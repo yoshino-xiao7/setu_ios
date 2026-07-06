@@ -33,9 +33,9 @@ public struct DashboardClient: Sendable {
         return count.count
     }
 
-    public func fetchHomeSnapshot() async -> HomeDashboardSnapshot {
+    public func fetchHomeSnapshot(usageLogPage: Int = 1, usageLogLimit: Int = 10) async -> HomeDashboardSnapshot {
         async let usage = optional { try await fetchUsageOverview() }
-        async let usageLogs = optional { try await fetchUsageLogs() }
+        async let usageLogs = optional { try await fetchUsageLogs(page: usageLogPage, limit: usageLogLimit) }
         async let apiKeyCount = optional { try await fetchApiKeyCount() }
         async let points = optional { try await fetchPointsBalance() }
         async let status = optional { try await fetchStatusOverview() }

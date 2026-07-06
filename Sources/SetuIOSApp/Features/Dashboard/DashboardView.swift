@@ -5,6 +5,10 @@ struct DashboardView: View {
     @Bindable var environment: AppEnvironment
     @Environment(RouterPath.self) private var router
     @State private var state: LoadState<HomeDashboardSnapshot> = .idle
+    @State private var usageLogPage = 1
+    @State private var usageLogPageSize = 10
+
+    private let usageLogPageSizes = [10, 20, 50]
 
     var body: some View {
         List {
@@ -128,10 +132,8 @@ struct DashboardView: View {
                     ForEach(logs) { log in
                         UsageLogRow(log: log)
                     }
-                    if let total = snapshot.usageLogs?.total, total > logs.count {
-                        Text("共 \(total) 条，已显示最近 \(logs.count) 条。")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+                    if let total = snapshot.usageLogs?.total {
+                        usageLogControls(total: total)
                     }
                 } else {
                     ContentUnavailableView("暂无调用日志", systemImage: "clock.arrow.circlepath")
@@ -140,9 +142,47 @@ struct DashboardView: View {
         }
     }
 
+    private func usageLogControls(total: Int) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Menu("每页 \(usageLogPageSize)") {
+                ForEach(usageLogPageSizes, id: \.self) { size in
+                    Button("\(size) 条") {
+                        usageLogPageSize = size
+                        usageLogPage = 1
+                        Task { await load() }
+                    }
+                }
+            }
+
+            HStack {
+                Button("上一页") {
+                    Task {
+                        usageLogPage = max(1, usageLogPage - 1)
+                        await load()
+                    }
+                }
+                .disabled(usageLogPage <= 1)
+
+                Spacer()
+                Text("第 \(usageLogPage) / \(max(1, Int(ceil(Double(total) / Double(usageLogPageSize))))) 页，共 \(total) 条")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Spacer()
+
+                Button("下一页") {
+                    Task {
+                        usageLogPage += 1
+                        await load()
+                    }
+                }
+                .disabled(usageLogPage * usageLogPageSize >= total)
+            }
+        }
+    }
+
     private func load() async {
         state = .loading
-        let snapshot = await environment.dashboardClient.fetchHomeSnapshot()
+        let snapshot = await environment.dashboardClient.fetchHomeSnapshot(usageLogPage: usageLogPage, usageLogLimit: usageLogPageSize)
         state = .loaded(snapshot)
     }
 }
