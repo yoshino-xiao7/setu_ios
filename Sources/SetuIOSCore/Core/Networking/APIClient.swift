@@ -135,7 +135,7 @@ public struct APIClient: Sendable {
             throw APIError.httpStatus(httpResponse.statusCode)
         }
 
-        if Value.self == EmptyResponse.self, data.isEmpty {
+        if Value.self == EmptyResponse.self {
             return EmptyResponse() as! Value
         }
 

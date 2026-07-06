@@ -8,9 +8,20 @@ struct AccountView: View {
     @State private var password = ""
     @State private var captchaCode = ""
     @State private var captchaUuid = ""
+    @State private var registerEmail = ""
+    @State private var registerPassword = ""
+    @State private var registerCaptchaCode = ""
+    @State private var registerCaptchaUuid = ""
+    @State private var recoveryEmail = ""
+    @State private var recoveryCaptchaCode = ""
+    @State private var recoveryCaptchaUuid = ""
+    @State private var resetToken = ""
+    @State private var resetPassword = ""
     @State private var passkeyService = PasskeyAuthorizationService()
     @State private var passkeyMessage: String?
+    @State private var authMessage: String?
     @State private var passkeyLoading = false
+    @State private var authActionLoading = false
 
     var body: some View {
         Form {
@@ -94,6 +105,66 @@ struct AccountView: View {
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
+                    if let authMessage {
+                        Text(authMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Section("注册账号") {
+                    TextField("邮箱", text: $registerEmail)
+                        .textContentType(.emailAddress)
+                        .modifier(EmailInputModifier())
+                    SecureField("密码", text: $registerPassword)
+                        .textContentType(.newPassword)
+                    TextField("验证码", text: $registerCaptchaCode)
+                    TextField("验证码 UUID", text: $registerCaptchaUuid)
+                    Button {
+                        Task { await registerAccount() }
+                    } label: {
+                        if authActionLoading {
+                            ProgressView()
+                        } else {
+                            Label("注册", systemImage: "person.badge.plus")
+                        }
+                    }
+                    .disabled(authActionLoading || registerEmail.isEmpty || registerPassword.isEmpty || registerCaptchaCode.isEmpty || registerCaptchaUuid.isEmpty)
+                }
+
+                Section("找回密码") {
+                    TextField("邮箱", text: $recoveryEmail)
+                        .textContentType(.emailAddress)
+                        .modifier(EmailInputModifier())
+                    TextField("验证码", text: $recoveryCaptchaCode)
+                    TextField("验证码 UUID", text: $recoveryCaptchaUuid)
+                    Button {
+                        Task { await sendPasswordRecoveryEmail() }
+                    } label: {
+                        if authActionLoading {
+                            ProgressView()
+                        } else {
+                            Label("发送重置邮件", systemImage: "envelope")
+                        }
+                    }
+                    .disabled(authActionLoading || recoveryEmail.isEmpty || recoveryCaptchaCode.isEmpty || recoveryCaptchaUuid.isEmpty)
+                }
+
+                Section("重置密码") {
+                    TextField("邮件 Token", text: $resetToken)
+                        .modifier(EmailInputModifier())
+                    SecureField("新密码", text: $resetPassword)
+                        .textContentType(.newPassword)
+                    Button {
+                        Task { await submitPasswordReset() }
+                    } label: {
+                        if authActionLoading {
+                            ProgressView()
+                        } else {
+                            Label("重置密码", systemImage: "key")
+                        }
+                    }
+                    .disabled(authActionLoading || resetToken.isEmpty || resetPassword.isEmpty)
                 }
             }
 
@@ -148,6 +219,54 @@ struct AccountView: View {
             passkeyMessage = error.localizedDescription
         }
         passkeyLoading = false
+    }
+
+    private func registerAccount() async {
+        authActionLoading = true
+        authMessage = nil
+        let success = await environment.authSession.register(
+            email: registerEmail,
+            password: registerPassword,
+            captchaCode: registerCaptchaCode,
+            captchaUuid: registerCaptchaUuid
+        )
+        if success {
+            authMessage = "注册成功，可以使用新账号登录"
+            email = registerEmail
+            password = registerPassword
+            registerPassword = ""
+            registerCaptchaCode = ""
+            registerCaptchaUuid = ""
+        }
+        authActionLoading = false
+    }
+
+    private func sendPasswordRecoveryEmail() async {
+        authActionLoading = true
+        authMessage = nil
+        let success = await environment.authSession.forgotPassword(
+            email: recoveryEmail,
+            captchaCode: recoveryCaptchaCode,
+            captchaUuid: recoveryCaptchaUuid
+        )
+        if success {
+            authMessage = "重置邮件已发送，请打开邮件获取 Token"
+            recoveryCaptchaCode = ""
+            recoveryCaptchaUuid = ""
+        }
+        authActionLoading = false
+    }
+
+    private func submitPasswordReset() async {
+        authActionLoading = true
+        authMessage = nil
+        let success = await environment.authSession.resetPassword(token: resetToken, newPassword: resetPassword)
+        if success {
+            authMessage = "密码已重置，可以使用新密码登录"
+            resetToken = ""
+            resetPassword = ""
+        }
+        authActionLoading = false
     }
 }
 

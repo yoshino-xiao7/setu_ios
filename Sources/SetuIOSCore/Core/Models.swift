@@ -37,6 +37,42 @@ public struct LoginRequest: Encodable, Sendable {
     }
 }
 
+public struct RegisterRequest: Encodable, Sendable {
+    public let email: String
+    public let password: String
+    public let captchaCode: String
+    public let captchaUuid: String
+
+    public init(email: String, password: String, captchaCode: String, captchaUuid: String) {
+        self.email = email
+        self.password = password
+        self.captchaCode = captchaCode
+        self.captchaUuid = captchaUuid
+    }
+}
+
+public struct ForgotPasswordRequest: Encodable, Sendable {
+    public let email: String
+    public let captchaCode: String
+    public let captchaUuid: String
+
+    public init(email: String, captchaCode: String, captchaUuid: String) {
+        self.email = email
+        self.captchaCode = captchaCode
+        self.captchaUuid = captchaUuid
+    }
+}
+
+public struct ResetPasswordRequest: Encodable, Sendable {
+    public let token: String
+    public let newPassword: String
+
+    public init(token: String, newPassword: String) {
+        self.token = token
+        self.newPassword = newPassword
+    }
+}
+
 public struct LoginResponse: Decodable, Sendable {
     public let token: String?
     public let role: UserRole

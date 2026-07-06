@@ -5,11 +5,12 @@
 ## 第一批：App Shell 与首页数据
 
 - 仪表盘：`/usage/overview`、`/points/me`、`/status/overview`、`/notifications/unread-count`。已接入 iOS 首页。
-- 账号：`/auth/login`、`/auth/refresh-signature`、`/auth/logout`、`/user/info`
+- 账号：`/auth/login`、`/auth/register`、`/auth/forgot-password`、`/auth/reset-password`、`/auth/refresh-signature`、`/auth/logout`、`/user/info`
 - 移动端能力：`/mobile/capabilities`、APNs 设备绑定、Live Activity token
 
 ## 已开始原生实现
 
+- 认证：登录、注册、找回密码、重置密码、刷新签名密钥、退出登录。
 - 个人中心：资料读取、昵称修改、头像上传。
 - QQ 绑定：读取绑定状态、发送验证码、保存绑定、停用绑定。
 - 安全设置：修改密码并清理本地会话。

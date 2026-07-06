@@ -35,6 +35,51 @@ public final class AuthSession {
         }
     }
 
+    public func register(email: String, password: String, captchaCode: String, captchaUuid: String) async -> Bool {
+        lastError = nil
+        do {
+            let _: EmptyResponse = try await apiClient.post(
+                "/auth/register",
+                body: RegisterRequest(email: email, password: password, captchaCode: captchaCode, captchaUuid: captchaUuid),
+                signed: false
+            )
+            return true
+        } catch {
+            lastError = error.localizedDescription
+            return false
+        }
+    }
+
+    public func forgotPassword(email: String, captchaCode: String, captchaUuid: String) async -> Bool {
+        lastError = nil
+        do {
+            let _: EmptyResponse = try await apiClient.post(
+                "/auth/forgot-password",
+                body: ForgotPasswordRequest(email: email, captchaCode: captchaCode, captchaUuid: captchaUuid),
+                signed: false
+            )
+            return true
+        } catch {
+            lastError = error.localizedDescription
+            return false
+        }
+    }
+
+    public func resetPassword(token: String, newPassword: String) async -> Bool {
+        lastError = nil
+        do {
+            let _: EmptyResponse = try await apiClient.post(
+                "/auth/reset-password",
+                body: ResetPasswordRequest(token: token, newPassword: newPassword),
+                signed: false
+            )
+            return true
+        } catch {
+            lastError = error.localizedDescription
+            return false
+        }
+    }
+
     public func applyLoginResponse(_ response: LoginResponse, fallbackEmail: String? = nil) throws {
         try apiClient.signer.persistSignSecret(response.signSecret)
         persistExpireAt(response.expireAt)
