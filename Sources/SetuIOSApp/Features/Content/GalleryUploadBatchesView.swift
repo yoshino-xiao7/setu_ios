@@ -20,11 +20,20 @@ struct GalleryUploadBatchesView: View {
     @State private var isUploading = false
     @State private var draftRestored = false
     @State private var page = 1
+    @State private var actionMessage: String?
     private let pageSize = 10
 
     var body: some View {
         List {
             createSection
+
+            if let actionMessage {
+                Section {
+                    Text(actionMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
 
             Picker("状态", selection: $statusFilter) {
                 Text("全部").tag("ALL")
@@ -52,10 +61,22 @@ struct GalleryUploadBatchesView: View {
                 } else {
                     Section("共 \(page.total) 个批次") {
                         ForEach(page.list) { batch in
-                            Button {
-                                router.navigate(to: .galleryUploadDetail(batch.batchId))
-                            } label: {
-                                GalleryUploadBatchRow(batch: batch)
+                            VStack(alignment: .leading, spacing: 8) {
+                                Button {
+                                    router.navigate(to: .galleryUploadDetail(batch.batchId))
+                                } label: {
+                                    GalleryUploadBatchRow(batch: batch)
+                                }
+
+                                if canCancel(batch) {
+                                    Button(role: .destructive) {
+                                        Task { await cancel(batch) }
+                                    } label: {
+                                        Label("取消投稿", systemImage: "xmark.circle")
+                                    }
+                                    .font(.footnote)
+                                    .buttonStyle(.borderless)
+                                }
                             }
                         }
                     }
@@ -156,11 +177,26 @@ struct GalleryUploadBatchesView: View {
 
     private func load() async {
         state = .loading
+        actionMessage = nil
         do {
             let status = statusFilter == "ALL" ? nil : statusFilter
             state = .loaded(try await environment.galleryUploadClient.listMine(status: status, page: page, pageSize: pageSize))
         } catch {
             state = .failed(error.localizedDescription)
+        }
+    }
+
+    private func canCancel(_ batch: GalleryUploadBatchSummary) -> Bool {
+        batch.status == "UPLOADING" || batch.status == "WAITING_MANUAL_REVIEW"
+    }
+
+    private func cancel(_ batch: GalleryUploadBatchSummary) async {
+        do {
+            try await environment.galleryUploadClient.cancel(batchID: batch.batchId)
+            await load()
+            actionMessage = "已取消批次 #\(batch.batchId)"
+        } catch {
+            actionMessage = error.localizedDescription
         }
     }
 

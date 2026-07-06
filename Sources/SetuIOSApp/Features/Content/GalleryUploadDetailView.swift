@@ -58,8 +58,10 @@ struct GalleryUploadDetailView: View {
         }
         .navigationTitle("投稿 #\(batchID)")
         .toolbar {
-            Button("取消批次", role: .destructive) {
-                Task { await cancel() }
+            if case .loaded(let batch) = state, canCancel(batch) {
+                Button("取消批次", role: .destructive) {
+                    Task { await cancel() }
+                }
             }
         }
         .task { await load() }
@@ -84,6 +86,10 @@ struct GalleryUploadDetailView: View {
         } catch {
             message = error.localizedDescription
         }
+    }
+
+    private func canCancel(_ batch: GalleryUploadBatchDetail) -> Bool {
+        batch.status == "UPLOADING" || batch.status == "WAITING_MANUAL_REVIEW"
     }
 }
 
