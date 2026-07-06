@@ -18,6 +18,7 @@ struct GalleryUploadBatchesView: View {
     @State private var aiType = 1
     @State private var uploadMessage: String?
     @State private var isUploading = false
+    @State private var draftRestored = false
 
     var body: some View {
         List {
@@ -60,7 +61,16 @@ struct GalleryUploadBatchesView: View {
         .onChange(of: pickedItems) {
             Task { await loadPickedItems() }
         }
-        .task { await load() }
+        .onChange(of: pidMode) { saveDraft() }
+        .onChange(of: title) { saveDraft() }
+        .onChange(of: author) { saveDraft() }
+        .onChange(of: tagsText) { saveDraft() }
+        .onChange(of: r18) { saveDraft() }
+        .onChange(of: aiType) { saveDraft() }
+        .task {
+            restoreDraftIfNeeded()
+            await load()
+        }
         .refreshable { await load() }
     }
 
@@ -85,6 +95,12 @@ struct GalleryUploadBatchesView: View {
                 ForEach(uploadItems) { item in
                     GalleryLocalUploadItemRow(item: item)
                 }
+                Button(role: .destructive) {
+                    clearDraft()
+                } label: {
+                    Label("清空草稿", systemImage: "trash")
+                }
+                .disabled(isUploading)
             }
             if let uploadMessage {
                 Text(uploadMessage)
@@ -116,6 +132,7 @@ struct GalleryUploadBatchesView: View {
     private func loadPickedItems() async {
         guard !pickedItems.isEmpty else {
             uploadItems = []
+            saveDraft()
             return
         }
         var nextItems: [LocalGalleryUploadItem] = []
@@ -123,17 +140,23 @@ struct GalleryUploadBatchesView: View {
             guard let data = try? await pickedItem.loadTransferable(type: Data.self) else { continue }
             let type = pickedItem.supportedContentTypes.first { $0.conforms(to: .image) } ?? .jpeg
             let preferredExtension = type.preferredFilenameExtension ?? "jpg"
+            let clientItemID = UUID().uuidString
+            let filename = "ios-upload-\(index + 1).\(preferredExtension)"
+            let storedFileName = "\(clientItemID)-\(filename)"
+            try? GalleryUploadDraftStore.write(data: data, fileName: storedFileName)
             nextItems.append(LocalGalleryUploadItem(
-                clientItemID: UUID().uuidString,
-                filename: "ios-upload-\(index + 1).\(preferredExtension)",
+                clientItemID: clientItemID,
+                filename: filename,
                 contentType: type.preferredMIMEType ?? "image/jpeg",
                 data: data,
+                storedFileName: storedFileName,
                 pageIndex: index,
                 status: "等待上传",
                 progress: 0
             ))
         }
         uploadItems = nextItems
+        saveDraft()
     }
 
     private func submitUpload() async {
@@ -178,6 +201,7 @@ struct GalleryUploadBatchesView: View {
 
                 uploadItems[index].status = "上传中"
                 uploadItems[index].progress = 15
+                saveDraft()
                 _ = try? await environment.galleryUploadClient.updateItemStatus(
                     batchID: initResponse.batchId,
                     clientItemID: localItem.clientItemID,
@@ -191,6 +215,7 @@ struct GalleryUploadBatchesView: View {
                 )
                 uploadItems[index].status = "已上传"
                 uploadItems[index].progress = 100
+                saveDraft()
                 _ = try? await environment.galleryUploadClient.updateItemStatus(
                     batchID: initResponse.batchId,
                     clientItemID: localItem.clientItemID,
@@ -207,6 +232,7 @@ struct GalleryUploadBatchesView: View {
             uploadMessage = "投稿批次 #\(completeResponse.batchId) 已提交审核"
             pickedItems = []
             uploadItems = []
+            GalleryUploadDraftStore.clear()
             await load()
         } catch {
             uploadMessage = error.localizedDescription
@@ -222,6 +248,73 @@ struct GalleryUploadBatchesView: View {
             .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
     }
+
+    private func restoreDraftIfNeeded() {
+        guard !draftRestored else { return }
+        draftRestored = true
+        guard let draft = GalleryUploadDraftStore.load() else { return }
+
+        pidMode = draft.form.pidMode == "SINGLE_PID_MULTI_PAGE" ? draft.form.pidMode : "MULTI_PID_P0"
+        title = draft.form.title
+        author = draft.form.author
+        tagsText = draft.form.tagsText
+        r18 = draft.form.r18
+        aiType = draft.form.aiType
+
+        let restoredItems = draft.items.compactMap { item -> LocalGalleryUploadItem? in
+            guard let data = GalleryUploadDraftStore.readData(fileName: item.storedFileName) else { return nil }
+            return LocalGalleryUploadItem(
+                clientItemID: item.clientItemID,
+                filename: item.filename,
+                contentType: item.contentType,
+                data: data,
+                storedFileName: item.storedFileName,
+                pageIndex: item.pageIndex,
+                status: item.status,
+                progress: item.progress
+            )
+        }
+        uploadItems = restoredItems
+
+        if !draft.isMeaningful {
+            GalleryUploadDraftStore.clear()
+        } else if restoredItems.count == draft.items.count, !restoredItems.isEmpty {
+            uploadMessage = "已自动恢复上次未完成的投稿图片和填写内容"
+        } else if !draft.items.isEmpty {
+            uploadMessage = "已恢复上次填写的投稿草稿，部分图片需要重新选择"
+        } else {
+            uploadMessage = "已恢复上次填写的投稿草稿"
+        }
+    }
+
+    private func saveDraft() {
+        guard draftRestored, !isUploading else { return }
+        let draft = GalleryUploadDraftPayload(
+            form: GalleryUploadDraftFormPayload(
+                pidMode: pidMode,
+                title: title,
+                author: author,
+                r18: r18,
+                aiType: aiType,
+                tagsText: tagsText
+            ),
+            items: uploadItems.map(GalleryUploadDraftItemPayload.init(item:))
+        )
+        GalleryUploadDraftStore.save(draft)
+    }
+
+    private func clearDraft() {
+        pickedItems = []
+        uploadItems = []
+        pidMode = "MULTI_PID_P0"
+        title = ""
+        author = ""
+        tagsText = ""
+        r18 = false
+        aiType = 1
+        uploadMessage = nil
+        GalleryUploadDraftStore.clear()
+    }
 }
 
 private struct LocalGalleryUploadItem: Identifiable {
@@ -229,6 +322,7 @@ private struct LocalGalleryUploadItem: Identifiable {
     let filename: String
     let contentType: String
     let data: Data
+    let storedFileName: String
     let pageIndex: Int
     var status: String
     var progress: Int
@@ -255,6 +349,109 @@ private struct GalleryLocalUploadItemRow: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+    }
+}
+
+private struct GalleryUploadDraftPayload: Codable {
+    let version: Int
+    let updatedAt: Date
+    let form: GalleryUploadDraftFormPayload
+    let items: [GalleryUploadDraftItemPayload]
+
+    init(form: GalleryUploadDraftFormPayload, items: [GalleryUploadDraftItemPayload]) {
+        self.version = 1
+        self.updatedAt = Date()
+        self.form = form
+        self.items = items
+    }
+
+    var isMeaningful: Bool {
+        !items.isEmpty
+            || !form.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !form.author.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || form.r18
+            || form.aiType != 1
+            || !form.tagsText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || form.pidMode != "MULTI_PID_P0"
+    }
+}
+
+private struct GalleryUploadDraftFormPayload: Codable {
+    let pidMode: String
+    let title: String
+    let author: String
+    let r18: Bool
+    let aiType: Int
+    let tagsText: String
+}
+
+private struct GalleryUploadDraftItemPayload: Codable {
+    let clientItemID: String
+    let filename: String
+    let contentType: String
+    let storedFileName: String
+    let sizeBytes: Int
+    let pageIndex: Int
+    let status: String
+    let progress: Int
+
+    init(item: LocalGalleryUploadItem) {
+        self.clientItemID = item.clientItemID
+        self.filename = item.filename
+        self.contentType = item.contentType
+        self.storedFileName = item.storedFileName
+        self.sizeBytes = item.data.count
+        self.pageIndex = item.pageIndex
+        self.status = item.status
+        self.progress = item.progress
+    }
+}
+
+private enum GalleryUploadDraftStore {
+    private static let key = "icu.yukiryou.setu.galleryUploadDraft"
+
+    static func load() -> GalleryUploadDraftPayload? {
+        guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
+        return try? JSONDecoder().decode(GalleryUploadDraftPayload.self, from: data)
+    }
+
+    static func save(_ draft: GalleryUploadDraftPayload) {
+        guard draft.isMeaningful else {
+            clear()
+            return
+        }
+        guard let data = try? JSONEncoder().encode(draft) else { return }
+        UserDefaults.standard.set(data, forKey: key)
+    }
+
+    static func write(data: Data, fileName: String) throws {
+        let targetURL = try directory().appendingPathComponent(fileName, isDirectory: false)
+        try data.write(to: targetURL, options: .atomic)
+    }
+
+    static func readData(fileName: String) -> Data? {
+        guard let fileURL = try? directory().appendingPathComponent(fileName, isDirectory: false) else { return nil }
+        return try? Data(contentsOf: fileURL)
+    }
+
+    static func clear() {
+        UserDefaults.standard.removeObject(forKey: key)
+        guard let directoryURL = try? directory(create: false) else { return }
+        try? FileManager.default.removeItem(at: directoryURL)
+    }
+
+    private static func directory(create: Bool = true) throws -> URL {
+        let cachesURL = try FileManager.default.url(
+            for: .cachesDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let directoryURL = cachesURL.appendingPathComponent("GalleryUploadDraft", isDirectory: true)
+        if create {
+            try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        }
+        return directoryURL
     }
 }
 
