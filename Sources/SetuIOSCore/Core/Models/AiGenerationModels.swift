@@ -211,6 +211,61 @@ public struct AiServiceStatusResponse: Decodable, Sendable {
     }
 }
 
+public struct AiControlStatus: Decodable, Sendable {
+    public let commandId: Int?
+    public let commandStatus: String?
+    public let controlReady: Bool?
+    public let comfyReady: Bool?
+    public let localServiceReady: Bool?
+    public let workerRunning: Bool?
+    public let running: Bool?
+    public let comfyUrl: String?
+    public let localAiUrl: String?
+    public let accepted: Bool?
+    public let action: String?
+    public let workerId: String?
+    public let pid: Int?
+    public let message: String?
+    public let errorMessage: String?
+    public let requestedAt: String?
+    public let claimedAt: String?
+    public let completedAt: String?
+
+    public var commandStatusTitle: String {
+        switch commandStatus {
+        case "PENDING": "等待领取"
+        case "CLAIMED": "已领取"
+        case "SUCCEEDED": "已完成"
+        case "FAILED": "执行失败"
+        case nil: "未知"
+        default: commandStatus ?? "未知"
+        }
+    }
+
+    public var actionTitle: String {
+        switch action {
+        case "START": "启动"
+        case "STOP": "停止"
+        case "RESTART": "重启"
+        case nil: "-"
+        default: action ?? "-"
+        }
+    }
+
+    public var stateMessage: String {
+        if let commandStatus, commandStatus != "SUCCEEDED" {
+            return "最新控制命令\(commandStatusTitle)"
+        }
+        if let errorMessage, !errorMessage.isEmpty {
+            return errorMessage
+        }
+        if let running {
+            return running ? "控制服务检测到 AI 绘图已运行" : "控制服务检测到 AI 绘图已停止"
+        }
+        return message ?? "等待本机控制服务回写状态"
+    }
+}
+
 public struct AiImageURL: Decodable, Sendable {
     public let jobId: Int
     public let url: String

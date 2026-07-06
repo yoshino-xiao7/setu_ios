@@ -110,6 +110,11 @@ struct AdminOverviewView: View {
             } label: {
                 Label("投稿审核", systemImage: "tray.full")
             }
+            Button {
+                router.navigate(to: .adminAiWorkers)
+            } label: {
+                Label("AI Worker 状态", systemImage: "cpu")
+            }
             Label("AI 审核队列", systemImage: "checklist")
             Button {
                 router.navigate(to: .adminOperationLogs)

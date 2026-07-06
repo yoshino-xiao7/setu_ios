@@ -39,6 +39,22 @@ public struct AiGenerationClient: Sendable {
         try await apiClient.get("/ai/status")
     }
 
+    public func adminControlStatus() async throws -> AiControlStatus {
+        try await apiClient.get("/admin/ai/control/status")
+    }
+
+    public func startAdminStack() async throws -> AiControlStatus {
+        try await apiClient.post("/admin/ai/control/start")
+    }
+
+    public func stopAdminStack() async throws -> AiControlStatus {
+        try await apiClient.post("/admin/ai/control/stop")
+    }
+
+    public func restartAdminStack() async throws -> AiControlStatus {
+        try await apiClient.post("/admin/ai/control/restart")
+    }
+
     public func imageURL(id: Int) async throws -> AiImageURL {
         try await apiClient.get("/ai/generations/\(id)/image-url")
     }
