@@ -106,6 +106,8 @@ struct RootAppView: View {
             AdminUserDetailView(environment: environment, userID: id)
         case .adminBlacklist:
             AdminBlacklistView(environment: environment)
+        case .adminSystemStatus:
+            SystemStatusView(environment: environment, title: "系统监控")
         case .adminMusicTokens:
             AdminMusicTokensView(environment: environment)
         case .adminImageDeleteRequests:
@@ -188,6 +190,8 @@ struct RootAppView: View {
             AdminUsersView(environment: environment)
         case .adminBlacklist:
             AdminBlacklistView(environment: environment)
+        case .adminSystemStatus:
+            SystemStatusView(environment: environment, title: "系统监控")
         case .adminMusicTokens:
             AdminMusicTokensView(environment: environment)
         case .adminImageDeleteRequests:

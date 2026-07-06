@@ -3,7 +3,13 @@ import SwiftUI
 
 struct SystemStatusView: View {
     @Bindable var environment: AppEnvironment
+    let title: String
     @State private var state: LoadState<StatusOverview> = .idle
+
+    init(environment: AppEnvironment, title: String = "系统状态") {
+        self.environment = environment
+        self.title = title
+    }
 
     var body: some View {
         List {
@@ -30,7 +36,7 @@ struct SystemStatusView: View {
                 }
             }
         }
-        .navigationTitle("系统状态")
+        .navigationTitle(title)
         .task { await load() }
         .refreshable { await load() }
     }

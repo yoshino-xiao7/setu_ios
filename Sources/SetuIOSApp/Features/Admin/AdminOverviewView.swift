@@ -90,6 +90,11 @@ struct AdminOverviewView: View {
                 Label("黑名单", systemImage: "nosign")
             }
             Button {
+                router.navigate(to: .adminSystemStatus)
+            } label: {
+                Label("系统监控", systemImage: "waveform.path.ecg.rectangle")
+            }
+            Button {
                 router.navigate(to: .adminMusicTokens)
             } label: {
                 Label("网易云 Token 管理", systemImage: "music.mic")

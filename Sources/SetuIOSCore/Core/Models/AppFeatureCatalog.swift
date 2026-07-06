@@ -48,6 +48,7 @@ public enum AppFeatureID: String, Codable, CaseIterable, Sendable {
     case adminOverview
     case adminUsers
     case adminBlacklist
+    case adminSystemStatus
     case adminMusicTokens
     case adminImageDeleteRequests
     case adminPixivCrawl
@@ -112,6 +113,7 @@ public enum AppFeatureCatalog {
         AppFeature(id: .adminOverview, group: .admin, title: "后台概览", subtitle: "管理端统计和运营入口", systemImage: "chart.bar", webRoute: "/admin/overview"),
         AppFeature(id: .adminUsers, group: .admin, title: "用户管理", subtitle: "用户列表、封禁、积分发放", systemImage: "person.2", webRoute: "/admin/users"),
         AppFeature(id: .adminBlacklist, group: .admin, title: "黑名单", subtitle: "IP 黑名单和临时封禁", systemImage: "nosign", webRoute: "/admin/blacklist"),
+        AppFeature(id: .adminSystemStatus, group: .admin, title: "系统监控", subtitle: "管理端服务状态、延迟和健康检查", systemImage: "waveform.path.ecg.rectangle", webRoute: "/admin/status"),
         AppFeature(id: .adminMusicTokens, group: .admin, title: "网易云 Token 管理", subtitle: "音乐代理 Cookie 状态维护", systemImage: "music.mic", webRoute: "/admin/music-tokens"),
         AppFeature(id: .adminImageDeleteRequests, group: .admin, title: "图片删除申请", subtitle: "审核用户图片删除申请", systemImage: "trash.square", webRoute: "/admin/image-delete-requests"),
         AppFeature(id: .adminPixivCrawl, group: .admin, title: "新增图片", subtitle: "Pixiv 爬虫和入库管理", systemImage: "plus.square.on.square", webRoute: "/admin/pixiv-crawl"),

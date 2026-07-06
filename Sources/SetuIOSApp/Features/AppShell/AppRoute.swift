@@ -34,6 +34,7 @@ enum AppRoute: Hashable {
     case adminUsers
     case adminUserDetail(Int)
     case adminBlacklist
+    case adminSystemStatus
     case adminMusicTokens
     case adminImageDeleteRequests
     case adminImageDeleteRequestDetail(Int)
