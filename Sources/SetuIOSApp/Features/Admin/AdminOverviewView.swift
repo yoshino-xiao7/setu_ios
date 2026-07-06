@@ -106,7 +106,11 @@ struct AdminOverviewView: View {
                 Label("投稿审核", systemImage: "tray.full")
             }
             Label("AI 审核队列", systemImage: "checklist")
-            Label("操作日志", systemImage: "doc.text.magnifyingglass")
+            Button {
+                router.navigate(to: .adminOperationLogs)
+            } label: {
+                Label("操作日志", systemImage: "doc.text.magnifyingglass")
+            }
         }
     }
 

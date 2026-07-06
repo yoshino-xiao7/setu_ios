@@ -147,3 +147,79 @@ public struct AdminOverviewSnapshot: Sendable {
         self.imageCount = imageCount
     }
 }
+
+public struct AdminOperationLogItem: Decodable, Identifiable, Sendable {
+    public let id: Int
+    public let traceId: String?
+    public let requestId: String?
+    public let userId: Int?
+    public let userEmail: String?
+    public let eventType: String
+    public let status: String
+    public let code: String?
+    public let message: String?
+    public let targetType: String?
+    public let targetId: String?
+    public let method: String?
+    public let path: String?
+    public let ip: String?
+    public let userAgent: String?
+    public let createdAt: String
+    public let durationMs: Int?
+
+    public var statusTitle: String {
+        switch status {
+        case "SUCCESS": "成功"
+        case "FAILED": "失败"
+        case "PARTIAL": "部分成功"
+        default: status
+        }
+    }
+}
+
+public struct AdminOperationLogDetail: Decodable, Identifiable, Sendable {
+    public let id: Int
+    public let traceId: String?
+    public let requestId: String?
+    public let userId: Int?
+    public let userEmail: String?
+    public let eventType: String
+    public let status: String
+    public let code: String?
+    public let message: String?
+    public let targetType: String?
+    public let targetId: String?
+    public let method: String?
+    public let path: String?
+    public let ip: String?
+    public let userAgent: String?
+    public let createdAt: String
+    public let durationMs: Int?
+    public let requestPayload: String?
+    public let responsePayload: String?
+    public let extraPayload: String?
+    public let requestBody: String?
+    public let responseBody: String?
+    public let extra: String?
+
+    public var statusTitle: String {
+        switch status {
+        case "SUCCESS": "成功"
+        case "FAILED": "失败"
+        case "PARTIAL": "部分成功"
+        default: status
+        }
+    }
+
+    public var displayRequestPayload: String? {
+        requestPayload ?? requestBody
+    }
+
+    public var displayResponsePayload: String? {
+        responsePayload ?? responseBody
+    }
+
+    public var displayExtraPayload: String? {
+        extraPayload ?? extra
+    }
+}

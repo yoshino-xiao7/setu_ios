@@ -112,6 +112,10 @@ struct RootAppView: View {
             AdminGallerySubmissionsView(environment: environment)
         case .adminGallerySubmissionDetail(let id):
             AdminGallerySubmissionDetailView(environment: environment, batchID: id)
+        case .adminOperationLogs:
+            AdminOperationLogsView(environment: environment)
+        case .adminOperationLogDetail(let id):
+            AdminOperationLogDetailView(environment: environment, logID: id)
         }
     }
 
@@ -170,6 +174,8 @@ struct RootAppView: View {
             AdminImageDeleteRequestsView(environment: environment)
         case .adminGallerySubmissions:
             AdminGallerySubmissionsView(environment: environment)
+        case .adminOperationLogs:
+            AdminOperationLogsView(environment: environment)
         default:
             if let feature = AppFeatureCatalog.feature(id: featureID) {
                 FeatureDetailView(feature: feature)

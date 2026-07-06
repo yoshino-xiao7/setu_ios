@@ -116,6 +116,37 @@ public struct AdminClient: Sendable {
         ))
     }
 
+    public func operationLogs(
+        page: Int = 1,
+        pageSize: Int = 20,
+        traceId: String? = nil,
+        userEmail: String? = nil,
+        eventType: String? = nil,
+        status: String? = nil,
+        code: String? = nil,
+        targetType: String? = nil,
+        targetId: String? = nil
+    ) async throws -> PageResult<AdminOperationLogItem> {
+        try await apiClient.get(queryPath(
+            "/admin/operation-logs",
+            items: [
+                URLQueryItem(name: "page", value: "\(page)"),
+                URLQueryItem(name: "pageSize", value: "\(pageSize)"),
+                URLQueryItem(name: "traceId", value: traceId),
+                URLQueryItem(name: "userEmail", value: userEmail),
+                URLQueryItem(name: "eventType", value: eventType),
+                URLQueryItem(name: "status", value: status),
+                URLQueryItem(name: "code", value: code),
+                URLQueryItem(name: "targetType", value: targetType),
+                URLQueryItem(name: "targetId", value: targetId)
+            ]
+        ))
+    }
+
+    public func operationLogDetail(id: Int) async throws -> AdminOperationLogDetail {
+        try await apiClient.get("/admin/operation-logs/\(id)")
+    }
+
     public func imageCount() async throws -> Int {
         if let value: Int = try? await apiClient.get("/status/image-count?t=\(Int(Date().timeIntervalSince1970))", signed: false) {
             return value
