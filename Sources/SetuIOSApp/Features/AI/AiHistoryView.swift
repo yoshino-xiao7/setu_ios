@@ -1,16 +1,30 @@
 import SetuIOSCore
 import SwiftUI
 
+#if os(iOS)
+import UIKit
+#endif
+
 struct AiHistoryView: View {
     @Environment(RouterPath.self) private var router
     @Bindable var environment: AppEnvironment
     @State private var state: LoadState<PageResult<AiGenerationJob>> = .idle
     @State private var statusFilter = ""
     @State private var page = 1
+    @State private var message: String?
     private let pageSize = 20
 
     var body: some View {
         List {
+            if let message {
+                Section {
+                    Text(message)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+            }
+
             Picker("状态", selection: $statusFilter) {
                 Text("全部").tag("")
                 Text("排队中").tag("QUEUED")
@@ -52,6 +66,32 @@ struct AiHistoryView: View {
                                 }
                                 .font(.footnote)
                                 .buttonStyle(.borderless)
+
+                                HStack {
+                                    Button {
+                                        copyPrompt(job)
+                                    } label: {
+                                        Label("复制提示词", systemImage: "doc.on.doc")
+                                    }
+                                    .buttonStyle(.borderless)
+
+                                    if let imageUrl = job.imageUrl, URL(string: imageUrl) != nil {
+                                        Button {
+                                            openURLString(imageUrl, successMessage: "已打开图片")
+                                        } label: {
+                                            Label("查看", systemImage: "eye")
+                                        }
+                                        .buttonStyle(.borderless)
+
+                                        Button {
+                                            Task { await download(job) }
+                                        } label: {
+                                            Label("下载", systemImage: "arrow.down.circle")
+                                        }
+                                        .buttonStyle(.borderless)
+                                    }
+                                }
+                                .font(.footnote)
                             }
                         }
                     }
@@ -94,6 +134,7 @@ struct AiHistoryView: View {
 
     private func load() async {
         state = .loading
+        message = nil
         do {
             state = .loaded(try await environment.aiGenerationClient.listMine(status: statusFilter, page: page, pageSize: pageSize))
         } catch {
@@ -104,6 +145,35 @@ struct AiHistoryView: View {
     private func reuse(_ job: AiGenerationJob) {
         AiDrawDraftStore.applyHistoryJob(job)
         router.navigate(to: .feature(.aiDraw))
+    }
+
+    private func copyPrompt(_ job: AiGenerationJob) {
+        let text = [
+            "正向提示词：\(job.promptPositive ?? job.promptCn)",
+            "反向提示词：\(job.promptNegative ?? "")"
+        ].joined(separator: "\n")
+        PlatformClipboard.copy(text)
+        message = "提示词已复制"
+    }
+
+    private func download(_ job: AiGenerationJob) async {
+        do {
+            let result = try await environment.aiGenerationClient.download(id: job.id)
+            openURLString(result.downloadUrl, successMessage: "已打开下载链接")
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    private func openURLString(_ value: String, successMessage: String) {
+        guard let url = URL(string: value) else {
+            message = "链接无效"
+            return
+        }
+        #if os(iOS)
+        UIApplication.shared.open(url)
+        #endif
+        message = successMessage
     }
 }
 
