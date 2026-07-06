@@ -8,6 +8,7 @@ struct AiAssetBrowserView: View {
     @State private var searchText = ""
     @State private var categoryFilter = "ALL"
     @State private var selectedAsset: AiAssetDisplayItem?
+    @State private var message: String?
 
     var body: some View {
         List {
@@ -20,6 +21,14 @@ struct AiAssetBrowserView: View {
             .onChange(of: activeKind) {
                 searchText = ""
                 categoryFilter = "ALL"
+            }
+
+            if let message {
+                Section {
+                    Text(message)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             switch state {
@@ -61,7 +70,9 @@ struct AiAssetBrowserView: View {
         .task { await load() }
         .refreshable { await load() }
         .sheet(item: $selectedAsset) { asset in
-            AiAssetDetailSheet(asset: asset)
+            AiAssetDetailSheet(asset: asset) {
+                applyToDrawDraft(asset)
+            }
         }
     }
 
@@ -98,6 +109,20 @@ struct AiAssetBrowserView: View {
                 asset.notes,
             ].contains { $0.lowercased().contains(keyword) }
         }
+    }
+
+    private func applyToDrawDraft(_ asset: AiAssetDisplayItem) {
+        AiDrawDraftStore.applyAsset(
+            kind: asset.draftKind,
+            name: asset.name,
+            triggerWords: asset.triggerWords,
+            negativeTags: asset.negativeTags,
+            recommendedStrength: asset.recommendedStrength,
+            recommendedCheckpoint: asset.recommendedCheckpoint,
+            notes: asset.notes
+        )
+        message = "\(asset.displayName) 已写入 AI 绘图草稿"
+        selectedAsset = nil
     }
 }
 
@@ -203,6 +228,14 @@ private struct AiAssetDisplayItem: Identifiable {
         }
         return fileName
     }
+
+    var draftKind: AiDraftAssetKind {
+        switch kind {
+        case .lora: .lora
+        case .character: .character
+        case .style: .style
+        }
+    }
 }
 
 private struct AiAssetRow: View {
@@ -253,6 +286,7 @@ private struct AiAssetRow: View {
 private struct AiAssetDetailSheet: View {
     @Environment(\.dismiss) private var dismiss
     let asset: AiAssetDisplayItem
+    let onUse: () -> Void
 
     var body: some View {
         NavigationStack {
@@ -296,6 +330,14 @@ private struct AiAssetDetailSheet: View {
                         Text(asset.notes)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
+                    }
+                }
+
+                Section {
+                    Button {
+                        onUse()
+                    } label: {
+                        Label("用于 AI 绘图", systemImage: "wand.and.stars")
                     }
                 }
             }

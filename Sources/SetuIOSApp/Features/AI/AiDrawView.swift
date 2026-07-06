@@ -24,6 +24,9 @@ struct AiDrawView: View {
     @State private var isSubmitting = false
     @State private var message: String?
     @State private var createdJob: AiGenerationJob?
+    @State private var draftLoaded = false
+    @State private var isApplyingDraft = false
+    @State private var loadedDraftUpdatedAt: Date?
 
     var body: some View {
         Form {
@@ -34,6 +37,13 @@ struct AiDrawView: View {
             actionSection
         }
         .navigationTitle("AI 绘图")
+        .onAppear { applyDraftIfNeeded() }
+        .onChange(of: selectedCheckpoint) { saveDraft() }
+        .onChange(of: selectedLora) { saveDraft() }
+        .onChange(of: loraStrength) { saveDraft() }
+        .onChange(of: styleTags) { saveDraft() }
+        .onChange(of: negativePrompt) { saveDraft() }
+        .onChange(of: styleNotes) { saveDraft() }
         .task { await loadMetadata() }
         .refreshable { await loadMetadata() }
     }
@@ -112,6 +122,11 @@ struct AiDrawView: View {
                 router.navigate(to: .feature(.aiAssets))
             } label: {
                 Label("浏览 AI 资产选择", systemImage: "photo.stack")
+            }
+            if draftLoaded, hasAssetDraft {
+                Label("已载入资产草稿", systemImage: "checkmark.circle")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
             switch capabilityState {
             case .idle, .loading:
@@ -236,9 +251,41 @@ struct AiDrawView: View {
             )
             createdJob = job
             message = "任务已创建：#\(job.id)"
+            saveDraft()
         } catch {
             message = error.localizedDescription
         }
+    }
+
+    private var hasAssetDraft: Bool {
+        !selectedCheckpoint.isEmpty || !selectedLora.isEmpty || !styleTags.isEmpty || !negativePrompt.isEmpty || !styleNotes.isEmpty
+    }
+
+    private func applyDraftIfNeeded() {
+        let draft = AiDrawDraftStore.load()
+        guard loadedDraftUpdatedAt != draft.updatedAt else { return }
+        isApplyingDraft = true
+        selectedCheckpoint = draft.checkpoint
+        selectedLora = draft.loraName
+        loraStrength = draft.loraStrength
+        styleTags = draft.styleTags
+        negativePrompt = draft.negativePrompt
+        styleNotes = draft.styleNotes
+        loadedDraftUpdatedAt = draft.updatedAt
+        draftLoaded = true
+        isApplyingDraft = false
+    }
+
+    private func saveDraft() {
+        guard draftLoaded, !isApplyingDraft else { return }
+        AiDrawDraftStore.updateFromForm(
+            checkpoint: selectedCheckpoint,
+            loraName: selectedLora,
+            loraStrength: loraStrength,
+            styleTags: styleTags,
+            negativePrompt: negativePrompt,
+            styleNotes: styleNotes
+        )
     }
 }
 
