@@ -10,6 +10,8 @@ struct MusicHomeView: View {
     @State private var selectedSong: MusicSong?
     @State private var playbackSong: MusicSong?
     @State private var mvSong: MusicSong?
+    @State private var player = MusicPlaybackController()
+    @State private var playbackMessage: String?
 
     var body: some View {
         List {
@@ -38,6 +40,7 @@ struct MusicHomeView: View {
                 .disabled(query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
 
+            nowPlayingSection
             searchContent
             hotSearchContent
         }
@@ -74,7 +77,7 @@ struct MusicHomeView: View {
                 } else {
                     ForEach(result.result.songs) { song in
                         MusicSongRow(song: song) {
-                            playbackSong = song
+                            Task { await play(song) }
                         } onPlayMv: {
                             mvSong = song
                         } onAddToPlaylist: {
@@ -82,6 +85,51 @@ struct MusicHomeView: View {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var nowPlayingSection: some View {
+        if let track = player.currentTrack {
+            Section("正在播放") {
+                HStack(spacing: 12) {
+                    MusicArtworkView(urlString: track.coverURLString)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(track.title)
+                            .font(.headline)
+                            .lineLimit(2)
+                        Text(track.artist)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                        if let message = playbackMessage ?? player.message {
+                            Text(message)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
+                    Button {
+                        player.toggle()
+                    } label: {
+                        Image(systemName: player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                            .font(.title2)
+                    }
+                    .buttonStyle(.borderless)
+                    Button(role: .destructive) {
+                        player.stop()
+                    } label: {
+                        Image(systemName: "stop.circle")
+                            .font(.title2)
+                    }
+                    .buttonStyle(.borderless)
+                }
+            }
+        } else if let playbackMessage {
+            Section {
+                Text(playbackMessage)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -138,6 +186,22 @@ struct MusicHomeView: View {
             searchState = .loaded(try await environment.musicClient.search(keywords: keywords))
         } catch {
             searchState = .failed(error.localizedDescription)
+        }
+    }
+
+    private func play(_ song: MusicSong) async {
+        playbackMessage = "正在获取播放地址"
+        do {
+            let response = try await environment.musicClient.url(songID: song.id, level: "standard")
+            guard let item = response.data?.first, let urlString = item.playableURLString, let url = URL(string: urlString) else {
+                playbackMessage = response.data?.first?.unavailableMessage ?? response.playabilityReason ?? response.message ?? "暂无可播放地址"
+                return
+            }
+            player.play(url: url, track: MusicPlaybackTrack(song: song))
+            try? await environment.musicClient.addHistory(song: song)
+            playbackMessage = "已开始播放"
+        } catch {
+            playbackMessage = error.localizedDescription
         }
     }
 }

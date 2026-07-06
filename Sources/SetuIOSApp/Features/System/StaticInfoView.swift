@@ -79,10 +79,10 @@ struct StaticInfoView: View {
         }
 
         Section("音乐 API") {
-            InfoParagraph("音乐能力用于搜索、热门关键词、歌单、播放历史和播放链接。当前 iOS 已完成搜索、热门搜索、歌单与播放历史。")
+            InfoParagraph("音乐能力用于搜索、热门关键词、歌单、播放历史、播放链接和原生播放。当前 iOS 已完成搜索、热门搜索、歌单、播放历史和后台播放第一版。")
             InfoPair(title: "搜索", value: "按歌曲、歌手或专辑关键词检索。")
             InfoPair(title: "歌单", value: "支持创建、删除、详情、添加和移除歌曲。")
-            InfoPair(title: "待补", value: "播放 URL、歌词和后台播放体验。")
+            InfoPair(title: "播放", value: "支持获取播放 URL、歌词、AVPlayer 播放、锁屏信息和远程播放暂停。")
         }
 
         Section("认证与积分") {

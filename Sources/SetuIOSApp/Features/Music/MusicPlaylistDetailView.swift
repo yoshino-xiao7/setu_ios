@@ -8,6 +8,7 @@ struct MusicPlaylistDetailView: View {
     @State private var state: LoadState<UserMusicPlaylistDetail> = .idle
     @State private var message: String?
     @State private var selectedMode = "sequence"
+    @State private var player = MusicPlaybackController()
 
     var body: some View {
         List {
@@ -18,6 +19,7 @@ struct MusicPlaylistDetailView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            nowPlayingSection
 
             switch state {
             case .idle, .loading:
@@ -66,6 +68,8 @@ struct MusicPlaylistDetailView: View {
                     } else {
                         ForEach(songs) { song in
                             PlaylistSongRow(song: song) {
+                                Task { await play(song) }
+                            } onRemove: {
                                 Task { await remove(song) }
                             }
                         }
@@ -81,6 +85,39 @@ struct MusicPlaylistDetailView: View {
         }
         .task { await load() }
         .refreshable { await load() }
+    }
+
+    @ViewBuilder
+    private var nowPlayingSection: some View {
+        if let track = player.currentTrack {
+            Section("正在播放") {
+                HStack(spacing: 12) {
+                    MusicArtworkView(urlString: track.coverURLString)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(track.title)
+                            .font(.headline)
+                        Text(track.artist)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button {
+                        player.toggle()
+                    } label: {
+                        Image(systemName: player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                            .font(.title2)
+                    }
+                    .buttonStyle(.borderless)
+                    Button(role: .destructive) {
+                        player.stop()
+                    } label: {
+                        Image(systemName: "stop.circle")
+                            .font(.title2)
+                    }
+                    .buttonStyle(.borderless)
+                }
+            }
+        }
     }
 
     private func load() async {
@@ -114,6 +151,21 @@ struct MusicPlaylistDetailView: View {
         }
     }
 
+    private func play(_ song: PlaylistSong) async {
+        message = "正在获取播放地址"
+        do {
+            let response = try await environment.musicClient.url(songID: song.songId)
+            guard let item = response.data?.first, let urlString = item.playableURLString, let url = URL(string: urlString) else {
+                message = response.data?.first?.unavailableMessage ?? response.playabilityReason ?? response.message ?? "暂无可播放地址"
+                return
+            }
+            player.play(url: url, track: MusicPlaybackTrack(song: song))
+            message = "已开始播放"
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
     private func deletePlaylist() async {
         do {
             try await environment.musicClient.deletePlaylist(id: playlistID)
@@ -126,6 +178,7 @@ struct MusicPlaylistDetailView: View {
 
 private struct PlaylistSongRow: View {
     let song: PlaylistSong
+    let onPlay: () -> Void
     let onRemove: () -> Void
 
     var body: some View {
@@ -145,6 +198,10 @@ private struct PlaylistSongRow: View {
                 }
             }
             Spacer()
+            Button(action: onPlay) {
+                Image(systemName: "play.circle")
+            }
+            .buttonStyle(.borderless)
             Button(role: .destructive, action: onRemove) {
                 Image(systemName: "minus.circle")
             }
