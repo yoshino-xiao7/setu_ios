@@ -95,7 +95,7 @@ struct RootAppView: View {
         case .playlistDetail(let id):
             MusicPlaylistDetailView(environment: environment, playlistID: id)
         case .admin:
-            PlaceholderFeatureView(title: "管理后台", systemImage: "shield", summary: "管理员审核、日志和系统操作。")
+            AdminOverviewView(environment: environment)
         }
     }
 
@@ -142,6 +142,8 @@ struct RootAppView: View {
             MusicPlaylistsView(environment: environment)
         case .musicHistory:
             MusicHistoryView(environment: environment)
+        case .adminOverview:
+            AdminOverviewView(environment: environment)
         default:
             if let feature = AppFeatureCatalog.feature(id: featureID) {
                 FeatureDetailView(feature: feature)

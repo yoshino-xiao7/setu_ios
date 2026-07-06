@@ -20,6 +20,7 @@ public final class AppEnvironment {
     public let imageDeleteRequestClient: ImageDeleteRequestClient
     public let musicClient: MusicClient
     public let galleryUploadClient: GalleryUploadClient
+    public let adminClient: AdminClient
     public let authSession: AuthSession
 
     public init(
@@ -40,6 +41,7 @@ public final class AppEnvironment {
         imageDeleteRequestClient: ImageDeleteRequestClient,
         musicClient: MusicClient,
         galleryUploadClient: GalleryUploadClient,
+        adminClient: AdminClient,
         authSession: AuthSession
     ) {
         self.config = config
@@ -59,6 +61,7 @@ public final class AppEnvironment {
         self.imageDeleteRequestClient = imageDeleteRequestClient
         self.musicClient = musicClient
         self.galleryUploadClient = galleryUploadClient
+        self.adminClient = adminClient
         self.authSession = authSession
     }
 
@@ -81,6 +84,7 @@ public final class AppEnvironment {
         let imageDeleteRequestClient = ImageDeleteRequestClient(apiClient: client)
         let musicClient = MusicClient(apiClient: client)
         let galleryUploadClient = GalleryUploadClient(apiClient: client)
+        let adminClient = AdminClient(apiClient: client)
         let session = AuthSession(apiClient: client, keychain: keychain)
         return AppEnvironment(
             config: config,
@@ -100,6 +104,7 @@ public final class AppEnvironment {
             imageDeleteRequestClient: imageDeleteRequestClient,
             musicClient: musicClient,
             galleryUploadClient: galleryUploadClient,
+            adminClient: adminClient,
             authSession: session
         )
     }
