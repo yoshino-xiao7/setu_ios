@@ -9,6 +9,9 @@ public struct PageResult<Value: Decodable & Sendable>: Decodable, Sendable {
 
 public struct AiGenerationJob: Decodable, Identifiable, Sendable {
     public let id: Int
+    public let userId: Int?
+    public let apiKeyId: Int?
+    public let source: String?
     public let promptCn: String
     public let promptPositive: String?
     public let promptNegative: String?
@@ -24,22 +27,42 @@ public struct AiGenerationJob: Decodable, Identifiable, Sendable {
     public let loraStrength: Double?
     public let secondLoraName: String?
     public let secondLoraStrength: Double?
+    public let jobType: String?
+    public let parentJobId: Int?
     public let status: String
+    public let workerId: String?
+    public let localJobId: String?
+    public let comfyPromptId: String?
     public let workerStage: String?
     public let workerDetail: String?
+    public let localRelativePath: String?
+    public let localAbsolutePath: String?
+    public let localStorageStatus: String?
+    public let localImageRecordedAt: String?
+    public let localImageDeletedAt: String?
+    public let privateOssStatus: String?
+    public let privateOssExpiresAt: String?
+    public let privateOssDeletedAt: String?
+    public let privateOssDeleteError: String?
     public let reviewStatus: String
     public let publicCategory: String?
     public let publicVisible: Bool?
     public let deleted: Bool?
     public let deleteStatus: String?
+    public let deleteRequestId: Int?
+    public let deletedAt: String?
     public let imageUrl: String?
     public let imageWidth: Int?
     public let imageHeight: Int?
+    public let sizeBytes: Int?
+    public let sha256: String?
     public let pointsCost: Int?
     public let pointsCharged: Bool?
     public let pointsRefunded: Bool?
+    public let adminFree: Bool?
     public let errorMessage: String?
     public let userErrorMessage: String?
+    public let qqNumber: String?
     public let createdAt: String?
     public let updatedAt: String?
     public let completedAt: String?
@@ -56,6 +79,26 @@ public struct AiGenerationJob: Decodable, Identifiable, Sendable {
         default: status
         }
     }
+}
+
+public struct AiGenerationDeleteCommandRequest: Encodable, Sendable {
+    public let reason: String?
+
+    public init(reason: String? = nil) {
+        self.reason = reason
+    }
+}
+
+public struct AiLocalImageDeleteCommand: Decodable, Identifiable, Sendable {
+    public let id: Int
+    public let jobId: Int
+    public let workerId: String
+    public let requestedByAdminId: Int
+    public let reason: String?
+    public let status: String
+    public let attemptCount: Int?
+    public let errorMessage: String?
+    public let localRelativePath: String?
 }
 
 public struct AiGenerationCreateRequest: Encodable, Sendable {

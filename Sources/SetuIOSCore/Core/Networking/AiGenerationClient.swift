@@ -85,6 +85,56 @@ public struct AiGenerationClient: Sendable {
         return try await apiClient.get(path)
     }
 
+    public func adminGenerations(
+        jobId: Int? = nil,
+        userId: Int? = nil,
+        status: String? = nil,
+        reviewStatus: String? = nil,
+        deleteStatus: String? = nil,
+        recordState: String? = nil,
+        page: Int = 1,
+        pageSize: Int = 20
+    ) async throws -> PageResult<AiGenerationJob> {
+        var path = "/admin/ai/generations?page=\(page)&pageSize=\(pageSize)"
+        if let jobId {
+            path += "&jobId=\(jobId)"
+        }
+        if let userId {
+            path += "&userId=\(userId)"
+        }
+        if let status, !status.isEmpty, status != "ALL" {
+            path += "&status=\(status)"
+        }
+        if let reviewStatus, !reviewStatus.isEmpty, reviewStatus != "ALL" {
+            path += "&reviewStatus=\(reviewStatus)"
+        }
+        if let deleteStatus, !deleteStatus.isEmpty, deleteStatus != "ALL" {
+            path += "&deleteStatus=\(deleteStatus)"
+        }
+        if let recordState, !recordState.isEmpty, recordState != "ALL" {
+            path += "&recordState=\(recordState)"
+        }
+        return try await apiClient.get(path)
+    }
+
+    public func unpublishAdminGeneration(id: Int) async throws -> AiGenerationJob {
+        try await apiClient.post("/admin/ai/generations/\(id)/unpublish")
+    }
+
+    public func deleteAdminGeneration(id: Int, reason: String? = nil) async throws -> AiGenerationJob {
+        try await apiClient.post(
+            "/admin/ai/generations/\(id)/delete",
+            body: AiGenerationDeleteCommandRequest(reason: reason)
+        )
+    }
+
+    public func deleteAdminLocalImage(id: Int, reason: String? = nil) async throws -> AiLocalImageDeleteCommand {
+        try await apiClient.post(
+            "/admin/ai/generations/\(id)/local-image/delete",
+            body: AiGenerationDeleteCommandRequest(reason: reason)
+        )
+    }
+
     public func adminReviews(status: String? = nil, category: String? = nil, page: Int = 1, pageSize: Int = 20) async throws -> PageResult<AiGenerationReview> {
         var path = "/admin/ai/reviews?page=\(page)&pageSize=\(pageSize)"
         if let status, !status.isEmpty, status != "ALL" {

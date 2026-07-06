@@ -120,6 +120,8 @@ struct RootAppView: View {
             AdminPixivCrawlView(environment: environment)
         case .adminPixivTask(let id):
             AdminPixivTaskDetailView(environment: environment, taskID: id)
+        case .adminAiGenerations:
+            AdminAiGenerationsView(environment: environment)
         case .adminAiWorkers:
             AdminAiWorkersView(environment: environment)
         case .adminAiReviews:
@@ -188,6 +190,8 @@ struct RootAppView: View {
             AdminOperationLogsView(environment: environment)
         case .adminPixivCrawl:
             AdminPixivCrawlView(environment: environment)
+        case .adminAiGenerations:
+            AdminAiGenerationsView(environment: environment)
         case .adminAiWorkers:
             AdminAiWorkersView(environment: environment)
         case .adminAiReviews:

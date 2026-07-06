@@ -111,6 +111,11 @@ struct AdminOverviewView: View {
                 Label("投稿审核", systemImage: "tray.full")
             }
             Button {
+                router.navigate(to: .adminAiGenerations)
+            } label: {
+                Label("AI 生成记录", systemImage: "sparkles.rectangle.stack")
+            }
+            Button {
                 router.navigate(to: .adminAiWorkers)
             } label: {
                 Label("AI Worker 状态", systemImage: "cpu")
