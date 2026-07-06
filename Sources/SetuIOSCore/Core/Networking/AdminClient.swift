@@ -147,6 +147,40 @@ public struct AdminClient: Sendable {
         try await apiClient.get("/admin/operation-logs/\(id)")
     }
 
+    public func pixivHealth() async throws -> PixivCrawlerHealth {
+        try await apiClient.get("/admin/pixiv/health")
+    }
+
+    public func crawlPixivByIDs(_ ids: [Int], skipExisting: Bool = true) async throws -> PixivCrawlerActionResponse {
+        try await apiClient.post(
+            "/admin/pixiv/crawl/illust",
+            body: PixivCrawlByIdsRequest(illustIds: ids, skipExisting: skipExisting)
+        )
+    }
+
+    public func crawlPixivByUser(userID: String, skipExisting: Bool = true) async throws -> PixivCrawlerActionResponse {
+        try await apiClient.post("/admin/pixiv/crawl/user/\(userID)?skipExisting=\(skipExisting)")
+    }
+
+    public func crawlPixivByTag(tag: String, mode: String, pageFrom: Int, pageTo: Int, skipExisting: Bool = true) async throws -> PixivCrawlerActionResponse {
+        try await apiClient.post(
+            "/admin/pixiv/crawl/tag",
+            body: PixivCrawlByTagRequest(tag: tag, mode: mode, pageFrom: pageFrom, pageTo: pageTo, skipExisting: skipExisting)
+        )
+    }
+
+    public func pixivTasks(limit: Int = 100, offset: Int = 0) async throws -> PixivCrawlerTaskList {
+        try await apiClient.get("/admin/pixiv/tasks?limit=\(limit)&offset=\(offset)")
+    }
+
+    public func pixivTask(taskID: String) async throws -> PixivCrawlerTask {
+        try await apiClient.get("/admin/pixiv/tasks/\(taskID)")
+    }
+
+    public func cancelPixivTask(taskID: String) async throws -> PixivCrawlerActionResponse {
+        try await apiClient.requestWithoutBody("/admin/pixiv/tasks/\(taskID)", method: "DELETE")
+    }
+
     public func imageCount() async throws -> Int {
         if let value: Int = try? await apiClient.get("/status/image-count?t=\(Int(Date().timeIntervalSince1970))", signed: false) {
             return value

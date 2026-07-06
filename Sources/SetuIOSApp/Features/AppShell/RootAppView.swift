@@ -116,6 +116,10 @@ struct RootAppView: View {
             AdminOperationLogsView(environment: environment)
         case .adminOperationLogDetail(let id):
             AdminOperationLogDetailView(environment: environment, logID: id)
+        case .adminPixivCrawl:
+            AdminPixivCrawlView(environment: environment)
+        case .adminPixivTask(let id):
+            AdminPixivTaskDetailView(environment: environment, taskID: id)
         }
     }
 
@@ -176,6 +180,8 @@ struct RootAppView: View {
             AdminGallerySubmissionsView(environment: environment)
         case .adminOperationLogs:
             AdminOperationLogsView(environment: environment)
+        case .adminPixivCrawl:
+            AdminPixivCrawlView(environment: environment)
         default:
             if let feature = AppFeatureCatalog.feature(id: featureID) {
                 FeatureDetailView(feature: feature)

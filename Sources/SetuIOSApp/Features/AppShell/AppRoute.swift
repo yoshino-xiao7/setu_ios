@@ -39,6 +39,8 @@ enum AppRoute: Hashable {
     case adminGallerySubmissionDetail(Int)
     case adminOperationLogs
     case adminOperationLogDetail(Int)
+    case adminPixivCrawl
+    case adminPixivTask(String)
 }
 
 enum AppTab: String, CaseIterable, Identifiable {

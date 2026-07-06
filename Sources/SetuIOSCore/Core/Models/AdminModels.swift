@@ -223,3 +223,126 @@ public struct AdminOperationLogDetail: Decodable, Identifiable, Sendable {
         extraPayload ?? extra
     }
 }
+
+public struct PixivCrawlerHealth: Decodable, Sendable {
+    public let status: String?
+    public let environment: String?
+    public let database: String?
+
+    public var isOnline: Bool {
+        status?.lowercased() == "ok" || status?.lowercased() == "healthy" || status?.lowercased() == "online"
+    }
+}
+
+public struct PixivCrawlByIdsRequest: Encodable, Sendable {
+    public let illustIds: [Int]
+    public let skipExisting: Bool
+
+    public init(illustIds: [Int], skipExisting: Bool) {
+        self.illustIds = illustIds
+        self.skipExisting = skipExisting
+    }
+}
+
+public struct PixivCrawlByTagRequest: Encodable, Sendable {
+    public let tag: String
+    public let mode: String
+    public let pageFrom: Int
+    public let pageTo: Int
+    public let skipExisting: Bool
+
+    public init(tag: String, mode: String, pageFrom: Int, pageTo: Int, skipExisting: Bool) {
+        self.tag = tag
+        self.mode = mode
+        self.pageFrom = pageFrom
+        self.pageTo = pageTo
+        self.skipExisting = skipExisting
+    }
+}
+
+public struct PixivCrawlerActionResponse: Decodable, Sendable {
+    public let taskID: String?
+    public let status: String?
+    public let message: String?
+
+    public init(taskID: String?, status: String?, message: String?) {
+        self.taskID = taskID
+        self.status = status
+        self.message = message
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case taskID = "task_id"
+        case status
+        case message
+    }
+}
+
+public struct PixivCrawlerTaskList: Decodable, Sendable {
+    public let total: Int
+    public let tasks: [PixivCrawlerTask]
+
+    public init(total: Int, tasks: [PixivCrawlerTask]) {
+        self.total = total
+        self.tasks = tasks
+    }
+}
+
+public struct PixivCrawlerTask: Decodable, Identifiable, Sendable {
+    public let taskID: String
+    public let status: String
+    public let mode: String
+    public let message: String?
+    public let progress: PixivCrawlerTaskProgress?
+    public let logs: [String]?
+    public let serverTimestamp: String?
+    public let startedAt: String?
+    public let finishedAt: String?
+
+    public var id: String { taskID }
+
+    public var statusTitle: String {
+        switch status {
+        case "pending": "等待中"
+        case "running": "进行中"
+        case "completed": "已完成"
+        case "failed": "失败"
+        case "cancelled": "已取消"
+        default: status
+        }
+    }
+
+    public var modeTitle: String {
+        switch mode {
+        case "by_ids": "按 ID"
+        case "by_user": "按画师"
+        case "by_tag": "按标签"
+        default: mode
+        }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case taskID = "task_id"
+        case status
+        case mode
+        case message
+        case progress
+        case logs
+        case serverTimestamp = "server_timestamp"
+        case startedAt = "started_at"
+        case finishedAt = "finished_at"
+    }
+}
+
+public struct PixivCrawlerTaskProgress: Decodable, Sendable {
+    public let total: Int
+    public let done: Int
+    public let new: Int
+    public let skipped: Int
+    public let failed: Int
+
+    public var percent: Int {
+        guard total > 0 else { return 0 }
+        return min(100, max(0, Int((Double(done) / Double(total)) * 100)))
+    }
+}

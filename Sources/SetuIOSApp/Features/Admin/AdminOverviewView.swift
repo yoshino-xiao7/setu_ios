@@ -99,6 +99,11 @@ struct AdminOverviewView: View {
             } label: {
                 Label("图片删除申请", systemImage: "trash.square")
             }
+            Button {
+                router.navigate(to: .adminPixivCrawl)
+            } label: {
+                Label("新增图片", systemImage: "plus.square.on.square")
+            }
             Label("图片库管理", systemImage: "photo.badge.checkmark")
             Button {
                 router.navigate(to: .adminGallerySubmissions)
