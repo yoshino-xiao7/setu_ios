@@ -29,6 +29,8 @@ public struct AiGenerationJob: Decodable, Identifiable, Sendable {
     public let secondLoraName: String?
     public let secondLoraStrength: Double?
     public let secondCharacterId: String?
+    public let nsfwMode: Bool?
+    public let nsfwVisibilityLevel: String?
     public let jobType: String?
     public let parentJobId: Int?
     public let status: String

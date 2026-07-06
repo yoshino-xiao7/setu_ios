@@ -32,10 +32,21 @@ struct AiHistoryView: View {
                 } else {
                     Section("共 \(page.total) 条") {
                         ForEach(page.list) { job in
-                            Button {
-                                router.navigate(to: .aiGenerationDetail(job.id))
-                            } label: {
-                                AiGenerationRow(job: job)
+                            VStack(alignment: .leading, spacing: 8) {
+                                Button {
+                                    router.navigate(to: .aiGenerationDetail(job.id))
+                                } label: {
+                                    AiGenerationRow(job: job)
+                                }
+                                .buttonStyle(.plain)
+
+                                Button {
+                                    reuse(job)
+                                } label: {
+                                    Label("复用参数", systemImage: "arrow.triangle.2.circlepath")
+                                }
+                                .font(.footnote)
+                                .buttonStyle(.borderless)
                             }
                         }
                     }
@@ -54,6 +65,11 @@ struct AiHistoryView: View {
         } catch {
             state = .failed(error.localizedDescription)
         }
+    }
+
+    private func reuse(_ job: AiGenerationJob) {
+        AiDrawDraftStore.applyHistoryJob(job)
+        router.navigate(to: .feature(.aiDraw))
     }
 }
 

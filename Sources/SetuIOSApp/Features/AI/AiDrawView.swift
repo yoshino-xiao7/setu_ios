@@ -43,6 +43,14 @@ struct AiDrawView: View {
         }
         .navigationTitle("AI 绘图")
         .onAppear { applyDraftIfNeeded() }
+        .onChange(of: promptCn) { saveDraft() }
+        .onChange(of: positivePrompt) { saveDraft() }
+        .onChange(of: width) { saveDraft() }
+        .onChange(of: height) { saveDraft() }
+        .onChange(of: steps) { saveDraft() }
+        .onChange(of: cfg) { saveDraft() }
+        .onChange(of: nsfwMode) { saveDraft() }
+        .onChange(of: nsfwVisibilityLevel) { saveDraft() }
         .onChange(of: generationMode) { saveDraft() }
         .onChange(of: selectedCheckpoint) { saveDraft() }
         .onChange(of: selectedLora) { saveDraft() }
@@ -319,6 +327,14 @@ struct AiDrawView: View {
         let draft = AiDrawDraftStore.load()
         guard loadedDraftUpdatedAt != draft.updatedAt else { return }
         isApplyingDraft = true
+        promptCn = draft.promptCn
+        positivePrompt = draft.promptPositive
+        width = draft.width
+        height = draft.height
+        steps = draft.steps
+        cfg = draft.cfg
+        nsfwMode = draft.nsfwMode
+        nsfwVisibilityLevel = draft.nsfwVisibilityLevel
         generationMode = draft.generationMode
         selectedCheckpoint = draft.checkpoint
         selectedLora = draft.loraName
@@ -338,6 +354,14 @@ struct AiDrawView: View {
     private func saveDraft() {
         guard draftLoaded, !isApplyingDraft else { return }
         AiDrawDraftStore.updateFromForm(
+            promptCn: promptCn,
+            promptPositive: positivePrompt,
+            width: width,
+            height: height,
+            steps: steps,
+            cfg: cfg,
+            nsfwMode: nsfwMode,
+            nsfwVisibilityLevel: nsfwVisibilityLevel,
             generationMode: generationMode,
             checkpoint: selectedCheckpoint,
             loraName: selectedLora,
