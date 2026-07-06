@@ -150,6 +150,8 @@ struct RootAppView: View {
             AiSquareView(environment: environment)
         case .aiDraw:
             AiDrawView(environment: environment)
+        case .aiAssets:
+            AiAssetBrowserView(environment: environment)
         case .collectionSquare:
             CollectionSquareView(environment: environment)
         case .galleryUpload:

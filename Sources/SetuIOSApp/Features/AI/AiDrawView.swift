@@ -2,6 +2,7 @@ import SetuIOSCore
 import SwiftUI
 
 struct AiDrawView: View {
+    @Environment(RouterPath.self) private var router
     @Bindable var environment: AppEnvironment
     @State private var statusState: LoadState<AiServiceStatusResponse> = .idle
     @State private var capabilityState: LoadState<AiCapabilityResponse> = .idle
@@ -107,6 +108,11 @@ struct AiDrawView: View {
     @ViewBuilder
     private var assetSection: some View {
         Section("模型资产") {
+            Button {
+                router.navigate(to: .feature(.aiAssets))
+            } label: {
+                Label("浏览 AI 资产选择", systemImage: "photo.stack")
+            }
             switch capabilityState {
             case .idle, .loading:
                 ProgressView("正在加载模型")
