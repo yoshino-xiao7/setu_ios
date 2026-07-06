@@ -92,6 +92,8 @@ struct RootAppView: View {
             AiHistoryView(environment: environment)
         case .aiSquare:
             AiSquareView(environment: environment)
+        case .aiDraw:
+            AiDrawView(environment: environment)
         case .collectionSquare:
             CollectionSquareView(environment: environment)
         case .qqBinding:
