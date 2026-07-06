@@ -84,4 +84,23 @@ public struct AiGenerationClient: Sendable {
         }
         return try await apiClient.get(path)
     }
+
+    public func adminReviews(status: String? = nil, category: String? = nil, page: Int = 1, pageSize: Int = 20) async throws -> PageResult<AiGenerationReview> {
+        var path = "/admin/ai/reviews?page=\(page)&pageSize=\(pageSize)"
+        if let status, !status.isEmpty, status != "ALL" {
+            path += "&status=\(status)"
+        }
+        if let category, !category.isEmpty, category != "ALL" {
+            path += "&category=\(category)"
+        }
+        return try await apiClient.get(path)
+    }
+
+    public func approveAdminReview(id: Int) async throws -> AiGenerationReview {
+        try await apiClient.post("/admin/ai/reviews/\(id)/approve")
+    }
+
+    public func rejectAdminReview(id: Int, reason: String) async throws -> AiGenerationReview {
+        try await apiClient.post("/admin/ai/reviews/\(id)/reject", body: AiReviewRejectRequest(reason: reason))
+    }
 }

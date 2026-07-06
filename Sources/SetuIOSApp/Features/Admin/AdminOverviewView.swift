@@ -115,7 +115,11 @@ struct AdminOverviewView: View {
             } label: {
                 Label("AI Worker 状态", systemImage: "cpu")
             }
-            Label("AI 审核队列", systemImage: "checklist")
+            Button {
+                router.navigate(to: .adminAiReviews)
+            } label: {
+                Label("AI 审核队列", systemImage: "checklist")
+            }
             Button {
                 router.navigate(to: .adminOperationLogs)
             } label: {

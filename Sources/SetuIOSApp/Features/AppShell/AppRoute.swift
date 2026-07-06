@@ -42,6 +42,7 @@ enum AppRoute: Hashable {
     case adminPixivCrawl
     case adminPixivTask(String)
     case adminAiWorkers
+    case adminAiReviews
 }
 
 enum AppTab: String, CaseIterable, Identifiable {

@@ -122,6 +122,8 @@ struct RootAppView: View {
             AdminPixivTaskDetailView(environment: environment, taskID: id)
         case .adminAiWorkers:
             AdminAiWorkersView(environment: environment)
+        case .adminAiReviews:
+            AdminAiReviewsView(environment: environment)
         }
     }
 
@@ -186,6 +188,8 @@ struct RootAppView: View {
             AdminPixivCrawlView(environment: environment)
         case .adminAiWorkers:
             AdminAiWorkersView(environment: environment)
+        case .adminAiReviews:
+            AdminAiReviewsView(environment: environment)
         default:
             if let feature = AppFeatureCatalog.feature(id: featureID) {
                 FeatureDetailView(feature: feature)
