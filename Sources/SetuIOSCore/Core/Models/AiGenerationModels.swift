@@ -25,8 +25,10 @@ public struct AiGenerationJob: Decodable, Identifiable, Sendable {
     public let generationMode: String?
     public let loraName: String?
     public let loraStrength: Double?
+    public let characterId: String?
     public let secondLoraName: String?
     public let secondLoraStrength: Double?
+    public let secondCharacterId: String?
     public let jobType: String?
     public let parentJobId: Int?
     public let status: String
@@ -115,6 +117,10 @@ public struct AiGenerationCreateRequest: Encodable, Sendable {
     public let generationMode: String
     public let loraName: String?
     public let loraStrength: Double?
+    public let characterId: String?
+    public let secondLoraName: String?
+    public let secondLoraStrength: Double?
+    public let secondCharacterId: String?
     public let nsfwMode: Bool
     public let nsfwVisibilityLevel: String
 
@@ -132,6 +138,10 @@ public struct AiGenerationCreateRequest: Encodable, Sendable {
         generationMode: String = "SINGLE",
         loraName: String? = nil,
         loraStrength: Double? = nil,
+        characterId: String? = nil,
+        secondLoraName: String? = nil,
+        secondLoraStrength: Double? = nil,
+        secondCharacterId: String? = nil,
         nsfwMode: Bool = false,
         nsfwVisibilityLevel: String = "STANDARD"
     ) {
@@ -148,6 +158,10 @@ public struct AiGenerationCreateRequest: Encodable, Sendable {
         self.generationMode = generationMode
         self.loraName = loraName
         self.loraStrength = loraStrength
+        self.characterId = characterId
+        self.secondLoraName = secondLoraName
+        self.secondLoraStrength = secondLoraStrength
+        self.secondCharacterId = secondCharacterId
         self.nsfwMode = nsfwMode
         self.nsfwVisibilityLevel = nsfwVisibilityLevel
     }

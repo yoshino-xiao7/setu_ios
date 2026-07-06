@@ -17,9 +17,14 @@ struct AiDrawView: View {
     @State private var cfg = 7.0
     @State private var nsfwMode = false
     @State private var nsfwVisibilityLevel = "STANDARD"
+    @State private var generationMode = "SINGLE"
     @State private var selectedCheckpoint = ""
     @State private var selectedLora = ""
     @State private var loraStrength = 0.8
+    @State private var selectedCharacter = ""
+    @State private var selectedSecondLora = ""
+    @State private var secondLoraStrength = 0.65
+    @State private var selectedSecondCharacter = ""
     @State private var isTranslating = false
     @State private var isSubmitting = false
     @State private var message: String?
@@ -38,9 +43,14 @@ struct AiDrawView: View {
         }
         .navigationTitle("AI 绘图")
         .onAppear { applyDraftIfNeeded() }
+        .onChange(of: generationMode) { saveDraft() }
         .onChange(of: selectedCheckpoint) { saveDraft() }
         .onChange(of: selectedLora) { saveDraft() }
         .onChange(of: loraStrength) { saveDraft() }
+        .onChange(of: selectedCharacter) { saveDraft() }
+        .onChange(of: selectedSecondLora) { saveDraft() }
+        .onChange(of: secondLoraStrength) { saveDraft() }
+        .onChange(of: selectedSecondCharacter) { saveDraft() }
         .onChange(of: styleTags) { saveDraft() }
         .onChange(of: negativePrompt) { saveDraft() }
         .onChange(of: styleNotes) { saveDraft() }
@@ -107,6 +117,10 @@ struct AiDrawView: View {
                     .monospacedDigit()
             }
             Toggle("NSFW 模式", isOn: $nsfwMode)
+            Picker("生成模式", selection: $generationMode) {
+                Text("单角色").tag("SINGLE")
+                Text("双角色").tag("DUAL")
+            }
             Picker("可见性", selection: $nsfwVisibilityLevel) {
                 Text("轻度").tag("LIGHT")
                 Text("标准").tag("STANDARD")
@@ -147,12 +161,40 @@ struct AiDrawView: View {
                         Text(item.displayName ?? item.name).tag(item.name)
                     }
                 }
+                Picker("角色预设", selection: $selectedCharacter) {
+                    Text("不使用").tag("")
+                    ForEach(capabilities.characters) { item in
+                        Text(item.displayName ?? item.name).tag(item.name)
+                    }
+                }
                 if !selectedLora.isEmpty {
                     HStack {
                         Text("LoRA 强度")
                         Slider(value: $loraStrength, in: 0.1...1.5, step: 0.1)
                         Text(loraStrength.formatted(.number.precision(.fractionLength(1))))
                             .monospacedDigit()
+                    }
+                }
+                if generationMode == "DUAL" {
+                    Picker("副角色 LoRA", selection: $selectedSecondLora) {
+                        Text("不使用").tag("")
+                        ForEach(capabilities.loras) { item in
+                            Text(item.displayName ?? item.name).tag(item.name)
+                        }
+                    }
+                    Picker("副角色预设", selection: $selectedSecondCharacter) {
+                        Text("不使用").tag("")
+                        ForEach(capabilities.characters) { item in
+                            Text(item.displayName ?? item.name).tag(item.name)
+                        }
+                    }
+                    if !selectedSecondLora.isEmpty {
+                        HStack {
+                            Text("副 LoRA 强度")
+                            Slider(value: $secondLoraStrength, in: 0.1...1.5, step: 0.1)
+                            Text(secondLoraStrength.formatted(.number.precision(.fractionLength(1))))
+                                .monospacedDigit()
+                        }
                     }
                 }
             }
@@ -243,8 +285,13 @@ struct AiDrawView: View {
                     steps: steps,
                     cfg: cfg,
                     checkpoint: selectedCheckpoint.isEmpty ? nil : selectedCheckpoint,
+                    generationMode: generationMode,
                     loraName: selectedLora.isEmpty ? nil : selectedLora,
                     loraStrength: selectedLora.isEmpty ? nil : loraStrength,
+                    characterId: selectedCharacter.isEmpty ? nil : selectedCharacter,
+                    secondLoraName: generationMode == "DUAL" && !selectedSecondLora.isEmpty ? selectedSecondLora : nil,
+                    secondLoraStrength: generationMode == "DUAL" && !selectedSecondLora.isEmpty ? secondLoraStrength : nil,
+                    secondCharacterId: generationMode == "DUAL" && !selectedSecondCharacter.isEmpty ? selectedSecondCharacter : nil,
                     nsfwMode: nsfwMode,
                     nsfwVisibilityLevel: nsfwVisibilityLevel
                 )
@@ -258,16 +305,28 @@ struct AiDrawView: View {
     }
 
     private var hasAssetDraft: Bool {
-        !selectedCheckpoint.isEmpty || !selectedLora.isEmpty || !styleTags.isEmpty || !negativePrompt.isEmpty || !styleNotes.isEmpty
+        !selectedCheckpoint.isEmpty
+            || !selectedLora.isEmpty
+            || !selectedCharacter.isEmpty
+            || !selectedSecondLora.isEmpty
+            || !selectedSecondCharacter.isEmpty
+            || !styleTags.isEmpty
+            || !negativePrompt.isEmpty
+            || !styleNotes.isEmpty
     }
 
     private func applyDraftIfNeeded() {
         let draft = AiDrawDraftStore.load()
         guard loadedDraftUpdatedAt != draft.updatedAt else { return }
         isApplyingDraft = true
+        generationMode = draft.generationMode
         selectedCheckpoint = draft.checkpoint
         selectedLora = draft.loraName
         loraStrength = draft.loraStrength
+        selectedCharacter = draft.characterId
+        selectedSecondLora = draft.secondLoraName
+        secondLoraStrength = draft.secondLoraStrength
+        selectedSecondCharacter = draft.secondCharacterId
         styleTags = draft.styleTags
         negativePrompt = draft.negativePrompt
         styleNotes = draft.styleNotes
@@ -279,9 +338,14 @@ struct AiDrawView: View {
     private func saveDraft() {
         guard draftLoaded, !isApplyingDraft else { return }
         AiDrawDraftStore.updateFromForm(
+            generationMode: generationMode,
             checkpoint: selectedCheckpoint,
             loraName: selectedLora,
             loraStrength: loraStrength,
+            characterId: selectedCharacter,
+            secondLoraName: selectedSecondLora,
+            secondLoraStrength: secondLoraStrength,
+            secondCharacterId: selectedSecondCharacter,
             styleTags: styleTags,
             negativePrompt: negativePrompt,
             styleNotes: styleNotes

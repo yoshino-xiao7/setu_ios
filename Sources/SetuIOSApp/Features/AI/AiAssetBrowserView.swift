@@ -5,6 +5,7 @@ struct AiAssetBrowserView: View {
     @Bindable var environment: AppEnvironment
     @State private var state: LoadState<AiCapabilityResponse> = .idle
     @State private var activeKind: AiAssetKind = .lora
+    @State private var target: AiDraftAssetTarget = .primary
     @State private var searchText = ""
     @State private var categoryFilter = "ALL"
     @State private var selectedAsset: AiAssetDisplayItem?
@@ -21,6 +22,14 @@ struct AiAssetBrowserView: View {
             .onChange(of: activeKind) {
                 searchText = ""
                 categoryFilter = "ALL"
+            }
+
+            if activeKind != .style {
+                Picker("写入目标", selection: $target) {
+                    Text("主角色").tag(AiDraftAssetTarget.primary)
+                    Text("副角色").tag(AiDraftAssetTarget.secondary)
+                }
+                .pickerStyle(.segmented)
             }
 
             if let message {
@@ -114,14 +123,17 @@ struct AiAssetBrowserView: View {
     private func applyToDrawDraft(_ asset: AiAssetDisplayItem) {
         AiDrawDraftStore.applyAsset(
             kind: asset.draftKind,
+            target: target,
             name: asset.name,
             triggerWords: asset.triggerWords,
             negativeTags: asset.negativeTags,
             recommendedStrength: asset.recommendedStrength,
             recommendedCheckpoint: asset.recommendedCheckpoint,
+            linkedLoraName: asset.linkedLoraName,
             notes: asset.notes
         )
-        message = "\(asset.displayName) 已写入 AI 绘图草稿"
+        let targetTitle = asset.kind == .style ? "全局风格" : (target == .secondary ? "副角色" : "主角色")
+        message = "\(asset.displayName) 已写入 AI 绘图草稿：\(targetTitle)"
         selectedAsset = nil
     }
 }
@@ -172,6 +184,7 @@ private struct AiAssetDisplayItem: Identifiable {
     let negativeTags: String
     let recommendedStrength: Double?
     let recommendedCheckpoint: String
+    let linkedLoraName: String
     let previewImage: String
     let notes: String
     let fileName: String
@@ -189,6 +202,7 @@ private struct AiAssetDisplayItem: Identifiable {
         self.negativeTags = metadata.firstText("default_negative", "defaultNegative") ?? ""
         self.recommendedStrength = metadata.firstNumber("recommended_strength", "recommendedStrength", "lora_strength", "loraStrength")
         self.recommendedCheckpoint = metadata.firstText("recommended_checkpoint", "recommendedCheckpoint") ?? ""
+        self.linkedLoraName = metadata.firstText("lora_name", "loraName") ?? ""
         self.previewImage = metadata.previewImage
         self.notes = metadata.firstText("notes", "description", "summary") ?? ""
         self.fileName = metadata.firstText("file_name", "fileName", "lora_name", "loraName") ?? item.name
@@ -207,6 +221,7 @@ private struct AiAssetDisplayItem: Identifiable {
         self.negativeTags = metadata.firstText("default_negative", "defaultNegative") ?? ""
         self.recommendedStrength = nil
         self.recommendedCheckpoint = metadata.firstText("recommended_checkpoint", "recommendedCheckpoint") ?? ""
+        self.linkedLoraName = ""
         self.previewImage = metadata.previewImage
         self.notes = metadata.firstText("notes", "description") ?? ""
         self.fileName = item.name
