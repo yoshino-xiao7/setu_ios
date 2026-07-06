@@ -66,6 +66,60 @@ public struct MusicHotSearchItem: Decodable, Identifiable, Sendable {
     public var id: String { first }
 }
 
+public struct MusicUrlResponse: Decodable, Sendable {
+    public let code: Int?
+    public let data: [MusicUrlItem]?
+    public let playability: String?
+    public let fullPlayable: Bool?
+    public let trial: Bool?
+    public let playabilityReason: String?
+    public let message: String?
+    public let msg: String?
+}
+
+public struct MusicUrlItem: Decodable, Identifiable, Sendable {
+    public let id: Int
+    public let url: String?
+    public let trialUrl: String?
+    public let level: String?
+    public let size: Int?
+    public let playability: String?
+    public let fullPlayable: Bool?
+    public let trial: Bool?
+    public let playabilityReason: String?
+    public let message: String?
+    public let msg: String?
+
+    public var playableURLString: String? {
+        guard playability == "FULL", fullPlayable == true else {
+            return nil
+        }
+        return url
+    }
+
+    public var unavailableMessage: String {
+        switch playability {
+        case "TRIAL":
+            return "当前音乐源仅支持试听，无法播放完整版"
+        case "LOGIN_INVALID":
+            return "音乐服务账号已失效，请稍后再试"
+        case "UNAVAILABLE":
+            return playabilityReason ?? message ?? msg ?? "该歌曲暂不可播放"
+        default:
+            return playabilityReason ?? message ?? msg ?? "该歌曲暂不可播放"
+        }
+    }
+}
+
+public struct MusicLyricResponse: Decodable, Sendable {
+    public let lrc: MusicLyricPayload?
+    public let tlyric: MusicLyricPayload?
+}
+
+public struct MusicLyricPayload: Decodable, Sendable {
+    public let lyric: String?
+}
+
 public struct UserMusicPlaylist: Decodable, Identifiable, Sendable {
     public let id: Int
     public let userId: Int?
@@ -133,6 +187,24 @@ public struct CreateMusicPlaylistRequest: Encodable, Sendable {
 }
 
 public struct AddSongToPlaylistRequest: Encodable, Sendable {
+    public let songId: Int
+    public let songName: String
+    public let artistName: String
+    public let albumName: String?
+    public let coverUrl: String?
+    public let duration: Int
+
+    public init(song: MusicSong) {
+        self.songId = song.id
+        self.songName = song.name
+        self.artistName = song.artistNames
+        self.albumName = song.albumName
+        self.coverUrl = song.coverURLString
+        self.duration = song.durationMilliseconds
+    }
+}
+
+public struct AddMusicHistoryRequest: Encodable, Sendable {
     public let songId: Int
     public let songName: String
     public let artistName: String

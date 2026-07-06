@@ -8,6 +8,7 @@ struct MusicHomeView: View {
     @State private var hotState: LoadState<[MusicHotSearchItem]> = .idle
     @State private var searchState: LoadState<MusicSearchResult> = .idle
     @State private var selectedSong: MusicSong?
+    @State private var playbackSong: MusicSong?
 
     var body: some View {
         List {
@@ -43,6 +44,9 @@ struct MusicHomeView: View {
         .sheet(item: $selectedSong) { song in
             AddSongToPlaylistSheet(environment: environment, song: song)
         }
+        .sheet(item: $playbackSong) { song in
+            MusicPlaybackSheet(environment: environment, song: song)
+        }
         .task { await loadHotSearch() }
         .refreshable { await loadHotSearch() }
     }
@@ -66,6 +70,8 @@ struct MusicHomeView: View {
                 } else {
                     ForEach(result.result.songs) { song in
                         MusicSongRow(song: song) {
+                            playbackSong = song
+                        } onAddToPlaylist: {
                             selectedSong = song
                         }
                     }
@@ -142,6 +148,7 @@ private struct MusicSearchInputModifier: ViewModifier {
 
 struct MusicSongRow: View {
     let song: MusicSong
+    var onPlay: (() -> Void)?
     var onAddToPlaylist: (() -> Void)?
 
     var body: some View {
@@ -160,6 +167,12 @@ struct MusicSongRow: View {
             }
             Spacer()
             VStack(spacing: 10) {
+                if let onPlay {
+                    Button(action: onPlay) {
+                        Image(systemName: "play.circle")
+                    }
+                    .buttonStyle(.borderless)
+                }
                 if song.mv ?? 0 > 0 {
                     Image(systemName: "play.rectangle")
                         .foregroundStyle(.pink)
@@ -275,6 +288,162 @@ private struct AddSongToPlaylistSheet: View {
             try await environment.musicClient.add(song: song, toPlaylist: playlist.id)
             message = "已加入 \(playlist.name)"
             dismiss()
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+}
+
+private struct MusicPlaybackSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Bindable var environment: AppEnvironment
+    let song: MusicSong
+
+    @State private var quality = "standard"
+    @State private var urlState: LoadState<MusicUrlItem?> = .idle
+    @State private var lyricState: LoadState<MusicLyricResponse> = .idle
+    @State private var message: String?
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("歌曲") {
+                    MusicSongRow(song: song)
+                    Picker("音质", selection: $quality) {
+                        Text("standard").tag("standard")
+                        Text("higher").tag("higher")
+                        Text("exhigh").tag("exhigh")
+                        Text("lossless").tag("lossless")
+                        Text("hires").tag("hires")
+                    }
+                    .onChange(of: quality) {
+                        Task { await loadPlayback() }
+                    }
+                }
+
+                if let message {
+                    Section {
+                        Text(message)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                playbackSection
+                lyricSection
+            }
+            .navigationTitle("播放信息")
+            .toolbar {
+                Button("关闭") {
+                    dismiss()
+                }
+            }
+            .task {
+                await load()
+            }
+            .refreshable {
+                await load()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var playbackSection: some View {
+        Section("播放地址") {
+            switch urlState {
+            case .idle, .loading:
+                ProgressView("正在获取播放地址")
+            case .failed(let message):
+                Text(message)
+                    .foregroundStyle(.red)
+            case .loaded(let item):
+                if let item, let urlString = item.playableURLString, let url = URL(string: urlString) {
+                    LabeledContent("状态", value: "完整可播")
+                    if let level = item.level {
+                        LabeledContent("音质", value: level)
+                    }
+                    if let size = item.size {
+                        LabeledContent("大小", value: "\(size)")
+                    }
+                    Link(destination: url) {
+                        Label("打开播放地址", systemImage: "arrow.up.forward.square")
+                    }
+                    Button {
+                        Task { await recordHistory() }
+                    } label: {
+                        Label("记录播放", systemImage: "clock.arrow.circlepath")
+                    }
+                } else if let item {
+                    LabeledContent("状态", value: item.playability ?? "不可播放")
+                    Text(item.unavailableMessage)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ContentUnavailableView("暂无播放地址", systemImage: "music.note")
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var lyricSection: some View {
+        Section("歌词") {
+            switch lyricState {
+            case .idle, .loading:
+                ProgressView("正在加载歌词")
+            case .failed(let message):
+                Text(message)
+                    .foregroundStyle(.red)
+            case .loaded(let lyric):
+                let rawLyric = lyric.lrc?.lyric ?? ""
+                let translation = lyric.tlyric?.lyric ?? ""
+                if rawLyric.isEmpty && translation.isEmpty {
+                    ContentUnavailableView("暂无歌词", systemImage: "text.quote")
+                } else {
+                    if !rawLyric.isEmpty {
+                        Text(rawLyric)
+                            .font(.footnote.monospaced())
+                            .textSelection(.enabled)
+                    }
+                    if !translation.isEmpty {
+                        DisclosureGroup("翻译歌词") {
+                            Text(translation)
+                                .font(.footnote.monospaced())
+                                .textSelection(.enabled)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func load() async {
+        await loadPlayback()
+        await loadLyric()
+    }
+
+    private func loadPlayback() async {
+        urlState = .loading
+        do {
+            let response = try await environment.musicClient.url(songID: song.id, level: quality)
+            urlState = .loaded(response.data?.first)
+        } catch {
+            urlState = .failed(error.localizedDescription)
+        }
+    }
+
+    private func loadLyric() async {
+        lyricState = .loading
+        do {
+            lyricState = .loaded(try await environment.musicClient.lyric(songID: song.id))
+        } catch {
+            lyricState = .failed(error.localizedDescription)
+        }
+    }
+
+    private func recordHistory() async {
+        do {
+            try await environment.musicClient.addHistory(song: song)
+            message = "已记录到播放历史"
         } catch {
             message = error.localizedDescription
         }

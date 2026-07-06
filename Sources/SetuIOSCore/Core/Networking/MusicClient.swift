@@ -16,6 +16,14 @@ public struct MusicClient: Sendable {
         try await apiClient.get("/user/music/search/hot")
     }
 
+    public func url(songID: Int, level: String = "standard") async throws -> MusicUrlResponse {
+        try await apiClient.get("/user/music/url?id=\(songID)&level=\(level)")
+    }
+
+    public func lyric(songID: Int) async throws -> MusicLyricResponse {
+        try await apiClient.get("/user/music/lyric?id=\(songID)")
+    }
+
     public func playlists() async throws -> [UserMusicPlaylist] {
         try await apiClient.get("/user/playlists")
     }
@@ -59,6 +67,10 @@ public struct MusicClient: Sendable {
 
     public func historyCount() async throws -> Int {
         try await apiClient.get("/user/music/history/count")
+    }
+
+    public func addHistory(song: MusicSong) async throws {
+        let _: String = try await apiClient.post("/user/music/history", body: AddMusicHistoryRequest(song: song))
     }
 
     public func clearHistory() async throws {
