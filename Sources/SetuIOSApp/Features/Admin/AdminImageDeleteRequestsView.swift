@@ -7,6 +7,9 @@ struct AdminImageDeleteRequestsView: View {
     @State private var state: LoadState<PageResult<ImageDeleteRequestItem>> = .idle
     @State private var statusFilter: DeleteRequestStatusFilter = .pending
     @State private var page = 1
+    @State private var selectedRequestIDs: Set<Int> = []
+    @State private var actionMessage: String?
+    @State private var isBulkReviewing = false
     private let pageSize = 20
 
     var body: some View {
@@ -14,6 +17,13 @@ struct AdminImageDeleteRequestsView: View {
             if environment.authSession.currentUser?.role != .admin {
                 ContentUnavailableView("需要管理员权限", systemImage: "shield.slash", description: Text("请使用管理员账号登录后审核图片删除申请。"))
             } else {
+                if let actionMessage {
+                    Section {
+                        Text(actionMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
                 filterSection
                 content
             }
@@ -49,17 +59,86 @@ struct AdminImageDeleteRequestsView: View {
             if result.list.isEmpty {
                 ContentUnavailableView("暂无申请", systemImage: "tray", description: Text("当前筛选条件下没有图片删除申请。"))
             } else {
+                let pendingItems = result.list.filter { $0.status == 0 }
+                if !pendingItems.isEmpty {
+                    bulkReviewSection(pendingItems)
+                }
                 Section("共 \(result.total) 条") {
                     ForEach(result.list) { request in
-                        Button {
-                            router.navigate(to: .adminImageDeleteRequestDetail(request.id))
-                        } label: {
-                            ImageDeleteRequestRow(request: request)
+                        HStack(spacing: 12) {
+                            if request.status == 0 {
+                                Button {
+                                    toggleSelection(request.id)
+                                } label: {
+                                    Image(systemName: selectedRequestIDs.contains(request.id) ? "checkmark.circle.fill" : "circle")
+                                        .foregroundStyle(selectedRequestIDs.contains(request.id) ? .green : .secondary)
+                                }
+                                .buttonStyle(.borderless)
+                                .disabled(isBulkReviewing)
+                            }
+
+                            Button {
+                                router.navigate(to: .adminImageDeleteRequestDetail(request.id))
+                            } label: {
+                                ImageDeleteRequestRow(request: request)
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
                 pagerSection(result)
+            }
+        }
+    }
+
+    private func bulkReviewSection(_ pendingItems: [ImageDeleteRequestItem]) -> some View {
+        let pendingIDs = Set(pendingItems.map(\.id))
+        let selectedCount = selectedRequestIDs.intersection(pendingIDs).count
+        let allSelected = selectedCount == pendingItems.count
+
+        return Section("批量审核") {
+            HStack {
+                Button(allSelected ? "取消全选当前页" : "选择当前页待审核") {
+                    if allSelected {
+                        selectedRequestIDs.subtract(pendingIDs)
+                    } else {
+                        selectedRequestIDs.formUnion(pendingIDs)
+                    }
+                }
+                .disabled(isBulkReviewing)
+
+                Spacer()
+
+                Text("已选 \(selectedCount) / \(pendingItems.count)")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack {
+                Button("清空选择") {
+                    selectedRequestIDs.removeAll()
+                }
+                .disabled(isBulkReviewing || selectedRequestIDs.isEmpty)
+
+                Spacer()
+
+                Button(role: .destructive) {
+                    Task { await batchReview(approve: false) }
+                } label: {
+                    Label("批量拒绝", systemImage: "xmark.circle")
+                }
+                .disabled(isBulkReviewing || selectedCount == 0)
+
+                Button {
+                    Task { await batchReview(approve: true) }
+                } label: {
+                    if isBulkReviewing {
+                        ProgressView()
+                    } else {
+                        Label("批量同意", systemImage: "checkmark.circle")
+                    }
+                }
+                .disabled(isBulkReviewing || selectedCount == 0)
             }
         }
     }
@@ -94,21 +173,58 @@ struct AdminImageDeleteRequestsView: View {
         guard environment.authSession.currentUser?.role == .admin else { return }
         if resetPage {
             page = 1
+            selectedRequestIDs.removeAll()
         }
         state = .loading
         do {
+            let result: PageResult<ImageDeleteRequestItem>
             if statusFilter == .pendingOnly {
-                state = .loaded(try await environment.imageDeleteRequestClient.adminPending(page: page, pageSize: pageSize))
+                result = try await environment.imageDeleteRequestClient.adminPending(page: page, pageSize: pageSize)
             } else {
-                state = .loaded(try await environment.imageDeleteRequestClient.adminList(
+                result = try await environment.imageDeleteRequestClient.adminList(
                     status: statusFilter.queryValue,
                     page: page,
                     pageSize: pageSize
-                ))
+                )
             }
+            selectedRequestIDs.formIntersection(Set(result.list.filter { $0.status == 0 }.map(\.id)))
+            state = .loaded(result)
         } catch {
             state = .failed(error.localizedDescription)
         }
+    }
+
+    private func toggleSelection(_ id: Int) {
+        if selectedRequestIDs.contains(id) {
+            selectedRequestIDs.remove(id)
+        } else {
+            selectedRequestIDs.insert(id)
+        }
+    }
+
+    private func batchReview(approve: Bool) async {
+        let requestIDs = Array(currentPendingIDs().intersection(selectedRequestIDs)).sorted()
+        guard !requestIDs.isEmpty else { return }
+        isBulkReviewing = true
+        actionMessage = nil
+        do {
+            let response = try await environment.imageDeleteRequestClient.batchReview(
+                requestIDs: requestIDs,
+                approve: approve,
+                remark: approve ? "iOS 批量同意" : "iOS 批量拒绝"
+            )
+            selectedRequestIDs.removeAll()
+            actionMessage = "批量审核完成：成功 \(response.successCount)，失败 \(response.failureCount)"
+            await load(resetPage: false)
+        } catch {
+            actionMessage = error.localizedDescription
+        }
+        isBulkReviewing = false
+    }
+
+    private func currentPendingIDs() -> Set<Int> {
+        guard case .loaded(let result) = state else { return [] }
+        return Set(result.list.filter { $0.status == 0 }.map(\.id))
     }
 }
 

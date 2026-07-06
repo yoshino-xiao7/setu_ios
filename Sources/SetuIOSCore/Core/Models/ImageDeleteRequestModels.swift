@@ -75,3 +75,20 @@ public struct ImageDeleteRequestDetail: Decodable, Identifiable, Sendable {
         }
     }
 }
+
+public struct DeleteRequestBatchReviewResult: Decodable, Identifiable, Sendable {
+    public let requestId: Int
+    public let success: Bool
+    public let status: Int?
+    public let code: String?
+    public let message: String?
+
+    public var id: Int { requestId }
+}
+
+public struct DeleteRequestBatchReviewResponse: Decodable, Sendable {
+    public let total: Int
+    public let successCount: Int
+    public let failureCount: Int
+    public let results: [DeleteRequestBatchReviewResult]
+}

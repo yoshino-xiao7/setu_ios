@@ -41,6 +41,13 @@ public struct ImageDeleteRequestClient: Sendable {
             body: ImageDeleteRequestReviewRequest(requestId: requestID, approve: approve, remark: remark)
         )
     }
+
+    public func batchReview(requestIDs: [Int], approve: Bool, remark: String?) async throws -> DeleteRequestBatchReviewResponse {
+        try await apiClient.post(
+            "/admin/image-delete/batch-review",
+            body: ImageDeleteRequestBatchReviewRequest(requestIds: requestIDs, approve: approve, remark: remark)
+        )
+    }
 }
 
 private struct ImageDeleteRequestSubmitRequest: Encodable, Sendable {
@@ -51,6 +58,12 @@ private struct ImageDeleteRequestSubmitRequest: Encodable, Sendable {
 
 private struct ImageDeleteRequestReviewRequest: Encodable, Sendable {
     let requestId: Int
+    let approve: Bool
+    let remark: String?
+}
+
+private struct ImageDeleteRequestBatchReviewRequest: Encodable, Sendable {
+    let requestIds: [Int]
     let approve: Bool
     let remark: String?
 }
