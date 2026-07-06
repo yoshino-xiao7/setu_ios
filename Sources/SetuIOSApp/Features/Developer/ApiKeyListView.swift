@@ -1,10 +1,5 @@
 import SetuIOSCore
 import SwiftUI
-#if canImport(UIKit)
-import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 
 struct ApiKeyListView: View {
     @Bindable var environment: AppEnvironment
@@ -123,12 +118,7 @@ struct ApiKeyListView: View {
     }
 
     private func copyCreatedKey(_ key: String) {
-        #if canImport(UIKit)
-        UIPasteboard.general.string = key
-        #elseif canImport(AppKit)
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(key, forType: .string)
-        #endif
+        PlatformClipboard.copy(key)
         copyMessage = "新 API Key 已复制"
     }
 

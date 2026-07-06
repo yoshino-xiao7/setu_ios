@@ -149,10 +149,42 @@ struct CollectionDetailView: View {
                 Label(info.isShared == true ? "取消分享到广场" : "分享到收藏夹广场", systemImage: info.isShared == true ? "square.and.arrow.down" : "square.and.arrow.up")
             }
 
+            if canShareLink(info) {
+                let url = publicShareURL(for: info)
+                Button {
+                    copyShareLink(url)
+                } label: {
+                    Label("复制分享链接", systemImage: "doc.on.doc")
+                }
+
+                Link(destination: url) {
+                    Label("打开公开预览", systemImage: "arrow.up.forward.square")
+                }
+            } else if !info.isDefault {
+                Text("公开链接需要先将收藏夹设为公开。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
             LabeledContent("浏览", value: "\(info.shareViewCount ?? 0)")
             LabeledContent("点赞", value: "\(info.likeCount ?? info.shareLikeCount ?? 0)")
             LabeledContent("收藏", value: "\(info.favoriteCount ?? info.shareFavCount ?? 0)")
         }
+    }
+
+    private func canShareLink(_ info: CollectionInfo) -> Bool {
+        !info.isDefault && info.visibility == .publicVisible
+    }
+
+    private func publicShareURL(for info: CollectionInfo) -> URL {
+        environment.config.siteBaseURL
+            .appendingPathComponent("c")
+            .appendingPathComponent(String(info.id))
+    }
+
+    private func copyShareLink(_ url: URL) {
+        PlatformClipboard.copy(url.absoluteString)
+        actionMessage = "分享链接已复制"
     }
 
     private func load() async {
