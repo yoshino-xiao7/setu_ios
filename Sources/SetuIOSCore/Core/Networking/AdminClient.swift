@@ -84,6 +84,38 @@ public struct AdminClient: Sendable {
         let _: String = try await apiClient.post("/admin/tempblock/clear-all")
     }
 
+    public func neteaseTokens() async throws -> [NeteaseToken] {
+        try await apiClient.get("/admin/netease/tokens")
+    }
+
+    public func addNeteaseToken(cookie: String, nickname: String) async throws -> Int {
+        try await apiClient.post(
+            "/admin/netease/tokens",
+            body: NeteaseTokenCreateRequest(cookie: cookie, nickname: nickname)
+        )
+    }
+
+    public func updateNeteaseToken(id: Int, cookie: String? = nil, nickname: String? = nil, status: Int? = nil) async throws {
+        let _: String = try await apiClient.put(
+            "/admin/netease/tokens/\(id)",
+            body: NeteaseTokenUpdateRequest(cookie: cookie, nickname: nickname, status: status)
+        )
+    }
+
+    public func deleteNeteaseToken(id: Int) async throws {
+        let _: String = try await apiClient.requestWithoutBody("/admin/netease/tokens/\(id)", method: "DELETE")
+    }
+
+    public func checkNeteaseToken(id: Int, probeSongID: String = "32358362", level: String = "exhigh") async throws -> NeteaseTokenCheckResult {
+        try await apiClient.get(queryPath(
+            "/admin/netease/tokens/\(id)/check",
+            items: [
+                URLQueryItem(name: "probeSongId", value: probeSongID),
+                URLQueryItem(name: "level", value: level)
+            ]
+        ))
+    }
+
     public func imageCount() async throws -> Int {
         if let value: Int = try? await apiClient.get("/status/image-count?t=\(Int(Date().timeIntervalSince1970))", signed: false) {
             return value

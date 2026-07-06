@@ -89,7 +89,11 @@ struct AdminOverviewView: View {
             } label: {
                 Label("黑名单", systemImage: "nosign")
             }
-            Label("网易云 Token 管理", systemImage: "music.mic")
+            Button {
+                router.navigate(to: .adminMusicTokens)
+            } label: {
+                Label("网易云 Token 管理", systemImage: "music.mic")
+            }
             Label("图片删除申请", systemImage: "trash.square")
             Label("图片库管理", systemImage: "photo.badge.checkmark")
             Label("投稿审核", systemImage: "tray.full")

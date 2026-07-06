@@ -182,6 +182,132 @@ public struct MusicMvUrlData: Decodable, Identifiable, Sendable {
     }
 }
 
+public struct NeteaseToken: Decodable, Identifiable, Sendable {
+    public let id: Int
+    public let cookie: String
+    public let nickname: String
+    public let status: Int
+    public let createdAt: String?
+    public let updatedAt: String?
+
+    public var statusTitle: String {
+        status == 1 ? "启用" : "禁用"
+    }
+
+    public var maskedCookie: String {
+        if cookie.isEmpty {
+            return "-"
+        }
+        if cookie.count <= 20 {
+            return cookie
+        }
+        return "\(cookie.prefix(20))..."
+    }
+}
+
+public struct NeteaseTokenCreateRequest: Encodable, Sendable {
+    public let cookie: String
+    public let nickname: String
+
+    public init(cookie: String, nickname: String) {
+        self.cookie = cookie
+        self.nickname = nickname
+    }
+}
+
+public struct NeteaseTokenUpdateRequest: Encodable, Sendable {
+    public let cookie: String?
+    public let nickname: String?
+    public let status: Int?
+
+    public init(cookie: String? = nil, nickname: String? = nil, status: Int? = nil) {
+        self.cookie = cookie
+        self.nickname = nickname
+        self.status = status
+    }
+}
+
+public struct NeteaseTokenCheckResult: Decodable, Sendable {
+    public let tokenId: Int
+    public let nickname: String?
+    public let status: Int?
+    public let cookieValid: Bool
+    public let account: NeteaseAccountInfo?
+    public let vip: Bool?
+    public let vipType: Int?
+    public let accountVipType: Int?
+    public let profileVipType: Int?
+    public let playbackProbe: NeteasePlaybackProbe?
+
+    public var label: String {
+        if !cookieValid || playbackProbe?.playability == "LOGIN_INVALID" {
+            return "Cookie 失效"
+        }
+        if playbackProbe?.fullPlayable == true {
+            return "完整可播"
+        }
+        if playbackProbe?.playability == "TRIAL" {
+            return "仅试听"
+        }
+        if playbackProbe?.playability == "UNAVAILABLE" {
+            return "不可播"
+        }
+        if vip == true {
+            return "疑似 VIP"
+        }
+        return "非 VIP/未知"
+    }
+
+    public var reason: String {
+        if !cookieValid || playbackProbe?.playability == "LOGIN_INVALID" {
+            return "网易云 Cookie 已失效，请更新"
+        }
+        if playbackProbe?.fullPlayable == true {
+            return playbackProbe?.reason ?? "测试歌曲可完整播放"
+        }
+        if playbackProbe?.playability == "TRIAL" {
+            return playbackProbe?.reason ?? "测试歌曲仅返回试听链接"
+        }
+        if playbackProbe?.playability == "UNAVAILABLE" {
+            return playbackProbe?.reason ?? "测试歌曲暂不可播，建议换一首确认是 VIP 的歌曲复查"
+        }
+        if playbackProbe?.skipped == true {
+            return "未传测试歌曲，仅检查登录态和账号字段"
+        }
+        if vip == true {
+            return "账号字段疑似 VIP，建议填写测试歌曲 ID 复查"
+        }
+        return "账号字段未显示 VIP，或尚未验证播放能力"
+    }
+}
+
+public struct NeteaseAccountInfo: Decodable, Sendable {
+    public let code: Int?
+    public let userId: Int?
+    public let nickname: String?
+    public let avatarUrl: String?
+    public let profileVipType: Int?
+    public let accountId: Int?
+    public let accountVipType: Int?
+}
+
+public struct NeteasePlaybackProbe: Decodable, Sendable {
+    public let skipped: Bool?
+    public let songId: String?
+    public let level: String?
+    public let playability: String?
+    public let fullPlayable: Bool?
+    public let trial: Bool?
+    public let reason: String?
+    public let neteaseCode: Int?
+    public let fee: Int?
+    public let payed: Int?
+    public let requestedLevel: String?
+    public let effectiveLevel: String?
+    public let urlAvailable: Bool?
+    public let trialUrlAvailable: Bool?
+}
+
 public struct UserMusicPlaylist: Decodable, Identifiable, Sendable {
     public let id: Int
     public let userId: Int?
