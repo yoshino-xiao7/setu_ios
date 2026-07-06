@@ -61,6 +61,10 @@ public struct CollectionClient: Sendable {
         try await apiClient.get("/square/collections?page=\(page)&size=\(size)&sort=\(sort)")
     }
 
+    public func squareDetail(id: Int) async throws -> CollectionInfo {
+        try await apiClient.get("/square/collections/\(id)")
+    }
+
     public func likeSquareCollection(id: Int, liked: Bool) async throws {
         if liked {
             let _: String = try await apiClient.post("/square/collections/\(id)/like")

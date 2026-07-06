@@ -40,7 +40,7 @@ struct PublicUserProfileView: View {
                     Section("公开收藏夹") {
                         ForEach(collections) { collection in
                             Button {
-                                router.navigate(to: .collectionDetail(collection.id))
+                                router.navigate(to: .publicCollectionDetail(collection.id))
                             } label: {
                                 PublicUserCollectionRow(collection: collection)
                             }

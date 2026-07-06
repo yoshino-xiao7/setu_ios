@@ -78,6 +78,8 @@ struct RootAppView: View {
             CollectionDetailView(environment: environment, collectionID: id)
         case .collectionSquare:
             CollectionSquareView(environment: environment)
+        case .publicCollectionDetail(let id):
+            PublicCollectionDetailView(environment: environment, collectionID: id)
         case .publicUserProfile(let userID):
             PublicUserProfileView(environment: environment, userID: userID)
         case .galleryUploads:

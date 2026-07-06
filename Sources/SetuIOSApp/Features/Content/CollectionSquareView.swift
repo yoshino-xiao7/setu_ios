@@ -39,12 +39,16 @@ struct CollectionSquareView: View {
                 } else {
                     Section("共 \(page.total) 个") {
                         ForEach(page.list) { collection in
-                            CollectionSquareRow(collection: collection) {
-                                Task { await like(collection) }
-                            } onFavorite: {
-                                Task { await favorite(collection) }
-                            } onOwner: {
-                                router.navigate(to: .publicUserProfile(collection.userId))
+                            Button {
+                                router.navigate(to: .publicCollectionDetail(collection.id))
+                            } label: {
+                                CollectionSquareRow(collection: collection) {
+                                    Task { await like(collection) }
+                                } onFavorite: {
+                                    Task { await favorite(collection) }
+                                } onOwner: {
+                                    router.navigate(to: .publicUserProfile(collection.userId))
+                                }
                             }
                         }
                     }
