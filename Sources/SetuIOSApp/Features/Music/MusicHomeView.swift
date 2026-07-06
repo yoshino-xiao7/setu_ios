@@ -14,7 +14,9 @@ struct MusicHomeView: View {
     @State private var playbackMessage: String?
     @State private var searchPage = 1
     @State private var searchKeyword = ""
+    @State private var searchHistory: [String] = MusicSearchHistoryStore.load()
 
+    private let searchHistoryLimit = 10
     private let searchPageSize = 10
 
     var body: some View {
@@ -45,6 +47,7 @@ struct MusicHomeView: View {
             }
 
             nowPlayingSection
+            searchHistorySection
             searchContent
             hotSearchContent
         }
@@ -60,6 +63,38 @@ struct MusicHomeView: View {
         }
         .task { await loadHotSearch() }
         .refreshable { await loadHotSearch() }
+    }
+
+    @ViewBuilder
+    private var searchHistorySection: some View {
+        if !searchHistory.isEmpty {
+            Section {
+                ForEach(searchHistory, id: \.self) { keyword in
+                    HStack {
+                        Button {
+                            query = keyword
+                            Task { await search() }
+                        } label: {
+                            Label(keyword, systemImage: "clock.arrow.circlepath")
+                        }
+                        Spacer()
+                        Button(role: .destructive) {
+                            removeSearchHistory(keyword)
+                        } label: {
+                            Image(systemName: "xmark.circle")
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+                Button(role: .destructive) {
+                    clearSearchHistory()
+                } label: {
+                    Label("清空搜索历史", systemImage: "trash")
+                }
+            } header: {
+                Text("搜索历史")
+            }
+        }
     }
 
     @ViewBuilder
@@ -196,6 +231,7 @@ struct MusicHomeView: View {
     private func search() async {
         let keywords = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !keywords.isEmpty else { return }
+        saveSearchHistory(keywords)
         searchKeyword = keywords
         searchPage = 1
         searchState = .loading
@@ -222,6 +258,24 @@ struct MusicHomeView: View {
         }
     }
 
+    private func saveSearchHistory(_ keyword: String) {
+        let normalized = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return }
+        let nextHistory = [normalized] + searchHistory.filter { $0 != normalized }
+        searchHistory = Array(nextHistory.prefix(searchHistoryLimit))
+        MusicSearchHistoryStore.save(searchHistory)
+    }
+
+    private func removeSearchHistory(_ keyword: String) {
+        searchHistory.removeAll { $0 == keyword }
+        MusicSearchHistoryStore.save(searchHistory)
+    }
+
+    private func clearSearchHistory() {
+        searchHistory = []
+        MusicSearchHistoryStore.clear()
+    }
+
     private func play(_ song: MusicSong) async {
         playbackMessage = "正在获取播放地址"
         do {
@@ -236,6 +290,22 @@ struct MusicHomeView: View {
         } catch {
             playbackMessage = error.localizedDescription
         }
+    }
+}
+
+private enum MusicSearchHistoryStore {
+    private static let key = "icu.yukiryou.setu.musicSearchHistory"
+
+    static func load() -> [String] {
+        UserDefaults.standard.stringArray(forKey: key) ?? []
+    }
+
+    static func save(_ history: [String]) {
+        UserDefaults.standard.set(history, forKey: key)
+    }
+
+    static func clear() {
+        UserDefaults.standard.removeObject(forKey: key)
     }
 }
 
