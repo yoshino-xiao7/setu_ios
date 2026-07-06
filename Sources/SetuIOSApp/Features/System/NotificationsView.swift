@@ -5,12 +5,17 @@ struct NotificationsView: View {
     @Bindable var environment: AppEnvironment
     @State private var state: LoadState<UserNotificationPage> = .idle
     @State private var unreadOnly = false
+    @State private var page = 1
+    private let pageSize = 20
 
     var body: some View {
         List {
             Toggle("仅看未读", isOn: $unreadOnly)
                 .onChange(of: unreadOnly) {
-                    Task { await load() }
+                    Task {
+                        page = 1
+                        await load()
+                    }
                 }
 
             switch state {
@@ -30,6 +35,7 @@ struct NotificationsView: View {
                             }
                         }
                     }
+                    pagerSection(page)
                 }
             }
         }
@@ -43,10 +49,38 @@ struct NotificationsView: View {
         .refreshable { await load() }
     }
 
+    private func pagerSection(_ result: UserNotificationPage) -> some View {
+        Section {
+            HStack {
+                Button("上一页") {
+                    Task {
+                        page = max(1, page - 1)
+                        await load()
+                    }
+                }
+                .disabled(page <= 1)
+
+                Spacer()
+                Text("第 \(result.page) 页")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Spacer()
+
+                Button("下一页") {
+                    Task {
+                        page += 1
+                        await load()
+                    }
+                }
+                .disabled(result.page * result.pageSize >= result.total)
+            }
+        }
+    }
+
     private func load() async {
         state = .loading
         do {
-            state = .loaded(try await environment.notificationClient.list(unreadOnly: unreadOnly))
+            state = .loaded(try await environment.notificationClient.list(page: page, pageSize: pageSize, unreadOnly: unreadOnly))
         } catch {
             state = .failed(error.localizedDescription)
         }
@@ -60,6 +94,7 @@ struct NotificationsView: View {
 
     private func markAllRead() async {
         try? await environment.notificationClient.markAllRead()
+        page = 1
         await load()
     }
 }
