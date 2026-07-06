@@ -24,6 +24,17 @@ public struct MusicClient: Sendable {
         try await apiClient.get("/user/music/lyric?id=\(songID)")
     }
 
+    public func mvDetail(id: Int) async throws -> MusicMvDetailResponse {
+        try await apiClient.get("/user/music/mv/detail?mvid=\(id)")
+    }
+
+    public func mvUrl(id: Int, resolution: Int? = nil) async throws -> MusicMvUrlResponse {
+        if let resolution {
+            return try await apiClient.get("/user/music/mv/url?id=\(id)&r=\(resolution)")
+        }
+        return try await apiClient.get("/user/music/mv/url?id=\(id)")
+    }
+
     public func playlists() async throws -> [UserMusicPlaylist] {
         try await apiClient.get("/user/playlists")
     }

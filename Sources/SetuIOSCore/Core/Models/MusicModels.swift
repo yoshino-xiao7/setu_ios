@@ -120,6 +120,68 @@ public struct MusicLyricPayload: Decodable, Sendable {
     public let lyric: String?
 }
 
+public struct MusicMvDetailResponse: Decodable, Sendable {
+    public let code: Int?
+    public let data: MusicMvDetail
+}
+
+public struct MusicMvDetail: Decodable, Identifiable, Sendable {
+    public let id: Int
+    public let name: String
+    public let artistId: Int?
+    public let artistName: String?
+    public let briefDesc: String?
+    public let desc: String?
+    public let cover: String?
+    public let coverId: Int?
+    public let playCount: Int?
+    public let subCount: Int?
+    public let shareCount: Int?
+    public let commentCount: Int?
+    public let duration: Int?
+    public let publishTime: String?
+    public let brs: [MusicMvQuality]?
+    public let artists: [MusicMvArtist]?
+}
+
+public struct MusicMvQuality: Decodable, Identifiable, Sendable {
+    public let size: Int?
+    public let br: Int
+    public let point: Int?
+
+    public var id: Int { br }
+}
+
+public struct MusicMvArtist: Decodable, Identifiable, Sendable {
+    public let id: Int
+    public let name: String
+    public let img1v1Url: String?
+}
+
+public struct MusicMvUrlResponse: Decodable, Sendable {
+    public let code: Int?
+    public let data: MusicMvUrlData?
+}
+
+public struct MusicMvUrlData: Decodable, Identifiable, Sendable {
+    public let id: Int
+    public let url: String?
+    public let r: Int?
+    public let size: Int?
+    public let md5: String?
+    public let duration: Int?
+    public let br: Int?
+    public let depth: Int?
+    public let encodeType: String?
+    public let type: String?
+    public let expi: Int?
+    public let fee: Int?
+
+    public var httpsURLString: String? {
+        url?.replacingOccurrences(of: "http://", with: "https://")
+    }
+}
+
 public struct UserMusicPlaylist: Decodable, Identifiable, Sendable {
     public let id: Int
     public let userId: Int?

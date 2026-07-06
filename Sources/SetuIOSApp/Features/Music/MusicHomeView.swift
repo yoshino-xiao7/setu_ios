@@ -9,6 +9,7 @@ struct MusicHomeView: View {
     @State private var searchState: LoadState<MusicSearchResult> = .idle
     @State private var selectedSong: MusicSong?
     @State private var playbackSong: MusicSong?
+    @State private var mvSong: MusicSong?
 
     var body: some View {
         List {
@@ -47,6 +48,9 @@ struct MusicHomeView: View {
         .sheet(item: $playbackSong) { song in
             MusicPlaybackSheet(environment: environment, song: song)
         }
+        .sheet(item: $mvSong) { song in
+            MusicMvSheet(environment: environment, song: song)
+        }
         .task { await loadHotSearch() }
         .refreshable { await loadHotSearch() }
     }
@@ -71,6 +75,8 @@ struct MusicHomeView: View {
                     ForEach(result.result.songs) { song in
                         MusicSongRow(song: song) {
                             playbackSong = song
+                        } onPlayMv: {
+                            mvSong = song
                         } onAddToPlaylist: {
                             selectedSong = song
                         }
@@ -149,6 +155,7 @@ private struct MusicSearchInputModifier: ViewModifier {
 struct MusicSongRow: View {
     let song: MusicSong
     var onPlay: (() -> Void)?
+    var onPlayMv: (() -> Void)?
     var onAddToPlaylist: (() -> Void)?
 
     var body: some View {
@@ -174,8 +181,15 @@ struct MusicSongRow: View {
                     .buttonStyle(.borderless)
                 }
                 if song.mv ?? 0 > 0 {
-                    Image(systemName: "play.rectangle")
-                        .foregroundStyle(.pink)
+                    if let onPlayMv {
+                        Button(action: onPlayMv) {
+                            Image(systemName: "play.rectangle")
+                        }
+                        .buttonStyle(.borderless)
+                    } else {
+                        Image(systemName: "play.rectangle")
+                            .foregroundStyle(.pink)
+                    }
                 }
                 if let onAddToPlaylist {
                     Button(action: onAddToPlaylist) {
@@ -447,5 +461,183 @@ private struct MusicPlaybackSheet: View {
         } catch {
             message = error.localizedDescription
         }
+    }
+}
+
+private struct MusicMvSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Bindable var environment: AppEnvironment
+    let song: MusicSong
+
+    @State private var detailState: LoadState<MusicMvDetail> = .idle
+    @State private var urlState: LoadState<MusicMvUrlData?> = .idle
+    @State private var selectedResolution: Int?
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("歌曲") {
+                    MusicSongRow(song: song)
+                }
+
+                detailSection
+                urlSection
+            }
+            .navigationTitle("MV")
+            .toolbar {
+                Button("关闭") {
+                    dismiss()
+                }
+            }
+            .task {
+                await load()
+            }
+            .refreshable {
+                await load()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var detailSection: some View {
+        Section("MV 详情") {
+            switch detailState {
+            case .idle, .loading:
+                ProgressView("正在加载 MV 详情")
+            case .failed(let message):
+                Text(message)
+                    .foregroundStyle(.red)
+            case .loaded(let detail):
+                if let cover = detail.cover {
+                    MusicMvCoverView(urlString: cover)
+                }
+                LabeledContent("标题", value: detail.name)
+                LabeledContent("艺人", value: detail.artistName ?? detail.artists?.map(\.name).joined(separator: " / ") ?? song.artistNames)
+                if let publishTime = detail.publishTime {
+                    LabeledContent("发布时间", value: publishTime)
+                }
+                if let playCount = detail.playCount {
+                    LabeledContent("播放量", value: "\(playCount)")
+                }
+                if let duration = detail.duration {
+                    LabeledContent("时长", value: formatDuration(duration))
+                }
+                if let description = detail.desc ?? detail.briefDesc, !description.isEmpty {
+                    Text(description)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                if let brs = detail.brs, !brs.isEmpty {
+                    Picker("清晰度", selection: $selectedResolution) {
+                        Text("默认").tag(Optional<Int>.none)
+                        ForEach(brs) { quality in
+                            Text("\(quality.br)p").tag(Optional(quality.br))
+                        }
+                    }
+                    .onChange(of: selectedResolution) {
+                        Task { await loadUrl() }
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var urlSection: some View {
+        Section("播放地址") {
+            switch urlState {
+            case .idle, .loading:
+                ProgressView("正在获取 MV 地址")
+            case .failed(let message):
+                Text(message)
+                    .foregroundStyle(.red)
+            case .loaded(let data):
+                if let data, let urlString = data.httpsURLString, let url = URL(string: urlString) {
+                    if let resolution = data.r ?? data.br {
+                        LabeledContent("清晰度", value: "\(resolution)p")
+                    }
+                    if let size = data.size {
+                        LabeledContent("大小", value: "\(size)")
+                    }
+                    if let type = data.type {
+                        LabeledContent("类型", value: type)
+                    }
+                    Link(destination: url) {
+                        Label("打开 MV 播放地址", systemImage: "arrow.up.forward.square")
+                    }
+                } else {
+                    ContentUnavailableView("暂无 MV 地址", systemImage: "play.rectangle")
+                }
+            }
+        }
+    }
+
+    private func load() async {
+        guard let mvID = song.mv, mvID > 0 else {
+            detailState = .failed("该歌曲没有 MV")
+            urlState = .failed("该歌曲没有 MV")
+            return
+        }
+        await loadDetail(mvID: mvID)
+        await loadUrl()
+    }
+
+    private func loadDetail(mvID: Int) async {
+        detailState = .loading
+        do {
+            let response = try await environment.musicClient.mvDetail(id: mvID)
+            detailState = .loaded(response.data)
+        } catch {
+            detailState = .failed(error.localizedDescription)
+        }
+    }
+
+    private func loadUrl() async {
+        guard let mvID = song.mv, mvID > 0 else { return }
+        urlState = .loading
+        do {
+            let response = try await environment.musicClient.mvUrl(id: mvID, resolution: selectedResolution)
+            urlState = .loaded(response.data)
+        } catch {
+            urlState = .failed(error.localizedDescription)
+        }
+    }
+
+    private func formatDuration(_ milliseconds: Int) -> String {
+        let seconds = milliseconds / 1000
+        return "\(seconds / 60):\(String(format: "%02d", seconds % 60))"
+    }
+}
+
+private struct MusicMvCoverView: View {
+    let urlString: String
+
+    var body: some View {
+        Group {
+            if let url = URL(string: urlString) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().scaledToFill()
+                    default:
+                        placeholder
+                    }
+                }
+            } else {
+                placeholder
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 180)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var placeholder: some View {
+        RoundedRectangle(cornerRadius: 8)
+            .fill(.pink.opacity(0.12))
+            .overlay {
+                Image(systemName: "play.rectangle")
+                    .foregroundStyle(.pink)
+            }
     }
 }
