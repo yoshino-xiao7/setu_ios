@@ -15,6 +15,8 @@ enum AppRoute: Hashable {
     case notifications
     case favorites
     case imageDeleteRequests
+    case qqBinding
+    case security
     case admin
 }
 

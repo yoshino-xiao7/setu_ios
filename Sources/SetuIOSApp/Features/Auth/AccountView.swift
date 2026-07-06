@@ -2,6 +2,7 @@ import SetuIOSCore
 import SwiftUI
 
 struct AccountView: View {
+    @Environment(RouterPath.self) private var router
     @Bindable var environment: AppEnvironment
     @State private var email = ""
     @State private var password = ""
@@ -14,6 +15,21 @@ struct AccountView: View {
                 Section("当前账号") {
                     LabeledContent("邮箱", value: user.email)
                     LabeledContent("角色", value: user.role == .admin ? "管理员" : "用户")
+                    Button {
+                        router.navigate(to: .profile)
+                    } label: {
+                        Label("个人资料", systemImage: "person.crop.circle")
+                    }
+                    Button {
+                        router.navigate(to: .qqBinding)
+                    } label: {
+                        Label("QQ 绑定", systemImage: "link")
+                    }
+                    Button {
+                        router.navigate(to: .security)
+                    } label: {
+                        Label("安全设置", systemImage: "lock")
+                    }
                     Button("退出登录", role: .destructive) {
                         Task {
                             await environment.authSession.logout()

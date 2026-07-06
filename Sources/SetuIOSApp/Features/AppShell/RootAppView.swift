@@ -60,6 +60,10 @@ struct RootAppView: View {
             FavoriteListView(environment: environment)
         case .imageDeleteRequests:
             ImageDeleteRequestsView(environment: environment)
+        case .qqBinding:
+            QqBindingView(environment: environment)
+        case .security:
+            SecuritySettingsView(environment: environment)
         case .collections:
             CollectionListView(environment: environment)
         case .collectionSquare:
@@ -92,6 +96,8 @@ struct RootAppView: View {
             AiSquareView(environment: environment)
         case .collectionSquare:
             CollectionSquareView(environment: environment)
+        case .qqBinding:
+            QqBindingView(environment: environment)
         case .deleteRequests:
             ImageDeleteRequestsView(environment: environment)
         case .pointsLogs:

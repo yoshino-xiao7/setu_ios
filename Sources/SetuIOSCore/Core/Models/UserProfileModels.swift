@@ -22,3 +22,46 @@ public struct UpdateNicknameRequest: Encodable, Sendable {
         self.nickname = nickname
     }
 }
+
+public struct QqBinding: Decodable, Sendable {
+    public let qqNumber: String?
+    public let enabled: Bool?
+    public let updatedAt: String?
+
+    public var isEnabled: Bool {
+        enabled == true
+    }
+}
+
+public struct QqBindingVerificationRequest: Encodable, Sendable {
+    public let qqNumber: String
+
+    public init(qqNumber: String) {
+        self.qqNumber = qqNumber
+    }
+}
+
+public struct QqBindingVerificationResponse: Decodable, Sendable {
+    public let qqEmail: String?
+    public let expiresInSeconds: Int?
+}
+
+public struct SaveQqBindingRequest: Encodable, Sendable {
+    public let qqNumber: String
+    public let verificationCode: String
+
+    public init(qqNumber: String, verificationCode: String) {
+        self.qqNumber = qqNumber
+        self.verificationCode = verificationCode
+    }
+}
+
+public struct ChangePasswordRequest: Encodable, Sendable {
+    public let oldPassword: String
+    public let newPassword: String
+
+    public init(oldPassword: String, newPassword: String) {
+        self.oldPassword = oldPassword
+        self.newPassword = newPassword
+    }
+}
