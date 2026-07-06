@@ -7,6 +7,7 @@ struct ApiKeyListView: View {
     @State private var newKeyName = ""
     @State private var createdKey: String?
     @State private var errorMessage: String?
+    @State private var renameTarget: ApiKeyItem?
 
     var body: some View {
         List {
@@ -36,6 +37,11 @@ struct ApiKeyListView: View {
             }
         }
         .navigationTitle("API Keys")
+        .sheet(item: $renameTarget) { key in
+            ApiKeyRenameSheet(environment: environment, key: key) {
+                Task { await load() }
+            }
+        }
         .task { await load() }
         .refreshable { await load() }
     }
@@ -63,6 +69,8 @@ struct ApiKeyListView: View {
                 ForEach(keys) { key in
                     ApiKeyRow(key: key) {
                         Task { await toggle(key) }
+                    } onRename: {
+                        renameTarget = key
                     } onDelete: {
                         Task { await delete(key) }
                     }
@@ -117,6 +125,7 @@ struct ApiKeyListView: View {
 private struct ApiKeyRow: View {
     let key: ApiKeyItem
     let onToggle: () -> Void
+    let onRename: () -> Void
     let onDelete: () -> Void
 
     var body: some View {
@@ -138,11 +147,78 @@ private struct ApiKeyRow: View {
             .foregroundStyle(.secondary)
             HStack {
                 Button(key.isEnabled ? "禁用" : "启用", action: onToggle)
+                Button("重命名", action: onRename)
                 Spacer()
                 Button("删除", role: .destructive, action: onDelete)
             }
             .buttonStyle(.borderless)
         }
         .padding(.vertical, 4)
+    }
+}
+
+private struct ApiKeyRenameSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Bindable var environment: AppEnvironment
+    let key: ApiKeyItem
+    let onSaved: () -> Void
+
+    @State private var name: String
+    @State private var message: String?
+
+    init(environment: AppEnvironment, key: ApiKeyItem, onSaved: @escaping () -> Void) {
+        self.environment = environment
+        self.key = key
+        self.onSaved = onSaved
+        _name = State(initialValue: key.name)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("API Key") {
+                    LabeledContent("当前名称", value: key.name)
+                    TextField("新名称", text: $name)
+                }
+
+                if let message {
+                    Section {
+                        Text(message)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                    }
+                }
+            }
+            .navigationTitle("重命名 API Key")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") {
+                        Task { await save() }
+                    }
+                    .disabled(trimmedName.isEmpty || trimmedName == key.name)
+                }
+            }
+        }
+    }
+
+    private var trimmedName: String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func save() async {
+        guard !trimmedName.isEmpty, trimmedName != key.name else { return }
+        message = nil
+        do {
+            try await environment.apiKeyClient.rename(id: key.id, name: trimmedName)
+            onSaved()
+            dismiss()
+        } catch {
+            message = error.localizedDescription
+        }
     }
 }
