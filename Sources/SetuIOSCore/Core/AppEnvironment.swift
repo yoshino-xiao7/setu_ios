@@ -17,6 +17,7 @@ public final class AppEnvironment {
     public let aiGenerationClient: AiGenerationClient
     public let favoriteClient: FavoriteClient
     public let imageDeleteRequestClient: ImageDeleteRequestClient
+    public let musicClient: MusicClient
     public let authSession: AuthSession
 
     public init(
@@ -34,6 +35,7 @@ public final class AppEnvironment {
         aiGenerationClient: AiGenerationClient,
         favoriteClient: FavoriteClient,
         imageDeleteRequestClient: ImageDeleteRequestClient,
+        musicClient: MusicClient,
         authSession: AuthSession
     ) {
         self.config = config
@@ -50,6 +52,7 @@ public final class AppEnvironment {
         self.aiGenerationClient = aiGenerationClient
         self.favoriteClient = favoriteClient
         self.imageDeleteRequestClient = imageDeleteRequestClient
+        self.musicClient = musicClient
         self.authSession = authSession
     }
 
@@ -69,6 +72,7 @@ public final class AppEnvironment {
         let aiGenerationClient = AiGenerationClient(apiClient: client)
         let favoriteClient = FavoriteClient(apiClient: client)
         let imageDeleteRequestClient = ImageDeleteRequestClient(apiClient: client)
+        let musicClient = MusicClient(apiClient: client)
         let session = AuthSession(apiClient: client, keychain: keychain)
         return AppEnvironment(
             config: config,
@@ -85,6 +89,7 @@ public final class AppEnvironment {
             aiGenerationClient: aiGenerationClient,
             favoriteClient: favoriteClient,
             imageDeleteRequestClient: imageDeleteRequestClient,
+            musicClient: musicClient,
             authSession: session
         )
     }

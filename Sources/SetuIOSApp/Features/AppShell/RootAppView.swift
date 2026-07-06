@@ -33,11 +33,7 @@ struct RootAppView: View {
         case .collections:
             CollectionListView(environment: environment)
         case .music:
-            PlaceholderFeatureView(
-                title: "音乐",
-                systemImage: "music.note",
-                summary: "后续接入播放器、歌单、播放历史和后台音频。"
-            )
+            MusicHomeView(environment: environment)
         case .settings:
             AccountView(environment: environment)
         }
@@ -73,9 +69,9 @@ struct RootAppView: View {
         case .aiSquare:
             AiSquareView(environment: environment)
         case .musicHistory:
-            PlaceholderFeatureView(title: "播放历史", systemImage: "clock.arrow.circlepath", summary: "查看最近播放记录。")
+            MusicHistoryView(environment: environment)
         case .playlists:
-            PlaceholderFeatureView(title: "我的歌单", systemImage: "music.note.list", summary: "管理歌单与歌曲。")
+            MusicPlaylistsView(environment: environment)
         case .admin:
             PlaceholderFeatureView(title: "管理后台", systemImage: "shield", summary: "管理员审核、日志和系统操作。")
         }
@@ -106,6 +102,12 @@ struct RootAppView: View {
             NotificationsView(environment: environment)
         case .systemStatus:
             SystemStatusView(environment: environment)
+        case .musicPlayer:
+            MusicHomeView(environment: environment)
+        case .playlists:
+            MusicPlaylistsView(environment: environment)
+        case .musicHistory:
+            MusicHistoryView(environment: environment)
         default:
             if let feature = AppFeatureCatalog.feature(id: featureID) {
                 FeatureDetailView(feature: feature)
