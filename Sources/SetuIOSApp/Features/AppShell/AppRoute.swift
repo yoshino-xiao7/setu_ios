@@ -14,6 +14,7 @@ enum AppRoute: Hashable {
     case collections
     case collectionDetail(Int)
     case collectionSquare
+    case publicUserProfile(Int)
     case galleryUploads
     case galleryUploadDetail(Int)
     case aiHistory

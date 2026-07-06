@@ -2,6 +2,7 @@ import SetuIOSCore
 import SwiftUI
 
 struct CollectionSquareView: View {
+    @Environment(RouterPath.self) private var router
     @Bindable var environment: AppEnvironment
     @State private var state: LoadState<PageResult<CollectionInfo>> = .idle
     @State private var sort = "hot"
@@ -42,6 +43,8 @@ struct CollectionSquareView: View {
                                 Task { await like(collection) }
                             } onFavorite: {
                                 Task { await favorite(collection) }
+                            } onOwner: {
+                                router.navigate(to: .publicUserProfile(collection.userId))
                             }
                         }
                     }
@@ -86,6 +89,7 @@ private struct CollectionSquareRow: View {
     let collection: CollectionInfo
     let onLike: () -> Void
     let onFavorite: () -> Void
+    let onOwner: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -100,9 +104,11 @@ private struct CollectionSquareRow: View {
                             .foregroundStyle(.secondary)
                             .lineLimit(2)
                     }
-                    Text(collection.ownerNickname ?? "匿名分享者")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Button(action: onOwner) {
+                        Label(collection.ownerNickname ?? "匿名分享者", systemImage: "person.crop.circle")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.borderless)
                 }
             }
 
