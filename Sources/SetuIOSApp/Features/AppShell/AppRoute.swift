@@ -7,6 +7,7 @@ enum AppRoute: Hashable {
     case apiKeys
     case pointsLogs
     case collections
+    case collectionDetail(Int)
     case collectionSquare
     case galleryUploads
     case galleryUploadDetail(Int)

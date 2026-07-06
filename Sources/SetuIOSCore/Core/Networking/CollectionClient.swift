@@ -11,8 +11,28 @@ public struct CollectionClient: Sendable {
         try await apiClient.get("/collections/mine")
     }
 
+    public func info(collectionID: Int) async throws -> CollectionInfo {
+        try await apiClient.get("/collections/\(collectionID)")
+    }
+
     public func items(collectionID: Int, page: Int = 1, size: Int = 24) async throws -> CollectionItemPage {
         try await apiClient.get("/collections/\(collectionID)/items?page=\(page)&size=\(size)")
+    }
+
+    public func removeItem(collectionID: Int, pid: Int, p: Int) async throws {
+        let _: String = try await apiClient.requestWithoutBody("/collections/\(collectionID)/items/\(pid)/\(p)", method: "DELETE")
+    }
+
+    public func share(collectionID: Int) async throws {
+        let _: String = try await apiClient.post("/collections/\(collectionID)/share")
+    }
+
+    public func unshare(collectionID: Int) async throws {
+        let _: String = try await apiClient.requestWithoutBody("/collections/\(collectionID)/share", method: "DELETE")
+    }
+
+    public func setCover(collectionID: Int, pid: Int, p: Int) async throws {
+        let _: String = try await apiClient.requestWithoutBody("/collections/\(collectionID)/cover?pid=\(pid)&p=\(p)", method: "PUT")
     }
 
     public func square(page: Int = 1, size: Int = 20, sort: String = "hot") async throws -> PageResult<CollectionInfo> {

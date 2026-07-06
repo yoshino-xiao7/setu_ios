@@ -27,7 +27,12 @@ struct CollectionListView: View {
                 } else {
                     Section("共 \(collections.count) 个收藏夹") {
                         ForEach(collections) { collection in
-                            CollectionRow(collection: collection)
+                            Button {
+                                router.navigate(to: .collectionDetail(collection.id))
+                            } label: {
+                                CollectionRow(collection: collection)
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
