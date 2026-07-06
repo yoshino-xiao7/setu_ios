@@ -12,7 +12,7 @@ struct AiHistoryView: View {
     @State private var statusFilter = ""
     @State private var page = 1
     @State private var message: String?
-    private let pageSize = 20
+    private let pageSize = 12
 
     var body: some View {
         List {
@@ -206,6 +206,9 @@ private struct AiGenerationRow: View {
                 if let cost = job.pointsCost {
                     Label("\(cost) 积分", systemImage: "bolt.circle")
                 }
+                if let size = job.sizeBytes {
+                    Label(formatFileSize(size), systemImage: "doc")
+                }
                 if job.publicVisible == true {
                     Label("公开", systemImage: "globe")
                 }
@@ -215,8 +218,63 @@ private struct AiGenerationRow: View {
             }
             .font(.caption)
             .foregroundStyle(.secondary)
+
+            if job.status == "COMPLETED" {
+                HStack(spacing: 8) {
+                    StatusBadge(title: "公开：\(reviewStatusTitle)", status: job.reviewStatus)
+                    if let publicCategory = job.publicCategory {
+                        StatusBadge(title: publicCategory == "R18" ? "R18" : "全年龄", status: publicCategory)
+                    }
+                    if let deleteStatus = job.deleteStatus, deleteStatus != "NONE" {
+                        StatusBadge(title: deleteStatusTitle(deleteStatus), status: deleteStatus)
+                    }
+                }
+            }
+
+            if job.privateOssStatus == "EXPIRED" || job.privateOssStatus == "EXPLICITLY_DELETED" {
+                Label("云端原图已清理，生成历史仍会保留", systemImage: "info.circle")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else if job.status == "COMPLETED", let expiresAt = job.privateOssExpiresAt {
+                Label("图片仅保留 30 天，预计 \(expiresAt) 清理", systemImage: "clock")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .padding(.vertical, 4)
+    }
+
+    private var reviewStatusTitle: String {
+        switch job.reviewStatus {
+        case "WAITING": "待审核"
+        case "APPROVED": "已进广场"
+        case "REJECTED": "已拒绝"
+        case "NONE": "未提交"
+        default: job.reviewStatus
+        }
+    }
+
+    private func deleteStatusTitle(_ status: String) -> String {
+        switch status {
+        case "WAITING": "删除待审核"
+        case "APPROVED": "删除已通过"
+        case "REJECTED": "删除已拒绝"
+        default: status
+        }
+    }
+
+    private func formatFileSize(_ bytes: Int) -> String {
+        let units = ["B", "KB", "MB", "GB"]
+        var value = Double(bytes)
+        var unitIndex = 0
+        while value >= 1024, unitIndex < units.count - 1 {
+            value /= 1024
+            unitIndex += 1
+        }
+        if unitIndex == 0 {
+            return "\(bytes) B"
+        }
+        return String(format: "%.1f %@", value, units[unitIndex])
     }
 }
 
@@ -238,6 +296,9 @@ private struct StatusBadge: View {
         case "COMPLETED": .green
         case "FAILED": .red
         case "RUNNING", "UPLOADING": .blue
+        case "APPROVED", "GENERAL": .green
+        case "REJECTED", "R18": .red
+        case "WAITING": .orange
         default: .orange
         }
     }
