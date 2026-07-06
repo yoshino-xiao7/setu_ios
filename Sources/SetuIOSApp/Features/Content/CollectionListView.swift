@@ -24,7 +24,7 @@ struct CollectionListView: View {
                 ContentUnavailableView("收藏夹加载失败", systemImage: "heart.slash", description: Text(message))
             case .loaded(let collections):
                 if collections.isEmpty {
-                    ContentUnavailableView("暂无收藏夹", systemImage: "heart", description: Text("网页端或图片详情中创建收藏夹后会显示在这里。"))
+                    ContentUnavailableView("暂无收藏夹", systemImage: "heart", description: Text("创建收藏夹后会显示在这里。"))
                 } else {
                     Section("共 \(collections.count) 个收藏夹") {
                         ForEach(collections) { collection in

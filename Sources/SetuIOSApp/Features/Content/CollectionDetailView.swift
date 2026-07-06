@@ -10,6 +10,7 @@ struct CollectionDetailView: View {
     @State private var itemsState: LoadState<CollectionItemPage> = .idle
     @State private var actionMessage: String?
     @State private var editor: CollectionEditorContext?
+    @State private var moveContext: CollectionItemMoveContext?
     @State private var showingDeleteConfirmation = false
 
     var body: some View {
@@ -45,6 +46,8 @@ struct CollectionDetailView: View {
                         ForEach(page.items) { item in
                             CollectionItemRow(item: item) {
                                 Task { await setCover(item) }
+                            } onMove: {
+                                moveContext = CollectionItemMoveContext(currentCollectionID: collectionID, item: item)
                             } onRemove: {
                                 Task { await remove(item) }
                             }
@@ -73,6 +76,12 @@ struct CollectionDetailView: View {
         }
         .sheet(item: $editor) { context in
             CollectionEditorSheet(environment: environment, context: context) {
+                Task { await load() }
+            }
+        }
+        .sheet(item: $moveContext) { context in
+            CollectionItemMoveSheet(environment: environment, context: context) { mode in
+                actionMessage = mode.completionMessage
                 Task { await load() }
             }
         }
@@ -218,6 +227,7 @@ struct CollectionDetailView: View {
 private struct CollectionItemRow: View {
     let item: CollectionItem
     let onSetCover: () -> Void
+    let onMove: () -> Void
     let onRemove: () -> Void
 
     var body: some View {
@@ -244,6 +254,9 @@ private struct CollectionItemRow: View {
                 Button(action: onSetCover) {
                     Label("设为封面", systemImage: "photo.badge.checkmark")
                 }
+                Button(action: onMove) {
+                    Label("移动/复制", systemImage: "arrow.left.arrow.right")
+                }
                 Button(role: .destructive, action: onRemove) {
                     Label("移除", systemImage: "trash")
                 }
@@ -253,6 +266,172 @@ private struct CollectionItemRow: View {
             .buttonStyle(.borderless)
         }
         .padding(.vertical, 4)
+    }
+}
+
+private struct CollectionItemMoveContext: Identifiable {
+    let currentCollectionID: Int
+    let item: CollectionItem
+
+    var id: String {
+        "\(currentCollectionID)-\(item.pid)-\(item.p)"
+    }
+}
+
+private enum CollectionItemMoveMode: String, CaseIterable, Identifiable {
+    case move
+    case copy
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .move: "移动"
+        case .copy: "复制"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .move: "arrow.right"
+        case .copy: "doc.on.doc"
+        }
+    }
+
+    var completionMessage: String {
+        switch self {
+        case .move: "已移动到目标收藏夹"
+        case .copy: "已复制到目标收藏夹"
+        }
+    }
+}
+
+private struct CollectionItemMoveSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Bindable var environment: AppEnvironment
+    let context: CollectionItemMoveContext
+    let onSaved: (CollectionItemMoveMode) -> Void
+
+    @State private var collectionsState: LoadState<[CollectionInfo]> = .idle
+    @State private var selectedCollectionID: Int?
+    @State private var mode: CollectionItemMoveMode = .move
+    @State private var message: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("图片") {
+                    LabeledContent("标题", value: context.item.image?.title ?? "PID \(context.item.pid)")
+                    LabeledContent("PID", value: "\(context.item.pid)-\(context.item.p)")
+                }
+
+                Section("目标收藏夹") {
+                    switch collectionsState {
+                    case .idle, .loading:
+                        ProgressView("正在加载收藏夹")
+                    case .failed(let message):
+                        ContentUnavailableView("收藏夹加载失败", systemImage: "heart.slash", description: Text(message))
+                    case .loaded(let collections):
+                        let candidates = targetCollections(from: collections)
+                        if candidates.isEmpty {
+                            ContentUnavailableView("没有可选目标收藏夹", systemImage: "tray", description: Text("请先创建另一个收藏夹。"))
+                        } else {
+                            Picker("目标", selection: selectedCollectionBinding(candidates)) {
+                                ForEach(candidates) { collection in
+                                    Text(collection.name).tag(collection.id)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Section("操作") {
+                    Picker("模式", selection: $mode) {
+                        ForEach(CollectionItemMoveMode.allCases) { value in
+                            Label(value.title, systemImage: value.systemImage)
+                                .tag(value)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    Text(mode == .move ? "移动会先复制到目标收藏夹，再从当前收藏夹移除。" : "复制会保留当前收藏夹中的图片。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
+                if let message {
+                    Section {
+                        Text(message)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                    }
+                }
+            }
+            .navigationTitle("移动/复制")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("确认") {
+                        Task { await submit() }
+                    }
+                    .disabled(selectedCollectionID == nil)
+                }
+            }
+            .task { await loadCollections() }
+        }
+    }
+
+    private func targetCollections(from collections: [CollectionInfo]) -> [CollectionInfo] {
+        collections.filter { $0.id != context.currentCollectionID }
+    }
+
+    private func selectedCollectionBinding(_ candidates: [CollectionInfo]) -> Binding<Int> {
+        Binding {
+            selectedCollectionID ?? candidates.first?.id ?? context.currentCollectionID
+        } set: { newValue in
+            selectedCollectionID = newValue
+        }
+    }
+
+    private func loadCollections() async {
+        collectionsState = .loading
+        do {
+            let collections = try await environment.collectionClient.listMine()
+            collectionsState = .loaded(collections)
+            let candidates = targetCollections(from: collections)
+            if selectedCollectionID == nil {
+                selectedCollectionID = candidates.first?.id
+            }
+        } catch {
+            collectionsState = .failed(error.localizedDescription)
+        }
+    }
+
+    private func submit() async {
+        guard let selectedCollectionID else { return }
+        message = nil
+        do {
+            try await environment.collectionClient.addItem(
+                collectionID: selectedCollectionID,
+                pid: context.item.pid,
+                p: context.item.p
+            )
+            if mode == .move {
+                try await environment.collectionClient.removeItem(
+                    collectionID: context.currentCollectionID,
+                    pid: context.item.pid,
+                    p: context.item.p
+                )
+            }
+            onSaved(mode)
+            dismiss()
+        } catch {
+            message = error.localizedDescription
+        }
     }
 }
 
