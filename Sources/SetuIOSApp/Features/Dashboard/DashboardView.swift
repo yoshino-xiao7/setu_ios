@@ -19,6 +19,7 @@ struct DashboardView: View {
             }
 
             dashboardSummary
+            usageLogsSection
 
             Section("常用功能") {
                 FeatureRow(title: "API Keys", systemImage: "key") {
@@ -104,10 +105,65 @@ struct DashboardView: View {
         }
     }
 
+    @ViewBuilder
+    private var usageLogsSection: some View {
+        Section("最近调用日志") {
+            switch state {
+            case .idle, .loading:
+                ProgressView("正在加载调用日志")
+            case .failed:
+                EmptyView()
+            case .loaded(let snapshot):
+                if let logs = snapshot.usageLogs?.list, !logs.isEmpty {
+                    ForEach(logs) { log in
+                        UsageLogRow(log: log)
+                    }
+                    if let total = snapshot.usageLogs?.total, total > logs.count {
+                        Text("共 \(total) 条，已显示最近 \(logs.count) 条。")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    ContentUnavailableView("暂无调用日志", systemImage: "clock.arrow.circlepath")
+                }
+            }
+        }
+    }
+
     private func load() async {
         state = .loading
         let snapshot = await environment.dashboardClient.fetchHomeSnapshot()
         state = .loaded(snapshot)
+    }
+}
+
+private struct UsageLogRow: View {
+    let log: UsageLogItem
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(log.endpoint)
+                    .font(.headline)
+                    .lineLimit(1)
+                Spacer()
+                Text("\(log.status)")
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(statusColor)
+            }
+            HStack(spacing: 12) {
+                Label(log.ip, systemImage: "network")
+                Label(log.timestamp, systemImage: "clock")
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var statusColor: Color {
+        (200..<400).contains(log.status) ? .green : .red
     }
 }
 

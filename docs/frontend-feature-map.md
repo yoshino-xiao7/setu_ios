@@ -4,7 +4,7 @@
 
 ## 第一批：App Shell 与首页数据
 
-- 仪表盘：`/usage/overview`、`/points/me`、`/status/overview`、`/notifications/unread-count`。已接入 iOS 首页。
+- 仪表盘：`/usage/overview`、`/usage/logs`、`/points/me`、`/status/overview`、`/notifications/unread-count`。已接入 iOS 首页。
 - 账号：`/auth/login`、`/auth/register`、`/auth/forgot-password`、`/auth/reset-password`、`/auth/refresh-signature`、`/auth/logout`、`/user/info`
 - 移动端能力：`/mobile/capabilities`、APNs 设备绑定、Live Activity token
 
