@@ -5,6 +5,8 @@ struct ApiKeyListView: View {
     @Bindable var environment: AppEnvironment
     @State private var state: LoadState<[ApiKeyItem]> = .idle
     @State private var newKeyName = ""
+    @State private var dailyQuota = 1000
+    @State private var totalQuotaText = ""
     @State private var createdKey: String?
     @State private var copyMessage: String?
     @State private var errorMessage: String?
@@ -14,10 +16,12 @@ struct ApiKeyListView: View {
         List {
             Section("新建") {
                 TextField("Key 名称", text: $newKeyName)
+                Stepper("每日调用配额 \(dailyQuota)", value: $dailyQuota, in: 1...100_000, step: 100)
+                TextField("总调用配额（留空为无限制）", text: $totalQuotaText)
                 Button("创建 API Key") {
                     Task { await createKey() }
                 }
-                .disabled(newKeyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(!canCreate)
 
                 if let createdKey {
                     VStack(alignment: .leading, spacing: 8) {
@@ -47,6 +51,8 @@ struct ApiKeyListView: View {
                 }
             }
 
+            apiKeyStats
+
             Section("我的 API Keys") {
                 content
             }
@@ -59,6 +65,18 @@ struct ApiKeyListView: View {
         }
         .task { await load() }
         .refreshable { await load() }
+    }
+
+    @ViewBuilder
+    private var apiKeyStats: some View {
+        if case .loaded(let keys) = state, !keys.isEmpty {
+            Section("概览") {
+                ApiKeyMetricRow(title: "全部 Key", value: "\(keys.count)", systemImage: "key")
+                ApiKeyMetricRow(title: "启用中", value: "\(keys.filter(\.isEnabled).count)", systemImage: "checkmark.circle")
+                ApiKeyMetricRow(title: "今日调用", value: "\(keys.reduce(0) { $0 + $1.callsToday })", systemImage: "calendar")
+                ApiKeyMetricRow(title: "历史总量", value: "\(keys.reduce(0) { $0 + $1.totalCalls })", systemImage: "chart.line.uptrend.xyaxis")
+            }
+        }
     }
 
     @ViewBuilder
@@ -94,6 +112,23 @@ struct ApiKeyListView: View {
         }
     }
 
+    private var canCreate: Bool {
+        !newKeyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && dailyQuota >= 1
+            && totalQuotaIsValid
+    }
+
+    private var parsedTotalQuota: Int? {
+        let text = totalQuotaText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return nil }
+        return Int(text)
+    }
+
+    private var totalQuotaIsValid: Bool {
+        let text = totalQuotaText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty || (Int(text) ?? 0) >= 1
+    }
+
     private func load() async {
         state = .loading
         do {
@@ -109,8 +144,10 @@ struct ApiKeyListView: View {
         errorMessage = nil
         copyMessage = nil
         do {
-            createdKey = try await environment.apiKeyClient.create(name: name)
+            createdKey = try await environment.apiKeyClient.create(name: name, dailyQuota: dailyQuota, totalQuota: parsedTotalQuota)
             newKeyName = ""
+            dailyQuota = 1000
+            totalQuotaText = ""
             await load()
         } catch {
             errorMessage = error.localizedDescription
@@ -143,6 +180,24 @@ struct ApiKeyListView: View {
     }
 }
 
+private struct ApiKeyMetricRow: View {
+    let title: String
+    let value: String
+    let systemImage: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: systemImage)
+                .foregroundStyle(.pink)
+                .frame(width: 24)
+            Text(title)
+            Spacer()
+            Text(value)
+                .font(.headline.monospacedDigit())
+        }
+    }
+}
+
 private struct ApiKeyRow: View {
     let key: ApiKeyItem
     let onToggle: () -> Void
@@ -163,6 +218,13 @@ private struct ApiKeyRow: View {
                 Label("今日 \(key.callsToday)", systemImage: "calendar")
                 Spacer()
                 Label("总计 \(key.totalCalls)", systemImage: "sum")
+            }
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            HStack {
+                Label("每日限额 \(key.dailyQuota)", systemImage: "speedometer")
+                Spacer()
+                Label("总限额 \(key.totalQuota.map(String.init) ?? "∞")", systemImage: "chart.bar")
             }
             .font(.footnote)
             .foregroundStyle(.secondary)
