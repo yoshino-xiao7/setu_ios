@@ -5,6 +5,8 @@ struct ImageDeleteRequestsView: View {
     @Environment(RouterPath.self) private var router
     @Bindable var environment: AppEnvironment
     @State private var state: LoadState<PageResult<ImageDeleteRequestItem>> = .idle
+    @State private var page = 1
+    private let pageSize = 10
 
     var body: some View {
         List {
@@ -27,6 +29,7 @@ struct ImageDeleteRequestsView: View {
                             .buttonStyle(.plain)
                         }
                     }
+                    pagerSection(page)
                 }
             }
         }
@@ -35,10 +38,38 @@ struct ImageDeleteRequestsView: View {
         .refreshable { await load() }
     }
 
+    private func pagerSection(_ result: PageResult<ImageDeleteRequestItem>) -> some View {
+        Section {
+            HStack {
+                Button("上一页") {
+                    Task {
+                        page = max(1, page - 1)
+                        await load()
+                    }
+                }
+                .disabled(page <= 1)
+
+                Spacer()
+                Text("第 \(result.page) 页")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Spacer()
+
+                Button("下一页") {
+                    Task {
+                        page += 1
+                        await load()
+                    }
+                }
+                .disabled(result.page * result.pageSize >= result.total)
+            }
+        }
+    }
+
     private func load() async {
         state = .loading
         do {
-            state = .loaded(try await environment.imageDeleteRequestClient.listMine())
+            state = .loaded(try await environment.imageDeleteRequestClient.listMine(page: page, pageSize: pageSize))
         } catch {
             state = .failed(error.localizedDescription)
         }
