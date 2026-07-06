@@ -346,3 +346,136 @@ public struct PixivCrawlerTaskProgress: Decodable, Sendable {
         return min(100, max(0, Int((Double(done) / Double(total)) * 100)))
     }
 }
+
+public struct ImageAuditItem: Decodable, Identifiable, Sendable {
+    public let id: Int
+    public let pid: Int
+    public let p: Int
+    public let uid: Int
+    public let title: String
+    public let author: String
+    public let r18: Int
+    public let width: Int
+    public let height: Int
+    public let ext: String
+    public let aiType: Int
+    public let uploadDate: Int64
+    public let urlOriginal: String
+    public let lastAuditStatus: Int?
+    public let lastAuditRemark: String?
+    public let lastAuditTime: String?
+    public let lastAuditAdminEmail: String?
+    public let availabilityStatus: String?
+    public let lastAvailabilityCheckAt: String?
+    public let lastAvailabilityHttpStatus: Int?
+    public let lastAvailabilityError: String?
+    public let availabilityFailCount: Int?
+
+    public var pidText: String { "\(pid)_p\(p)" }
+
+    public var ratingTitle: String {
+        r18 == 1 ? "R18" : "全年龄"
+    }
+
+    public var aiTitle: String {
+        aiType == 2 ? "AI" : "非 AI"
+    }
+
+    public var auditStatusTitle: String {
+        switch lastAuditStatus {
+        case 1: "上次正常"
+        case 2: "上次有问题"
+        default: "未审核"
+        }
+    }
+
+    public var availabilityTitle: String {
+        switch availabilityStatus {
+        case "OK": "可用"
+        case "SUSPECTED_BROKEN": "疑似失效"
+        case "BROKEN": "已失效"
+        case "UNKNOWN": "未知"
+        default: availabilityStatus ?? "未知"
+        }
+    }
+}
+
+public struct ImageAuditStats: Decodable, Sendable {
+    public let unreviewed: Int
+    public let dueReview: Int
+    public let all: Int
+}
+
+public struct ImageAuditPageResult: Decodable, Sendable {
+    public let total: Int
+    public let page: Int
+    public let pageSize: Int
+    public let list: [ImageAuditItem]
+    public let stats: ImageAuditStats?
+    public let dueBefore: String?
+}
+
+public struct ImageAuditSubmitRequest: Encodable, Sendable {
+    public let imageId: Int
+    public let status: Int
+    public let remark: String?
+
+    public init(imageId: Int, status: Int, remark: String? = nil) {
+        self.imageId = imageId
+        self.status = status
+        self.remark = remark
+    }
+}
+
+public struct ImageAuditBatchSubmitRequest: Encodable, Sendable {
+    public let imageIds: [Int]
+    public let status: Int
+    public let remark: String?
+
+    public init(imageIds: [Int], status: Int, remark: String? = nil) {
+        self.imageIds = imageIds
+        self.status = status
+        self.remark = remark
+    }
+}
+
+public struct ImageAuditBatchSubmitResult: Decodable, Sendable {
+    public let imageId: Int
+    public let success: Bool
+    public let auditStatus: Int?
+    public let deleteRequestCreated: Bool?
+    public let deleteRequestId: Int?
+    public let code: String?
+    public let message: String?
+}
+
+public struct ImageAuditBatchSubmitResponse: Decodable, Sendable {
+    public let total: Int
+    public let successCount: Int
+    public let failureCount: Int
+    public let results: [ImageAuditBatchSubmitResult]
+}
+
+public struct ImageAvailabilityCheckRequest: Encodable, Sendable {
+    public let imageIds: [Int]
+
+    public init(imageIds: [Int]) {
+        self.imageIds = imageIds
+    }
+}
+
+public struct ImageAvailabilityCheckResult: Decodable, Sendable {
+    public let imageId: Int
+    public let success: Bool
+    public let status: String?
+    public let httpStatus: Int?
+    public let code: String?
+    public let message: String?
+}
+
+public struct ImageAvailabilityCheckResponse: Decodable, Sendable {
+    public let total: Int
+    public let successCount: Int
+    public let failureCount: Int
+    public let results: [ImageAvailabilityCheckResult]
+}

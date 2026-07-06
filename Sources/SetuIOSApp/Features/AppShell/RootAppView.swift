@@ -108,6 +108,8 @@ struct RootAppView: View {
             AdminImageDeleteRequestsView(environment: environment)
         case .adminImageDeleteRequestDetail(let id):
             AdminImageDeleteRequestDetailView(environment: environment, requestID: id)
+        case .adminImageAudit:
+            AdminImageAuditView(environment: environment)
         case .adminGallerySubmissions:
             AdminGallerySubmissionsView(environment: environment)
         case .adminGallerySubmissionDetail(let id):
@@ -184,6 +186,8 @@ struct RootAppView: View {
             AdminMusicTokensView(environment: environment)
         case .adminImageDeleteRequests:
             AdminImageDeleteRequestsView(environment: environment)
+        case .adminImageAudit:
+            AdminImageAuditView(environment: environment)
         case .adminGallerySubmissions:
             AdminGallerySubmissionsView(environment: environment)
         case .adminOperationLogs:

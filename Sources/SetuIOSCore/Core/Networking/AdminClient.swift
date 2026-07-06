@@ -147,6 +147,52 @@ public struct AdminClient: Sendable {
         try await apiClient.get("/admin/operation-logs/\(id)")
     }
 
+    public func imageAuditList(
+        page: Int = 1,
+        pageSize: Int = 20,
+        scope: String? = nil,
+        pid: Int? = nil,
+        p: Int? = nil,
+        staleDays: Int? = nil,
+        availabilityStatus: String? = nil,
+        onlyBroken: Bool? = nil
+    ) async throws -> ImageAuditPageResult {
+        try await apiClient.get(queryPath(
+            "/admin/image-audit/list",
+            items: [
+                URLQueryItem(name: "page", value: "\(page)"),
+                URLQueryItem(name: "pageSize", value: "\(pageSize)"),
+                URLQueryItem(name: "scope", value: scope),
+                URLQueryItem(name: "pid", value: pid.map(String.init)),
+                URLQueryItem(name: "p", value: p.map(String.init)),
+                URLQueryItem(name: "staleDays", value: staleDays.map(String.init)),
+                URLQueryItem(name: "availabilityStatus", value: availabilityStatus),
+                URLQueryItem(name: "onlyBroken", value: onlyBroken.map { $0 ? "true" : "false" })
+            ]
+        ))
+    }
+
+    public func submitImageAudit(imageID: Int, status: Int, remark: String? = nil) async throws {
+        let _: String = try await apiClient.post(
+            "/admin/image-audit/submit",
+            body: ImageAuditSubmitRequest(imageId: imageID, status: status, remark: remark)
+        )
+    }
+
+    public func submitImageAuditBatch(imageIDs: [Int], status: Int, remark: String? = nil) async throws -> ImageAuditBatchSubmitResponse {
+        try await apiClient.post(
+            "/admin/image-audit/batch-submit",
+            body: ImageAuditBatchSubmitRequest(imageIds: imageIDs, status: status, remark: remark)
+        )
+    }
+
+    public func checkImageAvailability(imageIDs: [Int]) async throws -> ImageAvailabilityCheckResponse {
+        try await apiClient.post(
+            "/admin/image-audit/availability-check",
+            body: ImageAvailabilityCheckRequest(imageIds: imageIDs)
+        )
+    }
+
     public func pixivHealth() async throws -> PixivCrawlerHealth {
         try await apiClient.get("/admin/pixiv/health")
     }
