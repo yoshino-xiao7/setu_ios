@@ -5,6 +5,8 @@ struct AiSquareView: View {
     @Bindable var environment: AppEnvironment
     @State private var state: LoadState<PageResult<AiGenerationJob>> = .idle
     @State private var category = ""
+    @State private var page = 1
+    private let pageSize = 16
 
     var body: some View {
         List {
@@ -15,7 +17,10 @@ struct AiSquareView: View {
             }
             .pickerStyle(.segmented)
             .onChange(of: category) {
-                Task { await load() }
+                Task {
+                    page = 1
+                    await load()
+                }
             }
 
             switch state {
@@ -32,6 +37,7 @@ struct AiSquareView: View {
                             AiSquareRow(job: job)
                         }
                     }
+                    pagerSection(page)
                 }
             }
         }
@@ -40,10 +46,38 @@ struct AiSquareView: View {
         .refreshable { await load() }
     }
 
+    private func pagerSection(_ result: PageResult<AiGenerationJob>) -> some View {
+        Section {
+            HStack {
+                Button("上一页") {
+                    Task {
+                        page = max(1, page - 1)
+                        await load()
+                    }
+                }
+                .disabled(page <= 1)
+
+                Spacer()
+                Text("第 \(result.page) 页")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Spacer()
+
+                Button("下一页") {
+                    Task {
+                        page += 1
+                        await load()
+                    }
+                }
+                .disabled(result.page * result.pageSize >= result.total)
+            }
+        }
+    }
+
     private func load() async {
         state = .loading
         do {
-            state = .loaded(try await environment.aiGenerationClient.square(category: category))
+            state = .loaded(try await environment.aiGenerationClient.square(category: category, page: page, pageSize: pageSize))
         } catch {
             state = .failed(error.localizedDescription)
         }
