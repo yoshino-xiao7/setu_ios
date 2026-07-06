@@ -9,6 +9,8 @@ struct PublicCollectionDetailView: View {
     @State private var infoState: LoadState<CollectionInfo> = .idle
     @State private var itemsState: LoadState<CollectionItemPage> = .idle
     @State private var actionMessage: String?
+    @State private var page = 1
+    private let pageSize = 24
 
     var body: some View {
         List {
@@ -44,12 +46,41 @@ struct PublicCollectionDetailView: View {
                             PublicCollectionImageRow(item: item)
                         }
                     }
+                    pagerSection(page)
                 }
             }
         }
         .navigationTitle(title)
         .task { await load() }
         .refreshable { await load() }
+    }
+
+    private func pagerSection(_ result: CollectionItemPage) -> some View {
+        Section {
+            HStack {
+                Button("上一页") {
+                    Task {
+                        page = max(1, page - 1)
+                        await load()
+                    }
+                }
+                .disabled(page <= 1)
+
+                Spacer()
+                Text("第 \(result.page) 页")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Spacer()
+
+                Button("下一页") {
+                    Task {
+                        page += 1
+                        await load()
+                    }
+                }
+                .disabled(result.page * result.size >= result.total)
+            }
+        }
     }
 
     private var title: String {
@@ -142,7 +173,7 @@ struct PublicCollectionDetailView: View {
         itemsState = .loading
         do {
             async let info = environment.collectionClient.squareDetail(id: collectionID)
-            async let items = environment.collectionClient.items(collectionID: collectionID)
+            async let items = environment.collectionClient.items(collectionID: collectionID, page: page, size: pageSize)
             infoState = .loaded(try await info)
             itemsState = .loaded(try await items)
         } catch {
