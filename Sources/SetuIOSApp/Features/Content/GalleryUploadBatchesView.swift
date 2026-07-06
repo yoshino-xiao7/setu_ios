@@ -19,6 +19,8 @@ struct GalleryUploadBatchesView: View {
     @State private var uploadMessage: String?
     @State private var isUploading = false
     @State private var draftRestored = false
+    @State private var page = 1
+    private let pageSize = 10
 
     var body: some View {
         List {
@@ -33,7 +35,10 @@ struct GalleryUploadBatchesView: View {
             }
             .pickerStyle(.segmented)
             .onChange(of: statusFilter) {
-                Task { await load() }
+                Task {
+                    page = 1
+                    await load()
+                }
             }
 
             switch state {
@@ -54,6 +59,7 @@ struct GalleryUploadBatchesView: View {
                             }
                         }
                     }
+                    pagerSection(page)
                 }
             }
         }
@@ -72,6 +78,34 @@ struct GalleryUploadBatchesView: View {
             await load()
         }
         .refreshable { await load() }
+    }
+
+    private func pagerSection(_ result: PageResult<GalleryUploadBatchSummary>) -> some View {
+        Section {
+            HStack {
+                Button("上一页") {
+                    Task {
+                        page = max(1, page - 1)
+                        await load()
+                    }
+                }
+                .disabled(page <= 1)
+
+                Spacer()
+                Text("第 \(result.page) 页")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Spacer()
+
+                Button("下一页") {
+                    Task {
+                        page += 1
+                        await load()
+                    }
+                }
+                .disabled(result.page * result.pageSize >= result.total)
+            }
+        }
     }
 
     private var createSection: some View {
@@ -123,7 +157,8 @@ struct GalleryUploadBatchesView: View {
     private func load() async {
         state = .loading
         do {
-            state = .loaded(try await environment.galleryUploadClient.listMine(status: statusFilter))
+            let status = statusFilter == "ALL" ? nil : statusFilter
+            state = .loaded(try await environment.galleryUploadClient.listMine(status: status, page: page, pageSize: pageSize))
         } catch {
             state = .failed(error.localizedDescription)
         }
