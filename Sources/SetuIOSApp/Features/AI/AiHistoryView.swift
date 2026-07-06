@@ -6,6 +6,8 @@ struct AiHistoryView: View {
     @Bindable var environment: AppEnvironment
     @State private var state: LoadState<PageResult<AiGenerationJob>> = .idle
     @State private var statusFilter = ""
+    @State private var page = 1
+    private let pageSize = 20
 
     var body: some View {
         List {
@@ -18,7 +20,10 @@ struct AiHistoryView: View {
             }
             .pickerStyle(.segmented)
             .onChange(of: statusFilter) {
-                Task { await load() }
+                Task {
+                    page = 1
+                    await load()
+                }
             }
 
             switch state {
@@ -50,6 +55,7 @@ struct AiHistoryView: View {
                             }
                         }
                     }
+                    pagerSection(page)
                 }
             }
         }
@@ -58,10 +64,38 @@ struct AiHistoryView: View {
         .refreshable { await load() }
     }
 
+    private func pagerSection(_ result: PageResult<AiGenerationJob>) -> some View {
+        Section {
+            HStack {
+                Button("上一页") {
+                    Task {
+                        page = max(1, page - 1)
+                        await load()
+                    }
+                }
+                .disabled(page <= 1)
+
+                Spacer()
+                Text("第 \(result.page) 页")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Spacer()
+
+                Button("下一页") {
+                    Task {
+                        page += 1
+                        await load()
+                    }
+                }
+                .disabled(result.page * result.pageSize >= result.total)
+            }
+        }
+    }
+
     private func load() async {
         state = .loading
         do {
-            state = .loaded(try await environment.aiGenerationClient.listMine(status: statusFilter))
+            state = .loaded(try await environment.aiGenerationClient.listMine(status: statusFilter, page: page, pageSize: pageSize))
         } catch {
             state = .failed(error.localizedDescription)
         }
