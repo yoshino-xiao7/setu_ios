@@ -4,7 +4,7 @@ import SwiftUI
 struct SystemStatusView: View {
     @Bindable var environment: AppEnvironment
     let title: String
-    @State private var state: LoadState<StatusOverview> = .idle
+    @State private var state: LoadState<SystemStatusSnapshot> = .idle
 
     init(environment: AppEnvironment, title: String = "系统状态") {
         self.environment = environment
@@ -19,12 +19,14 @@ struct SystemStatusView: View {
             case .failed(let message):
                 Text(message)
                     .foregroundStyle(.red)
-            case .loaded(let overview):
+            case .loaded(let snapshot):
+                let overview = snapshot.overview
                 Section("API 状态") {
                     LabeledContent("状态", value: overview.status.status)
                     LabeledContent("今日调用", value: String(overview.status.callsToday))
                     LabeledContent("可用性", value: overview.status.availability.map { "\($0)%" } ?? "-")
                     LabeledContent("平均延迟", value: overview.status.avgLatencyMs.map { "\($0) ms" } ?? "-")
+                    LabeledContent("图库数量", value: snapshot.imageCount.map(String.init) ?? "-")
                 }
 
                 if let health = overview.health {
@@ -44,9 +46,20 @@ struct SystemStatusView: View {
     private func load() async {
         state = .loading
         do {
-            state = .loaded(try await environment.statusClient.overview())
+            async let overview = environment.statusClient.overview()
+            async let imageCount = optionalImageCount()
+            state = .loaded(try await SystemStatusSnapshot(overview: overview, imageCount: imageCount))
         } catch {
             state = .failed(error.localizedDescription)
         }
     }
+
+    private func optionalImageCount() async -> Int? {
+        try? await environment.statusClient.imageCount()
+    }
+}
+
+private struct SystemStatusSnapshot: Sendable {
+    let overview: StatusOverview
+    let imageCount: Int?
 }

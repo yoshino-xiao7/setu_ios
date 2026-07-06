@@ -29,6 +29,15 @@ public struct StatusOverview: Decodable, Sendable {
     public let health: ServiceHealthData?
 }
 
+public struct ImageCountResponse: Decodable, Sendable {
+    public let count: Int?
+    public let data: Int?
+
+    public var normalizedCount: Int {
+        count ?? data ?? 0
+    }
+}
+
 public struct UnreadNotificationCount: Decodable, Sendable {
     public let count: Int
 }
