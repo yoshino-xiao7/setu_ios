@@ -44,6 +44,10 @@ public struct AdminClient: Sendable {
         let _: String = try await apiClient.post("/admin/user/unban?userId=\(id)")
     }
 
+    public func deleteUser(id: Int) async throws {
+        let _: String = try await apiClient.requestWithoutBody("/admin/user/\(id)", method: "DELETE")
+    }
+
     public func grantPoints(userID: Int, amount: Int, reason: String?) async throws -> AdminPointsGrantResponse {
         try await apiClient.post(
             "/admin/users/\(userID)/points",

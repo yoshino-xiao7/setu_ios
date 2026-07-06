@@ -121,6 +121,7 @@ struct AdminUsersView: View {
 }
 
 struct AdminUserDetailView: View {
+    @Environment(\.dismiss) private var dismiss
     @Bindable var environment: AppEnvironment
     let userID: Int
     @State private var state: LoadState<AdminUserDetail> = .idle
@@ -128,6 +129,7 @@ struct AdminUserDetailView: View {
     @State private var pointsAmount = ""
     @State private var pointsReason = ""
     @State private var isSubmitting = false
+    @State private var showingDeleteConfirmation = false
 
     var body: some View {
         List {
@@ -145,6 +147,14 @@ struct AdminUserDetailView: View {
             }
         }
         .navigationTitle("用户详情")
+        .confirmationDialog("永久删除这个用户？", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) {
+            Button("确认删除", role: .destructive) {
+                Task { await deleteUser() }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("删除后该用户账号将无法恢复，请确认已经完成必要备份或风险判断。")
+        }
         .task { await load() }
         .refreshable { await load() }
     }
@@ -189,6 +199,13 @@ struct AdminUserDetailView: View {
                 } else {
                     Label(user.status == 0 ? "解除封禁" : "封禁用户", systemImage: user.status == 0 ? "lock.open" : "lock")
                 }
+            }
+            .disabled(isSubmitting)
+
+            Button(role: .destructive) {
+                showingDeleteConfirmation = true
+            } label: {
+                Label("永久删除用户", systemImage: "person.crop.circle.badge.xmark")
             }
             .disabled(isSubmitting)
         }
@@ -267,6 +284,18 @@ struct AdminUserDetailView: View {
                 actionMessage = "已封禁用户"
             }
             await load()
+        } catch {
+            actionMessage = error.localizedDescription
+        }
+        isSubmitting = false
+    }
+
+    private func deleteUser() async {
+        isSubmitting = true
+        actionMessage = nil
+        do {
+            try await environment.adminClient.deleteUser(id: userID)
+            dismiss()
         } catch {
             actionMessage = error.localizedDescription
         }
