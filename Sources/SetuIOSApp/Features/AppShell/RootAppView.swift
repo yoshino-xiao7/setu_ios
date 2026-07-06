@@ -31,11 +31,7 @@ struct RootAppView: View {
         case .features:
             FeatureMapView()
         case .collections:
-            PlaceholderFeatureView(
-                title: "收藏",
-                systemImage: "rectangle.stack",
-                summary: "后续接入我的收藏夹、公开收藏夹和收藏夹广场。"
-            )
+            CollectionListView(environment: environment)
         case .music:
             PlaceholderFeatureView(
                 title: "音乐",
@@ -53,7 +49,7 @@ struct RootAppView: View {
         case .feature(let featureID):
             featureDestination(featureID)
         case .profile:
-            AccountView(environment: environment)
+            ProfileView(environment: environment)
         case .apiKeys:
             ApiKeyListView(environment: environment)
         case .pointsLogs:
@@ -61,11 +57,11 @@ struct RootAppView: View {
         case .notifications:
             NotificationsView(environment: environment)
         case .collections:
-            PlaceholderFeatureView(title: "我的收藏夹", systemImage: "heart", summary: "浏览、编辑和分享收藏夹。")
+            CollectionListView(environment: environment)
         case .collectionSquare:
             PlaceholderFeatureView(title: "收藏夹广场", systemImage: "globe.asia.australia", summary: "发现公开收藏夹。")
         case .aiHistory:
-            PlaceholderFeatureView(title: "AI 绘图历史", systemImage: "clock", summary: "查看生成记录和任务状态。")
+            AiHistoryView(environment: environment)
         case .aiSquare:
             PlaceholderFeatureView(title: "AI 广场", systemImage: "photo.on.rectangle", summary: "浏览公开 AI 作品。")
         case .musicHistory:
@@ -80,8 +76,14 @@ struct RootAppView: View {
     @ViewBuilder
     private func featureDestination(_ featureID: AppFeatureID) -> some View {
         switch featureID {
+        case .profile:
+            ProfileView(environment: environment)
         case .apiKeys:
             ApiKeyListView(environment: environment)
+        case .collections:
+            CollectionListView(environment: environment)
+        case .aiHistory:
+            AiHistoryView(environment: environment)
         case .pointsLogs:
             PointsLogsView(environment: environment)
         case .notifications:

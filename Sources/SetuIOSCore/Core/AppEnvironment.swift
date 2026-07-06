@@ -12,6 +12,9 @@ public final class AppEnvironment {
     public let pointsClient: PointsClient
     public let notificationClient: NotificationClient
     public let statusClient: StatusClient
+    public let userProfileClient: UserProfileClient
+    public let collectionClient: CollectionClient
+    public let aiGenerationClient: AiGenerationClient
     public let authSession: AuthSession
 
     public init(
@@ -24,6 +27,9 @@ public final class AppEnvironment {
         pointsClient: PointsClient,
         notificationClient: NotificationClient,
         statusClient: StatusClient,
+        userProfileClient: UserProfileClient,
+        collectionClient: CollectionClient,
+        aiGenerationClient: AiGenerationClient,
         authSession: AuthSession
     ) {
         self.config = config
@@ -35,6 +41,9 @@ public final class AppEnvironment {
         self.pointsClient = pointsClient
         self.notificationClient = notificationClient
         self.statusClient = statusClient
+        self.userProfileClient = userProfileClient
+        self.collectionClient = collectionClient
+        self.aiGenerationClient = aiGenerationClient
         self.authSession = authSession
     }
 
@@ -49,6 +58,9 @@ public final class AppEnvironment {
         let pointsClient = PointsClient(apiClient: client)
         let notificationClient = NotificationClient(apiClient: client)
         let statusClient = StatusClient(apiClient: client)
+        let userProfileClient = UserProfileClient(apiClient: client)
+        let collectionClient = CollectionClient(apiClient: client)
+        let aiGenerationClient = AiGenerationClient(apiClient: client)
         let session = AuthSession(apiClient: client, keychain: keychain)
         return AppEnvironment(
             config: config,
@@ -60,6 +72,9 @@ public final class AppEnvironment {
             pointsClient: pointsClient,
             notificationClient: notificationClient,
             statusClient: statusClient,
+            userProfileClient: userProfileClient,
+            collectionClient: collectionClient,
+            aiGenerationClient: aiGenerationClient,
             authSession: session
         )
     }
