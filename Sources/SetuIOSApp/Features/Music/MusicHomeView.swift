@@ -6,12 +6,16 @@ struct MusicHomeView: View {
     @Bindable var environment: AppEnvironment
     @State private var query = ""
     @State private var hotState: LoadState<[MusicHotSearchItem]> = .idle
-    @State private var searchState: LoadState<MusicSearchResult> = .idle
+    @State private var searchState: LoadState<MusicSearchResultState> = .idle
     @State private var selectedSong: MusicSong?
     @State private var playbackSong: MusicSong?
     @State private var mvSong: MusicSong?
     @State private var player = MusicPlaybackController()
     @State private var playbackMessage: String?
+    @State private var searchPage = 1
+    @State private var searchKeyword = ""
+
+    private let searchPageSize = 10
 
     var body: some View {
         List {
@@ -71,11 +75,11 @@ struct MusicHomeView: View {
                     .foregroundStyle(.red)
             }
         case .loaded(let result):
-            Section("搜索结果 \(result.result.songCount)") {
-                if result.result.songs.isEmpty {
+            Section("搜索结果 \(result.songs.count)/\(result.total)") {
+                if result.songs.isEmpty {
                     ContentUnavailableView("没有找到音乐", systemImage: "magnifyingglass")
                 } else {
-                    ForEach(result.result.songs) { song in
+                    ForEach(result.songs) { song in
                         MusicSongRow(song: song) {
                             Task { await play(song) }
                         } onPlayMv: {
@@ -83,6 +87,17 @@ struct MusicHomeView: View {
                         } onAddToPlaylist: {
                             selectedSong = song
                         }
+                    }
+                    if result.hasMore {
+                        Button {
+                            Task { await loadMoreSearchResults() }
+                        } label: {
+                            Label("加载更多 (\(result.songs.count)/\(result.total))", systemImage: "plus.circle")
+                        }
+                    } else {
+                        Label("已加载全部 \(result.total) 首歌曲", systemImage: "checkmark.circle")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
                     }
                 }
             }
@@ -181,9 +196,27 @@ struct MusicHomeView: View {
     private func search() async {
         let keywords = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !keywords.isEmpty else { return }
+        searchKeyword = keywords
+        searchPage = 1
         searchState = .loading
         do {
-            searchState = .loaded(try await environment.musicClient.search(keywords: keywords))
+            let result = try await environment.musicClient.search(keywords: keywords, limit: searchPageSize, offset: 0)
+            searchState = .loaded(MusicSearchResultState(result: result))
+        } catch {
+            searchState = .failed(error.localizedDescription)
+        }
+    }
+
+    private func loadMoreSearchResults() async {
+        guard case .loaded(let current) = searchState, current.hasMore else { return }
+        searchPage += 1
+        do {
+            let result = try await environment.musicClient.search(
+                keywords: searchKeyword,
+                limit: searchPageSize,
+                offset: (searchPage - 1) * searchPageSize
+            )
+            searchState = .loaded(current.appending(result))
         } catch {
             searchState = .failed(error.localizedDescription)
         }
@@ -203,6 +236,32 @@ struct MusicHomeView: View {
         } catch {
             playbackMessage = error.localizedDescription
         }
+    }
+}
+
+private struct MusicSearchResultState: Sendable {
+    let songs: [MusicSong]
+    let total: Int
+
+    var hasMore: Bool {
+        songs.count < total
+    }
+
+    init(result: MusicSearchResult) {
+        self.songs = result.result.songs
+        self.total = result.result.songCount
+    }
+
+    private init(songs: [MusicSong], total: Int) {
+        self.songs = songs
+        self.total = total
+    }
+
+    func appending(_ result: MusicSearchResult) -> MusicSearchResultState {
+        MusicSearchResultState(
+            songs: songs + result.result.songs,
+            total: result.result.songCount
+        )
     }
 }
 
