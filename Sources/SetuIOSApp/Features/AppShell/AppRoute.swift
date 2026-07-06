@@ -1,6 +1,8 @@
+import SetuIOSCore
 import SwiftUI
 
 enum AppRoute: Hashable {
+    case feature(AppFeatureID)
     case profile
     case apiKeys
     case pointsLogs
@@ -16,7 +18,7 @@ enum AppRoute: Hashable {
 
 enum AppTab: String, CaseIterable, Identifiable {
     case home
-    case create
+    case features
     case collections
     case music
     case settings
@@ -28,8 +30,8 @@ enum AppTab: String, CaseIterable, Identifiable {
         switch self {
         case .home:
             Label("首页", systemImage: "house")
-        case .create:
-            Label("创作", systemImage: "sparkles")
+        case .features:
+            Label("功能", systemImage: "square.grid.2x2")
         case .collections:
             Label("收藏", systemImage: "rectangle.stack")
         case .music:

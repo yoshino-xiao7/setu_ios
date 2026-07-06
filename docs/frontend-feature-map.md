@@ -1,0 +1,50 @@
+# 前端功能到 iOS 模块映射
+
+本文件以 `setu_cloud/src/router/index.ts` 和 `setu_cloud/src/api/` 为来源，记录 iOS 原生开发的功能覆盖顺序。前端只作为功能和接口参考，iOS 不复制 Web 视图，也不做 WebView 套壳。
+
+## 第一批：App Shell 与首页数据
+
+- 仪表盘：`/usage/overview`、`/points/me`、`/status/overview`、`/notifications/unread-count`
+- 账号：`/auth/login`、`/auth/refresh-signature`、`/auth/logout`、`/user/info`
+- 移动端能力：`/mobile/capabilities`、APNs 设备绑定、Live Activity token
+
+## 用户端功能
+
+- API Keys：列表、创建、启停、重命名、删除。
+- 个人中心：资料、昵称、头像、密码。
+- QQ 绑定：验证码、保存、禁用。
+- 开发文档：原生文档视图或静态内容。
+- 系统状态：公开状态与用户内嵌状态。
+- 积分调用：余额、调用、流水。
+- 收藏夹：我的收藏夹、收藏夹详情、公开分享。
+- 收藏夹广场：列表、点赞、收藏。
+- 图库投稿：批次初始化、直传、状态回写、恢复、取消。
+- AI 绘图：创建任务、提示词翻译、状态、历史、公开审核、删除申请。
+- AI 广场：公开作品列表。
+- 音乐：搜索、播放 URL、歌词、歌单、播放历史、后台播放。
+- 通知中心：列表、未读数、标记已读。
+- 我的删除申请：图片删除申请列表与详情。
+
+## 管理端功能
+
+- 后台概览。
+- 用户管理。
+- 黑名单。
+- 系统监控。
+- 网易云 Token 管理。
+- 图片删除申请。
+- Pixiv 爬虫。
+- 图片库管理。
+- 投稿审核。
+- AI 生成记录。
+- AI Worker 状态。
+- AI 审核队列。
+- AI 删除申请。
+- 操作日志。
+
+## 开发规则
+
+1. 每个模块先补 Core client 和 DTO，再做 SwiftUI 页面。
+2. 所有受保护请求沿用 `SID` Cookie + `signSecret` HMAC。
+3. 上传、音乐、Live Activities 先按移动端契约实现，再做高级体验。
+4. 管理端默认只对 `role == admin` 用户显示入口。

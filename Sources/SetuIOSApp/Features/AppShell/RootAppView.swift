@@ -28,12 +28,8 @@ struct RootAppView: View {
         switch tab {
         case .home:
             DashboardView(environment: environment)
-        case .create:
-            PlaceholderFeatureView(
-                title: "AI 绘图",
-                systemImage: "sparkles",
-                summary: "后续接入 AI 绘图、资产选择、历史和生成进度。"
-            )
+        case .features:
+            FeatureMapView()
         case .collections:
             PlaceholderFeatureView(
                 title: "收藏",
@@ -54,6 +50,12 @@ struct RootAppView: View {
     @ViewBuilder
     private func destination(for route: AppRoute) -> some View {
         switch route {
+        case .feature(let featureID):
+            if let feature = AppFeatureCatalog.feature(id: featureID) {
+                FeatureDetailView(feature: feature)
+            } else {
+                PlaceholderFeatureView(title: "功能", systemImage: "questionmark.circle", summary: "功能定义不存在。")
+            }
         case .profile:
             AccountView(environment: environment)
         case .apiKeys:
