@@ -21,13 +21,51 @@ public struct CollectionInfo: Decodable, Identifiable, Sendable {
     public let isDefault: Bool
     public let coverPid: Int?
     public let coverP: Int?
+    public let coverUrl: String?
     public let createdAt: String?
     public let updatedAt: String?
+    public let ownerNickname: String?
+    public let ownerAvatarUrl: String?
     public let itemCount: Int?
     public let isShared: Bool?
+    public let shareViewCount: Int?
+    public let shareLikeCount: Int?
+    public let shareFavCount: Int?
+    public let shareCreatedAt: String?
+    public let likedByMe: Bool?
+    public let favoritedByMe: Bool?
+    public let likeCount: Int?
+    public let favoriteCount: Int?
+    public let previewImages: [CollectionPreviewImage]?
     public let tags: [String]?
     public let themeTags: [String]?
     public let curatorNote: String?
+    public let scoreReason: String?
+    public let recentItemCount: Int?
+    public let ownerCollectionCount: Int?
+}
+
+public struct CollectionPreviewImage: Decodable, Identifiable, Sendable {
+    public let pid: Int
+    public let p: Int?
+    public let title: String?
+    public let author: String?
+    public let url: String?
+    public let urlSmall: String?
+    public let urlRegular: String?
+    public let urlOriginal: String?
+    public let width: Int?
+    public let height: Int?
+    public let r18: Int?
+    public let tags: [String]?
+
+    public var id: String {
+        "\(pid)-\(p ?? 0)"
+    }
+
+    public var bestURLString: String? {
+        urlSmall ?? urlRegular ?? url ?? urlOriginal
+    }
 }
 
 public struct FavoriteImage: Decodable, Identifiable, Sendable {

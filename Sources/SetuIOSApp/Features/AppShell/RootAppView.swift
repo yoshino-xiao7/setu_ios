@@ -63,11 +63,11 @@ struct RootAppView: View {
         case .collections:
             CollectionListView(environment: environment)
         case .collectionSquare:
-            PlaceholderFeatureView(title: "收藏夹广场", systemImage: "globe.asia.australia", summary: "发现公开收藏夹。")
+            CollectionSquareView(environment: environment)
         case .aiHistory:
             AiHistoryView(environment: environment)
         case .aiSquare:
-            PlaceholderFeatureView(title: "AI 广场", systemImage: "photo.on.rectangle", summary: "浏览公开 AI 作品。")
+            AiSquareView(environment: environment)
         case .musicHistory:
             PlaceholderFeatureView(title: "播放历史", systemImage: "clock.arrow.circlepath", summary: "查看最近播放记录。")
         case .playlists:
@@ -88,6 +88,10 @@ struct RootAppView: View {
             CollectionListView(environment: environment)
         case .aiHistory:
             AiHistoryView(environment: environment)
+        case .aiSquare:
+            AiSquareView(environment: environment)
+        case .collectionSquare:
+            CollectionSquareView(environment: environment)
         case .deleteRequests:
             ImageDeleteRequestsView(environment: environment)
         case .pointsLogs:
