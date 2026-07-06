@@ -6,7 +6,9 @@ struct CollectionSquareView: View {
     @Bindable var environment: AppEnvironment
     @State private var state: LoadState<PageResult<CollectionInfo>> = .idle
     @State private var sort = "hot"
+    @State private var page = 1
     @State private var actionMessage: String?
+    private let pageSize = 20
 
     var body: some View {
         List {
@@ -17,7 +19,10 @@ struct CollectionSquareView: View {
             }
             .pickerStyle(.segmented)
             .onChange(of: sort) {
-                Task { await load() }
+                Task {
+                    page = 1
+                    await load()
+                }
             }
 
             if let actionMessage {
@@ -52,6 +57,7 @@ struct CollectionSquareView: View {
                             }
                         }
                     }
+                    pagerSection(page)
                 }
             }
         }
@@ -60,11 +66,39 @@ struct CollectionSquareView: View {
         .refreshable { await load() }
     }
 
+    private func pagerSection(_ result: PageResult<CollectionInfo>) -> some View {
+        Section {
+            HStack {
+                Button("上一页") {
+                    Task {
+                        page = max(1, page - 1)
+                        await load()
+                    }
+                }
+                .disabled(page <= 1)
+
+                Spacer()
+                Text("第 \(result.page) 页")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Spacer()
+
+                Button("下一页") {
+                    Task {
+                        page += 1
+                        await load()
+                    }
+                }
+                .disabled(result.page * result.pageSize >= result.total)
+            }
+        }
+    }
+
     private func load() async {
         state = .loading
         actionMessage = nil
         do {
-            state = .loaded(try await environment.collectionClient.square(sort: sort))
+            state = .loaded(try await environment.collectionClient.square(page: page, size: pageSize, sort: sort))
         } catch {
             state = .failed(error.localizedDescription)
         }
