@@ -64,6 +64,10 @@ struct RootAppView: View {
             CollectionListView(environment: environment)
         case .collectionSquare:
             CollectionSquareView(environment: environment)
+        case .galleryUploads:
+            GalleryUploadBatchesView(environment: environment)
+        case .galleryUploadDetail(let id):
+            GalleryUploadDetailView(environment: environment, batchID: id)
         case .aiHistory:
             AiHistoryView(environment: environment)
         case .aiGenerationDetail(let id):
@@ -98,6 +102,8 @@ struct RootAppView: View {
             AiDrawView(environment: environment)
         case .collectionSquare:
             CollectionSquareView(environment: environment)
+        case .galleryUpload:
+            GalleryUploadBatchesView(environment: environment)
         case .qqBinding:
             QqBindingView(environment: environment)
         case .deleteRequests:

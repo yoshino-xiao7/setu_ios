@@ -8,6 +8,8 @@ enum AppRoute: Hashable {
     case pointsLogs
     case collections
     case collectionSquare
+    case galleryUploads
+    case galleryUploadDetail(Int)
     case aiHistory
     case aiGenerationDetail(Int)
     case aiSquare
