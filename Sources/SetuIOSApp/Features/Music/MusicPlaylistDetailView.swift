@@ -9,6 +9,7 @@ struct MusicPlaylistDetailView: View {
     @State private var message: String?
     @State private var selectedMode = "sequence"
     @State private var player = MusicPlaybackController()
+    @State private var editingPlaylist: UserMusicPlaylistDetail?
 
     var body: some View {
         List {
@@ -79,8 +80,26 @@ struct MusicPlaylistDetailView: View {
         }
         .navigationTitle("歌单详情")
         .toolbar {
-            Button("删除", role: .destructive) {
-                Task { await deletePlaylist() }
+            Menu {
+                if case .loaded(let playlist) = state {
+                    Button {
+                        editingPlaylist = playlist
+                    } label: {
+                        Label("编辑歌单", systemImage: "square.and.pencil")
+                    }
+                }
+                Button(role: .destructive) {
+                    Task { await deletePlaylist() }
+                } label: {
+                    Label("删除歌单", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+            }
+        }
+        .sheet(item: $editingPlaylist) { playlist in
+            EditMusicPlaylistSheet(environment: environment, playlist: playlist) {
+                Task { await load() }
             }
         }
         .task { await load() }
@@ -169,6 +188,78 @@ struct MusicPlaylistDetailView: View {
     private func deletePlaylist() async {
         do {
             try await environment.musicClient.deletePlaylist(id: playlistID)
+            dismiss()
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+}
+
+private struct EditMusicPlaylistSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Bindable var environment: AppEnvironment
+    let playlist: UserMusicPlaylistDetail
+    let onSaved: () -> Void
+    @State private var name: String
+    @State private var description: String
+    @State private var coverUrl: String
+    @State private var isPublic: Bool
+    @State private var message: String?
+
+    init(environment: AppEnvironment, playlist: UserMusicPlaylistDetail, onSaved: @escaping () -> Void) {
+        self.environment = environment
+        self.playlist = playlist
+        self.onSaved = onSaved
+        _name = State(initialValue: playlist.name)
+        _description = State(initialValue: playlist.description ?? "")
+        _coverUrl = State(initialValue: playlist.coverUrl ?? "")
+        _isPublic = State(initialValue: playlist.isPublic == 1)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("歌单信息") {
+                    TextField("名称", text: $name)
+                    TextField("描述", text: $description, axis: .vertical)
+                    TextField("封面 URL", text: $coverUrl)
+                    Toggle("公开歌单", isOn: $isPublic)
+                }
+                if let message {
+                    Section {
+                        Text(message)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                    }
+                }
+            }
+            .navigationTitle("编辑歌单")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") {
+                        Task { await save() }
+                    }
+                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+    }
+
+    private func save() async {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return }
+        do {
+            _ = try await environment.musicClient.updatePlaylist(
+                id: playlist.id,
+                name: trimmedName,
+                description: description.trimmingCharacters(in: .whitespacesAndNewlines),
+                coverUrl: coverUrl.trimmingCharacters(in: .whitespacesAndNewlines),
+                isPublic: isPublic ? 1 : 0
+            )
+            onSaved()
             dismiss()
         } catch {
             message = error.localizedDescription

@@ -50,6 +50,13 @@ public struct MusicClient: Sendable {
         )
     }
 
+    public func updatePlaylist(id: Int, name: String, description: String? = nil, coverUrl: String? = nil, isPublic: Int = 0) async throws -> UserMusicPlaylist {
+        try await apiClient.put(
+            "/user/playlists/\(id)",
+            body: CreateMusicPlaylistRequest(name: name, description: description, coverUrl: coverUrl, isPublic: isPublic)
+        )
+    }
+
     public func deletePlaylist(id: Int) async throws {
         let _: String = try await apiClient.requestWithoutBody("/user/playlists/\(id)", method: "DELETE")
     }

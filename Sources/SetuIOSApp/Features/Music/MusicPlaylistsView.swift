@@ -16,7 +16,7 @@ struct MusicPlaylistsView: View {
                 ContentUnavailableView("歌单加载失败", systemImage: "music.note.list", description: Text(message))
             case .loaded(let playlists):
                 if playlists.isEmpty {
-                    ContentUnavailableView("暂无歌单", systemImage: "music.note.list", description: Text("在网页端或后续 iOS 歌单编辑中创建歌单后会显示在这里。"))
+                    ContentUnavailableView("暂无歌单", systemImage: "music.note.list", description: Text("创建歌单后会显示在这里。"))
                 } else {
                     Section("共 \(playlists.count) 个歌单") {
                         ForEach(playlists) { playlist in
