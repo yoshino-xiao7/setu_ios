@@ -3,12 +3,23 @@ import Foundation
 public struct MusicArtist: Decodable, Identifiable, Sendable {
     public let id: Int
     public let name: String
+
+    public init(id: Int, name: String) {
+        self.id = id
+        self.name = name
+    }
 }
 
 public struct MusicAlbum: Decodable, Identifiable, Sendable {
     public let id: Int
     public let name: String
     public let picUrl: String?
+
+    public init(id: Int, name: String, picUrl: String? = nil) {
+        self.id = id
+        self.name = name
+        self.picUrl = picUrl
+    }
 }
 
 public struct MusicSong: Decodable, Identifiable, Sendable {
@@ -22,6 +33,30 @@ public struct MusicSong: Decodable, Identifiable, Sendable {
     public let dt: Int?
     public let picUrl: String?
     public let mv: Int?
+
+    public init(
+        id: Int,
+        name: String,
+        artists: [MusicArtist]? = nil,
+        ar: [MusicArtist]? = nil,
+        album: MusicAlbum? = nil,
+        al: MusicAlbum? = nil,
+        duration: Int? = nil,
+        dt: Int? = nil,
+        picUrl: String? = nil,
+        mv: Int? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.artists = artists
+        self.ar = ar
+        self.album = album
+        self.al = al
+        self.duration = duration
+        self.dt = dt
+        self.picUrl = picUrl
+        self.mv = mv
+    }
 
     public var artistNames: String {
         (artists ?? ar ?? []).map(\.name).joined(separator: " / ")
@@ -358,6 +393,22 @@ public struct MusicHistoryRecord: Decodable, Identifiable, Sendable {
     public let coverUrl: String?
     public let duration: Int?
     public let playTime: String
+
+    public var song: MusicSong {
+        MusicSong(
+            id: songId,
+            name: songName,
+            artists: artistName
+                .split(separator: "/")
+                .enumerated()
+                .map { index, name in
+                    MusicArtist(id: index, name: name.trimmingCharacters(in: .whitespacesAndNewlines))
+                },
+            album: MusicAlbum(id: 0, name: albumName ?? "未知专辑", picUrl: coverUrl),
+            duration: duration,
+            picUrl: coverUrl
+        )
+    }
 }
 
 public struct CreateMusicPlaylistRequest: Encodable, Sendable {

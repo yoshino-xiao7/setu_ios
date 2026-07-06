@@ -299,7 +299,7 @@ struct MusicArtworkView: View {
     }
 }
 
-private struct AddSongToPlaylistSheet: View {
+struct AddSongToPlaylistSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var environment: AppEnvironment
     let song: MusicSong

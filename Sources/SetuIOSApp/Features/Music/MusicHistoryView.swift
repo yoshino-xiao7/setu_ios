@@ -8,6 +8,8 @@ struct MusicHistoryView: View {
     @State private var message: String?
     @State private var page = 1
     @State private var pageSize = 20
+    @State private var player = MusicPlaybackController()
+    @State private var selectedSong: MusicSong?
 
     private let pageSizes = [10, 20, 50]
 
@@ -21,6 +23,8 @@ struct MusicHistoryView: View {
                 }
             }
 
+            nowPlayingSection
+
             switch state {
             case .idle, .loading:
                 ProgressView("正在加载")
@@ -32,7 +36,11 @@ struct MusicHistoryView: View {
                 } else {
                     Section(count.map { "共 \($0) 条" } ?? "播放历史") {
                         ForEach(records) { record in
-                            MusicHistoryRow(record: record)
+                            MusicHistoryRow(record: record) {
+                                Task { await play(record) }
+                            } onAddToPlaylist: {
+                                selectedSong = record.song
+                            }
                         }
                     }
                     if let count, count > pageSize {
@@ -42,6 +50,9 @@ struct MusicHistoryView: View {
             }
         }
         .navigationTitle("播放历史")
+        .sheet(item: $selectedSong) { song in
+            AddSongToPlaylistSheet(environment: environment, song: song)
+        }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Menu("每页 \(pageSize)") {
@@ -61,6 +72,45 @@ struct MusicHistoryView: View {
         }
         .task { await load() }
         .refreshable { await load() }
+    }
+
+    @ViewBuilder
+    private var nowPlayingSection: some View {
+        if let track = player.currentTrack {
+            Section("正在播放") {
+                HStack(spacing: 12) {
+                    MusicArtworkView(urlString: track.coverURLString)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(track.title)
+                            .font(.headline)
+                            .lineLimit(2)
+                        Text(track.artist)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                        if let message = player.message {
+                            Text(message)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
+                    Button {
+                        player.toggle()
+                    } label: {
+                        Image(systemName: player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                            .font(.title2)
+                    }
+                    .buttonStyle(.borderless)
+                    Button(role: .destructive) {
+                        player.stop()
+                    } label: {
+                        Image(systemName: "stop.circle")
+                            .font(.title2)
+                    }
+                    .buttonStyle(.borderless)
+                }
+            }
+        }
     }
 
     private func pagerSection(total: Int) -> some View {
@@ -104,6 +154,22 @@ struct MusicHistoryView: View {
         }
     }
 
+    private func play(_ record: MusicHistoryRecord) async {
+        message = "正在获取播放地址"
+        do {
+            let response = try await environment.musicClient.url(songID: record.songId)
+            guard let item = response.data?.first, let urlString = item.playableURLString, let url = URL(string: urlString) else {
+                message = response.data?.first?.unavailableMessage ?? response.playabilityReason ?? response.message ?? "暂无可播放地址"
+                return
+            }
+            player.play(url: url, track: MusicPlaybackTrack(record: record))
+            try? await environment.musicClient.addHistory(song: record.song)
+            message = "已开始播放"
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
     private func clear() async {
         do {
             try await environment.musicClient.clearHistory()
@@ -119,6 +185,8 @@ struct MusicHistoryView: View {
 
 private struct MusicHistoryRow: View {
     let record: MusicHistoryRecord
+    let onPlay: () -> Void
+    let onAddToPlaylist: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
@@ -138,6 +206,18 @@ private struct MusicHistoryRow: View {
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            }
+            Spacer()
+            VStack(spacing: 10) {
+                Button(action: onPlay) {
+                    Image(systemName: "play.circle")
+                }
+                .buttonStyle(.borderless)
+
+                Button(action: onAddToPlaylist) {
+                    Image(systemName: "text.badge.plus")
+                }
+                .buttonStyle(.borderless)
             }
         }
         .padding(.vertical, 4)
