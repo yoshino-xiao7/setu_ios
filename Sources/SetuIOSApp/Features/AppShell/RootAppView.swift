@@ -124,6 +124,8 @@ struct RootAppView: View {
             AdminAiWorkersView(environment: environment)
         case .adminAiReviews:
             AdminAiReviewsView(environment: environment)
+        case .adminAiDeleteRequests:
+            AdminAiDeleteRequestsView(environment: environment)
         }
     }
 
@@ -190,6 +192,8 @@ struct RootAppView: View {
             AdminAiWorkersView(environment: environment)
         case .adminAiReviews:
             AdminAiReviewsView(environment: environment)
+        case .adminAiDeleteRequests:
+            AdminAiDeleteRequestsView(environment: environment)
         default:
             if let feature = AppFeatureCatalog.feature(id: featureID) {
                 FeatureDetailView(feature: feature)

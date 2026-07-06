@@ -103,4 +103,20 @@ public struct AiGenerationClient: Sendable {
     public func rejectAdminReview(id: Int, reason: String) async throws -> AiGenerationReview {
         try await apiClient.post("/admin/ai/reviews/\(id)/reject", body: AiReviewRejectRequest(reason: reason))
     }
+
+    public func adminDeleteRequests(status: String? = nil, page: Int = 1, pageSize: Int = 20) async throws -> PageResult<AiGenerationDeleteRequest> {
+        var path = "/admin/ai/delete-requests?page=\(page)&pageSize=\(pageSize)"
+        if let status, !status.isEmpty, status != "ALL" {
+            path += "&status=\(status)"
+        }
+        return try await apiClient.get(path)
+    }
+
+    public func approveAdminDeleteRequest(id: Int) async throws -> AiGenerationDeleteRequest {
+        try await apiClient.post("/admin/ai/delete-requests/\(id)/approve")
+    }
+
+    public func rejectAdminDeleteRequest(id: Int, reason: String) async throws -> AiGenerationDeleteRequest {
+        try await apiClient.post("/admin/ai/delete-requests/\(id)/reject", body: AiDeleteRejectRequest(reason: reason))
+    }
 }

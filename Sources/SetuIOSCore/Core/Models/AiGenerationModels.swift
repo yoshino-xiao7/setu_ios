@@ -343,6 +343,24 @@ public struct AiGenerationDeleteRequest: Decodable, Identifiable, Sendable {
     public let status: String
     public let rejectReason: String?
     public let adminId: Int?
+    public let job: AiGenerationJob?
     public let createdAt: String?
     public let reviewedAt: String?
+
+    public var statusTitle: String {
+        switch status {
+        case "WAITING": "待审核"
+        case "APPROVED": "已通过"
+        case "REJECTED": "已拒绝"
+        default: status
+        }
+    }
+}
+
+public struct AiDeleteRejectRequest: Encodable, Sendable {
+    public let reason: String
+
+    public init(reason: String) {
+        self.reason = reason
+    }
 }

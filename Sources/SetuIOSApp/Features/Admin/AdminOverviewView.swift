@@ -121,6 +121,11 @@ struct AdminOverviewView: View {
                 Label("AI 审核队列", systemImage: "checklist")
             }
             Button {
+                router.navigate(to: .adminAiDeleteRequests)
+            } label: {
+                Label("AI 删除申请", systemImage: "xmark.bin")
+            }
+            Button {
                 router.navigate(to: .adminOperationLogs)
             } label: {
                 Label("操作日志", systemImage: "doc.text.magnifyingglass")
