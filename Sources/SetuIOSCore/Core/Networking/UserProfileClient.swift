@@ -15,6 +15,16 @@ public struct UserProfileClient: Sendable {
         let _: String = try await apiClient.post("/user/profile/nickname", body: UpdateNicknameRequest(nickname: nickname))
     }
 
+    public func uploadAvatarFile(data: Data, fileName: String, mimeType: String) async throws -> AvatarUploadResponse {
+        try await apiClient.postMultipart(
+            "/user/profile/avatar-file",
+            fileFieldName: "file",
+            fileName: fileName,
+            mimeType: mimeType,
+            fileData: data
+        )
+    }
+
     public func getQqBinding() async throws -> QqBinding {
         try await apiClient.get("/user/qq-binding")
     }

@@ -58,6 +58,51 @@ public struct APIClient: Sendable {
         try await request(path, method: method, body: Optional<Data>.none, signed: signed)
     }
 
+    public func postMultipart<Value: Decodable & Sendable>(
+        _ path: String,
+        fileFieldName: String,
+        fileName: String,
+        mimeType: String,
+        fileData: Data,
+        signed: Bool = true
+    ) async throws -> Value {
+        guard let url = URL(string: path, relativeTo: config.apiBaseURL) else {
+            throw APIError.invalidURL(path)
+        }
+
+        let boundary = "Boundary-\(UUID().uuidString)"
+        var body = Data()
+        body.append("--\(boundary)\r\n")
+        body.append("Content-Disposition: form-data; name=\"\(fileFieldName)\"; filename=\"\(fileName)\"\r\n")
+        body.append("Content-Type: \(mimeType)\r\n\r\n")
+        body.append(fileData)
+        body.append("\r\n--\(boundary)--\r\n")
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        if signed {
+            let headers = try signer.signedHeaders(method: "POST", path: url.path)
+            for (name, value) in headers {
+                request.setValue(value, forHTTPHeaderField: name)
+            }
+        }
+
+        let (data, response) = try await session.upload(for: request, from: body)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            throw APIError.httpStatus(httpResponse.statusCode)
+        }
+
+        if let envelope = try? decoder.decode(APIEnvelope<Value>.self, from: data), let value = envelope.data {
+            return value
+        }
+        return try decoder.decode(Value.self, from: data)
+    }
+
     private func request<Value: Decodable & Sendable>(
         _ path: String,
         method: String,
@@ -123,5 +168,11 @@ public enum APIError: Error, LocalizedError {
         case .httpStatus(let status):
             "请求失败：HTTP \(status)"
         }
+    }
+}
+
+private extension Data {
+    mutating func append(_ string: String) {
+        append(Data(string.utf8))
     }
 }

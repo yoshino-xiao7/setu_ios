@@ -1,11 +1,15 @@
 import SetuIOSCore
+import PhotosUI
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ProfileView: View {
     @Bindable var environment: AppEnvironment
     @State private var state: LoadState<UserProfile> = .idle
     @State private var nickname = ""
     @State private var message: String?
+    @State private var selectedAvatarItem: PhotosPickerItem?
+    @State private var isUploadingAvatar = false
 
     var body: some View {
         List {
@@ -27,6 +31,14 @@ struct ProfileView: View {
                         }
                     }
                     .padding(.vertical, 4)
+                    PhotosPicker(selection: $selectedAvatarItem, matching: .images) {
+                        if isUploadingAvatar {
+                            ProgressView()
+                        } else {
+                            Label("更换头像", systemImage: "photo.badge.plus")
+                        }
+                    }
+                    .disabled(isUploadingAvatar)
                 }
 
                 Section("账号") {
@@ -56,6 +68,9 @@ struct ProfileView: View {
             }
         }
         .navigationTitle("个人中心")
+        .onChange(of: selectedAvatarItem) {
+            Task { await uploadSelectedAvatar() }
+        }
         .task { await load() }
         .refreshable { await load() }
     }
@@ -78,6 +93,35 @@ struct ProfileView: View {
         do {
             try await environment.userProfileClient.updateNickname(trimmed)
             message = "昵称已更新"
+            await load()
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    private func uploadSelectedAvatar() async {
+        guard let selectedAvatarItem else { return }
+        isUploadingAvatar = true
+        message = nil
+        defer {
+            isUploadingAvatar = false
+            self.selectedAvatarItem = nil
+        }
+
+        do {
+            guard let data = try await selectedAvatarItem.loadTransferable(type: Data.self) else {
+                message = "无法读取所选图片"
+                return
+            }
+            let contentType = selectedAvatarItem.supportedContentTypes.first { $0.conforms(to: .image) } ?? .jpeg
+            let fileExtension = contentType.preferredFilenameExtension ?? "jpg"
+            let mimeType = contentType.preferredMIMEType ?? "image/jpeg"
+            _ = try await environment.userProfileClient.uploadAvatarFile(
+                data: data,
+                fileName: "ios-avatar.\(fileExtension)",
+                mimeType: mimeType
+            )
+            message = "头像已更新"
             await load()
         } catch {
             message = error.localizedDescription

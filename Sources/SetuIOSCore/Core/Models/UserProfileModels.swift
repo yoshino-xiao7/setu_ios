@@ -23,6 +23,10 @@ public struct UpdateNicknameRequest: Encodable, Sendable {
     }
 }
 
+public struct AvatarUploadResponse: Decodable, Sendable {
+    public let avatarUrl: String
+}
+
 public struct QqBinding: Decodable, Sendable {
     public let qqNumber: String?
     public let enabled: Bool?
