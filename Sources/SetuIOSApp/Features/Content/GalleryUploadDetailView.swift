@@ -87,7 +87,7 @@ struct GalleryUploadDetailView: View {
     }
 }
 
-private struct GalleryUploadItemRow: View {
+struct GalleryUploadItemRow: View {
     let item: GalleryUploadItem
 
     var body: some View {

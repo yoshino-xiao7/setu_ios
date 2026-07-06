@@ -100,7 +100,11 @@ struct AdminOverviewView: View {
                 Label("图片删除申请", systemImage: "trash.square")
             }
             Label("图片库管理", systemImage: "photo.badge.checkmark")
-            Label("投稿审核", systemImage: "tray.full")
+            Button {
+                router.navigate(to: .adminGallerySubmissions)
+            } label: {
+                Label("投稿审核", systemImage: "tray.full")
+            }
             Label("AI 审核队列", systemImage: "checklist")
             Label("操作日志", systemImage: "doc.text.magnifyingglass")
         }

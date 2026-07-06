@@ -108,3 +108,46 @@ public enum GalleryUploadStatus {
         }
     }
 }
+
+public struct GalleryAdminApproveRequest: Encodable, Sendable {
+    public let remark: String?
+    public let publishNow: Bool
+    public let r18: Bool?
+    public let aiType: Int?
+    public let normalizedTags: [String]?
+
+    public init(remark: String?, publishNow: Bool, r18: Bool?, aiType: Int?, normalizedTags: [String]?) {
+        self.remark = remark
+        self.publishNow = publishNow
+        self.r18 = r18
+        self.aiType = aiType
+        self.normalizedTags = normalizedTags
+    }
+}
+
+public struct GalleryAdminRejectRequest: Encodable, Sendable {
+    public let reason: String
+    public let severity: String?
+
+    public init(reason: String, severity: String?) {
+        self.reason = reason
+        self.severity = severity
+    }
+}
+
+public struct GalleryAdminReviewResponse: Decodable, Sendable {
+    public let batchId: Int
+    public let status: String
+    public let ossDeleted: Bool?
+    public let rejectedCount: Int?
+    public let items: [GalleryAdminReviewItem]?
+}
+
+public struct GalleryAdminReviewItem: Decodable, Identifiable, Sendable {
+    public let submissionId: Int
+    public let imageId: Int?
+    public let pid: Int?
+    public let p: Int?
+
+    public var id: Int { submissionId }
+}

@@ -57,7 +57,7 @@ struct GalleryUploadBatchesView: View {
     }
 }
 
-private struct GalleryUploadBatchRow: View {
+struct GalleryUploadBatchRow: View {
     let batch: GalleryUploadBatchSummary
 
     var body: some View {
