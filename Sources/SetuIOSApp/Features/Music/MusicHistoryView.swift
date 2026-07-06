@@ -6,6 +6,10 @@ struct MusicHistoryView: View {
     @State private var state: LoadState<[MusicHistoryRecord]> = .idle
     @State private var count: Int?
     @State private var message: String?
+    @State private var page = 1
+    @State private var pageSize = 20
+
+    private let pageSizes = [10, 20, 50]
 
     var body: some View {
         List {
@@ -31,24 +35,67 @@ struct MusicHistoryView: View {
                             MusicHistoryRow(record: record)
                         }
                     }
+                    if let count, count > pageSize {
+                        pagerSection(total: count)
+                    }
                 }
             }
         }
         .navigationTitle("播放历史")
         .toolbar {
-            Button("清空", role: .destructive) {
-                Task { await clear() }
+            ToolbarItemGroup(placement: .primaryAction) {
+                Menu("每页 \(pageSize)") {
+                    ForEach(pageSizes, id: \.self) { size in
+                        Button("\(size) 条") {
+                            pageSize = size
+                            page = 1
+                            Task { await load() }
+                        }
+                    }
+                }
+
+                Button("清空", role: .destructive) {
+                    Task { await clear() }
+                }
             }
         }
         .task { await load() }
         .refreshable { await load() }
     }
 
+    private func pagerSection(total: Int) -> some View {
+        Section {
+            HStack {
+                Button("上一页") {
+                    Task {
+                        page = max(1, page - 1)
+                        await load()
+                    }
+                }
+                .disabled(page <= 1)
+
+                Spacer()
+                Text("第 \(page) / \(max(1, Int(ceil(Double(total) / Double(pageSize))))) 页")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Spacer()
+
+                Button("下一页") {
+                    Task {
+                        page += 1
+                        await load()
+                    }
+                }
+                .disabled(page * pageSize >= total)
+            }
+        }
+    }
+
     private func load() async {
         state = .loading
         message = nil
         do {
-            async let records = environment.musicClient.history()
+            async let records = environment.musicClient.history(limit: pageSize, offset: (page - 1) * pageSize)
             async let total = environment.musicClient.historyCount()
             state = .loaded(try await records)
             count = try await total
@@ -60,8 +107,10 @@ struct MusicHistoryView: View {
     private func clear() async {
         do {
             try await environment.musicClient.clearHistory()
-            message = "播放历史已清空"
+            page = 1
+            count = 0
             await load()
+            message = "播放历史已清空"
         } catch {
             message = error.localizedDescription
         }
