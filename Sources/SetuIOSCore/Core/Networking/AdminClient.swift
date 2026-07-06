@@ -11,8 +11,44 @@ public struct AdminClient: Sendable {
         try await apiClient.get("/admin/blog/stats")
     }
 
-    public func users(page: Int = 1, pageSize: Int = 1) async throws -> AdminUserListResponse {
-        try await apiClient.get("/admin/users?page=\(page)&pageSize=\(pageSize)")
+    public func users(
+        page: Int = 1,
+        pageSize: Int = 20,
+        email: String? = nil,
+        nickname: String? = nil,
+        status: Int? = nil,
+        role: Int? = nil
+    ) async throws -> AdminUserListResponse {
+        try await apiClient.get(queryPath(
+            "/admin/users",
+            items: [
+                URLQueryItem(name: "page", value: "\(page)"),
+                URLQueryItem(name: "pageSize", value: "\(pageSize)"),
+                URLQueryItem(name: "email", value: email),
+                URLQueryItem(name: "nickname", value: nickname),
+                URLQueryItem(name: "status", value: status.map(String.init)),
+                URLQueryItem(name: "role", value: role.map(String.init))
+            ]
+        ))
+    }
+
+    public func userDetail(id: Int) async throws -> AdminUserDetail {
+        try await apiClient.get("/admin/users/\(id)")
+    }
+
+    public func banUser(id: Int) async throws {
+        let _: String = try await apiClient.post("/admin/user/ban?userId=\(id)")
+    }
+
+    public func unbanUser(id: Int) async throws {
+        let _: String = try await apiClient.post("/admin/user/unban?userId=\(id)")
+    }
+
+    public func grantPoints(userID: Int, amount: Int, reason: String?) async throws -> AdminPointsGrantResponse {
+        try await apiClient.post(
+            "/admin/users/\(userID)/points",
+            body: AdminPointsGrantRequest(amount: amount, reason: reason)
+        )
     }
 
     public func ipBlacklist() async throws -> [AdminBlacklistIpItem] {
@@ -42,5 +78,15 @@ public struct AdminClient: Sendable {
             blockedIpCount: blacklist.count,
             imageCount: imageCount
         )
+    }
+
+    private func queryPath(_ path: String, items: [URLQueryItem]) -> String {
+        var components = URLComponents()
+        components.path = path
+        components.queryItems = items.filter { item in
+            guard let value = item.value else { return false }
+            return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        return components.string ?? path
     }
 }

@@ -29,6 +29,8 @@ enum AppRoute: Hashable {
     case qqBinding
     case security
     case admin
+    case adminUsers
+    case adminUserDetail(Int)
 }
 
 enum AppTab: String, CaseIterable, Identifiable {

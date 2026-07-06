@@ -2,6 +2,7 @@ import SetuIOSCore
 import SwiftUI
 
 struct AdminOverviewView: View {
+    @Environment(RouterPath.self) private var router
     @Bindable var environment: AppEnvironment
     @State private var state: LoadState<AdminOverviewSnapshot> = .idle
     @State private var syncing = false
@@ -78,7 +79,11 @@ struct AdminOverviewView: View {
 
     private var adminEntrypoints: some View {
         Section("管理模块") {
-            Label("用户管理", systemImage: "person.2")
+            Button {
+                router.navigate(to: .adminUsers)
+            } label: {
+                Label("用户管理", systemImage: "person.2")
+            }
             Label("黑名单", systemImage: "nosign")
             Label("网易云 Token 管理", systemImage: "music.mic")
             Label("图片删除申请", systemImage: "trash.square")

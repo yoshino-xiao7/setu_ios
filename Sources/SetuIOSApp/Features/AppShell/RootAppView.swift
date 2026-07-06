@@ -96,6 +96,10 @@ struct RootAppView: View {
             MusicPlaylistDetailView(environment: environment, playlistID: id)
         case .admin:
             AdminOverviewView(environment: environment)
+        case .adminUsers:
+            AdminUsersView(environment: environment)
+        case .adminUserDetail(let id):
+            AdminUserDetailView(environment: environment, userID: id)
         }
     }
 
@@ -144,6 +148,8 @@ struct RootAppView: View {
             MusicHistoryView(environment: environment)
         case .adminOverview:
             AdminOverviewView(environment: environment)
+        case .adminUsers:
+            AdminUsersView(environment: environment)
         default:
             if let feature = AppFeatureCatalog.feature(id: featureID) {
                 FeatureDetailView(feature: feature)
