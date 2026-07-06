@@ -12,6 +12,8 @@ struct CollectionDetailView: View {
     @State private var editor: CollectionEditorContext?
     @State private var moveContext: CollectionItemMoveContext?
     @State private var showingDeleteConfirmation = false
+    @State private var page = 1
+    private let pageSize = 24
 
     var body: some View {
         List {
@@ -53,6 +55,7 @@ struct CollectionDetailView: View {
                             }
                         }
                     }
+                    pagerSection(page)
                 }
             }
         }
@@ -95,6 +98,34 @@ struct CollectionDetailView: View {
         }
         .task { await load() }
         .refreshable { await load() }
+    }
+
+    private func pagerSection(_ result: CollectionItemPage) -> some View {
+        Section {
+            HStack {
+                Button("上一页") {
+                    Task {
+                        page = max(1, page - 1)
+                        await load()
+                    }
+                }
+                .disabled(page <= 1)
+
+                Spacer()
+                Text("第 \(result.page) 页")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Spacer()
+
+                Button("下一页") {
+                    Task {
+                        page += 1
+                        await load()
+                    }
+                }
+                .disabled(result.page * result.size >= result.total)
+            }
+        }
     }
 
     private var title: String {
@@ -193,7 +224,7 @@ struct CollectionDetailView: View {
         itemsState = .loading
         do {
             async let info = environment.collectionClient.info(collectionID: collectionID)
-            async let items = environment.collectionClient.items(collectionID: collectionID)
+            async let items = environment.collectionClient.items(collectionID: collectionID, page: page, size: pageSize)
             infoState = .loaded(try await info)
             itemsState = .loaded(try await items)
         } catch {
