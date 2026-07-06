@@ -15,6 +15,11 @@ public struct DashboardClient: Sendable {
         try await apiClient.get("/usage/logs?page=\(page)&limit=\(limit)")
     }
 
+    public func fetchApiKeyCount() async throws -> Int {
+        let keys: [ApiKeyItem] = try await apiClient.get("/api-key/list")
+        return keys.count
+    }
+
     public func fetchPointsBalance() async throws -> PointsBalance {
         try await apiClient.get("/points/me")
     }
@@ -31,6 +36,7 @@ public struct DashboardClient: Sendable {
     public func fetchHomeSnapshot() async -> HomeDashboardSnapshot {
         async let usage = optional { try await fetchUsageOverview() }
         async let usageLogs = optional { try await fetchUsageLogs() }
+        async let apiKeyCount = optional { try await fetchApiKeyCount() }
         async let points = optional { try await fetchPointsBalance() }
         async let status = optional { try await fetchStatusOverview() }
         async let unread = optional { try await fetchUnreadNotificationCount() }
@@ -38,6 +44,7 @@ public struct DashboardClient: Sendable {
         return await HomeDashboardSnapshot(
             usage: usage,
             usageLogs: usageLogs,
+            apiKeyCount: apiKeyCount,
             points: points,
             status: status,
             unreadNotifications: unread

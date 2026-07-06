@@ -87,6 +87,16 @@ struct DashboardView: View {
                     systemImage: "sum"
                 )
                 DashboardMetricRow(
+                    title: "Key 使用",
+                    value: snapshot.apiKeyCount.map { "\($0)/10" } ?? "-",
+                    systemImage: "key"
+                )
+                DashboardMetricRow(
+                    title: "上次活跃",
+                    value: snapshot.usage?.lastCalledAt ?? "-",
+                    systemImage: "clock"
+                )
+                DashboardMetricRow(
                     title: "积分余额",
                     value: snapshot.points.map { String($0.points) } ?? "-",
                     systemImage: "bolt.circle"
@@ -182,6 +192,8 @@ private struct DashboardMetricRow: View {
             Text(value)
                 .font(.headline)
                 .monospacedDigit()
+                .multilineTextAlignment(.trailing)
+                .lineLimit(2)
         }
     }
 }

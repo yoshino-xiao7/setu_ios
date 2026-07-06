@@ -95,6 +95,7 @@ public struct UnreadNotificationCount: Decodable, Sendable {
 public struct HomeDashboardSnapshot: Sendable {
     public let usage: UsageOverview?
     public let usageLogs: UsageLogPage?
+    public let apiKeyCount: Int?
     public let points: PointsBalance?
     public let status: StatusOverview?
     public let unreadNotifications: Int?
@@ -102,12 +103,14 @@ public struct HomeDashboardSnapshot: Sendable {
     public init(
         usage: UsageOverview?,
         usageLogs: UsageLogPage?,
+        apiKeyCount: Int?,
         points: PointsBalance?,
         status: StatusOverview?,
         unreadNotifications: Int?
     ) {
         self.usage = usage
         self.usageLogs = usageLogs
+        self.apiKeyCount = apiKeyCount
         self.points = points
         self.status = status
         self.unreadNotifications = unreadNotifications
