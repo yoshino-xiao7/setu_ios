@@ -10,6 +10,7 @@ struct AdminBlacklistView: View {
     @State private var reason = ""
     @State private var message: String?
     @State private var isSubmitting = false
+    @State private var selectedBlacklistIPs = Set<String>()
 
     var body: some View {
         List {
@@ -76,11 +77,51 @@ struct AdminBlacklistView: View {
                 ContentUnavailableView("黑名单加载失败", systemImage: "exclamationmark.shield", description: Text(message))
             case .loaded(let items):
                 let filtered = filteredBlacklist(items)
+                let filteredIPs = Set(filtered.map(\.ip))
                 if filtered.isEmpty {
                     ContentUnavailableView("暂无封禁记录", systemImage: "shield")
                 } else {
+                    HStack {
+                        Button(selectedBlacklistIPs.isSuperset(of: filteredIPs) ? "取消选择当前结果" : "选择当前结果") {
+                            if selectedBlacklistIPs.isSuperset(of: filteredIPs) {
+                                selectedBlacklistIPs.subtract(filteredIPs)
+                            } else {
+                                selectedBlacklistIPs.formUnion(filteredIPs)
+                            }
+                        }
+                        .disabled(isSubmitting)
+
+                        Spacer()
+
+                        Text("已选 \(selectedBlacklistIPs.intersection(filteredIPs).count) / \(filtered.count)")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    HStack {
+                        Button("清空选择") {
+                            selectedBlacklistIPs.removeAll()
+                        }
+                        .disabled(isSubmitting || selectedBlacklistIPs.isEmpty)
+
+                        Spacer()
+
+                        Button(role: .destructive) {
+                            Task { await batchRemoveIps(currentIPs: filteredIPs) }
+                        } label: {
+                            if isSubmitting {
+                                ProgressView()
+                            } else {
+                                Label("批量解封", systemImage: "lock.open")
+                            }
+                        }
+                        .disabled(isSubmitting || selectedBlacklistIPs.intersection(filteredIPs).isEmpty)
+                    }
+
                     ForEach(filtered, id: \.stableID) { item in
-                        BlacklistRow(item: item) {
+                        BlacklistRow(item: item, isSelected: selectedBlacklistIPs.contains(item.ip)) {
+                            toggleBlacklistSelection(item.ip)
+                        } onRemove: {
                             Task { await removeIp(item.ip) }
                         }
                     }
@@ -146,7 +187,9 @@ struct AdminBlacklistView: View {
     private func loadBlacklist() async {
         blacklistState = .loading
         do {
-            blacklistState = .loaded(try await environment.adminClient.ipBlacklist())
+            let items = try await environment.adminClient.ipBlacklist()
+            selectedBlacklistIPs.formIntersection(Set(items.map(\.ip)))
+            blacklistState = .loaded(items)
         } catch {
             blacklistState = .failed(error.localizedDescription)
         }
@@ -185,11 +228,49 @@ struct AdminBlacklistView: View {
         message = nil
         do {
             try await environment.adminClient.removeIpBlacklist(ip: ip)
+            selectedBlacklistIPs.remove(ip)
             message = "已移除 \(ip)"
             await loadBlacklist()
         } catch {
             message = error.localizedDescription
         }
+        isSubmitting = false
+    }
+
+    private func toggleBlacklistSelection(_ ip: String) {
+        if selectedBlacklistIPs.contains(ip) {
+            selectedBlacklistIPs.remove(ip)
+        } else {
+            selectedBlacklistIPs.insert(ip)
+        }
+    }
+
+    private func batchRemoveIps(currentIPs: Set<String>) async {
+        let targets = Array(selectedBlacklistIPs.intersection(currentIPs)).sorted()
+        guard !targets.isEmpty else { return }
+        isSubmitting = true
+        message = nil
+        var successCount = 0
+        var failures: [(ip: String, message: String)] = []
+
+        for ip in targets {
+            do {
+                try await environment.adminClient.removeIpBlacklist(ip: ip)
+                selectedBlacklistIPs.remove(ip)
+                successCount += 1
+            } catch {
+                failures.append((ip: ip, message: error.localizedDescription))
+            }
+        }
+
+        if failures.isEmpty {
+            message = "成功解封 \(successCount) 个 IP"
+        } else if successCount > 0, let firstFailure = failures.first {
+            message = "已解封 \(successCount) 个，\(failures.count) 个失败：\(firstFailure.ip) \(firstFailure.message)"
+        } else {
+            message = failures.first?.message ?? "批量解封失败"
+        }
+        await loadBlacklist()
         isSubmitting = false
     }
 
@@ -222,11 +303,18 @@ struct AdminBlacklistView: View {
 
 private struct BlacklistRow: View {
     let item: AdminBlacklistIpItem
+    let isSelected: Bool
+    let onToggleSelection: () -> Void
     let onRemove: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
+                Button(action: onToggleSelection) {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(isSelected ? .orange : .secondary)
+                }
+                .buttonStyle(.borderless)
                 Label(item.ip, systemImage: "network")
                     .font(.headline.monospaced())
                 Spacer()
