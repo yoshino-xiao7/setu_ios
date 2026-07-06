@@ -42,6 +42,7 @@ public enum AppFeatureID: String, Codable, CaseIterable, Sendable {
     case playlists
     case musicHistory
     case notifications
+    case about
     case privacy
     case deleteRequests
     case adminOverview
@@ -105,6 +106,7 @@ public enum AppFeatureCatalog {
         AppFeature(id: .playlists, group: .music, title: "我的歌单", subtitle: "歌单、歌曲和歌单详情", systemImage: "music.note.list", webRoute: "/dashboard/my-playlists"),
         AppFeature(id: .musicHistory, group: .music, title: "播放历史", subtitle: "最近播放记录", systemImage: "clock.arrow.circlepath", webRoute: "/dashboard/music-history"),
         AppFeature(id: .notifications, group: .system, title: "通知中心", subtitle: "系统、审核和 AI 完成通知", systemImage: "bell", webRoute: "/dashboard/notifications"),
+        AppFeature(id: .about, group: .account, title: "关于本站", subtitle: "站点定位、看板娘和快捷入口", systemImage: "info.circle", webRoute: "/dashboard/about"),
         AppFeature(id: .privacy, group: .account, title: "隐私政策", subtitle: "用户隐私和数据使用说明", systemImage: "hand.raised", webRoute: "/dashboard/privacy"),
         AppFeature(id: .deleteRequests, group: .content, title: "我的删除申请", subtitle: "图片删除申请记录和详情", systemImage: "trash", webRoute: "/dashboard/my-delete-requests"),
         AppFeature(id: .adminOverview, group: .admin, title: "后台概览", subtitle: "管理端统计和运营入口", systemImage: "chart.bar", webRoute: "/admin/overview"),

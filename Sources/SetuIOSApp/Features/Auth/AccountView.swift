@@ -30,6 +30,21 @@ struct AccountView: View {
                     } label: {
                         Label("安全设置", systemImage: "lock")
                     }
+                    Button {
+                        router.navigate(to: .docs)
+                    } label: {
+                        Label("开发文档", systemImage: "doc.text")
+                    }
+                    Button {
+                        router.navigate(to: .about)
+                    } label: {
+                        Label("关于本站", systemImage: "info.circle")
+                    }
+                    Button {
+                        router.navigate(to: .privacy)
+                    } label: {
+                        Label("隐私政策", systemImage: "hand.raised")
+                    }
                     Button("退出登录", role: .destructive) {
                         Task {
                             await environment.authSession.logout()
@@ -76,6 +91,21 @@ struct AccountView: View {
 
                 if let expireAt = environment.authSession.expireAt {
                     LabeledContent("过期时间", value: expireAt.formatted())
+                }
+            }
+
+            if environment.authSession.currentUser == nil {
+                Section("帮助") {
+                    Button {
+                        router.navigate(to: .docs)
+                    } label: {
+                        Label("开发文档", systemImage: "doc.text")
+                    }
+                    Button {
+                        router.navigate(to: .privacy)
+                    } label: {
+                        Label("隐私政策", systemImage: "hand.raised")
+                    }
                 }
             }
         }

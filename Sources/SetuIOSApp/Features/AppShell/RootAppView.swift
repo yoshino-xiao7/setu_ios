@@ -48,6 +48,12 @@ struct RootAppView: View {
             ProfileView(environment: environment)
         case .apiKeys:
             ApiKeyListView(environment: environment)
+        case .docs:
+            StaticInfoView(kind: .docs)
+        case .about:
+            StaticInfoView(kind: .about)
+        case .privacy:
+            StaticInfoView(kind: .privacy)
         case .points:
             PointsCallView(environment: environment)
         case .pointsLogs:
@@ -112,6 +118,12 @@ struct RootAppView: View {
             GalleryUploadBatchesView(environment: environment)
         case .qqBinding:
             QqBindingView(environment: environment)
+        case .docs:
+            StaticInfoView(kind: .docs)
+        case .about:
+            StaticInfoView(kind: .about)
+        case .privacy:
+            StaticInfoView(kind: .privacy)
         case .deleteRequests:
             ImageDeleteRequestsView(environment: environment)
         case .pointsLogs:
