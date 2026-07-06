@@ -5,6 +5,8 @@ struct FavoriteListView: View {
     @Bindable var environment: AppEnvironment
     @State private var state: LoadState<FavoritePage> = .idle
     @State private var errorMessage: String?
+    @State private var page = 1
+    private let pageSize = 24
 
     var body: some View {
         List {
@@ -32,6 +34,7 @@ struct FavoriteListView: View {
                             }
                         }
                     }
+                    pagerSection(page)
                 }
             }
         }
@@ -40,11 +43,39 @@ struct FavoriteListView: View {
         .refreshable { await load() }
     }
 
+    private func pagerSection(_ result: FavoritePage) -> some View {
+        Section {
+            HStack {
+                Button("上一页") {
+                    Task {
+                        page = max(1, page - 1)
+                        await load()
+                    }
+                }
+                .disabled(page <= 1)
+
+                Spacer()
+                Text("第 \(result.page) 页")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Spacer()
+
+                Button("下一页") {
+                    Task {
+                        page += 1
+                        await load()
+                    }
+                }
+                .disabled(result.page * result.size >= result.total)
+            }
+        }
+    }
+
     private func load() async {
         state = .loading
         errorMessage = nil
         do {
-            state = .loaded(try await environment.favoriteClient.list())
+            state = .loaded(try await environment.favoriteClient.list(page: page, size: pageSize))
         } catch {
             state = .failed(error.localizedDescription)
         }
