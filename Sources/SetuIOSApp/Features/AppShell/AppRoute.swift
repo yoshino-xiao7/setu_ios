@@ -8,6 +8,7 @@ enum AppRoute: Hashable {
     case docs
     case about
     case privacy
+    case passkeys
     case points
     case pointsLogs
     case collections

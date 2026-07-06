@@ -31,6 +31,11 @@ struct AccountView: View {
                         Label("安全设置", systemImage: "lock")
                     }
                     Button {
+                        router.navigate(to: .passkeys)
+                    } label: {
+                        Label("通行密钥", systemImage: "touchid")
+                    }
+                    Button {
                         router.navigate(to: .docs)
                     } label: {
                         Label("开发文档", systemImage: "doc.text")

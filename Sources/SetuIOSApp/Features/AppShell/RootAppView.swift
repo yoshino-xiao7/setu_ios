@@ -54,6 +54,8 @@ struct RootAppView: View {
             StaticInfoView(kind: .about)
         case .privacy:
             StaticInfoView(kind: .privacy)
+        case .passkeys:
+            PasskeyListView(environment: environment)
         case .points:
             PointsCallView(environment: environment)
         case .pointsLogs:

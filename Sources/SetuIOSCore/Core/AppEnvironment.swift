@@ -13,6 +13,7 @@ public final class AppEnvironment {
     public let notificationClient: NotificationClient
     public let statusClient: StatusClient
     public let userProfileClient: UserProfileClient
+    public let passkeyClient: PasskeyClient
     public let collectionClient: CollectionClient
     public let aiGenerationClient: AiGenerationClient
     public let favoriteClient: FavoriteClient
@@ -32,6 +33,7 @@ public final class AppEnvironment {
         notificationClient: NotificationClient,
         statusClient: StatusClient,
         userProfileClient: UserProfileClient,
+        passkeyClient: PasskeyClient,
         collectionClient: CollectionClient,
         aiGenerationClient: AiGenerationClient,
         favoriteClient: FavoriteClient,
@@ -50,6 +52,7 @@ public final class AppEnvironment {
         self.notificationClient = notificationClient
         self.statusClient = statusClient
         self.userProfileClient = userProfileClient
+        self.passkeyClient = passkeyClient
         self.collectionClient = collectionClient
         self.aiGenerationClient = aiGenerationClient
         self.favoriteClient = favoriteClient
@@ -71,6 +74,7 @@ public final class AppEnvironment {
         let notificationClient = NotificationClient(apiClient: client)
         let statusClient = StatusClient(apiClient: client)
         let userProfileClient = UserProfileClient(apiClient: client)
+        let passkeyClient = PasskeyClient(apiClient: client)
         let collectionClient = CollectionClient(apiClient: client)
         let aiGenerationClient = AiGenerationClient(apiClient: client)
         let favoriteClient = FavoriteClient(apiClient: client)
@@ -89,6 +93,7 @@ public final class AppEnvironment {
             notificationClient: notificationClient,
             statusClient: statusClient,
             userProfileClient: userProfileClient,
+            passkeyClient: passkeyClient,
             collectionClient: collectionClient,
             aiGenerationClient: aiGenerationClient,
             favoriteClient: favoriteClient,

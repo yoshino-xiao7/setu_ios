@@ -41,6 +41,15 @@ public struct APIClient: Sendable {
         return try await request(path, method: "PUT", body: data, signed: signed)
     }
 
+    public func patch<Request: Encodable & Sendable, Value: Decodable & Sendable>(
+        _ path: String,
+        body: Request,
+        signed: Bool = true
+    ) async throws -> Value {
+        let data = try encoder.encode(body)
+        return try await request(path, method: "PATCH", body: data, signed: signed)
+    }
+
     public func requestWithoutBody<Value: Decodable & Sendable>(
         _ path: String,
         method: String,
