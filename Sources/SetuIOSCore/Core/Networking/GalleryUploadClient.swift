@@ -15,6 +15,48 @@ public struct GalleryUploadClient: Sendable {
         return try await apiClient.get(path)
     }
 
+    public func createBatch(_ request: GalleryUploadInitRequest) async throws -> GalleryUploadInitResponse {
+        try await apiClient.post("/gallery/uploads/batches", body: request)
+    }
+
+    public func updateItemStatus(batchID: Int, clientItemID: String, request: GalleryUploadItemStatusRequest) async throws -> GalleryUploadItem {
+        let encodedID = clientItemID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? clientItemID
+        return try await apiClient.post("/gallery/uploads/batches/\(batchID)/items/\(encodedID)/status", body: request)
+    }
+
+    public func completeBatch(batchID: Int, items: [GalleryUploadCompleteItem]) async throws -> GalleryUploadCompleteResponse {
+        try await apiClient.post("/gallery/uploads/batches/\(batchID)/complete", body: GalleryUploadCompleteRequest(items: items))
+    }
+
+    public func uploadPreparedItem(initResponse: GalleryUploadInitResponse, item: GalleryUploadItem, data: Data, contentType: String) async throws -> String? {
+        if initResponse.uploadPolicy.provider == "mock" {
+            try await Task.sleep(nanoseconds: 180_000_000)
+            return "mock-etag-\(item.submissionId)"
+        }
+
+        let uploadURLString = item.uploadUrl ?? initResponse.uploadPolicy.uploadUrl
+        guard let uploadURLString, let uploadURL = URL(string: uploadURLString) else {
+            throw APIError.invalidURL("gallery direct upload")
+        }
+
+        var request = URLRequest(url: uploadURL)
+        request.httpMethod = item.uploadMethod ?? initResponse.uploadPolicy.uploadMethod ?? "PUT"
+        let headers = (initResponse.uploadPolicy.uploadHeaders ?? [:]).merging(item.uploadHeaders ?? [:]) { _, itemValue in itemValue }
+        for (name, value) in headers where !value.isEmpty {
+            request.setValue(value, forHTTPHeaderField: name)
+        }
+        request.setValue(contentType, forHTTPHeaderField: "Content-Type")
+
+        let (_, response) = try await URLSession.shared.upload(for: request, from: data)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            throw APIError.httpStatus(httpResponse.statusCode)
+        }
+        return httpResponse.value(forHTTPHeaderField: "etag")?.replacingOccurrences(of: "\"", with: "")
+    }
+
     public func detail(batchID: Int) async throws -> GalleryUploadBatchDetail {
         try await apiClient.get("/gallery/uploads/batches/\(batchID)")
     }
