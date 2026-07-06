@@ -9,6 +9,7 @@ enum AppRoute: Hashable {
     case collections
     case collectionSquare
     case aiHistory
+    case aiGenerationDetail(Int)
     case aiSquare
     case musicHistory
     case playlists

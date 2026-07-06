@@ -210,3 +210,58 @@ public struct AiServiceStatusResponse: Decodable, Sendable {
         return "离线"
     }
 }
+
+public struct AiImageURL: Decodable, Sendable {
+    public let jobId: Int
+    public let url: String
+    public let expiresInSeconds: Int
+}
+
+public struct AiImageDownload: Decodable, Sendable {
+    public let jobId: Int
+    public let downloadUrl: String
+    public let expires: Int?
+}
+
+public struct AiReviewSubmitRequest: Encodable, Sendable {
+    public let category: String
+    public let note: String?
+
+    public init(category: String, note: String? = nil) {
+        self.category = category
+        self.note = note
+    }
+}
+
+public struct AiGenerationReview: Decodable, Identifiable, Sendable {
+    public let id: Int
+    public let jobId: Int
+    public let userId: Int
+    public let category: String
+    public let status: String
+    public let submitNote: String?
+    public let rejectReason: String?
+    public let adminId: Int?
+    public let createdAt: String?
+    public let reviewedAt: String?
+}
+
+public struct AiDeleteRequestSubmitRequest: Encodable, Sendable {
+    public let reason: String?
+
+    public init(reason: String? = nil) {
+        self.reason = reason
+    }
+}
+
+public struct AiGenerationDeleteRequest: Decodable, Identifiable, Sendable {
+    public let id: Int
+    public let jobId: Int
+    public let userId: Int
+    public let reason: String?
+    public let status: String
+    public let rejectReason: String?
+    public let adminId: Int?
+    public let createdAt: String?
+    public let reviewedAt: String?
+}

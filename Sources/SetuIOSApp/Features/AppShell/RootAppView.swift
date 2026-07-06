@@ -66,6 +66,8 @@ struct RootAppView: View {
             CollectionSquareView(environment: environment)
         case .aiHistory:
             AiHistoryView(environment: environment)
+        case .aiGenerationDetail(let id):
+            AiGenerationDetailView(environment: environment, jobID: id)
         case .aiSquare:
             AiSquareView(environment: environment)
         case .musicHistory:

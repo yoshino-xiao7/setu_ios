@@ -19,6 +19,10 @@ public struct AiGenerationClient: Sendable {
         try await apiClient.post("/ai/generations", body: request)
     }
 
+    public func get(id: Int) async throws -> AiGenerationJob {
+        try await apiClient.get("/ai/generations/\(id)")
+    }
+
     public func translatePrompt(_ request: AiPromptTranslateRequest) async throws -> AiPromptTranslateResponse {
         try await apiClient.post("/ai/prompt/translate", body: request)
     }
@@ -33,6 +37,28 @@ public struct AiGenerationClient: Sendable {
 
     public func serviceStatus() async throws -> AiServiceStatusResponse {
         try await apiClient.get("/ai/status")
+    }
+
+    public func imageURL(id: Int) async throws -> AiImageURL {
+        try await apiClient.get("/ai/generations/\(id)/image-url")
+    }
+
+    public func download(id: Int) async throws -> AiImageDownload {
+        try await apiClient.post("/ai/generations/\(id)/download")
+    }
+
+    public func submitReview(id: Int, category: String, note: String? = nil) async throws -> AiGenerationReview {
+        try await apiClient.post(
+            "/ai/generations/\(id)/review",
+            body: AiReviewSubmitRequest(category: category, note: note)
+        )
+    }
+
+    public func submitDeleteRequest(id: Int, reason: String? = nil) async throws -> AiGenerationDeleteRequest {
+        try await apiClient.post(
+            "/ai/generations/\(id)/delete-request",
+            body: AiDeleteRequestSubmitRequest(reason: reason)
+        )
     }
 
     public func square(category: String? = nil, page: Int = 1, pageSize: Int = 20) async throws -> PageResult<AiGenerationJob> {
