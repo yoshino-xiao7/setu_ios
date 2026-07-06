@@ -13,6 +13,8 @@ enum AppRoute: Hashable {
     case musicHistory
     case playlists
     case notifications
+    case favorites
+    case imageDeleteRequests
     case admin
 }
 

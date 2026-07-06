@@ -24,8 +24,7 @@ struct AccountView: View {
                 Section("登录") {
                     TextField("邮箱", text: $email)
                         .textContentType(.username)
-                        .keyboardType(.emailAddress)
-                        .textInputAutocapitalization(.never)
+                        .modifier(EmailInputModifier())
                     SecureField("密码", text: $password)
                         .textContentType(.password)
                     TextField("验证码", text: $captchaCode)
@@ -65,5 +64,17 @@ struct AccountView: View {
             }
         }
         .navigationTitle("我的")
+    }
+}
+
+private struct EmailInputModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        #if os(iOS)
+        content
+            .keyboardType(.emailAddress)
+            .textInputAutocapitalization(.never)
+        #else
+        content
+        #endif
     }
 }

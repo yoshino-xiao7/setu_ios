@@ -56,6 +56,10 @@ struct RootAppView: View {
             PointsLogsView(environment: environment)
         case .notifications:
             NotificationsView(environment: environment)
+        case .favorites:
+            FavoriteListView(environment: environment)
+        case .imageDeleteRequests:
+            ImageDeleteRequestsView(environment: environment)
         case .collections:
             CollectionListView(environment: environment)
         case .collectionSquare:
@@ -84,6 +88,8 @@ struct RootAppView: View {
             CollectionListView(environment: environment)
         case .aiHistory:
             AiHistoryView(environment: environment)
+        case .deleteRequests:
+            ImageDeleteRequestsView(environment: environment)
         case .pointsLogs:
             PointsLogsView(environment: environment)
         case .notifications:

@@ -15,6 +15,8 @@ public final class AppEnvironment {
     public let userProfileClient: UserProfileClient
     public let collectionClient: CollectionClient
     public let aiGenerationClient: AiGenerationClient
+    public let favoriteClient: FavoriteClient
+    public let imageDeleteRequestClient: ImageDeleteRequestClient
     public let authSession: AuthSession
 
     public init(
@@ -30,6 +32,8 @@ public final class AppEnvironment {
         userProfileClient: UserProfileClient,
         collectionClient: CollectionClient,
         aiGenerationClient: AiGenerationClient,
+        favoriteClient: FavoriteClient,
+        imageDeleteRequestClient: ImageDeleteRequestClient,
         authSession: AuthSession
     ) {
         self.config = config
@@ -44,6 +48,8 @@ public final class AppEnvironment {
         self.userProfileClient = userProfileClient
         self.collectionClient = collectionClient
         self.aiGenerationClient = aiGenerationClient
+        self.favoriteClient = favoriteClient
+        self.imageDeleteRequestClient = imageDeleteRequestClient
         self.authSession = authSession
     }
 
@@ -61,6 +67,8 @@ public final class AppEnvironment {
         let userProfileClient = UserProfileClient(apiClient: client)
         let collectionClient = CollectionClient(apiClient: client)
         let aiGenerationClient = AiGenerationClient(apiClient: client)
+        let favoriteClient = FavoriteClient(apiClient: client)
+        let imageDeleteRequestClient = ImageDeleteRequestClient(apiClient: client)
         let session = AuthSession(apiClient: client, keychain: keychain)
         return AppEnvironment(
             config: config,
@@ -75,6 +83,8 @@ public final class AppEnvironment {
             userProfileClient: userProfileClient,
             collectionClient: collectionClient,
             aiGenerationClient: aiGenerationClient,
+            favoriteClient: favoriteClient,
+            imageDeleteRequestClient: imageDeleteRequestClient,
             authSession: session
         )
     }

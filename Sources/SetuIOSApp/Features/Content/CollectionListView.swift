@@ -2,11 +2,20 @@ import SetuIOSCore
 import SwiftUI
 
 struct CollectionListView: View {
+    @Environment(RouterPath.self) private var router
     @Bindable var environment: AppEnvironment
     @State private var state: LoadState<[CollectionInfo]> = .idle
 
     var body: some View {
         List {
+            Section {
+                Button {
+                    router.navigate(to: .favorites)
+                } label: {
+                    Label("默认收藏", systemImage: "heart.fill")
+                }
+            }
+
             switch state {
             case .idle, .loading:
                 ProgressView("正在加载")
