@@ -45,7 +45,7 @@ struct ImageDeleteRequestsView: View {
     }
 }
 
-private struct ImageDeleteRequestRow: View {
+struct ImageDeleteRequestRow: View {
     let request: ImageDeleteRequestItem
 
     var body: some View {

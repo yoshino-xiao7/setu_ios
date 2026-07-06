@@ -33,6 +33,8 @@ enum AppRoute: Hashable {
     case adminUserDetail(Int)
     case adminBlacklist
     case adminMusicTokens
+    case adminImageDeleteRequests
+    case adminImageDeleteRequestDetail(Int)
 }
 
 enum AppTab: String, CaseIterable, Identifiable {

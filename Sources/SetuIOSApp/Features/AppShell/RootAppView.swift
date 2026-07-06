@@ -104,6 +104,10 @@ struct RootAppView: View {
             AdminBlacklistView(environment: environment)
         case .adminMusicTokens:
             AdminMusicTokensView(environment: environment)
+        case .adminImageDeleteRequests:
+            AdminImageDeleteRequestsView(environment: environment)
+        case .adminImageDeleteRequestDetail(let id):
+            AdminImageDeleteRequestDetailView(environment: environment, requestID: id)
         }
     }
 
@@ -158,6 +162,8 @@ struct RootAppView: View {
             AdminBlacklistView(environment: environment)
         case .adminMusicTokens:
             AdminMusicTokensView(environment: environment)
+        case .adminImageDeleteRequests:
+            AdminImageDeleteRequestsView(environment: environment)
         default:
             if let feature = AppFeatureCatalog.feature(id: featureID) {
                 FeatureDetailView(feature: feature)

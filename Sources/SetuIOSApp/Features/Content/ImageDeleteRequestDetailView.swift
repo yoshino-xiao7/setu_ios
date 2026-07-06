@@ -108,7 +108,7 @@ struct ImageDeleteRequestDetailView: View {
     }
 }
 
-private struct DetailImagePreview: View {
+struct DetailImagePreview: View {
     let urlString: String?
 
     var body: some View {
