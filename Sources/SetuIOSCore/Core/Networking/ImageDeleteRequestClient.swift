@@ -14,4 +14,14 @@ public struct ImageDeleteRequestClient: Sendable {
     public func detail(id: Int) async throws -> ImageDeleteRequestDetail {
         try await apiClient.get("/image-delete/my/\(id)")
     }
+
+    public func submit(pid: Int, p: Int, reason: String?) async throws {
+        let _: String = try await apiClient.post("/image-delete/submit", body: ImageDeleteRequestSubmitRequest(pid: pid, p: p, reason: reason))
+    }
+}
+
+private struct ImageDeleteRequestSubmitRequest: Encodable, Sendable {
+    let pid: Int
+    let p: Int
+    let reason: String?
 }

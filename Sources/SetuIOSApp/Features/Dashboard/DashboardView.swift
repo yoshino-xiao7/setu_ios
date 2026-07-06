@@ -24,6 +24,9 @@ struct DashboardView: View {
                 FeatureRow(title: "API Keys", systemImage: "key") {
                     router.navigate(to: .apiKeys)
                 }
+                FeatureRow(title: "积分调用", systemImage: "bolt.circle") {
+                    router.navigate(to: .points)
+                }
                 FeatureRow(title: "积分流水", systemImage: "list.bullet.rectangle") {
                     router.navigate(to: .pointsLogs)
                 }

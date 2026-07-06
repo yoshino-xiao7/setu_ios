@@ -48,6 +48,8 @@ struct RootAppView: View {
             ProfileView(environment: environment)
         case .apiKeys:
             ApiKeyListView(environment: environment)
+        case .points:
+            PointsCallView(environment: environment)
         case .pointsLogs:
             PointsLogsView(environment: environment)
         case .notifications:
@@ -114,6 +116,8 @@ struct RootAppView: View {
             ImageDeleteRequestsView(environment: environment)
         case .pointsLogs:
             PointsLogsView(environment: environment)
+        case .points:
+            PointsCallView(environment: environment)
         case .notifications:
             NotificationsView(environment: environment)
         case .systemStatus:

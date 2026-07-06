@@ -41,6 +41,10 @@ public struct CollectionClient: Sendable {
         let _: String = try await apiClient.requestWithoutBody("/collections/\(collectionID)/items/\(pid)/\(p)", method: "DELETE")
     }
 
+    public func addItem(collectionID: Int, pid: Int, p: Int) async throws {
+        let _: String = try await apiClient.post("/collections/\(collectionID)/items/\(pid)/\(p)")
+    }
+
     public func share(collectionID: Int) async throws {
         let _: String = try await apiClient.post("/collections/\(collectionID)/share")
     }

@@ -5,6 +5,7 @@ enum AppRoute: Hashable {
     case feature(AppFeatureID)
     case profile
     case apiKeys
+    case points
     case pointsLogs
     case collections
     case collectionDetail(Int)

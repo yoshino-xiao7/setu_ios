@@ -11,6 +11,10 @@ public struct FavoriteClient: Sendable {
         try await apiClient.get("/favorite/list?page=\(page)&size=\(size)")
     }
 
+    public func add(pid: Int, p: Int = 0) async throws {
+        let _: String = try await apiClient.post("/favorite/\(pid)/\(p)")
+    }
+
     public func remove(pid: Int, p: Int = 0) async throws {
         let _: String = try await apiClient.requestWithoutBody("/favorite/\(pid)/\(p)", method: "DELETE")
     }
