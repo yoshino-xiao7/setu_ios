@@ -5,6 +5,7 @@ struct CollectionListView: View {
     @Environment(RouterPath.self) private var router
     @Bindable var environment: AppEnvironment
     @State private var state: LoadState<[CollectionInfo]> = .idle
+    @State private var editor: CollectionEditorContext?
 
     var body: some View {
         List {
@@ -39,6 +40,18 @@ struct CollectionListView: View {
             }
         }
         .navigationTitle("我的收藏夹")
+        .toolbar {
+            Button {
+                editor = .create
+            } label: {
+                Image(systemName: "plus")
+            }
+        }
+        .sheet(item: $editor) { context in
+            CollectionEditorSheet(environment: environment, context: context) {
+                Task { await load() }
+            }
+        }
         .task { await load() }
         .refreshable { await load() }
     }

@@ -2,12 +2,15 @@ import SetuIOSCore
 import SwiftUI
 
 struct CollectionDetailView: View {
+    @Environment(\.dismiss) private var dismiss
     @Bindable var environment: AppEnvironment
     let collectionID: Int
 
     @State private var infoState: LoadState<CollectionInfo> = .idle
     @State private var itemsState: LoadState<CollectionItemPage> = .idle
     @State private var actionMessage: String?
+    @State private var editor: CollectionEditorContext?
+    @State private var showingDeleteConfirmation = false
 
     var body: some View {
         List {
@@ -51,6 +54,36 @@ struct CollectionDetailView: View {
             }
         }
         .navigationTitle(title)
+        .toolbar {
+            if case .loaded(let info) = infoState {
+                Button {
+                    editor = .edit(info)
+                } label: {
+                    Image(systemName: "square.and.pencil")
+                }
+
+                if !info.isDefault {
+                    Button(role: .destructive) {
+                        showingDeleteConfirmation = true
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                }
+            }
+        }
+        .sheet(item: $editor) { context in
+            CollectionEditorSheet(environment: environment, context: context) {
+                Task { await load() }
+            }
+        }
+        .confirmationDialog("删除这个收藏夹？", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) {
+            Button("删除收藏夹", role: .destructive) {
+                Task { await deleteCollection() }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("删除后收藏夹中的条目关系会被移除，此操作不可撤销。")
+        }
         .task { await load() }
         .refreshable { await load() }
     }
@@ -166,6 +199,16 @@ struct CollectionDetailView: View {
             try await environment.collectionClient.removeItem(collectionID: collectionID, pid: item.pid, p: item.p)
             actionMessage = "已从收藏夹移除"
             await load()
+        } catch {
+            actionMessage = error.localizedDescription
+        }
+    }
+
+    private func deleteCollection() async {
+        actionMessage = nil
+        do {
+            try await environment.collectionClient.delete(collectionID: collectionID)
+            dismiss()
         } catch {
             actionMessage = error.localizedDescription
         }

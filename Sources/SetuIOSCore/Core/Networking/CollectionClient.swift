@@ -11,8 +11,26 @@ public struct CollectionClient: Sendable {
         try await apiClient.get("/collections/mine")
     }
 
+    public func create(name: String, description: String?, visibility: CollectionVisibility) async throws -> Int {
+        try await apiClient.post(
+            "/collections",
+            body: CollectionMutationRequest(name: name, description: description, visibility: visibility)
+        )
+    }
+
     public func info(collectionID: Int) async throws -> CollectionInfo {
         try await apiClient.get("/collections/\(collectionID)")
+    }
+
+    public func update(collectionID: Int, name: String, description: String?, visibility: CollectionVisibility) async throws {
+        let _: String = try await apiClient.put(
+            "/collections/\(collectionID)",
+            body: CollectionMutationRequest(name: name, description: description, visibility: visibility)
+        )
+    }
+
+    public func delete(collectionID: Int) async throws {
+        let _: String = try await apiClient.requestWithoutBody("/collections/\(collectionID)", method: "DELETE")
     }
 
     public func items(collectionID: Int, page: Int = 1, size: Int = 24) async throws -> CollectionItemPage {
@@ -54,4 +72,10 @@ public struct CollectionClient: Sendable {
             let _: String = try await apiClient.requestWithoutBody("/square/collections/\(id)/favorite", method: "DELETE")
         }
     }
+}
+
+private struct CollectionMutationRequest: Encodable, Sendable {
+    let name: String
+    let description: String?
+    let visibility: CollectionVisibility
 }

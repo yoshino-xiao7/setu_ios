@@ -1,6 +1,6 @@
 import Foundation
 
-public enum CollectionVisibility: Int, Codable, Sendable {
+public enum CollectionVisibility: Int, Codable, Sendable, CaseIterable {
     case `private` = 0
     case publicVisible = 1
 
