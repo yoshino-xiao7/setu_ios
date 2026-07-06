@@ -142,6 +142,8 @@ struct RootAppView: View {
     @ViewBuilder
     private func featureDestination(_ featureID: AppFeatureID) -> some View {
         switch featureID {
+        case .dashboard:
+            DashboardView(environment: environment)
         case .profile:
             ProfileView(environment: environment)
         case .apiKeys:
@@ -212,12 +214,6 @@ struct RootAppView: View {
             AdminAiReviewsView(environment: environment)
         case .adminAiDeleteRequests:
             AdminAiDeleteRequestsView(environment: environment)
-        default:
-            if let feature = AppFeatureCatalog.feature(id: featureID) {
-                FeatureDetailView(feature: feature)
-            } else {
-                PlaceholderFeatureView(title: "功能", systemImage: "questionmark.circle", summary: "功能定义不存在。")
-            }
         }
     }
 }
