@@ -98,6 +98,33 @@ public struct AdminBlacklistIpItem: Decodable, Identifiable, Sendable {
     public var stableID: String { "\(id ?? 0)-\(ip)" }
 }
 
+public struct AdminTempBlockItem: Decodable, Identifiable, Sendable {
+    public let ip: String
+    public let blockedAt: String?
+    public let expiresAt: String?
+    public let reason: String?
+
+    public var id: String { ip }
+}
+
+public struct AdminIpBlacklistAddRequest: Encodable, Sendable {
+    public let ip: String
+    public let reason: String
+
+    public init(ip: String, reason: String) {
+        self.ip = ip
+        self.reason = reason
+    }
+}
+
+public struct AdminIpBlacklistRemoveRequest: Encodable, Sendable {
+    public let ip: String
+
+    public init(ip: String) {
+        self.ip = ip
+    }
+}
+
 public struct AdminImageCountResponse: Decodable, Sendable {
     public let count: Int?
     public let data: Int?

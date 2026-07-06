@@ -55,6 +55,35 @@ public struct AdminClient: Sendable {
         try await apiClient.get("/admin/blacklist/ip")
     }
 
+    public func addIpBlacklist(ip: String, reason: String) async throws {
+        let _: String = try await apiClient.post(
+            "/admin/blacklist/ip/add",
+            body: AdminIpBlacklistAddRequest(ip: ip, reason: reason)
+        )
+    }
+
+    public func removeIpBlacklist(ip: String) async throws {
+        let _: String = try await apiClient.post(
+            "/admin/blacklist/ip/remove",
+            body: AdminIpBlacklistRemoveRequest(ip: ip)
+        )
+    }
+
+    public func tempBlocks() async throws -> [AdminTempBlockItem] {
+        try await apiClient.get("/admin/tempblock/list")
+    }
+
+    public func clearTempBlock(ip: String) async throws {
+        let _: String = try await apiClient.post(
+            "/admin/tempblock/clear",
+            body: AdminIpBlacklistRemoveRequest(ip: ip)
+        )
+    }
+
+    public func clearAllTempBlocks() async throws {
+        let _: String = try await apiClient.post("/admin/tempblock/clear-all")
+    }
+
     public func imageCount() async throws -> Int {
         if let value: Int = try? await apiClient.get("/status/image-count?t=\(Int(Date().timeIntervalSince1970))", signed: false) {
             return value

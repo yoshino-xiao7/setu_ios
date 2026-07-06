@@ -31,6 +31,7 @@ enum AppRoute: Hashable {
     case admin
     case adminUsers
     case adminUserDetail(Int)
+    case adminBlacklist
 }
 
 enum AppTab: String, CaseIterable, Identifiable {

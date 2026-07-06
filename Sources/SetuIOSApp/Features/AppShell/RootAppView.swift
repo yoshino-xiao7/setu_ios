@@ -100,6 +100,8 @@ struct RootAppView: View {
             AdminUsersView(environment: environment)
         case .adminUserDetail(let id):
             AdminUserDetailView(environment: environment, userID: id)
+        case .adminBlacklist:
+            AdminBlacklistView(environment: environment)
         }
     }
 
@@ -150,6 +152,8 @@ struct RootAppView: View {
             AdminOverviewView(environment: environment)
         case .adminUsers:
             AdminUsersView(environment: environment)
+        case .adminBlacklist:
+            AdminBlacklistView(environment: environment)
         default:
             if let feature = AppFeatureCatalog.feature(id: featureID) {
                 FeatureDetailView(feature: feature)
