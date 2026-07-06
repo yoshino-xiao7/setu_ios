@@ -112,7 +112,28 @@ struct PublicCollectionDetailView: View {
             } label: {
                 Label(info.favoritedByMe == true ? "取消收藏" : "收藏", systemImage: "star")
             }
+
+            Button {
+                copyShareLink(info)
+            } label: {
+                Label("复制分享链接", systemImage: "doc.on.doc")
+            }
+
+            Link(destination: publicShareURL(for: info)) {
+                Label("打开公开预览", systemImage: "arrow.up.forward.square")
+            }
         }
+    }
+
+    private func publicShareURL(for info: CollectionInfo) -> URL {
+        environment.config.siteBaseURL
+            .appendingPathComponent("c")
+            .appendingPathComponent(String(info.id))
+    }
+
+    private func copyShareLink(_ info: CollectionInfo) {
+        PlatformClipboard.copy(publicShareURL(for: info).absoluteString)
+        actionMessage = "分享链接已复制"
     }
 
     private func load() async {
@@ -175,6 +196,13 @@ private struct PublicCollectionImageRow: View {
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
+
+                if let urlString = item.image?.urlOriginal, let url = URL(string: urlString) {
+                    Link(destination: url) {
+                        Label("打开原图", systemImage: "arrow.up.forward.square")
+                    }
+                    .font(.footnote)
+                }
             }
         }
         .padding(.vertical, 4)
