@@ -76,11 +76,19 @@ struct AiGenerationDetailView: View {
             LabeledContent("尺寸", value: "\(job.width)x\(job.height)")
             LabeledContent("步数", value: "\(job.steps)")
             LabeledContent("CFG", value: job.cfg.formatted(.number.precision(.fractionLength(1))))
+            LabeledContent("Seed", value: job.seed.map(String.init) ?? "随机")
+            LabeledContent("生成模式", value: job.generationMode == "DUAL" ? "双角色" : "单角色")
+            LabeledContent("云端原图", value: job.privateOssStatus ?? "NONE")
+            LabeledContent("云端到期", value: job.privateOssExpiresAt ?? "-")
             if let checkpoint = job.checkpoint, !checkpoint.isEmpty {
                 LabeledContent("Checkpoint", value: checkpoint)
             }
             if let lora = job.loraName, !lora.isEmpty {
                 LabeledContent("LoRA", value: lora)
+            }
+            if job.generationMode == "DUAL" {
+                let secondLora = job.secondLoraName?.isEmpty == false ? job.secondLoraName ?? "" : "不使用第二 LoRA"
+                LabeledContent("第二 LoRA", value: secondLora)
             }
             if let cost = job.pointsCost {
                 LabeledContent("积分", value: "\(cost)")
@@ -185,11 +193,14 @@ struct AiGenerationDetailView: View {
     private func deleteRequestSection(_ job: AiGenerationJob) -> some View {
         Section("删除申请") {
             LabeledContent("当前状态", value: job.deleteStatus ?? "NONE")
+            Text("删除申请通过后，这张图会从你的历史和公共广场中隐藏，并清理 OSS 文件。管理员审计记录和本机归档不会随之删除。")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
             TextField("删除原因", text: $deleteReason, axis: .vertical)
             Button("提交删除申请", role: .destructive) {
                 Task { await submitDeleteRequest() }
             }
-            .disabled(deleteReason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .disabled(job.deleted == true || job.deleteStatus == "WAITING" || job.deleteStatus == "APPROVED")
         }
     }
 
@@ -236,10 +247,11 @@ struct AiGenerationDetailView: View {
 
     private func submitReview() async {
         do {
+            let note = reviewNote.trimmingCharacters(in: .whitespacesAndNewlines)
             let review = try await environment.aiGenerationClient.submitReview(
                 id: jobID,
                 category: publicCategory,
-                note: reviewNote.trimmingCharacters(in: .whitespacesAndNewlines)
+                note: note.isEmpty ? nil : note
             )
             message = "审核申请已提交：\(review.status)"
             await load()
@@ -250,9 +262,8 @@ struct AiGenerationDetailView: View {
 
     private func submitDeleteRequest() async {
         let reason = deleteReason.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !reason.isEmpty else { return }
         do {
-            let request = try await environment.aiGenerationClient.submitDeleteRequest(id: jobID, reason: reason)
+            let request = try await environment.aiGenerationClient.submitDeleteRequest(id: jobID, reason: reason.isEmpty ? nil : reason)
             message = "删除申请已提交：\(request.status)"
             await load()
         } catch {
