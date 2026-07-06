@@ -7,6 +7,7 @@ struct MusicHomeView: View {
     @State private var query = ""
     @State private var hotState: LoadState<[MusicHotSearchItem]> = .idle
     @State private var searchState: LoadState<MusicSearchResult> = .idle
+    @State private var selectedSong: MusicSong?
 
     var body: some View {
         List {
@@ -39,6 +40,9 @@ struct MusicHomeView: View {
             hotSearchContent
         }
         .navigationTitle("音乐")
+        .sheet(item: $selectedSong) { song in
+            AddSongToPlaylistSheet(environment: environment, song: song)
+        }
         .task { await loadHotSearch() }
         .refreshable { await loadHotSearch() }
     }
@@ -61,7 +65,9 @@ struct MusicHomeView: View {
                     ContentUnavailableView("没有找到音乐", systemImage: "magnifyingglass")
                 } else {
                     ForEach(result.result.songs) { song in
-                        MusicSongRow(song: song)
+                        MusicSongRow(song: song) {
+                            selectedSong = song
+                        }
                     }
                 }
             }
@@ -136,6 +142,7 @@ private struct MusicSearchInputModifier: ViewModifier {
 
 struct MusicSongRow: View {
     let song: MusicSong
+    var onAddToPlaylist: (() -> Void)?
 
     var body: some View {
         HStack(spacing: 12) {
@@ -152,9 +159,17 @@ struct MusicSongRow: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            if song.mv ?? 0 > 0 {
-                Image(systemName: "play.rectangle")
-                    .foregroundStyle(.pink)
+            VStack(spacing: 10) {
+                if song.mv ?? 0 > 0 {
+                    Image(systemName: "play.rectangle")
+                        .foregroundStyle(.pink)
+                }
+                if let onAddToPlaylist {
+                    Button(action: onAddToPlaylist) {
+                        Image(systemName: "text.badge.plus")
+                    }
+                    .buttonStyle(.borderless)
+                }
             }
         }
         .padding(.vertical, 4)
@@ -190,5 +205,78 @@ struct MusicArtworkView: View {
                 Image(systemName: "music.note")
                     .foregroundStyle(.pink)
             }
+    }
+}
+
+private struct AddSongToPlaylistSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Bindable var environment: AppEnvironment
+    let song: MusicSong
+    @State private var state: LoadState<[UserMusicPlaylist]> = .idle
+    @State private var message: String?
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("歌曲") {
+                    MusicSongRow(song: song)
+                }
+
+                if let message {
+                    Section {
+                        Text(message)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                switch state {
+                case .idle, .loading:
+                    ProgressView("正在加载歌单")
+                case .failed(let message):
+                    ContentUnavailableView("歌单加载失败", systemImage: "music.note.list", description: Text(message))
+                case .loaded(let playlists):
+                    if playlists.isEmpty {
+                        ContentUnavailableView("暂无歌单", systemImage: "music.note.list")
+                    } else {
+                        Section("选择歌单") {
+                            ForEach(playlists) { playlist in
+                                Button {
+                                    Task { await add(to: playlist) }
+                                } label: {
+                                    Text(playlist.name)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("加入歌单")
+            .toolbar {
+                Button("关闭") {
+                    dismiss()
+                }
+            }
+            .task { await load() }
+        }
+    }
+
+    private func load() async {
+        state = .loading
+        do {
+            state = .loaded(try await environment.musicClient.playlists())
+        } catch {
+            state = .failed(error.localizedDescription)
+        }
+    }
+
+    private func add(to playlist: UserMusicPlaylist) async {
+        do {
+            try await environment.musicClient.add(song: song, toPlaylist: playlist.id)
+            message = "已加入 \(playlist.name)"
+            dismiss()
+        } catch {
+            message = error.localizedDescription
+        }
     }
 }

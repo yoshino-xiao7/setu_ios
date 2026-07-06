@@ -72,6 +72,8 @@ struct RootAppView: View {
             MusicHistoryView(environment: environment)
         case .playlists:
             MusicPlaylistsView(environment: environment)
+        case .playlistDetail(let id):
+            MusicPlaylistDetailView(environment: environment, playlistID: id)
         case .admin:
             PlaceholderFeatureView(title: "管理后台", systemImage: "shield", summary: "管理员审核、日志和系统操作。")
         }

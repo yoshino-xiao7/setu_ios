@@ -20,6 +20,39 @@ public struct MusicClient: Sendable {
         try await apiClient.get("/user/playlists")
     }
 
+    public func playlist(id: Int) async throws -> UserMusicPlaylistDetail {
+        try await apiClient.get("/user/playlists/\(id)")
+    }
+
+    public func createPlaylist(name: String, description: String? = nil, isPublic: Int = 0) async throws -> UserMusicPlaylist {
+        try await apiClient.post(
+            "/user/playlists",
+            body: CreateMusicPlaylistRequest(name: name, description: description, isPublic: isPublic)
+        )
+    }
+
+    public func deletePlaylist(id: Int) async throws {
+        let _: String = try await apiClient.requestWithoutBody("/user/playlists/\(id)", method: "DELETE")
+    }
+
+    public func setPlayMode(playlistID: Int, playMode: String) async throws {
+        let _: String = try await apiClient.put(
+            "/user/playlists/\(playlistID)/play-mode",
+            body: UpdateMusicPlayModeRequest(playMode: playMode)
+        )
+    }
+
+    public func add(song: MusicSong, toPlaylist playlistID: Int) async throws {
+        let _: String = try await apiClient.post(
+            "/user/playlists/\(playlistID)/songs",
+            body: AddSongToPlaylistRequest(song: song)
+        )
+    }
+
+    public func removeSong(playlistID: Int, songID: Int) async throws {
+        let _: String = try await apiClient.requestWithoutBody("/user/playlists/\(playlistID)/songs/\(songID)", method: "DELETE")
+    }
+
     public func history(limit: Int = 20, offset: Int = 0) async throws -> [MusicHistoryRecord] {
         try await apiClient.get("/user/music/history?limit=\(limit)&offset=\(offset)")
     }

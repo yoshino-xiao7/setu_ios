@@ -32,6 +32,15 @@ public struct APIClient: Sendable {
         try await request(path, method: "POST", body: Optional<Data>.none, signed: signed)
     }
 
+    public func put<Request: Encodable & Sendable, Value: Decodable & Sendable>(
+        _ path: String,
+        body: Request,
+        signed: Bool = true
+    ) async throws -> Value {
+        let data = try encoder.encode(body)
+        return try await request(path, method: "PUT", body: data, signed: signed)
+    }
+
     public func requestWithoutBody<Value: Decodable & Sendable>(
         _ path: String,
         method: String,

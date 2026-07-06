@@ -2,8 +2,10 @@ import SetuIOSCore
 import SwiftUI
 
 struct MusicPlaylistsView: View {
+    @Environment(RouterPath.self) private var router
     @Bindable var environment: AppEnvironment
     @State private var state: LoadState<[UserMusicPlaylist]> = .idle
+    @State private var showingCreate = false
 
     var body: some View {
         List {
@@ -18,13 +20,29 @@ struct MusicPlaylistsView: View {
                 } else {
                     Section("共 \(playlists.count) 个歌单") {
                         ForEach(playlists) { playlist in
-                            MusicPlaylistRow(playlist: playlist)
+                            Button {
+                                router.navigate(to: .playlistDetail(playlist.id))
+                            } label: {
+                                MusicPlaylistRow(playlist: playlist)
+                            }
                         }
                     }
                 }
             }
         }
         .navigationTitle("我的歌单")
+        .toolbar {
+            Button {
+                showingCreate = true
+            } label: {
+                Image(systemName: "plus")
+            }
+        }
+        .sheet(isPresented: $showingCreate) {
+            CreatePlaylistSheet(environment: environment) {
+                Task { await load() }
+            }
+        }
         .task { await load() }
         .refreshable { await load() }
     }
@@ -76,6 +94,66 @@ private struct MusicPlaylistRow: View {
             return "单曲"
         default:
             return "顺序"
+        }
+    }
+}
+
+private struct CreatePlaylistSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Bindable var environment: AppEnvironment
+    let onCreated: () -> Void
+    @State private var name = ""
+    @State private var description = ""
+    @State private var isPublic = false
+    @State private var message: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("歌单信息") {
+                    TextField("名称", text: $name)
+                    TextField("描述", text: $description, axis: .vertical)
+                    Toggle("公开歌单", isOn: $isPublic)
+                }
+
+                if let message {
+                    Section {
+                        Text(message)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                    }
+                }
+            }
+            .navigationTitle("新建歌单")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("创建") {
+                        Task { await create() }
+                    }
+                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+    }
+
+    private func create() async {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return }
+        do {
+            _ = try await environment.musicClient.createPlaylist(
+                name: trimmedName,
+                description: description.trimmingCharacters(in: .whitespacesAndNewlines),
+                isPublic: isPublic ? 1 : 0
+            )
+            onCreated()
+            dismiss()
+        } catch {
+            message = error.localizedDescription
         }
     }
 }

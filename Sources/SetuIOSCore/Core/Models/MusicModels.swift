@@ -80,6 +80,20 @@ public struct UserMusicPlaylist: Decodable, Identifiable, Sendable {
     public let updatedAt: String?
 }
 
+public struct UserMusicPlaylistDetail: Decodable, Identifiable, Sendable {
+    public let id: Int
+    public let name: String
+    public let description: String?
+    public let coverUrl: String?
+    public let isPublic: Int?
+    public let playMode: String?
+    public let songCount: Int?
+    public let playCount: Int?
+    public let createdAt: String?
+    public let updatedAt: String?
+    public let songs: [PlaylistSong]?
+}
+
 public struct PlaylistSong: Decodable, Identifiable, Sendable {
     public let id: Int
     public let songId: Int
@@ -102,4 +116,44 @@ public struct MusicHistoryRecord: Decodable, Identifiable, Sendable {
     public let coverUrl: String?
     public let duration: Int?
     public let playTime: String
+}
+
+public struct CreateMusicPlaylistRequest: Encodable, Sendable {
+    public let name: String
+    public let description: String?
+    public let coverUrl: String?
+    public let isPublic: Int?
+
+    public init(name: String, description: String? = nil, coverUrl: String? = nil, isPublic: Int? = 0) {
+        self.name = name
+        self.description = description
+        self.coverUrl = coverUrl
+        self.isPublic = isPublic
+    }
+}
+
+public struct AddSongToPlaylistRequest: Encodable, Sendable {
+    public let songId: Int
+    public let songName: String
+    public let artistName: String
+    public let albumName: String?
+    public let coverUrl: String?
+    public let duration: Int
+
+    public init(song: MusicSong) {
+        self.songId = song.id
+        self.songName = song.name
+        self.artistName = song.artistNames
+        self.albumName = song.albumName
+        self.coverUrl = song.coverURLString
+        self.duration = song.durationMilliseconds
+    }
+}
+
+public struct UpdateMusicPlayModeRequest: Encodable, Sendable {
+    public let playMode: String
+
+    public init(playMode: String) {
+        self.playMode = playMode
+    }
 }

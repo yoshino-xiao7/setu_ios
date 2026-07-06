@@ -12,6 +12,7 @@ enum AppRoute: Hashable {
     case aiSquare
     case musicHistory
     case playlists
+    case playlistDetail(Int)
     case notifications
     case favorites
     case imageDeleteRequests
