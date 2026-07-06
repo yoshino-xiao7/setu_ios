@@ -1,5 +1,10 @@
 import SetuIOSCore
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 struct AiGenerationDetailView: View {
     @Bindable var environment: AppEnvironment
@@ -96,6 +101,12 @@ struct AiGenerationDetailView: View {
 
     private func promptSection(_ job: AiGenerationJob) -> some View {
         Section("提示词") {
+            Button {
+                copyPrompt(job)
+            } label: {
+                Label("复制提示词", systemImage: "doc.on.doc")
+            }
+
             Text(job.promptCn)
                 .textSelection(.enabled)
             if let positive = job.promptPositive, !positive.isEmpty {
@@ -117,6 +128,20 @@ struct AiGenerationDetailView: View {
                 }
             }
         }
+    }
+
+    private func copyPrompt(_ job: AiGenerationJob) {
+        let text = [
+            "正向提示词：\(job.promptPositive ?? job.promptCn)",
+            "反向提示词：\(job.promptNegative ?? "")"
+        ].joined(separator: "\n")
+        #if canImport(UIKit)
+        UIPasteboard.general.string = text
+        #elseif canImport(AppKit)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        #endif
+        message = "提示词已复制"
     }
 
     private var linkSection: some View {
