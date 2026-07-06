@@ -2,6 +2,7 @@ import SetuIOSCore
 import SwiftUI
 
 struct ImageDeleteRequestsView: View {
+    @Environment(RouterPath.self) private var router
     @Bindable var environment: AppEnvironment
     @State private var state: LoadState<PageResult<ImageDeleteRequestItem>> = .idle
 
@@ -18,7 +19,12 @@ struct ImageDeleteRequestsView: View {
                 } else {
                     Section("共 \(page.total) 条") {
                         ForEach(page.list) { request in
-                            ImageDeleteRequestRow(request: request)
+                            Button {
+                                router.navigate(to: .imageDeleteRequestDetail(request.id))
+                            } label: {
+                                ImageDeleteRequestRow(request: request)
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -77,7 +83,7 @@ private struct ImageDeleteRequestRow: View {
     }
 }
 
-private struct RequestStatusBadge: View {
+struct RequestStatusBadge: View {
     let title: String
     let status: Int
 

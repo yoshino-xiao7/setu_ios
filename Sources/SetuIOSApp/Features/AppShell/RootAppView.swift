@@ -56,6 +56,8 @@ struct RootAppView: View {
             FavoriteListView(environment: environment)
         case .imageDeleteRequests:
             ImageDeleteRequestsView(environment: environment)
+        case .imageDeleteRequestDetail(let id):
+            ImageDeleteRequestDetailView(environment: environment, requestID: id)
         case .qqBinding:
             QqBindingView(environment: environment)
         case .security:

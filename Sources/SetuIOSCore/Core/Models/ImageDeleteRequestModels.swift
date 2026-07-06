@@ -58,4 +58,20 @@ public struct ImageDeleteRequestDetail: Decodable, Identifiable, Sendable {
     public let adminEmail: String?
     public let adminRemark: String?
     public let reviewedAt: String?
+
+    public var statusTitle: String {
+        if !statusText.isEmpty {
+            return statusText
+        }
+        switch status {
+        case 0:
+            return "待审核"
+        case 1:
+            return "已批准"
+        case 2:
+            return "已拒绝"
+        default:
+            return "未知"
+        }
+    }
 }

@@ -256,7 +256,7 @@ private struct CollectionItemRow: View {
     }
 }
 
-private struct TagFlow: View {
+struct TagFlow: View {
     let tags: [String]
 
     var body: some View {
