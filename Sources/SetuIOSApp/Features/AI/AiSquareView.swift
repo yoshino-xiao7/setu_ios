@@ -4,7 +4,7 @@ import SwiftUI
 struct AiSquareView: View {
     @Bindable var environment: AppEnvironment
     @State private var state: LoadState<PageResult<AiGenerationJob>> = .idle
-    @State private var category = ""
+    @State private var category = "GENERAL"
     @State private var page = 1
     private let pageSize = 16
 
@@ -109,6 +109,13 @@ private struct AiSquareRow: View {
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
+
+                if let imageUrl = job.imageUrl, let url = URL(string: imageUrl) {
+                    Link(destination: url) {
+                        Label("查看原图", systemImage: "eye")
+                    }
+                    .font(.footnote)
+                }
             }
         }
         .padding(.vertical, 5)
