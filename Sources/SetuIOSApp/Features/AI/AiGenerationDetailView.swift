@@ -15,6 +15,7 @@ struct AiGenerationDetailView: View {
     @State private var imageURL: AiImageURL?
     @State private var download: AiImageDownload?
     @State private var message: String?
+    @State private var capabilities: AiCapabilityResponse?
 
     var body: some View {
         List {
@@ -80,9 +81,7 @@ struct AiGenerationDetailView: View {
             LabeledContent("生成模式", value: job.generationMode == "DUAL" ? "双角色" : "单角色")
             LabeledContent("云端原图", value: job.privateOssStatus ?? "NONE")
             LabeledContent("云端到期", value: job.privateOssExpiresAt ?? "-")
-            if let checkpoint = job.checkpoint, !checkpoint.isEmpty {
-                LabeledContent("Checkpoint", value: checkpoint)
-            }
+            LabeledContent("Checkpoint", value: checkpointDisplayName(job.checkpoint))
             if let lora = job.loraName, !lora.isEmpty {
                 LabeledContent("LoRA", value: lora)
             }
@@ -208,10 +207,26 @@ struct AiGenerationDetailView: View {
         state = .loading
         message = nil
         do {
-            state = .loaded(try await environment.aiGenerationClient.get(id: jobID))
+            async let job = environment.aiGenerationClient.get(id: jobID)
+            async let capabilityResponse = try? environment.aiGenerationClient.capabilities()
+            state = .loaded(try await job)
+            capabilities = await capabilityResponse
         } catch {
             state = .failed(error.localizedDescription)
         }
+    }
+
+    private func checkpointDisplayName(_ checkpoint: String?) -> String {
+        if let checkpoint, !checkpoint.isEmpty {
+            if let match = capabilities?.checkpoints.first(where: { $0.name == checkpoint }) {
+                return match.displayName?.isEmpty == false ? match.displayName ?? checkpoint : checkpoint
+            }
+            return checkpoint
+        }
+        if let onlyCheckpoint = capabilities?.checkpoints.first, capabilities?.checkpoints.count == 1 {
+            return "默认模型（\(onlyCheckpoint.displayName?.isEmpty == false ? onlyCheckpoint.displayName ?? onlyCheckpoint.name : onlyCheckpoint.name)）"
+        }
+        return "默认模型"
     }
 
     private func fetchImageURL() async {
