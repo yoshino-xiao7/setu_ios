@@ -57,8 +57,19 @@ public struct CollectionClient: Sendable {
         let _: String = try await apiClient.requestWithoutBody("/collections/\(collectionID)/cover?pid=\(pid)&p=\(p)", method: "PUT")
     }
 
-    public func square(page: Int = 1, size: Int = 20, sort: String = "hot") async throws -> PageResult<CollectionInfo> {
-        try await apiClient.get("/square/collections?page=\(page)&size=\(size)&sort=\(sort)")
+    public func square(page: Int = 1, size: Int = 20, sort: String = "hot", keyword: String? = nil) async throws -> PageResult<CollectionInfo> {
+        var components = URLComponents()
+        components.path = "/square/collections"
+        var queryItems = [
+            URLQueryItem(name: "page", value: String(page)),
+            URLQueryItem(name: "size", value: String(size)),
+            URLQueryItem(name: "sort", value: sort)
+        ]
+        if let keyword = keyword?.trimmingCharacters(in: .whitespacesAndNewlines), !keyword.isEmpty {
+            queryItems.append(URLQueryItem(name: "keyword", value: keyword))
+        }
+        components.queryItems = queryItems
+        return try await apiClient.get(components.string ?? "/square/collections")
     }
 
     public func squareDetail(id: Int) async throws -> CollectionInfo {

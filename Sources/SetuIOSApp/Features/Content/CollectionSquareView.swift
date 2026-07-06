@@ -6,6 +6,8 @@ struct CollectionSquareView: View {
     @Bindable var environment: AppEnvironment
     @State private var state: LoadState<PageResult<CollectionInfo>> = .idle
     @State private var sort = "hot"
+    @State private var searchText = ""
+    @State private var keyword = ""
     @State private var page = 1
     @State private var actionMessage: String?
     private let pageSize = 20
@@ -62,6 +64,19 @@ struct CollectionSquareView: View {
             }
         }
         .navigationTitle("收藏夹广场")
+        .searchable(text: $searchText, prompt: "搜索收藏夹")
+        .onSubmit(of: .search) {
+            Task { await submitSearch() }
+        }
+        .onChange(of: searchText) { _, newValue in
+            if newValue.isEmpty, !keyword.isEmpty {
+                Task {
+                    keyword = ""
+                    page = 1
+                    await load()
+                }
+            }
+        }
         .task { await load() }
         .refreshable { await load() }
     }
@@ -98,10 +113,16 @@ struct CollectionSquareView: View {
         state = .loading
         actionMessage = nil
         do {
-            state = .loaded(try await environment.collectionClient.square(page: page, size: pageSize, sort: sort))
+            state = .loaded(try await environment.collectionClient.square(page: page, size: pageSize, sort: sort, keyword: keyword))
         } catch {
             state = .failed(error.localizedDescription)
         }
+    }
+
+    private func submitSearch() async {
+        keyword = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        page = 1
+        await load()
     }
 
     private func like(_ collection: CollectionInfo) async {
