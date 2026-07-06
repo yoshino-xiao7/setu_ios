@@ -8,13 +8,30 @@ struct PasskeyListView: View {
     @State private var deleteTarget: PasskeyItem?
     @State private var showingDeleteConfirmation = false
     @State private var message: String?
+    @State private var nickname = "我的通行密钥"
+    @State private var passkeyService = PasskeyAuthorizationService()
+    @State private var isRegistering = false
 
     var body: some View {
         List {
             Section {
-                Label("通行密钥可用于免密码登录。iOS 原生注册/登录需要 Associated Domains 和 WebAuthn RP ID 配置配合，当前先提供已绑定密钥的管理。", systemImage: "touchid")
+                Label("通行密钥可用于免密码登录。真机使用前请在 Xcode 打开 Associated Domains，并确保后端 WebAuthn RP ID 与域名一致。", systemImage: "touchid")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+            }
+
+            Section("开通") {
+                TextField("通行密钥名称", text: $nickname)
+                Button {
+                    Task { await registerPasskey() }
+                } label: {
+                    if isRegistering {
+                        ProgressView()
+                    } else {
+                        Label("开通通行密钥", systemImage: "touchid")
+                    }
+                }
+                .disabled(isRegistering || trimmedNickname.isEmpty)
             }
 
             if let message {
@@ -72,6 +89,10 @@ struct PasskeyListView: View {
         "删除「\(deleteTarget?.displayName ?? "通行密钥")」"
     }
 
+    private var trimmedNickname: String {
+        nickname.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private func load() async {
         state = .loading
         do {
@@ -89,6 +110,26 @@ struct PasskeyListView: View {
         } catch {
             message = error.localizedDescription
         }
+    }
+
+    private func registerPasskey() async {
+        guard !trimmedNickname.isEmpty else { return }
+        isRegistering = true
+        message = nil
+        do {
+            let options = try await environment.passkeyClient.beginRegistration(nickname: trimmedNickname)
+            let credential = try await passkeyService.createCredential(options: options.publicKey.publicKey)
+            _ = try await environment.passkeyClient.finishRegistration(
+                challengeID: options.challengeId,
+                nickname: trimmedNickname,
+                credential: credential
+            )
+            message = "通行密钥已开通"
+            await load()
+        } catch {
+            message = error.localizedDescription
+        }
+        isRegistering = false
     }
 }
 

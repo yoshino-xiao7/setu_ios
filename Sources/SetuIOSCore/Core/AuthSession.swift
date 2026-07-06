@@ -29,19 +29,24 @@ public final class AuthSession {
                 body: LoginRequest(email: email, password: password, captchaCode: captchaCode, captchaUuid: captchaUuid),
                 signed: false
             )
-            try apiClient.signer.persistSignSecret(response.signSecret)
-            persistExpireAt(response.expireAt)
-            currentUser = CurrentUser(
-                id: response.userId ?? 0,
-                email: response.email ?? email,
-                role: response.role,
-                avatarUrl: response.avatarUrl,
-                nickname: nil,
-                lastLoginIp: response.lastLoginIp
-            )
+            try applyLoginResponse(response, fallbackEmail: email)
         } catch {
             lastError = error.localizedDescription
         }
+    }
+
+    public func applyLoginResponse(_ response: LoginResponse, fallbackEmail: String? = nil) throws {
+        try apiClient.signer.persistSignSecret(response.signSecret)
+        persistExpireAt(response.expireAt)
+        currentUser = CurrentUser(
+            id: response.userId ?? 0,
+            email: response.email ?? fallbackEmail ?? "passkey-user",
+            role: response.role,
+            avatarUrl: response.avatarUrl,
+            nickname: nil,
+            lastLoginIp: response.lastLoginIp
+        )
+        lastError = nil
     }
 
     public func refreshSignature() async -> Bool {

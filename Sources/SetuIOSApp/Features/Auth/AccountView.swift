@@ -8,6 +8,9 @@ struct AccountView: View {
     @State private var password = ""
     @State private var captchaCode = ""
     @State private var captchaUuid = ""
+    @State private var passkeyService = PasskeyAuthorizationService()
+    @State private var passkeyMessage: String?
+    @State private var passkeyLoading = false
 
     var body: some View {
         Form {
@@ -76,6 +79,21 @@ struct AccountView: View {
                         }
                     }
                     .disabled(email.isEmpty || password.isEmpty || captchaCode.isEmpty || captchaUuid.isEmpty)
+                    Button {
+                        Task { await loginWithPasskey() }
+                    } label: {
+                        if passkeyLoading {
+                            ProgressView()
+                        } else {
+                            Label("使用通行密钥登录", systemImage: "touchid")
+                        }
+                    }
+                    .disabled(passkeyLoading)
+                    if let passkeyMessage {
+                        Text(passkeyMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
 
@@ -115,6 +133,21 @@ struct AccountView: View {
             }
         }
         .navigationTitle("我的")
+    }
+
+    private func loginWithPasskey() async {
+        passkeyLoading = true
+        passkeyMessage = nil
+        do {
+            let options = try await environment.passkeyClient.beginAuthentication()
+            let credential = try await passkeyService.assertCredential(options: options.publicKey.publicKey)
+            let response = try await environment.passkeyClient.finishAuthentication(challengeID: options.challengeId, credential: credential)
+            try environment.authSession.applyLoginResponse(response)
+            passkeyMessage = "通行密钥登录成功"
+        } catch {
+            passkeyMessage = error.localizedDescription
+        }
+        passkeyLoading = false
     }
 }
 

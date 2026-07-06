@@ -22,3 +22,141 @@ public struct PasskeyItem: Decodable, Identifiable, Sendable {
 public struct PasskeyListResponse: Decodable, Sendable {
     public let list: [PasskeyItem]
 }
+
+public struct PasskeyOptionsResponse: Decodable, Sendable {
+    public let challengeId: String
+    public let publicKey: PasskeyPublicKeyEnvelope
+}
+
+public struct PasskeyPublicKeyEnvelope: Decodable, Sendable {
+    public let publicKey: PasskeyPublicKeyOptions
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if let nested = try? container.decode(PasskeyPublicKeyOptions.self, forKey: .publicKey) {
+            publicKey = nested
+        } else {
+            publicKey = try PasskeyPublicKeyOptions(from: decoder)
+        }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case publicKey
+    }
+}
+
+public struct PasskeyPublicKeyOptions: Decodable, Sendable {
+    public let challenge: String
+    public let rpId: String?
+    public let rp: PasskeyRelyingParty?
+    public let user: PasskeyUser?
+    public let timeout: Int?
+    public let userVerification: String?
+    public let excludeCredentials: [PasskeyCredentialDescriptor]?
+    public let allowCredentials: [PasskeyCredentialDescriptor]?
+
+    public var relyingPartyID: String? {
+        rpId ?? rp?.id
+    }
+}
+
+public struct PasskeyRelyingParty: Decodable, Sendable {
+    public let id: String?
+    public let name: String?
+}
+
+public struct PasskeyUser: Decodable, Sendable {
+    public let id: String
+    public let name: String
+    public let displayName: String
+}
+
+public struct PasskeyCredentialDescriptor: Decodable, Sendable {
+    public let id: String
+    public let type: String?
+    public let transports: [String]?
+}
+
+public struct PasskeyRegistrationStartRequest: Encodable, Sendable {
+    public let nickname: String
+
+    public init(nickname: String) {
+        self.nickname = nickname
+    }
+}
+
+public struct PasskeyRegistrationFinishRequest: Encodable, Sendable {
+    public let challengeId: String
+    public let nickname: String
+    public let credential: PasskeyRegistrationCredential
+
+    public init(challengeId: String, nickname: String, credential: PasskeyRegistrationCredential) {
+        self.challengeId = challengeId
+        self.nickname = nickname
+        self.credential = credential
+    }
+}
+
+public struct PasskeyAuthenticationFinishRequest: Encodable, Sendable {
+    public let challengeId: String
+    public let credential: PasskeyAssertionCredential
+
+    public init(challengeId: String, credential: PasskeyAssertionCredential) {
+        self.challengeId = challengeId
+        self.credential = credential
+    }
+}
+
+public struct PasskeyRegistrationCredential: Encodable, Sendable {
+    public let id: String
+    public let rawId: String
+    public let type: String
+    public let response: PasskeyAttestationResponse
+
+    public init(id: String, rawId: String, type: String = "public-key", response: PasskeyAttestationResponse) {
+        self.id = id
+        self.rawId = rawId
+        self.type = type
+        self.response = response
+    }
+}
+
+public struct PasskeyAttestationResponse: Encodable, Sendable {
+    public let clientDataJSON: String
+    public let attestationObject: String
+    public let transports: [String]?
+
+    public init(clientDataJSON: String, attestationObject: String, transports: [String]? = nil) {
+        self.clientDataJSON = clientDataJSON
+        self.attestationObject = attestationObject
+        self.transports = transports
+    }
+}
+
+public struct PasskeyAssertionCredential: Encodable, Sendable {
+    public let id: String
+    public let rawId: String
+    public let type: String
+    public let response: PasskeyAssertionResponse
+
+    public init(id: String, rawId: String, type: String = "public-key", response: PasskeyAssertionResponse) {
+        self.id = id
+        self.rawId = rawId
+        self.type = type
+        self.response = response
+    }
+}
+
+public struct PasskeyAssertionResponse: Encodable, Sendable {
+    public let authenticatorData: String
+    public let clientDataJSON: String
+    public let signature: String
+    public let userHandle: String?
+
+    public init(authenticatorData: String, clientDataJSON: String, signature: String, userHandle: String?) {
+        self.authenticatorData = authenticatorData
+        self.clientDataJSON = clientDataJSON
+        self.signature = signature
+        self.userHandle = userHandle
+    }
+}
