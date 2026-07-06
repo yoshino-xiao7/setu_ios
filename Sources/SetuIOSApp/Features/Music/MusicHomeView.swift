@@ -1,6 +1,10 @@
 import SetuIOSCore
 import SwiftUI
 
+#if os(iOS)
+import UIKit
+#endif
+
 struct MusicHomeView: View {
     @Environment(RouterPath.self) private var router
     @Bindable var environment: AppEnvironment
@@ -121,6 +125,8 @@ struct MusicHomeView: View {
                             mvSong = song
                         } onAddToPlaylist: {
                             selectedSong = song
+                        } onDownload: {
+                            Task { await download(song) }
                         }
                     }
                     if result.hasMore {
@@ -291,6 +297,37 @@ struct MusicHomeView: View {
             playbackMessage = error.localizedDescription
         }
     }
+
+    private func download(_ song: MusicSong) async {
+        playbackMessage = "正在准备下载"
+        do {
+            let response = try await environment.musicClient.url(songID: song.id, level: "exhigh")
+            guard let item = response.data?.first, let urlString = item.playableURLString else {
+                playbackMessage = response.data?.first?.unavailableMessage ?? response.playabilityReason ?? response.message ?? "暂无可下载地址"
+                return
+            }
+            let signed = try await environment.downloadClient.sign(url: urlString, filename: downloadFilename(for: song))
+            guard let url = URL(string: signed.downloadUrl) else {
+                playbackMessage = "下载地址无效"
+                return
+            }
+            openExternalURL(url)
+            playbackMessage = "已打开下载地址"
+        } catch {
+            playbackMessage = error.localizedDescription
+        }
+    }
+
+    private func downloadFilename(for song: MusicSong) -> String {
+        let artists = song.artistNames.isEmpty ? "未知歌手" : song.artistNames.replacingOccurrences(of: " / ", with: ", ")
+        return "\(song.name) - \(artists).mp3"
+    }
+
+    private func openExternalURL(_ url: URL) {
+        #if os(iOS)
+        UIApplication.shared.open(url)
+        #endif
+    }
 }
 
 private enum MusicSearchHistoryStore {
@@ -350,6 +387,7 @@ struct MusicSongRow: View {
     var onPlay: (() -> Void)?
     var onPlayMv: (() -> Void)?
     var onAddToPlaylist: (() -> Void)?
+    var onDownload: (() -> Void)?
 
     var body: some View {
         HStack(spacing: 12) {
@@ -387,6 +425,12 @@ struct MusicSongRow: View {
                 if let onAddToPlaylist {
                     Button(action: onAddToPlaylist) {
                         Image(systemName: "text.badge.plus")
+                    }
+                    .buttonStyle(.borderless)
+                }
+                if let onDownload {
+                    Button(action: onDownload) {
+                        Image(systemName: "arrow.down.circle")
                     }
                     .buttonStyle(.borderless)
                 }

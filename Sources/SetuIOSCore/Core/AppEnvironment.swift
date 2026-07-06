@@ -19,6 +19,7 @@ public final class AppEnvironment {
     public let favoriteClient: FavoriteClient
     public let imageDeleteRequestClient: ImageDeleteRequestClient
     public let musicClient: MusicClient
+    public let downloadClient: DownloadClient
     public let galleryUploadClient: GalleryUploadClient
     public let adminClient: AdminClient
     public let authSession: AuthSession
@@ -40,6 +41,7 @@ public final class AppEnvironment {
         favoriteClient: FavoriteClient,
         imageDeleteRequestClient: ImageDeleteRequestClient,
         musicClient: MusicClient,
+        downloadClient: DownloadClient,
         galleryUploadClient: GalleryUploadClient,
         adminClient: AdminClient,
         authSession: AuthSession
@@ -60,6 +62,7 @@ public final class AppEnvironment {
         self.favoriteClient = favoriteClient
         self.imageDeleteRequestClient = imageDeleteRequestClient
         self.musicClient = musicClient
+        self.downloadClient = downloadClient
         self.galleryUploadClient = galleryUploadClient
         self.adminClient = adminClient
         self.authSession = authSession
@@ -83,6 +86,7 @@ public final class AppEnvironment {
         let favoriteClient = FavoriteClient(apiClient: client)
         let imageDeleteRequestClient = ImageDeleteRequestClient(apiClient: client)
         let musicClient = MusicClient(apiClient: client)
+        let downloadClient = DownloadClient(apiClient: client)
         let galleryUploadClient = GalleryUploadClient(apiClient: client)
         let adminClient = AdminClient(apiClient: client)
         let session = AuthSession(apiClient: client, keychain: keychain)
@@ -103,6 +107,7 @@ public final class AppEnvironment {
             favoriteClient: favoriteClient,
             imageDeleteRequestClient: imageDeleteRequestClient,
             musicClient: musicClient,
+            downloadClient: downloadClient,
             galleryUploadClient: galleryUploadClient,
             adminClient: adminClient,
             authSession: session
