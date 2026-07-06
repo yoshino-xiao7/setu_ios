@@ -4,9 +4,16 @@
 
 ## 第一批：App Shell 与首页数据
 
-- 仪表盘：`/usage/overview`、`/points/me`、`/status/overview`、`/notifications/unread-count`
+- 仪表盘：`/usage/overview`、`/points/me`、`/status/overview`、`/notifications/unread-count`。已接入 iOS 首页。
 - 账号：`/auth/login`、`/auth/refresh-signature`、`/auth/logout`、`/user/info`
 - 移动端能力：`/mobile/capabilities`、APNs 设备绑定、Live Activity token
+
+## 已开始原生实现
+
+- API Keys：列表、创建、启停、删除。
+- 积分流水：分页列表第一版。
+- 通知中心：列表、未读筛选、标记已读、全部已读。
+- 系统状态：状态概览和健康检查展示。
 
 ## 用户端功能
 

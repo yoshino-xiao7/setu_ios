@@ -51,17 +51,15 @@ struct RootAppView: View {
     private func destination(for route: AppRoute) -> some View {
         switch route {
         case .feature(let featureID):
-            if let feature = AppFeatureCatalog.feature(id: featureID) {
-                FeatureDetailView(feature: feature)
-            } else {
-                PlaceholderFeatureView(title: "功能", systemImage: "questionmark.circle", summary: "功能定义不存在。")
-            }
+            featureDestination(featureID)
         case .profile:
             AccountView(environment: environment)
         case .apiKeys:
-            PlaceholderFeatureView(title: "API Keys", systemImage: "key", summary: "管理程序化调用密钥。")
+            ApiKeyListView(environment: environment)
         case .pointsLogs:
-            PlaceholderFeatureView(title: "积分流水", systemImage: "list.bullet.rectangle", summary: "查看积分变动与调用记录。")
+            PointsLogsView(environment: environment)
+        case .notifications:
+            NotificationsView(environment: environment)
         case .collections:
             PlaceholderFeatureView(title: "我的收藏夹", systemImage: "heart", summary: "浏览、编辑和分享收藏夹。")
         case .collectionSquare:
@@ -74,10 +72,28 @@ struct RootAppView: View {
             PlaceholderFeatureView(title: "播放历史", systemImage: "clock.arrow.circlepath", summary: "查看最近播放记录。")
         case .playlists:
             PlaceholderFeatureView(title: "我的歌单", systemImage: "music.note.list", summary: "管理歌单与歌曲。")
-        case .notifications:
-            PlaceholderFeatureView(title: "通知中心", systemImage: "bell", summary: "接收系统、任务和审核通知。")
         case .admin:
             PlaceholderFeatureView(title: "管理后台", systemImage: "shield", summary: "管理员审核、日志和系统操作。")
+        }
+    }
+
+    @ViewBuilder
+    private func featureDestination(_ featureID: AppFeatureID) -> some View {
+        switch featureID {
+        case .apiKeys:
+            ApiKeyListView(environment: environment)
+        case .pointsLogs:
+            PointsLogsView(environment: environment)
+        case .notifications:
+            NotificationsView(environment: environment)
+        case .systemStatus:
+            SystemStatusView(environment: environment)
+        default:
+            if let feature = AppFeatureCatalog.feature(id: featureID) {
+                FeatureDetailView(feature: feature)
+            } else {
+                PlaceholderFeatureView(title: "功能", systemImage: "questionmark.circle", summary: "功能定义不存在。")
+            }
         }
     }
 }

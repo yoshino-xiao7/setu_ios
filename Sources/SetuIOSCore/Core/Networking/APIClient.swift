@@ -76,6 +76,10 @@ public struct APIClient: Sendable {
             return EmptyResponse() as! Value
         }
 
+        if Value.self == String.self, let string = String(data: data, encoding: .utf8) {
+            return string as! Value
+        }
+
         if let envelope = try? decoder.decode(APIEnvelope<Value>.self, from: data), let value = envelope.data {
             return value
         }

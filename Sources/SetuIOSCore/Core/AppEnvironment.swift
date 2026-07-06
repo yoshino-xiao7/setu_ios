@@ -8,6 +8,10 @@ public final class AppEnvironment {
     public let apiClient: APIClient
     public let mobileAppClient: MobileAppClient
     public let dashboardClient: DashboardClient
+    public let apiKeyClient: ApiKeyClient
+    public let pointsClient: PointsClient
+    public let notificationClient: NotificationClient
+    public let statusClient: StatusClient
     public let authSession: AuthSession
 
     public init(
@@ -16,6 +20,10 @@ public final class AppEnvironment {
         apiClient: APIClient,
         mobileAppClient: MobileAppClient,
         dashboardClient: DashboardClient,
+        apiKeyClient: ApiKeyClient,
+        pointsClient: PointsClient,
+        notificationClient: NotificationClient,
+        statusClient: StatusClient,
         authSession: AuthSession
     ) {
         self.config = config
@@ -23,6 +31,10 @@ public final class AppEnvironment {
         self.apiClient = apiClient
         self.mobileAppClient = mobileAppClient
         self.dashboardClient = dashboardClient
+        self.apiKeyClient = apiKeyClient
+        self.pointsClient = pointsClient
+        self.notificationClient = notificationClient
+        self.statusClient = statusClient
         self.authSession = authSession
     }
 
@@ -33,6 +45,10 @@ public final class AppEnvironment {
         let client = APIClient(config: config, signer: signer)
         let mobileAppClient = MobileAppClient(apiClient: client)
         let dashboardClient = DashboardClient(apiClient: client)
+        let apiKeyClient = ApiKeyClient(apiClient: client)
+        let pointsClient = PointsClient(apiClient: client)
+        let notificationClient = NotificationClient(apiClient: client)
+        let statusClient = StatusClient(apiClient: client)
         let session = AuthSession(apiClient: client, keychain: keychain)
         return AppEnvironment(
             config: config,
@@ -40,6 +56,10 @@ public final class AppEnvironment {
             apiClient: client,
             mobileAppClient: mobileAppClient,
             dashboardClient: dashboardClient,
+            apiKeyClient: apiKeyClient,
+            pointsClient: pointsClient,
+            notificationClient: notificationClient,
+            statusClient: statusClient,
             authSession: session
         )
     }
