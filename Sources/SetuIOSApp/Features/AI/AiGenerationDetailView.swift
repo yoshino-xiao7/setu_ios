@@ -1,6 +1,10 @@
 import SetuIOSCore
 import SwiftUI
 
+#if os(iOS)
+import UIKit
+#endif
+
 struct AiGenerationDetailView: View {
     @Bindable var environment: AppEnvironment
     let jobID: Int
@@ -154,6 +158,11 @@ struct AiGenerationDetailView: View {
                 Text(download.downloadUrl)
                     .font(.footnote.monospaced())
                     .textSelection(.enabled)
+                Button {
+                    openDownload(download)
+                } label: {
+                    Label("打开下载链接", systemImage: "arrow.down.circle")
+                }
             }
         }
     }
@@ -206,10 +215,23 @@ struct AiGenerationDetailView: View {
     private func fetchDownload() async {
         do {
             download = try await environment.aiGenerationClient.download(id: jobID)
-            message = "已获取下载链接"
+            if let download {
+                openDownload(download)
+            }
+            message = "已打开下载链接"
         } catch {
             message = error.localizedDescription
         }
+    }
+
+    private func openDownload(_ download: AiImageDownload) {
+        guard let url = URL(string: download.downloadUrl) else {
+            message = "下载地址无效"
+            return
+        }
+        #if os(iOS)
+        UIApplication.shared.open(url)
+        #endif
     }
 
     private func submitReview() async {
