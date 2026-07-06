@@ -1,11 +1,17 @@
 import SetuIOSCore
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 struct ApiKeyListView: View {
     @Bindable var environment: AppEnvironment
     @State private var state: LoadState<[ApiKeyItem]> = .idle
     @State private var newKeyName = ""
     @State private var createdKey: String?
+    @State private var copyMessage: String?
     @State private var errorMessage: String?
     @State private var renameTarget: ApiKeyItem?
 
@@ -19,9 +25,23 @@ struct ApiKeyListView: View {
                 .disabled(newKeyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 
                 if let createdKey {
-                    Text(createdKey)
-                        .font(.footnote.monospaced())
-                        .textSelection(.enabled)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(createdKey)
+                            .font(.footnote.monospaced())
+                            .textSelection(.enabled)
+
+                        Button {
+                            copyCreatedKey(createdKey)
+                        } label: {
+                            Label("复制新 Key", systemImage: "doc.on.doc")
+                        }
+                    }
+                }
+
+                if let copyMessage {
+                    Text(copyMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
             }
 
@@ -92,6 +112,7 @@ struct ApiKeyListView: View {
         let name = newKeyName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return }
         errorMessage = nil
+        copyMessage = nil
         do {
             createdKey = try await environment.apiKeyClient.create(name: name)
             newKeyName = ""
@@ -99,6 +120,16 @@ struct ApiKeyListView: View {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func copyCreatedKey(_ key: String) {
+        #if canImport(UIKit)
+        UIPasteboard.general.string = key
+        #elseif canImport(AppKit)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(key, forType: .string)
+        #endif
+        copyMessage = "新 API Key 已复制"
     }
 
     private func toggle(_ key: ApiKeyItem) async {
