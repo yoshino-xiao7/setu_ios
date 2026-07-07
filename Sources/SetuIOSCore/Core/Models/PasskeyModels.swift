@@ -21,6 +21,30 @@ public struct PasskeyItem: Decodable, Identifiable, Sendable {
 
 public struct PasskeyListResponse: Decodable, Sendable {
     public let list: [PasskeyItem]
+
+    public init(from decoder: Decoder) throws {
+        if let array = try? [PasskeyItem](from: decoder) {
+            list = array
+            return
+        }
+
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        for key in CodingKeys.allCases {
+            if let values = try container.decodeIfPresent([PasskeyItem].self, forKey: key) {
+                list = values
+                return
+            }
+        }
+        list = []
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case list
+        case items
+        case records
+        case rows
+        case content
+    }
 }
 
 public struct PasskeyOptionsResponse: Decodable, Sendable {
