@@ -35,6 +35,9 @@ struct AccountView: View {
                 Section("当前账号") {
                     LabeledContent("邮箱", value: user.email)
                     LabeledContent("角色", value: user.role == .admin ? "管理员" : "用户")
+                }
+
+                Section("账号与安全") {
                     Button {
                         router.navigate(to: .profile)
                     } label: {
@@ -55,27 +58,23 @@ struct AccountView: View {
                     } label: {
                         Label("通行密钥", systemImage: "touchid")
                     }
+                }
+
+                Section("帮助与信息") {
                     Button {
                         router.navigate(to: .docs)
                     } label: {
                         Label("开发文档", systemImage: "doc.text")
                     }
                     Button {
-                        router.navigate(to: .about)
-                    } label: {
-                        Label("关于本站", systemImage: "info.circle")
-                    }
-                    Button {
                         router.navigate(to: .privacy)
                     } label: {
                         Label("隐私政策", systemImage: "hand.raised")
                     }
-                    Button("退出登录", role: .destructive) {
-                        Task {
-                            await environment.authSession.logout()
-                            sessionMessage = "已退出登录"
-                            updateSessionDiagnostics()
-                        }
+                    Button {
+                        router.navigate(to: .about)
+                    } label: {
+                        Label("关于本站", systemImage: "info.circle")
                     }
                 }
 
@@ -86,20 +85,15 @@ struct AccountView: View {
                         } label: {
                             Label("进入管理员模式", systemImage: "switch.2")
                         }
-                        Button {
-                            router.navigate(to: .adminUsers)
-                        } label: {
-                            Label("用户管理", systemImage: "person.2")
-                        }
-                        Button {
-                            router.navigate(to: .adminImageAudit)
-                        } label: {
-                            Label("图片审核", systemImage: "checkmark.seal")
-                        }
-                        Button {
-                            router.navigate(to: .adminAiGenerations)
-                        } label: {
-                            Label("AI 生成管理", systemImage: "sparkles")
+                    }
+                }
+
+                Section {
+                    Button("退出登录", role: .destructive) {
+                        Task {
+                            await environment.authSession.logout()
+                            sessionMessage = "已退出登录"
+                            updateSessionDiagnostics()
                         }
                     }
                 }
@@ -219,65 +213,67 @@ struct AccountView: View {
                 }
             }
 
-            Section("移动端会话") {
-                Button("刷新签名密钥") {
-                    Task {
-                        _ = await environment.authSession.refreshSignature()
-                        updateSessionDiagnostics()
-                    }
-                }
-                .disabled(environment.authSession.isRefreshing)
-
-                Button {
-                    updateSessionDiagnostics()
-                } label: {
-                    Label("检查会话状态", systemImage: "checkmark.shield")
-                }
-
-                Button {
-                    copySessionDiagnostics()
-                } label: {
-                    Label("复制诊断摘要", systemImage: "doc.on.doc")
-                }
-
-                Button(role: .destructive) {
-                    environment.authSession.resetLocalSession()
-                    updateSessionDiagnostics()
-                    sessionMessage = "本地会话已清理"
-                } label: {
-                    Label("清理本地会话", systemImage: "trash")
-                }
-
-                if environment.authSession.currentUser != nil {
-                    Button {
-                        Task { await confirmCurrentSession() }
-                    } label: {
-                        if sessionActionLoading {
-                            ProgressView()
-                        } else {
-                            Label("确认当前会话", systemImage: "network")
+            Section("故障排查") {
+                DisclosureGroup("会话与登录状态") {
+                    Button("刷新签名密钥") {
+                        Task {
+                            _ = await environment.authSession.refreshSignature()
+                            updateSessionDiagnostics()
                         }
                     }
-                    .disabled(sessionActionLoading)
-                }
+                    .disabled(environment.authSession.isRefreshing)
 
-                if let expireAt = environment.authSession.expireAt {
-                    LabeledContent("过期时间", value: expireAt.formatted())
-                }
+                    Button {
+                        updateSessionDiagnostics()
+                    } label: {
+                        Label("检查会话状态", systemImage: "checkmark.shield")
+                    }
 
-                if let sessionDiagnostics {
-                    LabeledContent("API 主机", value: sessionDiagnostics.apiHost)
-                    LabeledContent("本地登录态", value: sessionDiagnostics.isSignedIn ? "存在" : "未登录")
-                    LabeledContent("SID Cookie", value: sessionDiagnostics.hasSIDCookie ? "存在" : "缺失")
-                    LabeledContent("Cookie 数量", value: "\(sessionDiagnostics.cookieCount)")
-                    LabeledContent("签名密钥", value: sessionDiagnostics.hasSignSecret ? "存在" : "缺失")
-                    LabeledContent("上次会话确认", value: sessionConfirmationText)
-                }
+                    Button {
+                        copySessionDiagnostics()
+                    } label: {
+                        Label("复制诊断摘要", systemImage: "doc.on.doc")
+                    }
 
-                if let sessionMessage {
-                    Text(sessionMessage)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    Button(role: .destructive) {
+                        environment.authSession.resetLocalSession()
+                        updateSessionDiagnostics()
+                        sessionMessage = "本地会话已清理"
+                    } label: {
+                        Label("清理本地会话", systemImage: "trash")
+                    }
+
+                    if environment.authSession.currentUser != nil {
+                        Button {
+                            Task { await confirmCurrentSession() }
+                        } label: {
+                            if sessionActionLoading {
+                                ProgressView()
+                            } else {
+                                Label("确认当前会话", systemImage: "network")
+                            }
+                        }
+                        .disabled(sessionActionLoading)
+                    }
+
+                    if let expireAt = environment.authSession.expireAt {
+                        LabeledContent("过期时间", value: expireAt.formatted())
+                    }
+
+                    if let sessionDiagnostics {
+                        LabeledContent("API 主机", value: sessionDiagnostics.apiHost)
+                        LabeledContent("本地登录态", value: sessionDiagnostics.isSignedIn ? "存在" : "未登录")
+                        LabeledContent("SID Cookie", value: sessionDiagnostics.hasSIDCookie ? "存在" : "缺失")
+                        LabeledContent("Cookie 数量", value: "\(sessionDiagnostics.cookieCount)")
+                        LabeledContent("签名密钥", value: sessionDiagnostics.hasSignSecret ? "存在" : "缺失")
+                        LabeledContent("上次会话确认", value: sessionConfirmationText)
+                    }
+
+                    if let sessionMessage {
+                        Text(sessionMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
 
