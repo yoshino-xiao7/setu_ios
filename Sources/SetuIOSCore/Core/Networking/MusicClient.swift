@@ -16,6 +16,22 @@ public struct MusicClient: Sendable {
         try await apiClient.get("/user/music/search/hot")
     }
 
+    public func personalizedPlaylists(limit: Int = 10) async throws -> MusicRecommendedPlaylistsResponse {
+        try await apiClient.get("/user/music/personalized?limit=\(limit)")
+    }
+
+    public func personalizedNewSongs() async throws -> MusicRecommendedSongsResponse {
+        try await apiClient.get("/user/music/personalized/newsong")
+    }
+
+    public func recommendSongs() async throws -> MusicDailyRecommendResponse {
+        try await apiClient.get("/user/music/recommend/songs")
+    }
+
+    public func playlistTracks(id: Int, limit: Int = 100) async throws -> MusicPlaylistTrackResponse {
+        try await apiClient.get("/user/music/playlist/track/all?id=\(id)&limit=\(limit)")
+    }
+
     public func url(songID: Int, level: String = "standard") async throws -> MusicUrlResponse {
         try await apiClient.get("/user/music/url?id=\(songID)&level=\(level)")
     }

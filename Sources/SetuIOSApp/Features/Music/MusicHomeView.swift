@@ -10,10 +10,14 @@ struct MusicHomeView: View {
     @Bindable var environment: AppEnvironment
     @State private var query = ""
     @State private var hotState: LoadState<[MusicHotSearchItem]> = .idle
+    @State private var recommendedPlaylistState: LoadState<[MusicRecommendedPlaylist]> = .idle
+    @State private var newSongsState: LoadState<[MusicSong]> = .idle
+    @State private var dailySongsState: LoadState<[MusicSong]> = .idle
     @State private var searchState: LoadState<MusicSearchResultState> = .idle
     @State private var selectedSong: MusicSong?
     @State private var playbackSong: MusicSong?
     @State private var mvSong: MusicSong?
+    @State private var selectedRecommendedPlaylist: MusicRecommendedPlaylist?
     @State private var player = MusicPlaybackController()
     @State private var playbackMessage: String?
     @State private var searchPage = 1
@@ -51,6 +55,7 @@ struct MusicHomeView: View {
             }
 
             nowPlayingSection
+            recommendationsContent
             searchHistorySection
             searchContent
             hotSearchContent
@@ -65,8 +70,11 @@ struct MusicHomeView: View {
         .sheet(item: $mvSong) { song in
             MusicMvSheet(environment: environment, song: song)
         }
-        .task { await loadHotSearch() }
-        .refreshable { await loadHotSearch() }
+        .sheet(item: $selectedRecommendedPlaylist) { playlist in
+            RecommendedPlaylistSheet(environment: environment, playlist: playlist)
+        }
+        .task { await loadLandingContent() }
+        .refreshable { await loadLandingContent() }
     }
 
     @ViewBuilder
@@ -225,12 +233,123 @@ struct MusicHomeView: View {
         }
     }
 
+    @ViewBuilder
+    private var recommendationsContent: some View {
+        Section("推荐新歌") {
+            switch newSongsState {
+            case .idle, .loading:
+                ProgressView("正在加载推荐新歌")
+            case .failed(let message):
+                Text(message)
+                    .foregroundStyle(.red)
+            case .loaded(let songs):
+                if songs.isEmpty {
+                    ContentUnavailableView("暂无推荐新歌", systemImage: "music.note")
+                } else {
+                    ForEach(songs.prefix(5)) { song in
+                        MusicSongRow(song: song) {
+                            Task { await play(song) }
+                        } onPlayMv: {
+                            mvSong = song
+                        } onAddToPlaylist: {
+                            selectedSong = song
+                        } onDownload: {
+                            Task { await download(song) }
+                        }
+                    }
+                }
+            }
+        }
+
+        Section("每日推荐") {
+            switch dailySongsState {
+            case .idle, .loading:
+                ProgressView("正在加载每日推荐")
+            case .failed(let message):
+                Text(message)
+                    .foregroundStyle(.red)
+            case .loaded(let songs):
+                if songs.isEmpty {
+                    ContentUnavailableView("暂无每日推荐", systemImage: "sparkles")
+                } else {
+                    ForEach(songs.prefix(5)) { song in
+                        MusicSongRow(song: song) {
+                            Task { await play(song) }
+                        } onPlayMv: {
+                            mvSong = song
+                        } onAddToPlaylist: {
+                            selectedSong = song
+                        } onDownload: {
+                            Task { await download(song) }
+                        }
+                    }
+                }
+            }
+        }
+
+        Section("推荐歌单") {
+            switch recommendedPlaylistState {
+            case .idle, .loading:
+                ProgressView("正在加载推荐歌单")
+            case .failed(let message):
+                Text(message)
+                    .foregroundStyle(.red)
+            case .loaded(let playlists):
+                if playlists.isEmpty {
+                    ContentUnavailableView("暂无推荐歌单", systemImage: "music.note.list")
+                } else {
+                    ForEach(playlists.prefix(6)) { playlist in
+                        Button {
+                            selectedRecommendedPlaylist = playlist
+                        } label: {
+                            RecommendedPlaylistRow(playlist: playlist)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func loadLandingContent() async {
+        async let hot: Void = loadHotSearch()
+        async let recommended: Void = loadRecommendations()
+        _ = await (hot, recommended)
+    }
+
     private func loadHotSearch() async {
         hotState = .loading
         do {
             hotState = .loaded(try await environment.musicClient.hotSearch().result.hots)
         } catch {
             hotState = .failed(error.localizedDescription)
+        }
+    }
+
+    private func loadRecommendations() async {
+        recommendedPlaylistState = .loading
+        newSongsState = .loading
+        dailySongsState = .loading
+
+        async let playlists = environment.musicClient.personalizedPlaylists(limit: 6)
+        async let newSongs = environment.musicClient.personalizedNewSongs()
+        async let dailySongs = environment.musicClient.recommendSongs()
+
+        do {
+            recommendedPlaylistState = .loaded(try await playlists.result)
+        } catch {
+            recommendedPlaylistState = .failed(error.localizedDescription)
+        }
+
+        do {
+            newSongsState = .loaded(try await newSongs.result)
+        } catch {
+            newSongsState = .failed(error.localizedDescription)
+        }
+
+        do {
+            dailySongsState = .loaded(try await dailySongs.data.dailySongs)
+        } catch {
+            dailySongsState = .failed(error.localizedDescription)
         }
     }
 
@@ -327,6 +446,115 @@ struct MusicHomeView: View {
         #if os(iOS)
         UIApplication.shared.open(url)
         #endif
+    }
+}
+
+private struct RecommendedPlaylistRow: View {
+    let playlist: MusicRecommendedPlaylist
+
+    var body: some View {
+        HStack(spacing: 12) {
+            MusicArtworkView(urlString: playlist.picUrl)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(playlist.name)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                if let description = playlist.description, !description.isEmpty {
+                    Text(description)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+                if let playCount = playlist.playCount {
+                    Label(formatPlayCount(playCount), systemImage: "play.circle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func formatPlayCount(_ value: Int) -> String {
+        if value >= 10_000 {
+            return "\(value / 10_000) 万次播放"
+        }
+        return "\(value) 次播放"
+    }
+}
+
+private struct RecommendedPlaylistSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Bindable var environment: AppEnvironment
+    let playlist: MusicRecommendedPlaylist
+
+    @State private var state: LoadState<[MusicSong]> = .idle
+    @State private var selectedSong: MusicSong?
+    @State private var playbackSong: MusicSong?
+    @State private var mvSong: MusicSong?
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("歌单") {
+                    RecommendedPlaylistRow(playlist: playlist)
+                }
+
+                switch state {
+                case .idle, .loading:
+                    ProgressView("正在加载歌单歌曲")
+                case .failed(let message):
+                    ContentUnavailableView("歌单加载失败", systemImage: "music.note.list", description: Text(message))
+                case .loaded(let songs):
+                    if songs.isEmpty {
+                        ContentUnavailableView("暂无歌曲", systemImage: "music.note")
+                    } else {
+                        Section("歌曲") {
+                            ForEach(songs) { song in
+                                MusicSongRow(song: song) {
+                                    playbackSong = song
+                                } onPlayMv: {
+                                    mvSong = song
+                                } onAddToPlaylist: {
+                                    selectedSong = song
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle(playlist.name)
+            .toolbar {
+                Button("关闭") {
+                    dismiss()
+                }
+            }
+            .sheet(item: $selectedSong) { song in
+                AddSongToPlaylistSheet(environment: environment, song: song)
+            }
+            .sheet(item: $playbackSong) { song in
+                MusicPlaybackSheet(environment: environment, song: song)
+            }
+            .sheet(item: $mvSong) { song in
+                MusicMvSheet(environment: environment, song: song)
+            }
+            .task { await load() }
+            .refreshable { await load() }
+        }
+    }
+
+    private func load() async {
+        state = .loading
+        do {
+            state = .loaded(try await environment.musicClient.playlistTracks(id: playlist.id).songs)
+        } catch {
+            state = .failed(error.localizedDescription)
+        }
     }
 }
 

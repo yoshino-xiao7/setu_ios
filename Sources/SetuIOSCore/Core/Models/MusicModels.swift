@@ -101,6 +101,34 @@ public struct MusicHotSearchItem: Decodable, Identifiable, Sendable {
     public var id: String { first }
 }
 
+public struct MusicRecommendedPlaylistsResponse: Decodable, Sendable {
+    public let result: [MusicRecommendedPlaylist]
+}
+
+public struct MusicRecommendedPlaylist: Decodable, Identifiable, Sendable {
+    public let id: Int
+    public let name: String
+    public let picUrl: String?
+    public let playCount: Int?
+    public let description: String?
+}
+
+public struct MusicRecommendedSongsResponse: Decodable, Sendable {
+    public let result: [MusicSong]
+}
+
+public struct MusicDailyRecommendResponse: Decodable, Sendable {
+    public let data: MusicDailyRecommendPayload
+}
+
+public struct MusicDailyRecommendPayload: Decodable, Sendable {
+    public let dailySongs: [MusicSong]
+}
+
+public struct MusicPlaylistTrackResponse: Decodable, Sendable {
+    public let songs: [MusicSong]
+}
+
 public struct MusicUrlResponse: Decodable, Sendable {
     public let code: Int?
     public let data: [MusicUrlItem]?
