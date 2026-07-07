@@ -119,6 +119,7 @@ public struct APIClient: Sendable {
         request.httpMethod = "POST"
         request.httpShouldHandleCookies = true
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(Self.makeRequestID(), forHTTPHeaderField: "X-Request-Id")
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         if signed {
             let headers = try signer.signedHeaders(method: "POST", path: url.path)
@@ -159,6 +160,7 @@ public struct APIClient: Sendable {
         request.httpBody = body
         request.httpShouldHandleCookies = true
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(Self.makeRequestID(), forHTTPHeaderField: "X-Request-Id")
         if body != nil {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
@@ -192,6 +194,10 @@ public struct APIClient: Sendable {
             return value
         }
         return try decoder.decode(Value.self, from: data)
+    }
+
+    private static func makeRequestID() -> String {
+        UUID().uuidString.lowercased()
     }
 }
 

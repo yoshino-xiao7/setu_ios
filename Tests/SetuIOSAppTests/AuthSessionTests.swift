@@ -192,6 +192,29 @@ final class APIClientUnauthorizedTests: XCTestCase {
         XCTAssertEqual(handlesCookies, true)
     }
 
+    func testRequestsIncludeTraceableRequestID() async throws {
+        let keychain = InMemoryKeychain()
+        let capturedRequest = RequestProbe()
+        let session = URLSession(
+            configuration: .mock { request in
+                Task {
+                    await capturedRequest.capture(request)
+                }
+                return MockHTTPResponse(statusCode: 200, body: "{}")
+            }
+        )
+        let client = APIClient(
+            config: AppConfig(apiBaseURL: URL(string: "https://api.example.com")!, siteBaseURL: URL(string: "https://example.com")!),
+            signer: AuthSigner(keychain: keychain),
+            session: session
+        )
+
+        let _: EmptyResponse = try await client.get("/auth/captcha", signed: false)
+
+        let requestID = await capturedRequest.lastRequest?.value(forHTTPHeaderField: "X-Request-Id")
+        XCTAssertNotNil(UUID(uuidString: requestID ?? ""))
+    }
+
     func testUnauthorizedResponseNotifiesSessionInvalidation() async throws {
         let keychain = InMemoryKeychain()
         try keychain.setString("secret", for: "signSecret")
