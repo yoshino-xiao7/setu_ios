@@ -55,7 +55,7 @@ struct RootAppView: View {
         case .ai:
             AiHubView(environment: environment)
         case .images:
-            RandomImageSwipeView(environment: environment)
+            ImageHubView(environment: environment)
         case .music:
             MusicHomeView(environment: environment, player: musicPlayer)
         case .square:
