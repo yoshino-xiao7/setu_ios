@@ -10,6 +10,7 @@ struct MusicHistoryView: View {
     @State private var pageSize = 20
     @State private var player = MusicPlaybackController()
     @State private var selectedSong: MusicSong?
+    @State private var showingClearConfirmation = false
 
     private let pageSizes = [10, 20, 50]
 
@@ -66,9 +67,18 @@ struct MusicHistoryView: View {
                 }
 
                 Button("清空", role: .destructive) {
-                    Task { await clear() }
+                    showingClearConfirmation = true
                 }
+                .disabled((count ?? 0) == 0)
             }
+        }
+        .confirmationDialog("清空播放历史？", isPresented: $showingClearConfirmation, titleVisibility: .visible) {
+            Button("清空历史", role: .destructive) {
+                Task { await clear() }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("确定要清空所有播放历史吗？此操作不可恢复。")
         }
         .task { await load() }
         .refreshable { await load() }
