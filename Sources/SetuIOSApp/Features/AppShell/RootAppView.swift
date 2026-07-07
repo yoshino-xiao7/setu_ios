@@ -127,6 +127,8 @@ struct RootAppView: View {
             AiGenerationDetailView(environment: environment, jobID: id)
         case .aiSquare:
             AiSquareView(environment: environment)
+        case .musicSearch(let initialQuery):
+            MusicSearchView(environment: environment, player: musicPlayer, initialQuery: initialQuery)
         case .musicHistory:
             MusicHistoryView(environment: environment, player: musicPlayer)
         case .playlists:

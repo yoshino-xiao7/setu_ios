@@ -9,26 +9,23 @@ struct MusicHomeView: View {
     @Environment(RouterPath.self) private var router
     @Bindable var environment: AppEnvironment
     @Bindable var player: MusicPlaybackController
-    @State private var query = ""
     @State private var hotState: LoadState<[MusicHotSearchItem]> = .idle
     @State private var recommendedPlaylistState: LoadState<[MusicRecommendedPlaylist]> = .idle
     @State private var newSongsState: LoadState<[MusicSong]> = .idle
     @State private var dailySongsState: LoadState<[MusicSong]> = .idle
-    @State private var searchState: LoadState<MusicSearchResultState> = .idle
     @State private var selectedSong: MusicSong?
     @State private var mvSong: MusicSong?
     @State private var selectedRecommendedPlaylist: MusicRecommendedPlaylist?
     @State private var playbackMessage: String?
-    @State private var searchPage = 1
-    @State private var searchKeyword = ""
-    @State private var searchHistory: [String] = MusicSearchHistoryStore.load()
-
-    private let searchHistoryLimit = 10
-    private let searchPageSize = 10
 
     var body: some View {
         List {
             Section {
+                Button {
+                    router.navigate(to: .musicSearch(nil))
+                } label: {
+                    Label("搜索音乐", systemImage: "magnifyingglass")
+                }
                 Button {
                     router.navigate(to: .playlists)
                 } label: {
@@ -41,25 +38,8 @@ struct MusicHomeView: View {
                 }
             }
 
-            Section("搜索音乐") {
-                TextField("歌曲、歌手或专辑", text: $query)
-                    .modifier(MusicSearchInputModifier())
-                    .onSubmit {
-                        Task { await search() }
-                    }
-                Button {
-                    Task { await search() }
-                } label: {
-                    Label("搜索音乐", systemImage: "magnifyingglass")
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-
             nowPlayingSection
             recommendationsContent
-            searchHistorySection
-            searchContent
             hotSearchContent
         }
         .navigationTitle("音乐")
@@ -74,88 +54,6 @@ struct MusicHomeView: View {
         }
         .task { await loadLandingContent() }
         .refreshable { await loadLandingContent() }
-    }
-
-    @ViewBuilder
-    private var searchHistorySection: some View {
-        if !searchHistory.isEmpty {
-            Section {
-                ForEach(searchHistory, id: \.self) { keyword in
-                    HStack {
-                        Button {
-                            query = keyword
-                            Task { await search() }
-                        } label: {
-                            Label(keyword, systemImage: "clock.arrow.circlepath")
-                        }
-                        Spacer()
-                        Button(role: .destructive) {
-                            removeSearchHistory(keyword)
-                        } label: {
-                            Image(systemName: "xmark.circle")
-                        }
-                        .buttonStyle(.borderless)
-                    }
-                }
-                Button(role: .destructive) {
-                    clearSearchHistory()
-                } label: {
-                    Label("清空搜索历史", systemImage: "trash")
-                }
-            } header: {
-                Text("搜索历史")
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var searchContent: some View {
-        switch searchState {
-        case .idle:
-            EmptyView()
-        case .loading:
-            ProgressView("正在搜索")
-        case .failed(let message):
-            Section {
-                Text(message)
-                    .foregroundStyle(.red)
-            }
-        case .loaded(let result):
-            Section("搜索结果 \(result.songs.count)/\(result.total)") {
-                if result.songs.isEmpty {
-                    ContentUnavailableView("没有找到音乐", systemImage: "magnifyingglass")
-                } else {
-                    ForEach(result.songs) { song in
-                        MusicSongRow(song: song) {
-                            Task {
-                                await play(
-                                    song,
-                                    queueName: "搜索结果",
-                                    queueTracks: result.songs.map { MusicPlaybackTrack(song: $0) }
-                                )
-                            }
-                        } onPlayMv: {
-                            mvSong = song
-                        } onAddToPlaylist: {
-                            selectedSong = song
-                        } onDownload: {
-                            Task { await download(song) }
-                        }
-                    }
-                    if result.hasMore {
-                        Button {
-                            Task { await loadMoreSearchResults() }
-                        } label: {
-                            Label("加载更多 (\(result.songs.count)/\(result.total))", systemImage: "plus.circle")
-                        }
-                    } else {
-                        Label("已加载全部 \(result.total) 首歌曲", systemImage: "checkmark.circle")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-        }
     }
 
     @ViewBuilder
@@ -218,8 +116,7 @@ struct MusicHomeView: View {
                 Section("热门搜索") {
                     ForEach(hots.prefix(10)) { item in
                         Button {
-                            query = item.first
-                            Task { await search() }
+                            router.navigate(to: .musicSearch(item.first))
                         } label: {
                             HStack {
                                 Text(item.first)
@@ -370,54 +267,6 @@ struct MusicHomeView: View {
         } catch {
             dailySongsState = .failed(error.localizedDescription)
         }
-    }
-
-    private func search() async {
-        let keywords = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !keywords.isEmpty else { return }
-        saveSearchHistory(keywords)
-        searchKeyword = keywords
-        searchPage = 1
-        searchState = .loading
-        do {
-            let result = try await environment.musicClient.search(keywords: keywords, limit: searchPageSize, offset: 0)
-            searchState = .loaded(MusicSearchResultState(result: result))
-        } catch {
-            searchState = .failed(error.localizedDescription)
-        }
-    }
-
-    private func loadMoreSearchResults() async {
-        guard case .loaded(let current) = searchState, current.hasMore else { return }
-        searchPage += 1
-        do {
-            let result = try await environment.musicClient.search(
-                keywords: searchKeyword,
-                limit: searchPageSize,
-                offset: (searchPage - 1) * searchPageSize
-            )
-            searchState = .loaded(current.appending(result))
-        } catch {
-            searchState = .failed(error.localizedDescription)
-        }
-    }
-
-    private func saveSearchHistory(_ keyword: String) {
-        let normalized = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalized.isEmpty else { return }
-        let nextHistory = [normalized] + searchHistory.filter { $0 != normalized }
-        searchHistory = Array(nextHistory.prefix(searchHistoryLimit))
-        MusicSearchHistoryStore.save(searchHistory)
-    }
-
-    private func removeSearchHistory(_ keyword: String) {
-        searchHistory.removeAll { $0 == keyword }
-        MusicSearchHistoryStore.save(searchHistory)
-    }
-
-    private func clearSearchHistory() {
-        searchHistory = []
-        MusicSearchHistoryStore.clear()
     }
 
     private func play(_ song: MusicSong, queueName: String? = nil, queueTracks: [MusicPlaybackTrack] = []) async {
@@ -601,6 +450,242 @@ private struct RecommendedPlaylistSheet: View {
         } catch {
             message = error.localizedDescription
         }
+    }
+}
+
+struct MusicSearchView: View {
+    @Bindable var environment: AppEnvironment
+    @Bindable var player: MusicPlaybackController
+    let initialQuery: String?
+
+    @State private var query = ""
+    @State private var state: LoadState<MusicSearchResultState> = .idle
+    @State private var selectedSong: MusicSong?
+    @State private var mvSong: MusicSong?
+    @State private var message: String?
+    @State private var page = 1
+    @State private var searchKeyword = ""
+    @State private var searchHistory: [String] = MusicSearchHistoryStore.load()
+    @State private var didRunInitialSearch = false
+
+    private let searchHistoryLimit = 10
+    private let pageSize = 10
+
+    var body: some View {
+        List {
+            Section("搜索") {
+                TextField("歌曲、歌手或专辑", text: $query)
+                    .modifier(MusicSearchInputModifier())
+                    .onSubmit {
+                        Task { await search() }
+                    }
+
+                Button {
+                    Task { await search() }
+                } label: {
+                    Label("搜索音乐", systemImage: "magnifyingglass")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+
+            if let message {
+                Section {
+                    Text(message)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            historySection
+            resultSection
+        }
+        .navigationTitle("搜索音乐")
+        .sheet(item: $selectedSong) { song in
+            AddSongToPlaylistSheet(environment: environment, song: song)
+        }
+        .sheet(item: $mvSong) { song in
+            MusicMvSheet(environment: environment, song: song)
+        }
+        .task {
+            guard !didRunInitialSearch else { return }
+            didRunInitialSearch = true
+            if let initialQuery, !initialQuery.isEmpty {
+                query = initialQuery
+                await search()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var historySection: some View {
+        if !searchHistory.isEmpty {
+            Section("搜索历史") {
+                ForEach(searchHistory, id: \.self) { keyword in
+                    HStack {
+                        Button {
+                            query = keyword
+                            Task { await search() }
+                        } label: {
+                            Label(keyword, systemImage: "clock.arrow.circlepath")
+                        }
+                        Spacer()
+                        Button(role: .destructive) {
+                            removeSearchHistory(keyword)
+                        } label: {
+                            Image(systemName: "xmark.circle")
+                        }
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel("删除搜索记录")
+                    }
+                }
+
+                Button(role: .destructive) {
+                    clearSearchHistory()
+                } label: {
+                    Label("清空搜索历史", systemImage: "trash")
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var resultSection: some View {
+        switch state {
+        case .idle:
+            ContentUnavailableView("搜索音乐", systemImage: "magnifyingglass", description: Text("输入歌曲、歌手或专辑开始搜索。"))
+        case .loading:
+            ProgressView("正在搜索")
+        case .failed(let message):
+            Section {
+                Text(message)
+                    .foregroundStyle(.red)
+            }
+        case .loaded(let result):
+            Section("搜索结果 \(result.songs.count)/\(result.total)") {
+                if result.songs.isEmpty {
+                    ContentUnavailableView("没有找到音乐", systemImage: "magnifyingglass")
+                } else {
+                    ForEach(result.songs) { song in
+                        MusicSongRow(song: song) {
+                            Task {
+                                await play(
+                                    song,
+                                    queueTracks: result.songs.map { MusicPlaybackTrack(song: $0) }
+                                )
+                            }
+                        } onPlayMv: {
+                            mvSong = song
+                        } onAddToPlaylist: {
+                            selectedSong = song
+                        } onDownload: {
+                            Task { await download(song) }
+                        }
+                    }
+
+                    if result.hasMore {
+                        Button {
+                            Task { await loadMore() }
+                        } label: {
+                            Label("加载更多 \(result.songs.count)/\(result.total)", systemImage: "plus.circle")
+                        }
+                    } else {
+                        Label("已加载全部 \(result.total) 首歌曲", systemImage: "checkmark.circle")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+
+    private func search() async {
+        let keywords = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !keywords.isEmpty else { return }
+        saveSearchHistory(keywords)
+        searchKeyword = keywords
+        page = 1
+        state = .loading
+        message = nil
+        do {
+            let result = try await environment.musicClient.search(keywords: keywords, limit: pageSize, offset: 0)
+            state = .loaded(MusicSearchResultState(result: result))
+        } catch {
+            state = .failed(error.localizedDescription)
+        }
+    }
+
+    private func loadMore() async {
+        guard case .loaded(let current) = state, current.hasMore else { return }
+        page += 1
+        do {
+            let result = try await environment.musicClient.search(
+                keywords: searchKeyword,
+                limit: pageSize,
+                offset: (page - 1) * pageSize
+            )
+            state = .loaded(current.appending(result))
+        } catch {
+            state = .failed(error.localizedDescription)
+        }
+    }
+
+    private func play(_ song: MusicSong, queueTracks: [MusicPlaybackTrack]) async {
+        message = "正在准备播放"
+        do {
+            let response = try await environment.musicClient.url(songID: song.id, level: "standard")
+            guard let item = response.data?.first, let urlString = item.playableURLString, let url = URL(string: urlString) else {
+                message = response.data?.first?.unavailableMessage ?? response.playabilityReason ?? response.message ?? "这首歌暂时无法播放"
+                return
+            }
+            player.play(url: url, track: MusicPlaybackTrack(song: song), queueName: "搜索结果", queueTracks: queueTracks)
+            try? await environment.musicClient.addHistory(song: song)
+            message = "已开始播放"
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    private func download(_ song: MusicSong) async {
+        message = "正在准备下载"
+        do {
+            let response = try await environment.musicClient.url(songID: song.id, level: "exhigh")
+            guard let item = response.data?.first, let urlString = item.playableURLString else {
+                message = response.data?.first?.unavailableMessage ?? response.playabilityReason ?? response.message ?? "这首歌暂时无法下载"
+                return
+            }
+            let artists = song.artistNames.isEmpty ? "未知歌手" : song.artistNames.replacingOccurrences(of: " / ", with: ", ")
+            let signed = try await environment.downloadClient.sign(url: urlString, filename: "\(song.name) - \(artists).mp3")
+            guard let url = URL(string: signed.downloadUrl) else {
+                message = "下载暂时不可用"
+                return
+            }
+            #if os(iOS)
+            await UIApplication.shared.open(url)
+            #endif
+            message = "已打开下载"
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    private func saveSearchHistory(_ keyword: String) {
+        let normalized = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return }
+        let nextHistory = [normalized] + searchHistory.filter { $0 != normalized }
+        searchHistory = Array(nextHistory.prefix(searchHistoryLimit))
+        MusicSearchHistoryStore.save(searchHistory)
+    }
+
+    private func removeSearchHistory(_ keyword: String) {
+        searchHistory.removeAll { $0 == keyword }
+        MusicSearchHistoryStore.save(searchHistory)
+    }
+
+    private func clearSearchHistory() {
+        searchHistory = []
+        MusicSearchHistoryStore.clear()
     }
 }
 
