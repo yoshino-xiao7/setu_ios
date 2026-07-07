@@ -75,8 +75,6 @@ struct RootAppView: View {
             AccountView(environment: environment, initialAuthPage: .recovery)
         case .profile:
             ProfileView(environment: environment)
-        case .apiKeys:
-            ApiKeyListView(environment: environment)
         case .docs:
             StaticInfoView(environment: environment, kind: .docs)
         case .about:

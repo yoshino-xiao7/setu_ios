@@ -5,7 +5,6 @@ enum AppRoute: Hashable {
     case authRegister
     case authRecovery
     case profile
-    case apiKeys
     case docs
     case about
     case privacy
