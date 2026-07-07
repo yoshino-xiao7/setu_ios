@@ -18,7 +18,9 @@ enum AppRoute: Hashable {
     case publicUserProfile(Int)
     case galleryUploads
     case galleryUploadDetail(Int)
+    case aiDraw
     case aiHistory
+    case aiDeleteRequests
     case aiGenerationDetail(Int)
     case aiSquare
     case musicHistory
@@ -55,9 +57,10 @@ enum AppRoute: Hashable {
 
 enum AppTab: String, CaseIterable, Identifiable {
     case home
-    case features
-    case collections
+    case ai
+    case images
     case music
+    case square
     case settings
 
     var id: String { rawValue }
@@ -67,12 +70,14 @@ enum AppTab: String, CaseIterable, Identifiable {
         switch self {
         case .home:
             Label("首页", systemImage: "house")
-        case .features:
-            Label("功能", systemImage: "square.grid.2x2")
-        case .collections:
-            Label("收藏", systemImage: "rectangle.stack")
+        case .ai:
+            Label("AI", systemImage: "sparkles")
+        case .images:
+            Label("图片", systemImage: "photo.on.rectangle")
         case .music:
             Label("音乐", systemImage: "music.note")
+        case .square:
+            Label("广场", systemImage: "rectangle.stack")
         case .settings:
             Label("我的", systemImage: "person.crop.circle")
         }

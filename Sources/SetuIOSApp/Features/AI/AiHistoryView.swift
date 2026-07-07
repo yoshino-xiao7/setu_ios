@@ -155,7 +155,7 @@ struct AiHistoryView: View {
 
     private func reuse(_ job: AiGenerationJob) {
         AiDrawDraftStore.applyHistoryJob(job)
-        router.navigate(to: .feature(.aiDraw))
+        router.navigate(to: .aiDraw)
     }
 
     private func copyPrompt(_ job: AiGenerationJob) {

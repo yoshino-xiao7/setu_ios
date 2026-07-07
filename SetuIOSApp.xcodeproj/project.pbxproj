@@ -122,6 +122,7 @@
 		FA305A7FED3CD3AEC2419BD0 /* AdminPixivCrawlView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D65CD600EB96DA067D349D7E /* AdminPixivCrawlView.swift */; };
 		FAD73840F6FAC39D66876740 /* SystemStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA263C6C60D6DAEBF1EDADA9 /* SystemStatusView.swift */; };
 		FE273EC908BFB74560257D20 /* AdminAiDeleteRequestsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5680B80541513C9C12C1AFE6 /* AdminAiDeleteRequestsView.swift */; };
+		FE9C4A87206A4E6CA7B2E9F1 /* UserHubViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE9C4A86206A4E6CA7B2E9F1 /* UserHubViews.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -281,6 +282,7 @@
 		F5571DEF047E80A570FB6399 /* ApiKeyClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApiKeyClient.swift; sourceTree = "<group>"; };
 		FC249EC7818524E6348F12D7 /* DashboardClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardClientTests.swift; sourceTree = "<group>"; };
 		FE7793E13316490662E8AD8D /* QqBindingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QqBindingView.swift; sourceTree = "<group>"; };
+		FE9C4A86206A4E6CA7B2E9F1 /* UserHubViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserHubViews.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -484,6 +486,7 @@
 				6DBD3799BD34CC0A909F89EB /* FeatureDetailView.swift */,
 				6EF3C4622B5092D865537A36 /* FeatureMapView.swift */,
 				9EE2B37F69E3C40990952658 /* RootAppView.swift */,
+				FE9C4A86206A4E6CA7B2E9F1 /* UserHubViews.swift */,
 			);
 			path = AppShell;
 			sourceTree = "<group>";
@@ -782,6 +785,7 @@
 				6B5D0083B10D64D4B09718BF /* SetuIOSApp.swift in Sources */,
 				14BEBD584F237CC21AC7A6CB /* StaticInfoView.swift in Sources */,
 				FAD73840F6FAC39D66876740 /* SystemStatusView.swift in Sources */,
+				FE9C4A87206A4E6CA7B2E9F1 /* UserHubViews.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

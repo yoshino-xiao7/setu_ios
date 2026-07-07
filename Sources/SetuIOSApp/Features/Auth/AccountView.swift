@@ -78,6 +78,31 @@ struct AccountView: View {
                         }
                     }
                 }
+
+                if user.role == .admin {
+                    Section("管理员模式") {
+                        Button {
+                            router.navigate(to: .admin)
+                        } label: {
+                            Label("进入管理员模式", systemImage: "switch.2")
+                        }
+                        Button {
+                            router.navigate(to: .adminUsers)
+                        } label: {
+                            Label("用户管理", systemImage: "person.2")
+                        }
+                        Button {
+                            router.navigate(to: .adminImageAudit)
+                        } label: {
+                            Label("图片审核", systemImage: "checkmark.seal")
+                        }
+                        Button {
+                            router.navigate(to: .adminAiGenerations)
+                        } label: {
+                            Label("AI 生成管理", systemImage: "sparkles")
+                        }
+                    }
+                }
             } else {
                 Section("登录") {
                     TextField("邮箱", text: $email)

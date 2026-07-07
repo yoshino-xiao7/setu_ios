@@ -48,12 +48,14 @@ struct RootAppView: View {
         switch tab {
         case .home:
             DashboardView(environment: environment)
-        case .features:
-            FeatureMapView()
-        case .collections:
-            CollectionListView(environment: environment)
+        case .ai:
+            AiHubView(environment: environment)
+        case .images:
+            ImageHubView(environment: environment)
         case .music:
             MusicHomeView(environment: environment)
+        case .square:
+            SquareHubView(environment: environment)
         case .settings:
             AccountView(environment: environment)
         }
@@ -106,8 +108,12 @@ struct RootAppView: View {
             GalleryUploadBatchesView(environment: environment)
         case .galleryUploadDetail(let id):
             GalleryUploadDetailView(environment: environment, batchID: id)
+        case .aiDraw:
+            AiDrawView(environment: environment)
         case .aiHistory:
             AiHistoryView(environment: environment)
+        case .aiDeleteRequests:
+            AiDeleteRequestsView(environment: environment)
         case .aiGenerationDetail(let id):
             AiGenerationDetailView(environment: environment, jobID: id)
         case .aiSquare:
