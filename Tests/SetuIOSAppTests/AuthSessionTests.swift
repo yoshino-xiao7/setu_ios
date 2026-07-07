@@ -61,11 +61,78 @@ final class AuthSessionTests: XCTestCase {
         XCTAssertNil(try keychain.string(for: "signSecret"))
     }
 
-    private func makeSession(keychain: InMemoryKeychain) -> AuthSession {
+    func testLoginClearsLocalStateWhenSessionConfirmationReturnsUnauthorized() async throws {
+        let keychain = InMemoryKeychain()
+        let session = makeSession(
+            keychain: keychain,
+            urlSession: URLSession(
+                configuration: .mock { request in
+                    switch request.url?.path {
+                    case "/auth/login":
+                        return MockHTTPResponse(
+                            statusCode: 200,
+                            body: """
+                            {"data":{"role":0,"email":"user@example.com","userId":3,"signSecret":"secret","expireAt":4102444800000}}
+                            """
+                        )
+                    case "/user/info":
+                        return MockHTTPResponse(statusCode: 401, body: #"{"message":"Unauthorized"}"#)
+                    default:
+                        return MockHTTPResponse(statusCode: 404, body: "{}")
+                    }
+                }
+            )
+        )
+
+        await session.login(email: "user@example.com", password: "password", captchaCode: "ABCD", captchaUuid: "uuid")
+
+        XCTAssertFalse(session.isSignedIn)
+        XCTAssertNil(session.currentUser)
+        XCTAssertNil(try keychain.string(for: "signSecret"))
+        XCTAssertEqual(session.lastError, "登录会话确认失败，请重新登录")
+    }
+
+    func testLoginPersistsProfileAfterSessionConfirmationSucceeds() async throws {
+        let keychain = InMemoryKeychain()
+        let session = makeSession(
+            keychain: keychain,
+            urlSession: URLSession(
+                configuration: .mock { request in
+                    switch request.url?.path {
+                    case "/auth/login":
+                        return MockHTTPResponse(
+                            statusCode: 200,
+                            body: """
+                            {"data":{"role":0,"email":"user@example.com","userId":3,"signSecret":"secret","expireAt":4102444800000}}
+                            """
+                        )
+                    case "/user/info":
+                        return MockHTTPResponse(
+                            statusCode: 200,
+                            body: """
+                            {"data":{"id":3,"email":"user@example.com","nickname":"Yuki","avatarUrl":null,"role":0,"createdAt":"2026-07-07T00:00:00","lastLoginIp":"127.0.0.1"}}
+                            """
+                        )
+                    default:
+                        return MockHTTPResponse(statusCode: 404, body: "{}")
+                    }
+                }
+            )
+        )
+
+        await session.login(email: "user@example.com", password: "password", captchaCode: "ABCD", captchaUuid: "uuid")
+
+        XCTAssertTrue(session.isSignedIn)
+        XCTAssertEqual(session.currentUser?.nickname, "Yuki")
+        XCTAssertEqual(try keychain.string(for: "signSecret"), "secret")
+    }
+
+    private func makeSession(keychain: InMemoryKeychain, urlSession: URLSession = .shared) -> AuthSession {
         let signer = AuthSigner(keychain: keychain)
         let client = APIClient(
             config: AppConfig(apiBaseURL: URL(string: "https://api.example.com")!, siteBaseURL: URL(string: "https://example.com")!),
-            signer: signer
+            signer: signer,
+            session: urlSession
         )
         return AuthSession(apiClient: client, keychain: keychain)
     }
@@ -134,6 +201,7 @@ private actor InvalidationProbe {
 private final class MockURLProtocol: URLProtocol {
     nonisolated(unsafe) static var statusCode = 200
     nonisolated(unsafe) static var body = Data()
+    nonisolated(unsafe) static var handler: ((URLRequest) -> MockHTTPResponse)?
 
     override class func canInit(with request: URLRequest) -> Bool {
         true
@@ -144,24 +212,48 @@ private final class MockURLProtocol: URLProtocol {
     }
 
     override func startLoading() {
+        let result = Self.handler?(request) ?? MockHTTPResponse(statusCode: Self.statusCode, body: Self.body)
         let response = HTTPURLResponse(
             url: request.url!,
-            statusCode: Self.statusCode,
+            statusCode: result.statusCode,
             httpVersion: nil,
             headerFields: ["Content-Type": "application/json"]
         )!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: Self.body)
+        client?.urlProtocol(self, didLoad: result.body)
         client?.urlProtocolDidFinishLoading(self)
     }
 
     override func stopLoading() {}
 }
 
+private struct MockHTTPResponse {
+    let statusCode: Int
+    let body: Data
+
+    init(statusCode: Int, body: String) {
+        self.statusCode = statusCode
+        self.body = Data(body.utf8)
+    }
+
+    init(statusCode: Int, body: Data) {
+        self.statusCode = statusCode
+        self.body = body
+    }
+}
+
 private extension URLSessionConfiguration {
     static func mock(statusCode: Int, body: String) -> URLSessionConfiguration {
         MockURLProtocol.statusCode = statusCode
         MockURLProtocol.body = Data(body.utf8)
+        MockURLProtocol.handler = nil
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        return configuration
+    }
+
+    static func mock(handler: @escaping (URLRequest) -> MockHTTPResponse) -> URLSessionConfiguration {
+        MockURLProtocol.handler = handler
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [MockURLProtocol.self]
         return configuration

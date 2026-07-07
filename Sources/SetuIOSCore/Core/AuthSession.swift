@@ -35,7 +35,7 @@ public final class AuthSession {
                 body: LoginRequest(email: email, password: password, captchaCode: captchaCode, captchaUuid: captchaUuid),
                 signed: false
             )
-            try applyLoginResponse(response, fallbackEmail: email)
+            try await acceptLoginResponse(response, fallbackEmail: email)
         } catch {
             lastError = error.localizedDescription
         }
@@ -99,6 +99,35 @@ public final class AuthSession {
         )
         try persistCurrentUser()
         lastError = nil
+    }
+
+    public func acceptLoginResponse(_ response: LoginResponse, fallbackEmail: String? = nil) async throws {
+        try applyLoginResponse(response, fallbackEmail: fallbackEmail)
+        guard await confirmAuthenticatedSession() else {
+            throw AuthSessionError.sessionConfirmationFailed
+        }
+    }
+
+    @discardableResult
+    public func confirmAuthenticatedSession() async -> Bool {
+        do {
+            let profile: UserProfile = try await apiClient.get("/user/info")
+            currentUser = CurrentUser(
+                id: profile.id,
+                email: profile.email,
+                role: profile.role,
+                avatarUrl: profile.avatarUrl,
+                nickname: profile.nickname,
+                lastLoginIp: profile.lastLoginIp
+            )
+            try persistCurrentUser()
+            lastError = nil
+            return true
+        } catch {
+            clearLocalSession()
+            lastError = "登录会话确认失败，请重新登录"
+            return false
+        }
     }
 
     public func refreshSignature() async -> Bool {
@@ -181,5 +210,16 @@ public final class AuthSession {
         try? keychain.remove(currentUserKey)
         currentUser = nil
         expireAt = nil
+    }
+}
+
+public enum AuthSessionError: Error, LocalizedError {
+    case sessionConfirmationFailed
+
+    public var errorDescription: String? {
+        switch self {
+        case .sessionConfirmationFailed:
+            "登录会话确认失败，请重新登录"
+        }
     }
 }

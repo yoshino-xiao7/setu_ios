@@ -244,7 +244,7 @@ struct AccountView: View {
             let options = try await environment.passkeyClient.beginAuthentication()
             let credential = try await passkeyService.assertCredential(options: options.publicKey.publicKey)
             let response = try await environment.passkeyClient.finishAuthentication(challengeID: options.challengeId, credential: credential)
-            try environment.authSession.applyLoginResponse(response)
+            try await environment.authSession.acceptLoginResponse(response)
             passkeyMessage = "通行密钥登录成功"
         } catch {
             passkeyMessage = error.localizedDescription
