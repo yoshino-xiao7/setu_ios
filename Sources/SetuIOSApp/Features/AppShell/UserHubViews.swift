@@ -409,8 +409,11 @@ private struct SquareCollectionPreviewCard: View {
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 8) {
-                ImageThumbnailView(urlString: collection.coverUrl ?? collection.previewImages?.first?.bestURLString)
-                    .frame(width: 132, height: 92)
+                ImageThumbnailView(
+                    urlString: collection.coverUrl ?? collection.previewImages?.first?.bestURLString,
+                    width: 132,
+                    height: 92
+                )
                     .clipShape(RoundedRectangle(cornerRadius: 10))
 
                 Text(collection.name)
@@ -436,8 +439,7 @@ private struct SquareAiPreviewCard: View {
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 8) {
-                ImageThumbnailView(urlString: job.imageUrl)
-                    .frame(width: 132, height: 132)
+                ImageThumbnailView(urlString: job.imageUrl, width: 132, height: 132)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
 
                 Text(job.promptCn)

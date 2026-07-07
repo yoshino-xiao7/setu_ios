@@ -175,8 +175,7 @@ private struct CollectionSquareRow: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(previews.prefix(5)) { image in
-                            ImageThumbnailView(urlString: image.bestURLString)
-                                .frame(width: 48, height: 48)
+                            ImageThumbnailView(urlString: image.bestURLString, width: 48, height: 48)
                         }
                     }
                 }

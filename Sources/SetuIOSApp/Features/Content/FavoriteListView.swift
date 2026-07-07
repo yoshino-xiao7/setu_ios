@@ -127,6 +127,8 @@ private struct FavoriteImageRow: View {
 
 struct ImageThumbnailView: View {
     let urlString: String?
+    var width: CGFloat = 58
+    var height: CGFloat = 58
 
     var body: some View {
         Group {
@@ -143,7 +145,7 @@ struct ImageThumbnailView: View {
                 placeholder
             }
         }
-        .frame(width: 58, height: 58)
+        .frame(width: width, height: height)
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
