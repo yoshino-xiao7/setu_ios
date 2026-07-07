@@ -6,6 +6,7 @@ public final class AuthSession {
     private let apiClient: APIClient
     private let keychain: KeychainStoring
     private let expireAtKey = "authExpireAt"
+    private let currentUserKey = "currentUser"
 
     public var currentUser: CurrentUser?
     public var expireAt: Date?
@@ -15,6 +16,7 @@ public final class AuthSession {
     public init(apiClient: APIClient, keychain: KeychainStoring) {
         self.apiClient = apiClient
         self.keychain = keychain
+        restoreLocalSession()
     }
 
     public var isSignedIn: Bool {
@@ -91,6 +93,7 @@ public final class AuthSession {
             nickname: nil,
             lastLoginIp: response.lastLoginIp
         )
+        try persistCurrentUser()
         lastError = nil
     }
 
@@ -111,10 +114,12 @@ public final class AuthSession {
 
     public func logout() async {
         _ = try? await apiClient.post("/auth/logout", signed: true) as EmptyResponse
-        try? apiClient.signer.clearSignSecret()
-        try? keychain.remove(expireAtKey)
-        currentUser = nil
-        expireAt = nil
+        clearLocalSession()
+    }
+
+    public func invalidateLocalSession(message: String = "登录已过期，请重新登录") {
+        clearLocalSession()
+        lastError = message
     }
 
     private func persistExpireAt(_ value: Int64?) {
@@ -126,5 +131,51 @@ public final class AuthSession {
         let milliseconds = value < 1_000_000_000_000 ? value * 1000 : value
         expireAt = Date(timeIntervalSince1970: TimeInterval(milliseconds) / 1000)
         try? keychain.setString(String(milliseconds), for: expireAtKey)
+    }
+
+    private func persistCurrentUser() throws {
+        guard let currentUser else {
+            try keychain.remove(currentUserKey)
+            return
+        }
+        let data = try JSONEncoder().encode(currentUser)
+        let value = data.base64EncodedString()
+        try keychain.setString(value, for: currentUserKey)
+    }
+
+    private func restoreLocalSession() {
+        guard
+            let expireAtValue = try? keychain.string(for: expireAtKey),
+            let milliseconds = Int64(expireAtValue)
+        else {
+            clearLocalSession()
+            return
+        }
+
+        let restoredExpireAt = Date(timeIntervalSince1970: TimeInterval(milliseconds) / 1000)
+        guard restoredExpireAt > Date() else {
+            clearLocalSession()
+            return
+        }
+
+        guard
+            let encodedUser = try? keychain.string(for: currentUserKey),
+            let data = Data(base64Encoded: encodedUser),
+            let user = try? JSONDecoder().decode(CurrentUser.self, from: data)
+        else {
+            clearLocalSession()
+            return
+        }
+
+        expireAt = restoredExpireAt
+        currentUser = user
+    }
+
+    private func clearLocalSession() {
+        try? apiClient.signer.clearSignSecret()
+        try? keychain.remove(expireAtKey)
+        try? keychain.remove(currentUserKey)
+        currentUser = nil
+        expireAt = nil
     }
 }

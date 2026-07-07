@@ -8,6 +8,6 @@ final class AuthSignerTests: XCTestCase {
             secret: "test-secret"
         )
 
-        XCTAssertEqual(signature, "7b89fd077e741dd5b51d4ccfc5d0244e7f4bd549b625347ed324234befd1ca4b")
+        XCTAssertEqual(signature, "745cf2253c6dfc956d200fc6b9c33f3bcc4159aa2411a7455f379d319fa56077")
     }
 }

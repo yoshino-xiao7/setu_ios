@@ -7,6 +7,19 @@ struct RootAppView: View {
     @State private var tabRouter = TabRouter()
 
     var body: some View {
+        Group {
+            if environment.authSession.isSignedIn {
+                appTabs
+            } else {
+                NavigationStack {
+                    AccountView(environment: environment)
+                }
+            }
+        }
+        .tint(.pink)
+    }
+
+    private var appTabs: some View {
         TabView(selection: $selectedTab) {
             ForEach(AppTab.allCases) { tab in
                 NavigationStack(path: tabRouter.binding(for: tab)) {
@@ -20,7 +33,6 @@ struct RootAppView: View {
                 .tag(tab)
             }
         }
-        .tint(.pink)
     }
 
     @ViewBuilder

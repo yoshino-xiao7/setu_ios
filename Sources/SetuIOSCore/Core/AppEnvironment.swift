@@ -72,7 +72,8 @@ public final class AppEnvironment {
         let config = AppConfig.production
         let keychain = KeychainStore(service: "com.xueliang.setu-ios")
         let signer = AuthSigner(keychain: keychain)
-        let client = APIClient(config: config, signer: signer)
+        let sessionInvalidationNotifier = SessionInvalidationNotifier()
+        let client = APIClient(config: config, signer: signer, sessionInvalidationNotifier: sessionInvalidationNotifier)
         let mobileAppClient = MobileAppClient(apiClient: client)
         let dashboardClient = DashboardClient(apiClient: client)
         let apiKeyClient = ApiKeyClient(apiClient: client)
@@ -90,6 +91,9 @@ public final class AppEnvironment {
         let galleryUploadClient = GalleryUploadClient(apiClient: client)
         let adminClient = AdminClient(apiClient: client)
         let session = AuthSession(apiClient: client, keychain: keychain)
+        sessionInvalidationNotifier.setHandler { [weak session] in
+            await session?.invalidateLocalSession()
+        }
         return AppEnvironment(
             config: config,
             keychain: keychain,

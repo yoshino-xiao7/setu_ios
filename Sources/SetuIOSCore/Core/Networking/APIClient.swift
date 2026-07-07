@@ -3,13 +3,22 @@ import Foundation
 public struct APIClient: Sendable {
     public let config: AppConfig
     public let signer: AuthSigner
+    public let sessionInvalidationNotifier: SessionInvalidationNotifier?
     public var session: URLSession = .shared
     public var decoder: JSONDecoder = JSONDecoder()
     public var encoder: JSONEncoder = JSONEncoder()
 
-    public init(config: AppConfig, signer: AuthSigner, session: URLSession = .shared, decoder: JSONDecoder = JSONDecoder(), encoder: JSONEncoder = JSONEncoder()) {
+    public init(
+        config: AppConfig,
+        signer: AuthSigner,
+        session: URLSession = .shared,
+        decoder: JSONDecoder = JSONDecoder(),
+        encoder: JSONEncoder = JSONEncoder(),
+        sessionInvalidationNotifier: SessionInvalidationNotifier? = nil
+    ) {
         self.config = config
         self.signer = signer
+        self.sessionInvalidationNotifier = sessionInvalidationNotifier
         self.session = session
         self.decoder = decoder
         self.encoder = encoder
@@ -93,6 +102,9 @@ public struct APIClient: Sendable {
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.invalidResponse
         }
+        if httpResponse.statusCode == 401 {
+            await sessionInvalidationNotifier?.notifyUnauthorized()
+        }
         guard (200..<300).contains(httpResponse.statusCode) else {
             throw APIError.httpStatus(httpResponse.statusCode)
         }
@@ -131,6 +143,9 @@ public struct APIClient: Sendable {
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.invalidResponse
         }
+        if httpResponse.statusCode == 401 {
+            await sessionInvalidationNotifier?.notifyUnauthorized()
+        }
         guard (200..<300).contains(httpResponse.statusCode) else {
             throw APIError.httpStatus(httpResponse.statusCode)
         }
@@ -147,6 +162,24 @@ public struct APIClient: Sendable {
             return value
         }
         return try decoder.decode(Value.self, from: data)
+    }
+}
+
+public final class SessionInvalidationNotifier: @unchecked Sendable {
+    private let lock = NSLock()
+    private var handler: (@Sendable () async -> Void)?
+
+    public init() {}
+
+    public func setHandler(_ handler: (@Sendable () async -> Void)?) {
+        lock.withLock {
+            self.handler = handler
+        }
+    }
+
+    public func notifyUnauthorized() async {
+        let handler = lock.withLock { handler }
+        await handler?()
     }
 }
 
