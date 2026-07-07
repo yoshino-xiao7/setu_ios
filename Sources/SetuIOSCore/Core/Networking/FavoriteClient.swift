@@ -18,4 +18,8 @@ public struct FavoriteClient: Sendable {
     public func remove(pid: Int, p: Int = 0) async throws {
         let _: String = try await apiClient.requestWithoutBody("/favorite/\(pid)/\(p)", method: "DELETE")
     }
+
+    public func exists(pid: Int, p: Int = 0) async throws -> Bool {
+        try await apiClient.get("/favorite/exists/\(pid)/\(p)")
+    }
 }

@@ -17,6 +17,7 @@ struct PointsCallView: View {
     @State private var message: String?
     @State private var favoriteTarget: SetuImageItem?
     @State private var deleteTarget: SetuImageItem?
+    @State private var defaultFavoriteIDs: Set<String> = []
 
     private let costPerCall = 20
 
@@ -43,6 +44,7 @@ struct PointsCallView: View {
         }
         .sheet(item: $favoriteTarget) { item in
             PointsFavoriteSheet(environment: environment, item: item) { text in
+                defaultFavoriteIDs.insert(item.id)
                 message = text
             }
         }
@@ -109,7 +111,7 @@ struct PointsCallView: View {
         } else {
             Section("调用结果") {
                 ForEach(results) { item in
-                    PointsResultRow(item: item) {
+                    PointsResultRow(item: item, isDefaultFavorited: defaultFavoriteIDs.contains(item.id)) {
                         favoriteTarget = item
                     } onDeleteRequest: {
                         deleteTarget = item
@@ -154,9 +156,11 @@ struct PointsCallView: View {
         calling = true
         message = nil
         results = []
+        defaultFavoriteIDs = []
         do {
             let request = PointsCallRequest(r18: r18, num: num, keyword: keyword, tags: parsedTags, size: size, excludeAI: excludeAI)
             results = try await environment.pointsClient.callSetu(request: request)
+            await loadDefaultFavoriteStatuses(for: results)
             await loadPoints()
             message = results.isEmpty ? "返回为空：当前筛选条件没有匹配图片" : "成功返回 \(results.count) 张"
         } catch {
@@ -165,10 +169,21 @@ struct PointsCallView: View {
         }
         calling = false
     }
+
+    private func loadDefaultFavoriteStatuses(for items: [SetuImageItem]) async {
+        var nextIDs = Set<String>()
+        for item in items {
+            if (try? await environment.favoriteClient.exists(pid: item.pid, p: item.page)) == true {
+                nextIDs.insert(item.id)
+            }
+        }
+        defaultFavoriteIDs = nextIDs
+    }
 }
 
 private struct PointsResultRow: View {
     let item: SetuImageItem
+    let isDefaultFavorited: Bool
     let onFavorite: () -> Void
     let onDeleteRequest: () -> Void
 
@@ -188,6 +203,9 @@ private struct PointsResultRow: View {
                     if item.r18 == 1 {
                         Text("R18")
                     }
+                    if isDefaultFavorited {
+                        Label("已收藏", systemImage: "heart.fill")
+                    }
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -195,7 +213,7 @@ private struct PointsResultRow: View {
             Spacer()
             Menu {
                 Button(action: onFavorite) {
-                    Label("收藏", systemImage: "heart")
+                    Label(isDefaultFavorited ? "收藏到其他收藏夹" : "收藏", systemImage: isDefaultFavorited ? "heart.fill" : "heart")
                 }
                 Button(action: onDeleteRequest) {
                     Label("申请删除", systemImage: "trash")
