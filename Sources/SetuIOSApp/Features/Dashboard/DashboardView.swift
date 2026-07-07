@@ -27,7 +27,7 @@ struct DashboardView: View {
             accountStatusSection
 
             Section("继续使用") {
-                FeatureRow(title: "积分调用", systemImage: "bolt.circle") {
+                FeatureRow(title: "图片积分调用", systemImage: "bolt.circle") {
                     router.navigate(to: .points)
                 }
                 FeatureRow(title: "积分流水", systemImage: "list.bullet.rectangle") {
@@ -39,23 +39,20 @@ struct DashboardView: View {
             }
 
             Section("我的内容") {
-                FeatureRow(title: "AI 绘图历史", systemImage: "clock") {
+                FeatureRow(title: "AI 绘画历史", systemImage: "clock") {
                     router.navigate(to: .aiHistory)
+                }
+                FeatureRow(title: "图库投稿", systemImage: "square.and.arrow.up") {
+                    router.navigate(to: .galleryUploads)
                 }
                 FeatureRow(title: "我的收藏夹", systemImage: "heart.rectangle") {
                     router.navigate(to: .collections)
                 }
+                FeatureRow(title: "我的收藏", systemImage: "heart.fill") {
+                    router.navigate(to: .favorites)
+                }
                 FeatureRow(title: "我的歌单", systemImage: "music.note.list") {
                     router.navigate(to: .playlists)
-                }
-            }
-
-            Section("开发者工具") {
-                FeatureRow(title: "API Keys", systemImage: "key") {
-                    router.navigate(to: .apiKeys)
-                }
-                FeatureRow(title: "开发文档", systemImage: "doc.text") {
-                    router.navigate(to: .docs)
                 }
             }
 
@@ -99,11 +96,11 @@ struct DashboardView: View {
             }
             HomeActionRow(
                 title: "广场",
-                subtitle: "浏览收藏夹广场和 AI 作品",
+                subtitle: "浏览收藏夹广场和 AI 绘画广场",
                 systemImage: "rectangle.stack",
                 tint: .blue
             ) {
-                router.navigate(to: .collectionSquare)
+                router.navigate(to: .squareHub)
             }
         }
     }
@@ -138,19 +135,9 @@ struct DashboardView: View {
                     systemImage: "bell"
                 )
                 DashboardMetricRow(
-                    title: "今日调用",
+                    title: "今日图片调用",
                     value: snapshot.usage.map { String($0.todayCalls) } ?? "-",
                     systemImage: "chart.line.uptrend.xyaxis"
-                )
-                DashboardMetricRow(
-                    title: "服务状态",
-                    value: snapshot.status?.status.status ?? "-",
-                    systemImage: "waveform.path.ecg"
-                )
-                DashboardMetricRow(
-                    title: "上次活跃",
-                    value: snapshot.usage?.lastCalledAt ?? "-",
-                    systemImage: "clock"
                 )
             }
         }
@@ -158,22 +145,22 @@ struct DashboardView: View {
 
     @ViewBuilder
     private var usageLogsSection: some View {
-        Section("最近调用日志") {
+        Section("最近积分调用") {
             switch state {
             case .idle, .loading:
-                ProgressView("正在加载调用日志")
+                ProgressView("正在加载积分记录")
             case .failed:
                 EmptyView()
             case .loaded(let snapshot):
                 if let logs = snapshot.usageLogs?.list, !logs.isEmpty {
-                    ForEach(logs) { log in
+                    ForEach(logs.prefix(5)) { log in
                         UsageLogRow(log: log)
                     }
                     if let total = snapshot.usageLogs?.total {
                         usageLogControls(total: total)
                     }
                 } else {
-                    ContentUnavailableView("暂无调用日志", systemImage: "clock.arrow.circlepath")
+                    ContentUnavailableView("暂无积分调用记录", systemImage: "clock.arrow.circlepath")
                 }
             }
         }
@@ -230,17 +217,17 @@ private struct UsageLogRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(log.endpoint)
+                Text("图片接口调用")
                     .font(.headline)
                     .lineLimit(1)
                 Spacer()
-                Text("\(log.status)")
+                Text(statusText)
                     .font(.subheadline.monospacedDigit())
                     .foregroundStyle(statusColor)
             }
             HStack(spacing: 12) {
-                Label(log.ip, systemImage: "network")
                 Label(log.timestamp, systemImage: "clock")
+                Label(statusText, systemImage: statusSystemImage)
             }
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -251,6 +238,14 @@ private struct UsageLogRow: View {
 
     private var statusColor: Color {
         (200..<400).contains(log.status) ? .green : .red
+    }
+
+    private var statusText: String {
+        (200..<400).contains(log.status) ? "成功" : "失败"
+    }
+
+    private var statusSystemImage: String {
+        (200..<400).contains(log.status) ? "checkmark.circle" : "exclamationmark.triangle"
     }
 }
 

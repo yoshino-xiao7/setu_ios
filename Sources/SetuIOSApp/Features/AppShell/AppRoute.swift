@@ -14,6 +14,7 @@ enum AppRoute: Hashable {
     case imageSwipe
     case collections
     case collectionDetail(Int)
+    case squareHub
     case collectionSquare
     case publicCollectionDetail(Int)
     case publicUserProfile(Int)

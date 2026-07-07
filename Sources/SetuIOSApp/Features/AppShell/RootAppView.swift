@@ -105,6 +105,8 @@ struct RootAppView: View {
             CollectionListView(environment: environment)
         case .collectionDetail(let id):
             CollectionDetailView(environment: environment, collectionID: id)
+        case .squareHub:
+            SquareHubView(environment: environment)
         case .collectionSquare:
             CollectionSquareView(environment: environment)
         case .publicCollectionDetail(let id):
