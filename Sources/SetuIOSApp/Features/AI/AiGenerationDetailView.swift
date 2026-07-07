@@ -35,9 +35,9 @@ struct AiGenerationDetailView: View {
                 ContentUnavailableView("任务加载失败", systemImage: "sparkles.rectangle.stack", description: Text(message))
             case .loaded(let job):
                 previewSection(job)
+                imageActionsSection(job)
                 infoSection(job)
                 promptSection(job)
-                linkSection
                 reviewSection(job)
                 deleteRequestSection(job)
             }
@@ -66,7 +66,31 @@ struct AiGenerationDetailView: View {
                     }
                 }
             } else {
-                ContentUnavailableView("暂无图片", systemImage: "photo")
+                ContentUnavailableView("暂无图片", systemImage: "photo", description: Text(job.status == "COMPLETED" ? "可以尝试刷新图片。" : "任务完成后会显示预览。"))
+            }
+        }
+    }
+
+    private func imageActionsSection(_ job: AiGenerationJob) -> some View {
+        Section("图片操作") {
+            Button {
+                Task { await fetchImageURL() }
+            } label: {
+                Label("刷新图片", systemImage: "arrow.clockwise")
+            }
+            .disabled(job.status != "COMPLETED")
+
+            Button {
+                Task { await fetchDownload() }
+            } label: {
+                Label("下载图片", systemImage: "arrow.down.circle")
+            }
+            .disabled(job.status != "COMPLETED")
+
+            if let imageURL {
+                Label("\(imageURL.expiresInSeconds) 秒内有效", systemImage: "clock")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -79,9 +103,9 @@ struct AiGenerationDetailView: View {
             LabeledContent("CFG", value: job.cfg.formatted(.number.precision(.fractionLength(1))))
             LabeledContent("Seed", value: job.seed.map(String.init) ?? "随机")
             LabeledContent("生成模式", value: job.generationMode == "DUAL" ? "双角色" : "单角色")
-            LabeledContent("云端原图", value: job.privateOssStatus ?? "NONE")
-            LabeledContent("云端到期", value: job.privateOssExpiresAt ?? "-")
-            LabeledContent("Checkpoint", value: checkpointDisplayName(job.checkpoint))
+            LabeledContent("图片保留", value: imageRetentionTitle(job.privateOssStatus))
+            LabeledContent("清理时间", value: job.privateOssExpiresAt ?? "-")
+            LabeledContent("模型", value: checkpointDisplayName(job.checkpoint))
             if let lora = job.loraName, !lora.isEmpty {
                 LabeledContent("LoRA", value: lora)
             }
@@ -102,6 +126,21 @@ struct AiGenerationDetailView: View {
                 Text(error)
                     .foregroundStyle(.red)
             }
+        }
+    }
+
+    private func imageRetentionTitle(_ status: String?) -> String {
+        switch status {
+        case "ACTIVE":
+            return "可下载"
+        case "EXPIRED":
+            return "已过期"
+        case "EXPLICITLY_DELETED":
+            return "已清理"
+        case "NONE", nil:
+            return "未生成"
+        default:
+            return status ?? "-"
         }
     }
 
@@ -143,35 +182,6 @@ struct AiGenerationDetailView: View {
         ].joined(separator: "\n")
         PlatformClipboard.copy(text)
         message = "提示词已复制"
-    }
-
-    private var linkSection: some View {
-        Section("链接") {
-            Button("获取临时图片链接") {
-                Task { await fetchImageURL() }
-            }
-            Button("获取下载链接") {
-                Task { await fetchDownload() }
-            }
-            if let imageURL {
-                Text(imageURL.url)
-                    .font(.footnote.monospaced())
-                    .textSelection(.enabled)
-                Text("\(imageURL.expiresInSeconds) 秒内有效")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            if let download {
-                Text(download.downloadUrl)
-                    .font(.footnote.monospaced())
-                    .textSelection(.enabled)
-                Button {
-                    openDownload(download)
-                } label: {
-                    Label("打开下载链接", systemImage: "arrow.down.circle")
-                }
-            }
-        }
     }
 
     private func reviewSection(_ job: AiGenerationJob) -> some View {
@@ -232,7 +242,7 @@ struct AiGenerationDetailView: View {
     private func fetchImageURL() async {
         do {
             imageURL = try await environment.aiGenerationClient.imageURL(id: jobID)
-            message = "已获取临时图片链接"
+            message = "图片已刷新"
         } catch {
             message = error.localizedDescription
         }
@@ -244,7 +254,7 @@ struct AiGenerationDetailView: View {
             if let download {
                 openDownload(download)
             }
-            message = "已打开下载链接"
+            message = "已打开下载"
         } catch {
             message = error.localizedDescription
         }

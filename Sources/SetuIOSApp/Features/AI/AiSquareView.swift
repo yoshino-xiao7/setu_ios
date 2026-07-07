@@ -145,7 +145,7 @@ private struct AiSquareRow: View {
                     Button {
                         onPreview()
                     } label: {
-                        Label("查看原图", systemImage: "eye")
+                        Label("查看图片", systemImage: "eye")
                     }
                     .buttonStyle(.borderless)
                     .font(.footnote)

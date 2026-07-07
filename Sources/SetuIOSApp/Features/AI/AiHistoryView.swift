@@ -182,7 +182,7 @@ struct AiHistoryView: View {
     private func download(_ job: AiGenerationJob) async {
         do {
             let result = try await environment.aiGenerationClient.download(id: job.id)
-            openURLString(result.downloadUrl, successMessage: "已打开下载链接")
+            openURLString(result.downloadUrl, successMessage: "已打开下载")
         } catch {
             message = error.localizedDescription
         }
@@ -190,7 +190,7 @@ struct AiHistoryView: View {
 
     private func openURLString(_ value: String, successMessage: String) {
         guard let url = URL(string: value) else {
-            message = "链接无效"
+            message = "下载暂时不可用"
             return
         }
         #if os(iOS)
@@ -265,7 +265,7 @@ private struct AiGenerationRow: View {
             }
 
             if job.privateOssStatus == "EXPIRED" || job.privateOssStatus == "EXPLICITLY_DELETED" {
-                Label("云端原图已清理，生成历史仍会保留", systemImage: "info.circle")
+                Label("图片文件已清理，生成历史仍会保留", systemImage: "info.circle")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else if job.status == "COMPLETED", let expiresAt = job.privateOssExpiresAt {
@@ -379,7 +379,7 @@ struct AiGenerationImagePreviewSheet: View {
                             .scaledToFit()
                             .clipShape(RoundedRectangle(cornerRadius: 10))
                     case .failure:
-                        ContentUnavailableView("图片加载失败", systemImage: "photo", description: Text("可以尝试刷新临时链接。"))
+                        ContentUnavailableView("图片加载失败", systemImage: "photo", description: Text("可以尝试刷新图片。"))
                             .frame(maxWidth: .infinity, minHeight: 320)
                     default:
                         ProgressView("正在加载图片")
@@ -387,7 +387,7 @@ struct AiGenerationImagePreviewSheet: View {
                     }
                 }
             } else {
-                ContentUnavailableView("图片链接无效", systemImage: "link.badge.plus")
+                ContentUnavailableView("图片暂时不可用", systemImage: "photo.badge.exclamationmark")
                     .frame(maxWidth: .infinity, minHeight: 320)
             }
         }
@@ -398,7 +398,7 @@ struct AiGenerationImagePreviewSheet: View {
             Button {
                 Task { await refreshImageURL() }
             } label: {
-                Label("刷新临时链接", systemImage: "arrow.clockwise")
+                Label("刷新图片", systemImage: "arrow.clockwise")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
@@ -459,8 +459,8 @@ struct AiGenerationImagePreviewSheet: View {
             #if os(iOS)
             await UIApplication.shared.open(url)
             #endif
-            localMessage = "已打开下载链接"
-            onMessage("已打开下载链接")
+            localMessage = "已打开下载"
+            onMessage("已打开下载")
         } catch {
             localMessage = error.localizedDescription
         }

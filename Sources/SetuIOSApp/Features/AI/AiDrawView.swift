@@ -203,7 +203,7 @@ struct AiDrawView: View {
                 Text(message)
                     .foregroundStyle(.red)
             case .loaded(let capabilities):
-                Picker("Checkpoint", selection: $selectedCheckpoint) {
+                Picker("模型", selection: $selectedCheckpoint) {
                     Text("默认").tag("")
                     ForEach(capabilities.checkpoints) { item in
                         Text(item.displayName ?? item.name).tag(item.name)
