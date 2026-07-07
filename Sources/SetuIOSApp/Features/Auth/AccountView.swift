@@ -72,6 +72,8 @@ struct AccountView: View {
                     Button("退出登录", role: .destructive) {
                         Task {
                             await environment.authSession.logout()
+                            sessionMessage = "已退出登录"
+                            updateSessionDiagnostics()
                         }
                     }
                 }
@@ -258,6 +260,7 @@ struct AccountView: View {
             if environment.authSession.currentUser == nil {
                 await refreshCaptchaIfNeeded(.login)
             }
+            updateSessionDiagnostics()
         }
     }
 
@@ -268,9 +271,13 @@ struct AccountView: View {
             captchaCode: loginCaptcha.code,
             captchaUuid: loginCaptcha.uuid
         )
+        updateSessionDiagnostics()
         if environment.authSession.currentUser == nil {
+            sessionMessage = "登录未建立有效会话，请查看下方状态"
             loginCaptcha.code = ""
             await refreshCaptcha(.login)
+        } else {
+            sessionMessage = "登录成功，会话已确认"
         }
     }
 
@@ -282,9 +289,13 @@ struct AccountView: View {
             let credential = try await passkeyService.assertCredential(options: options.publicKey.publicKey)
             let response = try await environment.passkeyClient.finishAuthentication(challengeID: options.challengeId, credential: credential)
             try await environment.authSession.acceptLoginResponse(response)
+            updateSessionDiagnostics()
             passkeyMessage = "通行密钥登录成功"
+            sessionMessage = "登录成功，会话已确认"
         } catch {
             passkeyMessage = error.localizedDescription
+            updateSessionDiagnostics()
+            sessionMessage = "通行密钥未建立有效会话，请查看下方状态"
         }
         passkeyLoading = false
     }
