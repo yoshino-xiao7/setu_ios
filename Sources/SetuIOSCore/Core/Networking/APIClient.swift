@@ -113,6 +113,26 @@ public struct APIClient: Sendable {
         fileData: Data,
         signed: Bool = true
     ) async throws -> Value {
+        try await postMultipart(
+            path,
+            fileFieldName: fileFieldName,
+            fileName: fileName,
+            mimeType: mimeType,
+            fileData: fileData,
+            signed: signed,
+            retryingSignatureError: true
+        )
+    }
+
+    private func postMultipart<Value: Decodable & Sendable>(
+        _ path: String,
+        fileFieldName: String,
+        fileName: String,
+        mimeType: String,
+        fileData: Data,
+        signed: Bool,
+        retryingSignatureError: Bool
+    ) async throws -> Value {
         guard let url = URL(string: path, relativeTo: config.apiBaseURL) else {
             throw APIError.invalidURL(path)
         }
@@ -143,6 +163,18 @@ public struct APIClient: Sendable {
         let (data, response) = try await session.upload(for: request, from: body)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.invalidResponse
+        }
+        if shouldRetrySignatureError(response: httpResponse, data: data, signed: signed, retryingSignatureError: retryingSignatureError),
+           await refreshSignature(force: true) {
+            return try await postMultipart(
+                path,
+                fileFieldName: fileFieldName,
+                fileName: fileName,
+                mimeType: mimeType,
+                fileData: fileData,
+                signed: signed,
+                retryingSignatureError: false
+            )
         }
         if httpResponse.statusCode == 401 {
             await sessionInvalidationNotifier?.notifyUnauthorized()

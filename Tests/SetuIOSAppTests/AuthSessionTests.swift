@@ -370,6 +370,57 @@ final class APIClientUnauthorizedTests: XCTestCase {
         XCTAssertFalse(wasInvalidated)
     }
 
+    func testMultipartRequestRefreshesAndRetriesSignatureErrorBeforeInvalidating() async throws {
+        let keychain = InMemoryKeychain()
+        try keychain.setString("stale-secret", for: "signSecret")
+        let capturedRequests = RequestListProbe()
+        let invalidated = InvalidationProbe()
+        let invalidationNotifier = SessionInvalidationNotifier()
+        invalidationNotifier.setHandler {
+            await invalidated.markInvalidated()
+        }
+        let refreshNotifier = SignatureRefreshNotifier()
+        refreshNotifier.setHandler {
+            try? keychain.setString("fresh-secret", for: "signSecret")
+            return true
+        }
+        let session = URLSession(
+            configuration: .mock { request in
+                Task {
+                    await capturedRequests.capture(request)
+                }
+                if request.value(forHTTPHeaderField: "X-Signature") == AuthSigner.hmac(
+                    message: "\(request.value(forHTTPHeaderField: "X-Timestamp") ?? ""):\(request.value(forHTTPHeaderField: "X-Nonce") ?? ""):POST:/user/profile/avatar-file",
+                    secret: "fresh-secret"
+                ) {
+                    return MockHTTPResponse(statusCode: 200, body: #"{"avatarUrl":"https://example.com/avatar.jpg"}"#)
+                }
+                return MockHTTPResponse(statusCode: 401, body: #"{"message":"signature invalid"}"#)
+            }
+        )
+        let client = APIClient(
+            config: AppConfig(apiBaseURL: URL(string: "https://api.example.com")!, siteBaseURL: URL(string: "https://example.com")!),
+            signer: AuthSigner(keychain: keychain),
+            session: session,
+            sessionInvalidationNotifier: invalidationNotifier,
+            signatureRefreshNotifier: refreshNotifier
+        )
+
+        let response: AvatarUploadResponse = try await client.postMultipart(
+            "/user/profile/avatar-file",
+            fileFieldName: "file",
+            fileName: "avatar.jpg",
+            mimeType: "image/jpeg",
+            fileData: Data([1, 2, 3])
+        )
+
+        let requests = await capturedRequests.requests
+        let wasInvalidated = await invalidated.wasInvalidated
+        XCTAssertEqual(response.avatarUrl, "https://example.com/avatar.jpg")
+        XCTAssertEqual(requests.count, 2)
+        XCTAssertFalse(wasInvalidated)
+    }
+
     func testUnauthorizedResponseNotifiesSessionInvalidation() async throws {
         let keychain = InMemoryKeychain()
         try keychain.setString("secret", for: "signSecret")
