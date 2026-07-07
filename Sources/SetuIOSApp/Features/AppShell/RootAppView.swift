@@ -5,15 +5,23 @@ struct RootAppView: View {
     @Bindable var environment: AppEnvironment
     @State private var selectedTab: AppTab = .home
     @State private var tabRouter = TabRouter()
+    @State private var loggedOutRouter = RouterPath()
 
     var body: some View {
         Group {
             if environment.authSession.isSignedIn {
                 appTabs
             } else {
-                NavigationStack {
+                NavigationStack(path: Binding(
+                    get: { loggedOutRouter.path },
+                    set: { loggedOutRouter.path = $0 }
+                )) {
                     AccountView(environment: environment)
+                        .navigationDestination(for: AppRoute.self) { route in
+                            destination(for: route)
+                        }
                 }
+                .environment(loggedOutRouter)
             }
         }
         .tint(.pink)

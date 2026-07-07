@@ -1,0 +1,81 @@
+name: SetuIOSApp
+options:
+  bundleIdPrefix: icu.yukiryou
+  deploymentTarget:
+    iOS: "17.0"
+  developmentLanguage: zh-Hans
+  groupSortPosition: top
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    CODE_SIGN_STYLE: Automatic
+
+targets:
+  SetuIOSCore:
+    type: framework
+    platform: iOS
+    sources:
+      - path: Sources/SetuIOSCore
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: icu.yukiryou.setuios.core
+        DEFINES_MODULE: NO
+        SWIFT_INSTALL_OBJC_HEADER: NO
+        ENABLE_TESTABILITY: YES
+
+  SetuIOSApp:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources/SetuIOSApp
+    dependencies:
+      - target: SetuIOSCore
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: icu.yukiryou.setuios
+        TARGETED_DEVICE_FAMILY: "1"
+        SUPPORTED_PLATFORMS: "iphoneos iphonesimulator"
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: false
+        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: ""
+
+  SetuIOSAppTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/SetuIOSAppTests
+    dependencies:
+      - target: SetuIOSCore
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: icu.yukiryou.setuios.tests
+
+schemes:
+  SetuIOSApp:
+    build:
+      targets:
+        SetuIOSApp: all
+        SetuIOSCore: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - SetuIOSAppTests
+    archive:
+      config: Release
+    profile:
+      config: Release
+    analyze:
+      config: Debug
