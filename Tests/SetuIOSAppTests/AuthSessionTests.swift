@@ -326,6 +326,50 @@ final class APIClientUnauthorizedTests: XCTestCase {
         XCTAssertFalse(nonce?.isEmpty ?? true)
     }
 
+    func testSignedRequestRefreshesAndRetriesSignatureErrorBeforeInvalidating() async throws {
+        let keychain = InMemoryKeychain()
+        try keychain.setString("stale-secret", for: "signSecret")
+        let capturedRequests = RequestListProbe()
+        let invalidated = InvalidationProbe()
+        let invalidationNotifier = SessionInvalidationNotifier()
+        invalidationNotifier.setHandler {
+            await invalidated.markInvalidated()
+        }
+        let refreshNotifier = SignatureRefreshNotifier()
+        refreshNotifier.setHandler {
+            try? keychain.setString("fresh-secret", for: "signSecret")
+            return true
+        }
+        let session = URLSession(
+            configuration: .mock { request in
+                Task {
+                    await capturedRequests.capture(request)
+                }
+                if request.value(forHTTPHeaderField: "X-Signature") == AuthSigner.hmac(
+                    message: "\(request.value(forHTTPHeaderField: "X-Timestamp") ?? ""):\(request.value(forHTTPHeaderField: "X-Nonce") ?? ""):GET:/user/info",
+                    secret: "fresh-secret"
+                ) {
+                    return MockHTTPResponse(statusCode: 200, body: "{}")
+                }
+                return MockHTTPResponse(statusCode: 401, body: #"{"message":"signature invalid"}"#)
+            }
+        )
+        let client = APIClient(
+            config: AppConfig(apiBaseURL: URL(string: "https://api.example.com")!, siteBaseURL: URL(string: "https://example.com")!),
+            signer: AuthSigner(keychain: keychain),
+            session: session,
+            sessionInvalidationNotifier: invalidationNotifier,
+            signatureRefreshNotifier: refreshNotifier
+        )
+
+        let _: EmptyResponse = try await client.get("/user/info")
+
+        let requests = await capturedRequests.requests
+        let wasInvalidated = await invalidated.wasInvalidated
+        XCTAssertEqual(requests.count, 2)
+        XCTAssertFalse(wasInvalidated)
+    }
+
     func testUnauthorizedResponseNotifiesSessionInvalidation() async throws {
         let keychain = InMemoryKeychain()
         try keychain.setString("secret", for: "signSecret")
@@ -401,6 +445,14 @@ private actor RequestProbe {
 
     func capture(_ request: URLRequest) {
         lastRequest = request
+    }
+}
+
+private actor RequestListProbe {
+    private(set) var requests: [URLRequest] = []
+
+    func capture(_ request: URLRequest) {
+        requests.append(request)
     }
 }
 

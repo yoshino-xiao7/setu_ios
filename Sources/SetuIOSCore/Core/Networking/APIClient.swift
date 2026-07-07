@@ -161,7 +161,8 @@ public struct APIClient: Sendable {
         _ path: String,
         method: String,
         body: Data?,
-        signed: Bool
+        signed: Bool,
+        retryingSignatureError: Bool = true
     ) async throws -> Value {
         guard let url = URL(string: path, relativeTo: config.apiBaseURL) else {
             throw APIError.invalidURL(path)
@@ -169,25 +170,29 @@ public struct APIClient: Sendable {
 
         await refreshSignatureIfNeeded(signed: signed)
         let requestID = Self.makeRequestID()
-        var request = URLRequest(url: url)
-        request.httpMethod = method
-        request.httpBody = body
-        request.httpShouldHandleCookies = true
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue(requestID, forHTTPHeaderField: "X-Request-Id")
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = method
+        urlRequest.httpBody = body
+        urlRequest.httpShouldHandleCookies = true
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Accept")
+        urlRequest.setValue(requestID, forHTTPHeaderField: "X-Request-Id")
         if body != nil {
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
         if signed {
             let headers = try signer.signedHeaders(method: method, path: url.path)
             for (name, value) in headers {
-                request.setValue(value, forHTTPHeaderField: name)
+                urlRequest.setValue(value, forHTTPHeaderField: name)
             }
         }
 
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.data(for: urlRequest)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.invalidResponse
+        }
+        if shouldRetrySignatureError(response: httpResponse, data: data, signed: signed, retryingSignatureError: retryingSignatureError),
+           await refreshSignature(force: true) {
+            return try await request(path, method: method, body: body, signed: signed, retryingSignatureError: false)
         }
         if httpResponse.statusCode == 401 {
             await sessionInvalidationNotifier?.notifyUnauthorized()
@@ -212,7 +217,30 @@ public struct APIClient: Sendable {
 
     private func refreshSignatureIfNeeded(signed: Bool = true) async {
         guard signed, !signer.hasSignSecret() else { return }
-        _ = await signatureRefreshNotifier?.refreshSignature()
+        _ = await refreshSignature(force: false)
+    }
+
+    private func refreshSignature(force: Bool) async -> Bool {
+        guard force || !signer.hasSignSecret() else { return true }
+        return await signatureRefreshNotifier?.refreshSignature() ?? false
+    }
+
+    private func shouldRetrySignatureError(
+        response: HTTPURLResponse,
+        data: Data,
+        signed: Bool,
+        retryingSignatureError: Bool
+    ) -> Bool {
+        guard signed, retryingSignatureError, [400, 401, 403].contains(response.statusCode) else {
+            return false
+        }
+        let payload = try? decoder.decode(APIErrorPayload.self, from: data)
+        let message = (payload?.message ?? payload?.msg ?? String(data: data, encoding: .utf8) ?? "").lowercased()
+        return message.contains("签名")
+            || message.contains("signature")
+            || message.contains("x-signature")
+            || message.contains("timestamp")
+            || message.contains("nonce")
     }
 
     private static func makeRequestID() -> String {
