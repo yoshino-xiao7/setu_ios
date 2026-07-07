@@ -24,6 +24,7 @@ struct AccountView: View {
     @State private var authMessage: String?
     @State private var sessionMessage: String?
     @State private var sessionDiagnostics: MobileSessionDiagnostics?
+    @State private var lastSessionConfirmation: Bool?
     @State private var passkeyLoading = false
     @State private var authActionLoading = false
     @State private var sessionActionLoading = false
@@ -245,6 +246,7 @@ struct AccountView: View {
                     LabeledContent("SID Cookie", value: sessionDiagnostics.hasSIDCookie ? "存在" : "缺失")
                     LabeledContent("Cookie 数量", value: "\(sessionDiagnostics.cookieCount)")
                     LabeledContent("签名密钥", value: sessionDiagnostics.hasSignSecret ? "存在" : "缺失")
+                    LabeledContent("上次会话确认", value: sessionConfirmationText)
                 }
 
                 if let sessionMessage {
@@ -279,6 +281,7 @@ struct AccountView: View {
     }
 
     private func loginWithPassword() async {
+        lastSessionConfirmation = nil
         await environment.authSession.login(
             email: email,
             password: password,
@@ -287,16 +290,19 @@ struct AccountView: View {
         )
         updateSessionDiagnostics()
         if environment.authSession.currentUser == nil {
+            lastSessionConfirmation = false
             sessionMessage = "登录未建立有效会话，请查看下方状态"
             loginCaptcha.code = ""
             await refreshCaptcha(.login)
         } else {
+            lastSessionConfirmation = true
             sessionMessage = "登录成功，会话已确认"
         }
     }
 
     private func loginWithPasskey() async {
         passkeyLoading = true
+        lastSessionConfirmation = nil
         passkeyMessage = nil
         do {
             let options = try await environment.passkeyClient.beginAuthentication()
@@ -304,11 +310,13 @@ struct AccountView: View {
             let response = try await environment.passkeyClient.finishAuthentication(challengeID: options.challengeId, credential: credential)
             try await environment.authSession.acceptLoginResponse(response)
             updateSessionDiagnostics()
+            lastSessionConfirmation = true
             passkeyMessage = "通行密钥登录成功"
             sessionMessage = "登录成功，会话已确认"
         } catch {
             passkeyMessage = error.localizedDescription
             updateSessionDiagnostics()
+            lastSessionConfirmation = false
             sessionMessage = "通行密钥未建立有效会话，请查看下方状态"
         }
         passkeyLoading = false
@@ -383,15 +391,40 @@ struct AccountView: View {
         Cookie Count: \(diagnostics.cookieCount)
         Sign Secret: \(diagnostics.hasSignSecret ? "present" : "missing")
         Expire At: \(expireAtText)
+        Last Session Confirmation: \(sessionConfirmationSummary)
+        Last Auth Error: \(environment.authSession.lastError ?? "-")
         """
     }
 
     private func confirmCurrentSession() async {
         sessionActionLoading = true
         let confirmed = await environment.authSession.confirmAuthenticatedSession()
+        lastSessionConfirmation = confirmed
         updateSessionDiagnostics()
         sessionMessage = confirmed ? "当前会话有效" : "当前会话无效，请重新登录"
         sessionActionLoading = false
+    }
+
+    private var sessionConfirmationText: String {
+        switch lastSessionConfirmation {
+        case .some(true):
+            return "有效"
+        case .some(false):
+            return "无效"
+        case .none:
+            return "未确认"
+        }
+    }
+
+    private var sessionConfirmationSummary: String {
+        switch lastSessionConfirmation {
+        case .some(true):
+            return "valid"
+        case .some(false):
+            return "invalid"
+        case .none:
+            return "not checked"
+        }
     }
 
     private func refreshCaptchaIfNeeded(_ kind: AuthCaptchaKind) async {
