@@ -49,7 +49,7 @@ struct ImageHubView: View {
             Section {
                 HubHeroRow(
                     title: "随机图片",
-                    subtitle: "使用积分调用图片接口，上下或左右滑动获取新图片。",
+                    subtitle: "使用积分刷随机图片，上下或左右滑动获取新图片。",
                     systemImage: "photo.on.rectangle.angled",
                     tint: .pink
                 ) {
@@ -75,7 +75,7 @@ struct ImageHubView: View {
                 HubNavigationRow(title: "积分调用", subtitle: "配置 R18、尺寸、关键词、标签等参数", systemImage: "bolt.circle") {
                     router.navigate(to: .points)
                 }
-                HubNavigationRow(title: "积分流水", subtitle: "查看积分消耗和接口调用记录", systemImage: "list.bullet.rectangle") {
+                HubNavigationRow(title: "积分流水", subtitle: "查看积分获得和消耗记录", systemImage: "list.bullet.rectangle") {
                     router.navigate(to: .pointsLogs)
                 }
                 HubNavigationRow(title: "图库投稿", subtitle: "上传图片并查看投稿批次", systemImage: "square.and.arrow.up") {

@@ -32,6 +32,9 @@ struct RandomImageSwipeView: View {
 
             VStack(spacing: 12) {
                 statusStrip
+                if let message {
+                    messageStrip(message)
+                }
                 imageStage
                 actionBar
             }
@@ -50,7 +53,7 @@ struct RandomImageSwipeView: View {
                     Button {
                         router.navigate(to: .points)
                     } label: {
-                        Label("高级积分调用", systemImage: "bolt.circle")
+                        Label("详细参数调用", systemImage: "bolt.circle")
                     }
                     Button {
                         router.navigate(to: .pointsLogs)
@@ -87,7 +90,7 @@ struct RandomImageSwipeView: View {
         .task {
             await loadPoints()
             if currentImage == nil {
-                await loadNextImage(reason: "上滑、下滑或左右滑切换下一张")
+                await loadNextImage(reason: "上滑、下滑或左右滑继续刷图")
             }
         }
         .refreshable {
@@ -102,17 +105,25 @@ struct RandomImageSwipeView: View {
                 .frame(height: 18)
             Label("单次 \(costPerCall)", systemImage: "tag")
             Spacer()
-            Button {
-                Task { await loadNextImage(reason: "已刷新") }
-            } label: {
-                if case .loading = imageState {
-                    ProgressView()
-                } else {
-                    Label("下一张", systemImage: "arrow.triangle.2.circlepath")
-                        .labelStyle(.iconOnly)
-                }
+            if isLoadingImage {
+                ProgressView()
+            } else {
+                Label("滑动换图", systemImage: "hand.draw")
             }
-            .disabled(isLoadingImage || !canCall)
+        }
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func messageStrip(_ text: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: text.contains("失败") || text.contains("不足") ? "exclamationmark.triangle" : "hand.draw")
+            Text(text)
+                .lineLimit(2)
+            Spacer()
         }
         .font(.footnote)
         .foregroundStyle(.secondary)
@@ -173,7 +184,7 @@ struct RandomImageSwipeView: View {
                         let distance = max(abs(value.translation.width), abs(value.translation.height))
                         dragOffset = .zero
                         if distance > 70 {
-                            Task { await loadNextImage(reason: "已切换下一张") }
+                            Task { await loadNextImage(reason: "已切换下一张，继续滑动可以再换") }
                         }
                     }
             )
@@ -201,13 +212,12 @@ struct RandomImageSwipeView: View {
             .disabled(currentImage?.originalURLString == nil)
 
             Button {
-                Task { await loadNextImage(reason: "已切换下一张") }
+                showingParameters = true
             } label: {
-                Label("换一张", systemImage: "arrow.right.circle")
+                Label("参数", systemImage: "slider.horizontal.3")
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
-            .disabled(isLoadingImage || !canCall)
+            .buttonStyle(.bordered)
         }
         .controlSize(.large)
     }
@@ -235,7 +245,7 @@ struct RandomImageSwipeView: View {
             }
 
             HStack(spacing: 10) {
-                Label("\(item.pid)-\(item.page)", systemImage: "number")
+                Label("PID \(item.pid)-\(item.page)", systemImage: "number")
                 Label("\(item.width)x\(item.height)", systemImage: "aspectratio")
                 if let firstTag = item.tags?.first {
                     Label(firstTag, systemImage: "tag")
@@ -408,7 +418,7 @@ private struct RandomImageParameterSheet: View {
                 }
 
                 Section {
-                    Text("每次滑动会请求 1 张图片并消耗积分。高级收藏、删除申请和批量调用仍在“高级积分调用”里。")
+                    Text("每次滑动会获取 1 张图片并消耗积分。收藏、删除申请和批量获取仍在“详细参数调用”里。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }

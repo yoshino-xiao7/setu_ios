@@ -68,13 +68,13 @@ struct PointsCallView: View {
             case .loaded(let balance):
                 LabeledContent("当前积分", value: "\(balance.points)")
                 LabeledContent("单次消耗", value: "\(costPerCall)")
-                LabeledContent("本页结果", value: "\(results.count)")
+                LabeledContent("本次图片", value: "\(results.count)")
             }
         }
     }
 
     private var requestSection: some View {
-        Section("调用参数") {
+        Section("图片参数") {
             Picker("R18", selection: $r18) {
                 Text("非 R18").tag(0)
                 Text("R18").tag(1)
@@ -95,7 +95,7 @@ struct PointsCallView: View {
                 if calling {
                     ProgressView()
                 } else {
-                    Label("调用 /setu/v2", systemImage: "bolt.circle")
+                    Label("获取图片", systemImage: "photo.on.rectangle")
                 }
             }
             .disabled(calling || !canCall)
@@ -106,10 +106,10 @@ struct PointsCallView: View {
     private var resultsSection: some View {
         if results.isEmpty {
             Section {
-                ContentUnavailableView("暂无调用结果", systemImage: "photo.on.rectangle", description: Text("设置参数后调用 /setu/v2。"))
+                ContentUnavailableView("暂无图片", systemImage: "photo.on.rectangle", description: Text("设置参数后获取图片。"))
             }
         } else {
-            Section("调用结果") {
+            Section("获取结果") {
                 ForEach(results) { item in
                     PointsResultRow(item: item, isDefaultFavorited: defaultFavoriteIDs.contains(item.id)) {
                         favoriteTarget = item
@@ -162,7 +162,7 @@ struct PointsCallView: View {
             results = try await environment.pointsClient.callSetu(request: request)
             await loadDefaultFavoriteStatuses(for: results)
             await loadPoints()
-            message = results.isEmpty ? "返回为空：当前筛选条件没有匹配图片" : "成功返回 \(results.count) 张"
+            message = results.isEmpty ? "当前筛选条件没有匹配图片" : "已获取 \(results.count) 张图片"
         } catch {
             message = error.localizedDescription
             await loadPoints()
