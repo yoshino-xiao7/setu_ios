@@ -53,7 +53,7 @@ struct RandomImageSwipeView: View {
                     Button {
                         router.navigate(to: .points)
                     } label: {
-                        Label("详细参数调用", systemImage: "bolt.circle")
+                        Label("高级参数与批量获取", systemImage: "slider.horizontal.3")
                     }
                     Button {
                         router.navigate(to: .pointsLogs)
@@ -182,9 +182,11 @@ struct RandomImageSwipeView: View {
                     }
                     .onEnded { value in
                         let distance = max(abs(value.translation.width), abs(value.translation.height))
+                        let reason = swipeReason(for: value.translation)
                         dragOffset = .zero
                         if distance > 70 {
-                            Task { await loadNextImage(reason: "已切换下一张，继续滑动可以再换") }
+                            playSwipeFeedback()
+                            Task { await loadNextImage(reason: reason) }
                         }
                     }
             )
@@ -358,6 +360,19 @@ struct RandomImageSwipeView: View {
         UIApplication.shared.open(url)
         #endif
     }
+
+    private func swipeReason(for translation: CGSize) -> String {
+        if abs(translation.width) > abs(translation.height) {
+            return translation.width > 0 ? "已向右换图，继续滑动可以再刷" : "已向左换图，继续滑动可以再刷"
+        }
+        return translation.height > 0 ? "已向下换图，继续滑动可以再刷" : "已向上换图，继续滑动可以再刷"
+    }
+
+    private func playSwipeFeedback() {
+        #if os(iOS)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        #endif
+    }
 }
 
 private struct RandomImageCard: View {
@@ -418,7 +433,7 @@ private struct RandomImageParameterSheet: View {
                 }
 
                 Section {
-                    Text("每次滑动会获取 1 张图片并消耗积分。收藏、删除申请和批量获取仍在“详细参数调用”里。")
+                    Text("每次滑动会获取 1 张图片并消耗积分。收藏、删除申请和批量获取可以在“高级参数与批量获取”里处理。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
