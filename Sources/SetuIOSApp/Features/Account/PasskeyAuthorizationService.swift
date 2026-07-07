@@ -129,11 +129,11 @@ enum PasskeyAuthorizationError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingRelyingPartyID:
-            "Passkey RP ID 缺失，请检查后端 WebAuthn 配置。"
+            "通行密钥域名配置缺失，请稍后再试。"
         case .missingUser:
-            "Passkey 用户信息缺失。"
+            "通行密钥用户信息缺失。"
         case .invalidBase64URL:
-            "Passkey challenge 编码无效。"
+            "通行密钥验证信息无效。"
         case .unsupportedCredential:
             "系统返回了暂不支持的通行密钥凭据。"
         }

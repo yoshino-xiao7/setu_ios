@@ -15,7 +15,7 @@ struct PasskeyListView: View {
     var body: some View {
         List {
             Section {
-                Label("通行密钥可用于免密码登录。若开通失败，通常需要先完成应用域名和后端 WebAuthn 域名配置。", systemImage: "touchid")
+                Label("通行密钥可用于免密码登录。若开通失败，通常需要先完成应用域名配置。", systemImage: "touchid")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

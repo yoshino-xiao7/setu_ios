@@ -110,7 +110,7 @@ struct AccountView: View {
                 }
             }
 
-            if environment.authSession.currentUser != nil {
+            if environment.authSession.currentUser?.role == .admin {
                 Section("故障排查") {
                     DisclosureGroup("会话与登录状态") {
                         Button("刷新签名密钥") {
@@ -341,7 +341,7 @@ struct AccountView: View {
             }
 
             Section("重置密码") {
-                TextField("邮件 Token", text: $resetToken)
+                TextField("邮件重置码", text: $resetToken)
                     .modifier(EmailInputModifier())
                 SecureField("新密码", text: $resetPassword)
                     .textContentType(.newPassword)
@@ -380,12 +380,12 @@ struct AccountView: View {
         updateSessionDiagnostics()
         if environment.authSession.currentUser == nil {
             lastSessionConfirmation = false
-            authMessage = "登录未建立有效会话，请重试"
+            authMessage = "登录失败，请重试"
             loginCaptcha.code = ""
             await refreshCaptcha(.login)
         } else {
             lastSessionConfirmation = true
-            sessionMessage = "登录成功，会话已确认"
+            sessionMessage = "登录成功"
         }
     }
 
@@ -401,12 +401,12 @@ struct AccountView: View {
             updateSessionDiagnostics()
             lastSessionConfirmation = true
             passkeyMessage = "通行密钥登录成功"
-            sessionMessage = "登录成功，会话已确认"
+            sessionMessage = "登录成功"
         } catch {
             passkeyMessage = error.localizedDescription
             updateSessionDiagnostics()
             lastSessionConfirmation = false
-            sessionMessage = "通行密钥未建立有效会话"
+            sessionMessage = "通行密钥登录失败，请重试"
         }
         passkeyLoading = false
     }
@@ -441,7 +441,7 @@ struct AccountView: View {
             captchaUuid: recoveryCaptcha.uuid
         )
         if success {
-            authMessage = "重置邮件已发送，请打开邮件获取 Token"
+            authMessage = "重置邮件已发送，请打开邮件获取重置码"
         }
         recoveryCaptcha.code = ""
         await refreshCaptcha(.recovery)
@@ -492,7 +492,7 @@ struct AccountView: View {
         let confirmed = await environment.authSession.confirmAuthenticatedSession()
         lastSessionConfirmation = confirmed
         updateSessionDiagnostics()
-        sessionMessage = confirmed ? "当前会话有效" : "当前会话无效，请重新登录"
+        sessionMessage = confirmed ? "当前登录状态有效" : "当前登录状态无效，请重新登录"
         sessionActionLoading = false
     }
 
@@ -594,8 +594,8 @@ private struct AccountProfileCard: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
-                    if let lastLoginIp = user.lastLoginIp, !lastLoginIp.isEmpty {
-                        Text("最近登录 \(lastLoginIp)")
+                    if user.lastLoginIp?.isEmpty == false {
+                        Text("最近登录已记录")
                             .font(.caption)
                             .foregroundStyle(.tertiary)
                             .lineLimit(1)

@@ -45,8 +45,8 @@ struct ProfileView: View {
                     LabeledContent("用户 ID", value: "\(profile.id)")
                     LabeledContent("角色", value: profile.role == .admin ? "管理员" : "用户")
                     LabeledContent("注册时间", value: profile.createdAt)
-                    if let lastLoginIp = profile.lastLoginIp, !lastLoginIp.isEmpty {
-                        LabeledContent("最近登录 IP", value: lastLoginIp)
+                    if profile.lastLoginIp?.isEmpty == false {
+                        LabeledContent("最近登录", value: "已记录")
                     }
                 }
 
