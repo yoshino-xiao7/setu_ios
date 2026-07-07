@@ -170,11 +170,11 @@ struct MusicHistoryView: View {
     }
 
     private func play(_ record: MusicHistoryRecord, queueTracks: [MusicPlaybackTrack] = []) async {
-        message = "正在获取播放地址"
+        message = "正在准备播放"
         do {
             let response = try await environment.musicClient.url(songID: record.songId)
             guard let item = response.data?.first, let urlString = item.playableURLString, let url = URL(string: urlString) else {
-                message = response.data?.first?.unavailableMessage ?? response.playabilityReason ?? response.message ?? "暂无可播放地址"
+                message = response.data?.first?.unavailableMessage ?? response.playabilityReason ?? response.message ?? "这首歌暂时无法播放"
                 return
             }
             player.play(url: url, track: MusicPlaybackTrack(record: record), queueName: "播放历史", queueTracks: queueTracks)

@@ -26,6 +26,7 @@ struct MusicMiniPlayerBar: View {
                         Text(queueCaption)
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
+                            .lineLimit(1)
                     }
 
                     Spacer()
@@ -38,15 +39,6 @@ struct MusicMiniPlayerBar: View {
                     }
                     .buttonStyle(.borderless)
                     .accessibilityLabel(player.isPlaying ? "暂停" : "播放")
-
-                    Button {
-                        player.stop()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .frame(width: 28, height: 34)
-                    }
-                    .buttonStyle(.borderless)
-                    .accessibilityLabel("停止播放")
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
@@ -71,12 +63,12 @@ struct MusicMiniPlayerBar: View {
     }
 
     private var queueCaption: String {
-        let name = player.queueName ?? "当前歌单"
+        let name = player.queueName ?? "当前队列"
         let count = player.queueTracks.count
         if count > 1 {
             return "\(name) · \(count) 首"
         }
-        return "\(name) · 正在播放"
+        return name
     }
 }
 
@@ -288,11 +280,11 @@ private struct MusicNowPlayingDetailView: View {
     }
 
     private func play(_ track: MusicPlaybackTrack) async {
-        queueMessage = "正在切换歌曲"
+        queueMessage = "正在准备播放"
         do {
             let response = try await environment.musicClient.url(songID: track.id, level: "standard")
             guard let item = response.data?.first, let urlString = item.playableURLString, let url = URL(string: urlString) else {
-                queueMessage = response.data?.first?.unavailableMessage ?? response.playabilityReason ?? response.message ?? "暂无可播放地址"
+                queueMessage = response.data?.first?.unavailableMessage ?? response.playabilityReason ?? response.message ?? "这首歌暂时无法播放"
                 return
             }
             player.play(url: url, track: track, queueName: player.queueName, queueTracks: player.queueTracks)

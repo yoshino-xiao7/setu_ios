@@ -41,15 +41,18 @@ struct MusicHomeView: View {
                 }
             }
 
-            Section("搜索") {
+            Section("搜索音乐") {
                 TextField("歌曲、歌手或专辑", text: $query)
                     .modifier(MusicSearchInputModifier())
                     .onSubmit {
                         Task { await search() }
                     }
-                Button("搜索音乐") {
+                Button {
                     Task { await search() }
+                } label: {
+                    Label("搜索音乐", systemImage: "magnifyingglass")
                 }
+                .buttonStyle(.borderedProminent)
                 .disabled(query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
 
@@ -418,11 +421,11 @@ struct MusicHomeView: View {
     }
 
     private func play(_ song: MusicSong, queueName: String? = nil, queueTracks: [MusicPlaybackTrack] = []) async {
-        playbackMessage = "正在获取播放地址"
+        playbackMessage = "正在准备播放"
         do {
             let response = try await environment.musicClient.url(songID: song.id, level: "standard")
             guard let item = response.data?.first, let urlString = item.playableURLString, let url = URL(string: urlString) else {
-                playbackMessage = response.data?.first?.unavailableMessage ?? response.playabilityReason ?? response.message ?? "暂无可播放地址"
+                playbackMessage = response.data?.first?.unavailableMessage ?? response.playabilityReason ?? response.message ?? "这首歌暂时无法播放"
                 return
             }
             player.play(url: url, track: MusicPlaybackTrack(song: song), queueName: queueName, queueTracks: queueTracks)
@@ -585,11 +588,11 @@ private struct RecommendedPlaylistSheet: View {
     }
 
     private func play(_ song: MusicSong, queueTracks: [MusicPlaybackTrack] = []) async {
-        message = "正在获取播放地址"
+        message = "正在准备播放"
         do {
             let response = try await environment.musicClient.url(songID: song.id, level: "standard")
             guard let item = response.data?.first, let urlString = item.playableURLString, let url = URL(string: urlString) else {
-                message = response.data?.first?.unavailableMessage ?? response.playabilityReason ?? response.message ?? "暂无可播放地址"
+                message = response.data?.first?.unavailableMessage ?? response.playabilityReason ?? response.message ?? "这首歌暂时无法播放"
                 return
             }
             player.play(url: url, track: MusicPlaybackTrack(song: song), queueName: playlist.name, queueTracks: queueTracks)
@@ -832,11 +835,11 @@ private struct MusicPlaybackSheet: View {
                 Section("歌曲") {
                     MusicSongRow(song: song)
                     Picker("音质", selection: $quality) {
-                        Text("standard").tag("standard")
-                        Text("higher").tag("higher")
-                        Text("exhigh").tag("exhigh")
-                        Text("lossless").tag("lossless")
-                        Text("hires").tag("hires")
+                        Text("标准").tag("standard")
+                        Text("较高").tag("higher")
+                        Text("极高").tag("exhigh")
+                        Text("无损").tag("lossless")
+                        Text("Hi-Res").tag("hires")
                     }
                     .onChange(of: quality) {
                         Task { await loadPlayback() }
@@ -871,10 +874,10 @@ private struct MusicPlaybackSheet: View {
 
     @ViewBuilder
     private var playbackSection: some View {
-        Section("播放地址") {
+        Section("播放链接") {
             switch urlState {
             case .idle, .loading:
-                ProgressView("正在获取播放地址")
+                ProgressView("正在准备播放链接")
             case .failed(let message):
                 Text(message)
                     .foregroundStyle(.red)
@@ -888,7 +891,7 @@ private struct MusicPlaybackSheet: View {
                         LabeledContent("大小", value: "\(size)")
                     }
                     Link(destination: url) {
-                        Label("打开播放地址", systemImage: "arrow.up.forward.square")
+                        Label("打开播放链接", systemImage: "arrow.up.forward.square")
                     }
                     Button {
                         Task { await recordHistory() }
@@ -900,7 +903,7 @@ private struct MusicPlaybackSheet: View {
                     Text(item.unavailableMessage)
                         .foregroundStyle(.secondary)
                 } else {
-                    ContentUnavailableView("暂无播放地址", systemImage: "music.note")
+                    ContentUnavailableView("这首歌暂时无法播放", systemImage: "music.note")
                 }
             }
         }
@@ -1052,10 +1055,10 @@ private struct MusicMvSheet: View {
 
     @ViewBuilder
     private var urlSection: some View {
-        Section("播放地址") {
+        Section("MV 播放链接") {
             switch urlState {
             case .idle, .loading:
-                ProgressView("正在获取 MV 地址")
+                ProgressView("正在准备 MV 播放链接")
             case .failed(let message):
                 Text(message)
                     .foregroundStyle(.red)
@@ -1071,10 +1074,10 @@ private struct MusicMvSheet: View {
                         LabeledContent("类型", value: type)
                     }
                     Link(destination: url) {
-                        Label("打开 MV 播放地址", systemImage: "arrow.up.forward.square")
+                        Label("打开 MV 播放链接", systemImage: "arrow.up.forward.square")
                     }
                 } else {
-                    ContentUnavailableView("暂无 MV 地址", systemImage: "play.rectangle")
+                    ContentUnavailableView("暂无 MV 播放链接", systemImage: "play.rectangle")
                 }
             }
         }
