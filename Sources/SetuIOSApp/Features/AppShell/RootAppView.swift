@@ -69,8 +69,6 @@ struct RootAppView: View {
     @ViewBuilder
     private func destination(for route: AppRoute) -> some View {
         switch route {
-        case .feature(let featureID):
-            featureDestination(featureID)
         case .profile:
             ProfileView(environment: environment)
         case .apiKeys:
@@ -173,84 +171,6 @@ struct RootAppView: View {
             AdminPixivCrawlView(environment: environment)
         case .adminPixivTask(let id):
             AdminPixivTaskDetailView(environment: environment, taskID: id)
-        case .adminAiGenerations:
-            AdminAiGenerationsView(environment: environment)
-        case .adminAiWorkers:
-            AdminAiWorkersView(environment: environment)
-        case .adminAiReviews:
-            AdminAiReviewsView(environment: environment)
-        case .adminAiDeleteRequests:
-            AdminAiDeleteRequestsView(environment: environment)
-        }
-    }
-
-    @ViewBuilder
-    private func featureDestination(_ featureID: AppFeatureID) -> some View {
-        switch featureID {
-        case .dashboard:
-            DashboardView(environment: environment)
-        case .profile:
-            ProfileView(environment: environment)
-        case .apiKeys:
-            ApiKeyListView(environment: environment)
-        case .collections:
-            CollectionListView(environment: environment)
-        case .aiHistory:
-            AiHistoryView(environment: environment)
-        case .aiSquare:
-            AiSquareView(environment: environment)
-        case .aiDraw:
-            AiDrawView(environment: environment)
-        case .aiAssets:
-            AiAssetBrowserView(environment: environment)
-        case .collectionSquare:
-            CollectionSquareView(environment: environment)
-        case .galleryUpload:
-            GalleryUploadBatchesView(environment: environment)
-        case .qqBinding:
-            QqBindingView(environment: environment)
-        case .docs:
-            StaticInfoView(environment: environment, kind: .docs)
-        case .about:
-            StaticInfoView(environment: environment, kind: .about)
-        case .privacy:
-            StaticInfoView(environment: environment, kind: .privacy)
-        case .deleteRequests:
-            ImageDeleteRequestsView(environment: environment)
-        case .pointsLogs:
-            PointsLogsView(environment: environment)
-        case .points:
-            PointsCallView(environment: environment)
-        case .notifications:
-            NotificationsView(environment: environment)
-        case .systemStatus:
-            SystemStatusView(environment: environment)
-        case .musicPlayer:
-            MusicHomeView(environment: environment, player: musicPlayer)
-        case .playlists:
-            MusicPlaylistsView(environment: environment)
-        case .musicHistory:
-            MusicHistoryView(environment: environment, player: musicPlayer)
-        case .adminOverview:
-            AdminOverviewView(environment: environment)
-        case .adminUsers:
-            AdminUsersView(environment: environment)
-        case .adminBlacklist:
-            AdminBlacklistView(environment: environment)
-        case .adminSystemStatus:
-            SystemStatusView(environment: environment, title: "系统监控")
-        case .adminMusicTokens:
-            AdminMusicTokensView(environment: environment)
-        case .adminImageDeleteRequests:
-            AdminImageDeleteRequestsView(environment: environment)
-        case .adminImageAudit:
-            AdminImageAuditView(environment: environment)
-        case .adminGallerySubmissions:
-            AdminGallerySubmissionsView(environment: environment)
-        case .adminOperationLogs:
-            AdminOperationLogsView(environment: environment)
-        case .adminPixivCrawl:
-            AdminPixivCrawlView(environment: environment)
         case .adminAiGenerations:
             AdminAiGenerationsView(environment: environment)
         case .adminAiWorkers:

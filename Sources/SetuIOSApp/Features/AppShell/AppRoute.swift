@@ -2,7 +2,6 @@ import SetuIOSCore
 import SwiftUI
 
 enum AppRoute: Hashable {
-    case feature(AppFeatureID)
     case profile
     case apiKeys
     case docs
