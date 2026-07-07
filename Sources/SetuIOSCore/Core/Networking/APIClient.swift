@@ -69,10 +69,11 @@ public struct APIClient: Sendable {
     public func post<Request: Encodable & Sendable, Value: Decodable & Sendable>(
         _ path: String,
         body: Request,
-        signed: Bool = true
+        signed: Bool = true,
+        headers: [String: String] = [:]
     ) async throws -> Value {
         let data = try encoder.encode(body)
-        return try await request(path, method: "POST", body: data, signed: signed)
+        return try await request(path, method: "POST", body: data, signed: signed, headers: headers)
     }
 
     public func post<Value: Decodable & Sendable>(_ path: String, signed: Bool = true) async throws -> Value {
@@ -194,6 +195,7 @@ public struct APIClient: Sendable {
         method: String,
         body: Data?,
         signed: Bool,
+        headers: [String: String] = [:],
         retryingSignatureError: Bool = true
     ) async throws -> Value {
         guard let url = URL(string: path, relativeTo: config.apiBaseURL) else {
@@ -211,6 +213,9 @@ public struct APIClient: Sendable {
         if body != nil {
             urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
+        for (name, value) in headers where !value.isEmpty {
+            urlRequest.setValue(value, forHTTPHeaderField: name)
+        }
         if signed {
             let headers = try signer.signedHeaders(method: method, path: url.path)
             for (name, value) in headers {
@@ -224,7 +229,7 @@ public struct APIClient: Sendable {
         }
         if shouldRetrySignatureError(response: httpResponse, data: data, signed: signed, retryingSignatureError: retryingSignatureError),
            await refreshSignature(force: true) {
-            return try await request(path, method: method, body: body, signed: signed, retryingSignatureError: false)
+            return try await request(path, method: method, body: body, signed: signed, headers: headers, retryingSignatureError: false)
         }
         if httpResponse.statusCode == 401 {
             await sessionInvalidationNotifier?.notifyUnauthorized()

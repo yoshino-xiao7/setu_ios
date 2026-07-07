@@ -16,7 +16,8 @@ public struct GalleryUploadClient: Sendable {
     }
 
     public func createBatch(_ request: GalleryUploadInitRequest) async throws -> GalleryUploadInitResponse {
-        try await apiClient.post("/gallery/uploads/batches", body: request)
+        let headers = request.clientRequestId.map { ["Idempotency-Key": $0] } ?? [:]
+        return try await apiClient.post("/gallery/uploads/batches", body: request, headers: headers)
     }
 
     public func updateItemStatus(batchID: Int, clientItemID: String, request: GalleryUploadItemStatusRequest) async throws -> GalleryUploadItem {
