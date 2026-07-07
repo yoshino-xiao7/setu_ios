@@ -27,6 +27,46 @@ final class FavoriteClientTests: XCTestCase {
         XCTAssertEqual(url, "https://api.example.com/favorite/exists/123/2")
     }
 
+    func testListAcceptsWrappedListPayload() async throws {
+        let capturedRequest = FavoriteClientRequestProbe()
+        let session = URLSession(
+            configuration: .favoriteClientMock { request in
+                Task {
+                    await capturedRequest.capture(request)
+                }
+                return """
+                {
+                  "code": 200,
+                  "data": {
+                    "page": 1,
+                    "pageSize": 24,
+                    "total": 1,
+                    "list": [
+                      {
+                        "favoriteId": 9,
+                        "imageId": 10,
+                        "pid": 123,
+                        "p": 2,
+                        "favoritedAt": "2026-07-07T13:40:00Z",
+                        "image": null
+                      }
+                    ]
+                  }
+                }
+                """
+            }
+        )
+        let client = FavoriteClient(apiClient: makeAPIClient(session: session))
+
+        let page = try await client.list(page: 1, size: 24)
+
+        XCTAssertEqual(page.total, 1)
+        XCTAssertEqual(page.items.first?.pid, 123)
+        XCTAssertEqual(page.size, 24)
+        let url = await capturedRequest.lastURL
+        XCTAssertEqual(url, "https://api.example.com/favorite/list?page=1&size=24")
+    }
+
     private func makeAPIClient(session: URLSession) -> APIClient {
         let keychain = FavoriteClientTestKeychain()
         try? keychain.setString("secret", for: "signSecret")
