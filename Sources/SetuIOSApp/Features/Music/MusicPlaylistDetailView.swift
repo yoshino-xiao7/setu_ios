@@ -10,6 +10,9 @@ struct MusicPlaylistDetailView: View {
     @State private var selectedMode = "sequence"
     @State private var player = MusicPlaybackController()
     @State private var editingPlaylist: UserMusicPlaylistDetail?
+    @State private var showingDeleteConfirmation = false
+    @State private var songPendingRemoval: PlaylistSong?
+    @State private var showingRemoveConfirmation = false
 
     var body: some View {
         List {
@@ -71,7 +74,8 @@ struct MusicPlaylistDetailView: View {
                             PlaylistSongRow(song: song) {
                                 Task { await play(song) }
                             } onRemove: {
-                                Task { await remove(song) }
+                                songPendingRemoval = song
+                                showingRemoveConfirmation = true
                             }
                         }
                     }
@@ -89,7 +93,7 @@ struct MusicPlaylistDetailView: View {
                     }
                 }
                 Button(role: .destructive) {
-                    Task { await deletePlaylist() }
+                    showingDeleteConfirmation = true
                 } label: {
                     Label("删除歌单", systemImage: "trash")
                 }
@@ -101,6 +105,24 @@ struct MusicPlaylistDetailView: View {
             EditMusicPlaylistSheet(environment: environment, playlist: playlist) {
                 Task { await load() }
             }
+        }
+        .confirmationDialog("删除这个歌单？", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) {
+            Button("删除歌单", role: .destructive) {
+                Task { await deletePlaylist() }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("删除后歌单中的歌曲关系会被移除，此操作不可恢复。")
+        }
+        .confirmationDialog("移除这首歌？", isPresented: $showingRemoveConfirmation, titleVisibility: .visible) {
+            Button("移除歌曲", role: .destructive) {
+                if let song = songPendingRemoval {
+                    Task { await remove(song) }
+                }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("确定从歌单中移除《\(songPendingRemoval?.songName ?? "这首歌")》吗？")
         }
         .task { await load() }
         .refreshable { await load() }
