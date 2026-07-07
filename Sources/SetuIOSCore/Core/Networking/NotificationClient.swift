@@ -17,10 +17,10 @@ public struct NotificationClient: Sendable {
     }
 
     public func markRead(id: Int) async throws {
-        let _: [String: String] = try await apiClient.post("/notifications/\(id)/read")
+        let _: String = try await apiClient.post("/notifications/\(id)/read")
     }
 
     public func markAllRead() async throws {
-        let _: [String: String] = try await apiClient.post("/notifications/read-all")
+        let _: String = try await apiClient.post("/notifications/read-all")
     }
 }

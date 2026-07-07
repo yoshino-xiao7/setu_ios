@@ -90,6 +90,19 @@ public struct ImageCountResponse: Decodable, Sendable {
 
 public struct UnreadNotificationCount: Decodable, Sendable {
     public let count: Int
+
+    public init(from decoder: Decoder) throws {
+        if let value = try? Int(from: decoder) {
+            count = value
+            return
+        }
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        count = try container.decodeIfPresent(Int.self, forKey: .count) ?? 0
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case count
+    }
 }
 
 public struct HomeDashboardSnapshot: Sendable {
