@@ -48,6 +48,7 @@ targets:
         INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: false
         ASSETCATALOG_COMPILER_APPICON_NAME: ""
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: ""
+        CODE_SIGN_ENTITLEMENTS: SetuIOSApp.entitlements
 
   SetuIOSAppTests:
     type: bundle.unit-test
