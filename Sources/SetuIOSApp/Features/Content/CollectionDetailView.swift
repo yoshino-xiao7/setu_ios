@@ -11,6 +11,7 @@ struct CollectionDetailView: View {
     @State private var actionMessage: String?
     @State private var editor: CollectionEditorContext?
     @State private var moveContext: CollectionItemMoveContext?
+    @State private var previewItem: CollectionImagePreviewItem?
     @State private var showingDeleteConfirmation = false
     @State private var page = 1
     private let pageSize = 24
@@ -47,6 +48,8 @@ struct CollectionDetailView: View {
                     Section("共 \(page.total) 张") {
                         ForEach(page.items) { item in
                             CollectionItemRow(item: item) {
+                                previewItem = CollectionImagePreviewItem(item: item)
+                            } onSetCover: {
                                 Task { await setCover(item) }
                             } onMove: {
                                 moveContext = CollectionItemMoveContext(currentCollectionID: collectionID, item: item)
@@ -87,6 +90,9 @@ struct CollectionDetailView: View {
                 actionMessage = mode.completionMessage
                 Task { await load() }
             }
+        }
+        .sheet(item: $previewItem) { item in
+            CollectionImagePreviewSheet(item: item)
         }
         .confirmationDialog("删除这个收藏夹？", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) {
             Button("删除收藏夹", role: .destructive) {
@@ -289,6 +295,7 @@ struct CollectionDetailView: View {
 
 private struct CollectionItemRow: View {
     let item: CollectionItem
+    let onPreview: () -> Void
     let onSetCover: () -> Void
     let onMove: () -> Void
     let onRemove: () -> Void
@@ -313,6 +320,14 @@ private struct CollectionItemRow: View {
                 .foregroundStyle(.secondary)
             }
             Spacer()
+            Button {
+                onPreview()
+            } label: {
+                Image(systemName: "eye")
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("查看图片")
+
             Menu {
                 Button(action: onSetCover) {
                     Label("设为封面", systemImage: "photo.badge.checkmark")
@@ -365,6 +380,111 @@ private enum CollectionItemMoveMode: String, CaseIterable, Identifiable {
         switch self {
         case .move: "已移动到目标收藏夹"
         case .copy: "已复制到目标收藏夹"
+        }
+    }
+}
+
+struct CollectionImagePreviewItem: Identifiable {
+    let item: CollectionItem
+
+    var id: Int { item.id }
+
+    var image: FavoriteImage? { item.image }
+
+    var title: String {
+        image?.title ?? "PID \(item.pid)"
+    }
+
+    var author: String {
+        image?.author ?? "未知作者"
+    }
+
+    var bestURLString: String? {
+        image?.urlOriginal ?? image?.urlRegular ?? image?.urlSmall
+    }
+
+    var displayURLString: String? {
+        image?.urlRegular ?? image?.urlSmall ?? image?.urlOriginal
+    }
+}
+
+struct CollectionImagePreviewSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let item: CollectionImagePreviewItem
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    imageStage
+                    metadata
+                }
+                .padding()
+            }
+            .navigationTitle("图片预览")
+            .toolbar {
+                Button("关闭") {
+                    dismiss()
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var imageStage: some View {
+        if let urlString = item.bestURLString, let url = URL(string: urlString) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFit()
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                case .failure:
+                    ContentUnavailableView("图片加载失败", systemImage: "photo", description: Text("可以返回列表稍后再试。"))
+                        .frame(maxWidth: .infinity, minHeight: 320)
+                default:
+                    ProgressView("正在加载图片")
+                        .frame(maxWidth: .infinity, minHeight: 320)
+                }
+            }
+        } else {
+            ContentUnavailableView("暂无图片链接", systemImage: "photo")
+                .frame(maxWidth: .infinity, minHeight: 320)
+        }
+    }
+
+    private var metadata: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(item.title)
+                .font(.headline)
+                .textSelection(.enabled)
+            Text(item.author)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            HStack(spacing: 10) {
+                Label("\(item.item.pid)-\(item.item.p)", systemImage: "number")
+                if let image = item.image {
+                    Label("\(image.width)x\(image.height)", systemImage: "aspectratio")
+                    if image.r18 == 1 {
+                        Label("R18", systemImage: "exclamationmark.triangle")
+                            .foregroundStyle(.red)
+                    }
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+            if let tags = item.image?.tags, !tags.isEmpty {
+                TagFlow(tags: tags)
+            }
+
+            if let urlString = item.displayURLString {
+                Text(urlString)
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
         }
     }
 }

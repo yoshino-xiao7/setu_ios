@@ -9,6 +9,7 @@ struct PublicCollectionDetailView: View {
     @State private var infoState: LoadState<CollectionInfo> = .idle
     @State private var itemsState: LoadState<CollectionItemPage> = .idle
     @State private var actionMessage: String?
+    @State private var previewItem: CollectionImagePreviewItem?
     @State private var page = 1
     private let pageSize = 24
 
@@ -43,7 +44,9 @@ struct PublicCollectionDetailView: View {
                 } else {
                     Section("共 \(page.total) 张") {
                         ForEach(page.items) { item in
-                            PublicCollectionImageRow(item: item)
+                            PublicCollectionImageRow(item: item) {
+                                previewItem = CollectionImagePreviewItem(item: item)
+                            }
                         }
                     }
                     pagerSection(page)
@@ -51,6 +54,9 @@ struct PublicCollectionDetailView: View {
             }
         }
         .navigationTitle(title)
+        .sheet(item: $previewItem) { item in
+            CollectionImagePreviewSheet(item: item)
+        }
         .task { await load() }
         .refreshable { await load() }
     }
@@ -208,6 +214,7 @@ struct PublicCollectionDetailView: View {
 
 private struct PublicCollectionImageRow: View {
     let item: CollectionItem
+    let onPreview: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
@@ -228,10 +235,13 @@ private struct PublicCollectionImageRow: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-                if let urlString = item.image?.urlOriginal, let url = URL(string: urlString) {
-                    Link(destination: url) {
-                        Label("打开原图", systemImage: "arrow.up.forward.square")
+                if item.image != nil {
+                    Button {
+                        onPreview()
+                    } label: {
+                        Label("查看图片", systemImage: "eye")
                     }
+                    .buttonStyle(.borderless)
                     .font(.footnote)
                 }
             }
