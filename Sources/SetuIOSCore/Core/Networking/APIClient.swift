@@ -165,7 +165,9 @@ public struct APIClient: Sendable {
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.invalidResponse
         }
-        if shouldRetrySignatureError(response: httpResponse, data: data, signed: signed, retryingSignatureError: retryingSignatureError),
+        let signatureError = isSignatureErrorResponse(response: httpResponse, data: data, signed: signed)
+        if retryingSignatureError,
+           signatureError,
            await refreshSignature(force: true) {
             return try await postMultipart(
                 path,
@@ -177,7 +179,7 @@ public struct APIClient: Sendable {
                 retryingSignatureError: false
             )
         }
-        if httpResponse.statusCode == 401 {
+        if httpResponse.statusCode == 401 || signatureError {
             await sessionInvalidationNotifier?.notifyUnauthorized()
         }
         guard (200..<300).contains(httpResponse.statusCode) else {
@@ -227,11 +229,13 @@ public struct APIClient: Sendable {
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.invalidResponse
         }
-        if shouldRetrySignatureError(response: httpResponse, data: data, signed: signed, retryingSignatureError: retryingSignatureError),
+        let signatureError = isSignatureErrorResponse(response: httpResponse, data: data, signed: signed)
+        if retryingSignatureError,
+           signatureError,
            await refreshSignature(force: true) {
             return try await request(path, method: method, body: body, signed: signed, headers: headers, retryingSignatureError: false)
         }
-        if httpResponse.statusCode == 401 {
+        if httpResponse.statusCode == 401 || signatureError {
             await sessionInvalidationNotifier?.notifyUnauthorized()
         }
         guard (200..<300).contains(httpResponse.statusCode) else {
@@ -262,13 +266,12 @@ public struct APIClient: Sendable {
         return await signatureRefreshNotifier?.refreshSignature() ?? false
     }
 
-    private func shouldRetrySignatureError(
+    private func isSignatureErrorResponse(
         response: HTTPURLResponse,
         data: Data,
-        signed: Bool,
-        retryingSignatureError: Bool
+        signed: Bool
     ) -> Bool {
-        guard signed, retryingSignatureError, [400, 401, 403].contains(response.statusCode) else {
+        guard signed, [400, 401, 403].contains(response.statusCode) else {
             return false
         }
         let payload = try? decoder.decode(APIErrorPayload.self, from: data)

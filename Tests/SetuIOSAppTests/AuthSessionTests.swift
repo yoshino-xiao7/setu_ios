@@ -370,6 +370,77 @@ final class APIClientUnauthorizedTests: XCTestCase {
         XCTAssertFalse(wasInvalidated)
     }
 
+    func testSignedRequestInvalidatesWhenSignatureErrorCannotRefresh() async throws {
+        let keychain = InMemoryKeychain()
+        try keychain.setString("stale-secret", for: "signSecret")
+        let invalidated = InvalidationProbe()
+        let invalidationNotifier = SessionInvalidationNotifier()
+        invalidationNotifier.setHandler {
+            await invalidated.markInvalidated()
+        }
+        let refreshNotifier = SignatureRefreshNotifier()
+        refreshNotifier.setHandler {
+            false
+        }
+        let session = URLSession(configuration: .mock(statusCode: 403, body: #"{"msg":"signature invalid"}"#))
+        let client = APIClient(
+            config: AppConfig(apiBaseURL: URL(string: "https://api.example.com")!, siteBaseURL: URL(string: "https://example.com")!),
+            signer: AuthSigner(keychain: keychain),
+            session: session,
+            sessionInvalidationNotifier: invalidationNotifier,
+            signatureRefreshNotifier: refreshNotifier
+        )
+
+        do {
+            let _: EmptyResponse = try await client.get("/user/info")
+            XCTFail("Expected HTTP 403")
+        } catch APIError.httpStatus(403, _, _, _) {
+            let wasInvalidated = await invalidated.wasInvalidated
+            XCTAssertTrue(wasInvalidated)
+        }
+    }
+
+    func testSignedRequestInvalidatesWhenRetriedSignatureErrorStillFails() async throws {
+        let keychain = InMemoryKeychain()
+        try keychain.setString("stale-secret", for: "signSecret")
+        let capturedRequests = RequestListProbe()
+        let invalidated = InvalidationProbe()
+        let invalidationNotifier = SessionInvalidationNotifier()
+        invalidationNotifier.setHandler {
+            await invalidated.markInvalidated()
+        }
+        let refreshNotifier = SignatureRefreshNotifier()
+        refreshNotifier.setHandler {
+            try? keychain.setString("fresh-secret", for: "signSecret")
+            return true
+        }
+        let session = URLSession(
+            configuration: .mock { request in
+                Task {
+                    await capturedRequests.capture(request)
+                }
+                return MockHTTPResponse(statusCode: 403, body: #"{"msg":"signature invalid"}"#)
+            }
+        )
+        let client = APIClient(
+            config: AppConfig(apiBaseURL: URL(string: "https://api.example.com")!, siteBaseURL: URL(string: "https://example.com")!),
+            signer: AuthSigner(keychain: keychain),
+            session: session,
+            sessionInvalidationNotifier: invalidationNotifier,
+            signatureRefreshNotifier: refreshNotifier
+        )
+
+        do {
+            let _: EmptyResponse = try await client.get("/user/info")
+            XCTFail("Expected HTTP 403")
+        } catch APIError.httpStatus(403, _, _, _) {
+            let requests = await capturedRequests.requests
+            let wasInvalidated = await invalidated.wasInvalidated
+            XCTAssertEqual(requests.count, 2)
+            XCTAssertTrue(wasInvalidated)
+        }
+    }
+
     func testMultipartRequestRefreshesAndRetriesSignatureErrorBeforeInvalidating() async throws {
         let keychain = InMemoryKeychain()
         try keychain.setString("stale-secret", for: "signSecret")
@@ -419,6 +490,53 @@ final class APIClientUnauthorizedTests: XCTestCase {
         XCTAssertEqual(response.avatarUrl, "https://example.com/avatar.jpg")
         XCTAssertEqual(requests.count, 2)
         XCTAssertFalse(wasInvalidated)
+    }
+
+    func testMultipartRequestInvalidatesWhenRetriedSignatureErrorStillFails() async throws {
+        let keychain = InMemoryKeychain()
+        try keychain.setString("stale-secret", for: "signSecret")
+        let capturedRequests = RequestListProbe()
+        let invalidated = InvalidationProbe()
+        let invalidationNotifier = SessionInvalidationNotifier()
+        invalidationNotifier.setHandler {
+            await invalidated.markInvalidated()
+        }
+        let refreshNotifier = SignatureRefreshNotifier()
+        refreshNotifier.setHandler {
+            try? keychain.setString("fresh-secret", for: "signSecret")
+            return true
+        }
+        let session = URLSession(
+            configuration: .mock { request in
+                Task {
+                    await capturedRequests.capture(request)
+                }
+                return MockHTTPResponse(statusCode: 403, body: #"{"msg":"signature invalid"}"#)
+            }
+        )
+        let client = APIClient(
+            config: AppConfig(apiBaseURL: URL(string: "https://api.example.com")!, siteBaseURL: URL(string: "https://example.com")!),
+            signer: AuthSigner(keychain: keychain),
+            session: session,
+            sessionInvalidationNotifier: invalidationNotifier,
+            signatureRefreshNotifier: refreshNotifier
+        )
+
+        do {
+            let _: AvatarUploadResponse = try await client.postMultipart(
+                "/user/profile/avatar-file",
+                fileFieldName: "file",
+                fileName: "avatar.jpg",
+                mimeType: "image/jpeg",
+                fileData: Data([1, 2, 3])
+            )
+            XCTFail("Expected HTTP 403")
+        } catch APIError.httpStatus(403, _, _, _) {
+            let requests = await capturedRequests.requests
+            let wasInvalidated = await invalidated.wasInvalidated
+            XCTAssertEqual(requests.count, 2)
+            XCTAssertTrue(wasInvalidated)
+        }
     }
 
     func testUnauthorizedResponseNotifiesSessionInvalidation() async throws {
