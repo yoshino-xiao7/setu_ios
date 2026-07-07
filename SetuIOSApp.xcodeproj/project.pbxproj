@@ -122,6 +122,7 @@
 		FA305A7FED3CD3AEC2419BD0 /* AdminPixivCrawlView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D65CD600EB96DA067D349D7E /* AdminPixivCrawlView.swift */; };
 		FAD73840F6FAC39D66876740 /* SystemStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA263C6C60D6DAEBF1EDADA9 /* SystemStatusView.swift */; };
 		FE273EC908BFB74560257D20 /* AdminAiDeleteRequestsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5680B80541513C9C12C1AFE6 /* AdminAiDeleteRequestsView.swift */; };
+		FE8F985BC5B5468B948B20AF /* RandomImageSwipeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE8F985AC5B5468B948B20AF /* RandomImageSwipeView.swift */; };
 		FE9C4A87206A4E6CA7B2E9F1 /* UserHubViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE9C4A86206A4E6CA7B2E9F1 /* UserHubViews.swift */; };
 /* End PBXBuildFile section */
 
@@ -282,6 +283,7 @@
 		F5571DEF047E80A570FB6399 /* ApiKeyClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApiKeyClient.swift; sourceTree = "<group>"; };
 		FC249EC7818524E6348F12D7 /* DashboardClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardClientTests.swift; sourceTree = "<group>"; };
 		FE7793E13316490662E8AD8D /* QqBindingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QqBindingView.swift; sourceTree = "<group>"; };
+		FE8F985AC5B5468B948B20AF /* RandomImageSwipeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RandomImageSwipeView.swift; sourceTree = "<group>"; };
 		FE9C4A86206A4E6CA7B2E9F1 /* UserHubViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserHubViews.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -598,6 +600,7 @@
 				CF20EAE938A450CBFCD46498 /* ApiKeyListView.swift */,
 				4C9935B26CB39A7E5A026D96 /* PointsCallView.swift */,
 				285FABC7318C6DEEE5674CBB /* PointsLogsView.swift */,
+				FE8F985AC5B5468B948B20AF /* RandomImageSwipeView.swift */,
 			);
 			path = Developer;
 			sourceTree = "<group>";
@@ -776,6 +779,7 @@
 				D0C6A35A484C88DDF595CAB0 /* PlatformClipboard.swift in Sources */,
 				7264A31F1345C8A9CB32EA38 /* PointsCallView.swift in Sources */,
 				499EB97431BB3667A1AA50D0 /* PointsLogsView.swift in Sources */,
+				FE8F985BC5B5468B948B20AF /* RandomImageSwipeView.swift in Sources */,
 				D6D6F047A83C75D0488FF28C /* ProfileView.swift in Sources */,
 				A8FBD1E6E6F162E9A46ADAFD /* PublicCollectionDetailView.swift in Sources */,
 				EFC3522C424986B25369E387 /* PublicUserProfileView.swift in Sources */,
