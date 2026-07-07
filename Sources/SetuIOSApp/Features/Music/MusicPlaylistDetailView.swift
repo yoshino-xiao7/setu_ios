@@ -272,7 +272,7 @@ private struct EditMusicPlaylistSheet: View {
                 Section("歌单信息") {
                     TextField("名称", text: $name)
                     TextField("描述", text: $description, axis: .vertical)
-                    TextField("封面 URL", text: $coverUrl)
+                    TextField("封面图片地址", text: $coverUrl)
                     Toggle("公开歌单", isOn: $isPublic)
                 }
                 if let message {
