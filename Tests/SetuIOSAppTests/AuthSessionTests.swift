@@ -258,6 +258,31 @@ final class APIClientUnauthorizedTests: XCTestCase {
             XCTAssertEqual(traceID, "trace-123")
         }
     }
+
+    func testHTTPStatusErrorUsesTraceIDHeader() async throws {
+        let keychain = InMemoryKeychain()
+        let session = URLSession(
+            configuration: .mock { _ in
+                MockHTTPResponse(
+                    statusCode: 401,
+                    body: #"{"message":"Unauthorized"}"#,
+                    headers: ["X-Trace-Id": "header-trace-456"]
+                )
+            }
+        )
+        let client = APIClient(
+            config: AppConfig(apiBaseURL: URL(string: "https://api.example.com")!, siteBaseURL: URL(string: "https://example.com")!),
+            signer: AuthSigner(keychain: keychain),
+            session: session
+        )
+
+        do {
+            let _: EmptyResponse = try await client.get("/user/info", signed: false)
+            XCTFail("Expected HTTP 401")
+        } catch APIError.httpStatus(401, _, _, let traceID) {
+            XCTAssertEqual(traceID, "header-trace-456")
+        }
+    }
 }
 
 private actor RequestProbe {
@@ -320,7 +345,7 @@ private final class MockURLProtocol: URLProtocol {
             url: request.url!,
             statusCode: result.statusCode,
             httpVersion: nil,
-            headerFields: ["Content-Type": "application/json"]
+            headerFields: ["Content-Type": "application/json"].merging(result.headers) { _, value in value }
         )!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: result.body)
@@ -333,15 +358,18 @@ private final class MockURLProtocol: URLProtocol {
 private struct MockHTTPResponse {
     let statusCode: Int
     let body: Data
+    let headers: [String: String]
 
-    init(statusCode: Int, body: String) {
+    init(statusCode: Int, body: String, headers: [String: String] = [:]) {
         self.statusCode = statusCode
         self.body = Data(body.utf8)
+        self.headers = headers
     }
 
-    init(statusCode: Int, body: Data) {
+    init(statusCode: Int, body: Data, headers: [String: String] = [:]) {
         self.statusCode = statusCode
         self.body = body
+        self.headers = headers
     }
 }
 

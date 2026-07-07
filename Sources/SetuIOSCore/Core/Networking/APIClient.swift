@@ -137,7 +137,7 @@ public struct APIClient: Sendable {
             await sessionInvalidationNotifier?.notifyUnauthorized()
         }
         guard (200..<300).contains(httpResponse.statusCode) else {
-            throw makeHTTPStatusError(status: httpResponse.statusCode, data: data, requestID: requestID)
+            throw makeHTTPStatusError(response: httpResponse, data: data, requestID: requestID)
         }
 
         if let envelope = try? decoder.decode(APIEnvelope<Value>.self, from: data), let value = envelope.data {
@@ -181,7 +181,7 @@ public struct APIClient: Sendable {
             await sessionInvalidationNotifier?.notifyUnauthorized()
         }
         guard (200..<300).contains(httpResponse.statusCode) else {
-            throw makeHTTPStatusError(status: httpResponse.statusCode, data: data, requestID: requestID)
+            throw makeHTTPStatusError(response: httpResponse, data: data, requestID: requestID)
         }
 
         if Value.self == EmptyResponse.self {
@@ -202,11 +202,15 @@ public struct APIClient: Sendable {
         UUID().uuidString.lowercased()
     }
 
-    private func makeHTTPStatusError(status: Int, data: Data, requestID: String) -> APIError {
+    private func makeHTTPStatusError(response: HTTPURLResponse, data: Data, requestID: String) -> APIError {
         let payload = try? decoder.decode(APIErrorPayload.self, from: data)
         let message = payload?.message ?? payload?.msg
-        let traceID = payload?.traceId ?? payload?.traceID ?? payload?.trace_id
-        return .httpStatus(status, message: message, requestID: requestID, traceID: traceID)
+        let traceID = response.headerValue(named: "X-Trace-Id")
+            ?? response.headerValue(named: "Trace-Id")
+            ?? payload?.traceId
+            ?? payload?.traceID
+            ?? payload?.trace_id
+        return .httpStatus(response.statusCode, message: message, requestID: requestID, traceID: traceID)
     }
 }
 
@@ -265,6 +269,18 @@ private struct APIErrorPayload: Decodable {
     let traceId: String?
     let traceID: String?
     let trace_id: String?
+}
+
+private extension HTTPURLResponse {
+    func headerValue(named name: String) -> String? {
+        let value = allHeaderFields.first { key, _ in
+            guard let key = key as? String else {
+                return false
+            }
+            return key.caseInsensitiveCompare(name) == .orderedSame
+        }?.value
+        return value as? String
+    }
 }
 
 private extension Data {
