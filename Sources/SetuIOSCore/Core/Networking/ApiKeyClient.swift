@@ -8,7 +8,8 @@ public struct ApiKeyClient: Sendable {
     }
 
     public func list() async throws -> [ApiKeyItem] {
-        try await apiClient.get("/api-key/list")
+        let response: ApiKeyListResponse = try await apiClient.get("/api-key/list")
+        return response.items
     }
 
     public func create(name: String, dailyQuota: Int = 1000, totalQuota: Int? = nil) async throws -> String {

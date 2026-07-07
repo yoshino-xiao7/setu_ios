@@ -15,6 +15,34 @@ public struct ApiKeyItem: Decodable, Identifiable, Sendable {
     }
 }
 
+public struct ApiKeyListResponse: Decodable, Sendable {
+    public let items: [ApiKeyItem]
+
+    public init(from decoder: Decoder) throws {
+        if let array = try? [ApiKeyItem](from: decoder) {
+            items = array
+            return
+        }
+
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        for key in CodingKeys.allCases {
+            if let values = try container.decodeIfPresent([ApiKeyItem].self, forKey: key) {
+                items = values
+                return
+            }
+        }
+        items = []
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case list
+        case items
+        case records
+        case rows
+        case content
+    }
+}
+
 public struct ApiKeyCreateRequest: Encodable, Sendable {
     public let name: String
     public let dailyQuota: Int
