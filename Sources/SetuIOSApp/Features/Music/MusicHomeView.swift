@@ -8,6 +8,7 @@ import UIKit
 struct MusicHomeView: View {
     @Environment(RouterPath.self) private var router
     @Bindable var environment: AppEnvironment
+    @Bindable var player: MusicPlaybackController
     @State private var query = ""
     @State private var hotState: LoadState<[MusicHotSearchItem]> = .idle
     @State private var recommendedPlaylistState: LoadState<[MusicRecommendedPlaylist]> = .idle
@@ -15,10 +16,8 @@ struct MusicHomeView: View {
     @State private var dailySongsState: LoadState<[MusicSong]> = .idle
     @State private var searchState: LoadState<MusicSearchResultState> = .idle
     @State private var selectedSong: MusicSong?
-    @State private var playbackSong: MusicSong?
     @State private var mvSong: MusicSong?
     @State private var selectedRecommendedPlaylist: MusicRecommendedPlaylist?
-    @State private var player = MusicPlaybackController()
     @State private var playbackMessage: String?
     @State private var searchPage = 1
     @State private var searchKeyword = ""
@@ -64,14 +63,11 @@ struct MusicHomeView: View {
         .sheet(item: $selectedSong) { song in
             AddSongToPlaylistSheet(environment: environment, song: song)
         }
-        .sheet(item: $playbackSong) { song in
-            MusicPlaybackSheet(environment: environment, song: song)
-        }
         .sheet(item: $mvSong) { song in
             MusicMvSheet(environment: environment, song: song)
         }
         .sheet(item: $selectedRecommendedPlaylist) { playlist in
-            RecommendedPlaylistSheet(environment: environment, playlist: playlist)
+            RecommendedPlaylistSheet(environment: environment, player: player, playlist: playlist)
         }
         .task { await loadLandingContent() }
         .refreshable { await loadLandingContent() }
@@ -128,7 +124,7 @@ struct MusicHomeView: View {
                 } else {
                     ForEach(result.songs) { song in
                         MusicSongRow(song: song) {
-                            Task { await play(song) }
+                            Task { await play(song, queueName: "搜索结果") }
                         } onPlayMv: {
                             mvSong = song
                         } onAddToPlaylist: {
@@ -248,7 +244,7 @@ struct MusicHomeView: View {
                 } else {
                     ForEach(songs.prefix(5)) { song in
                         MusicSongRow(song: song) {
-                            Task { await play(song) }
+                            Task { await play(song, queueName: "推荐新歌") }
                         } onPlayMv: {
                             mvSong = song
                         } onAddToPlaylist: {
@@ -274,7 +270,7 @@ struct MusicHomeView: View {
                 } else {
                     ForEach(songs.prefix(5)) { song in
                         MusicSongRow(song: song) {
-                            Task { await play(song) }
+                            Task { await play(song, queueName: "每日推荐") }
                         } onPlayMv: {
                             mvSong = song
                         } onAddToPlaylist: {
@@ -401,7 +397,7 @@ struct MusicHomeView: View {
         MusicSearchHistoryStore.clear()
     }
 
-    private func play(_ song: MusicSong) async {
+    private func play(_ song: MusicSong, queueName: String? = nil) async {
         playbackMessage = "正在获取播放地址"
         do {
             let response = try await environment.musicClient.url(songID: song.id, level: "standard")
@@ -409,7 +405,7 @@ struct MusicHomeView: View {
                 playbackMessage = response.data?.first?.unavailableMessage ?? response.playabilityReason ?? response.message ?? "暂无可播放地址"
                 return
             }
-            player.play(url: url, track: MusicPlaybackTrack(song: song))
+            player.play(url: url, track: MusicPlaybackTrack(song: song), queueName: queueName)
             try? await environment.musicClient.addHistory(song: song)
             playbackMessage = "已开始播放"
         } catch {
@@ -491,18 +487,27 @@ private struct RecommendedPlaylistRow: View {
 private struct RecommendedPlaylistSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var environment: AppEnvironment
+    @Bindable var player: MusicPlaybackController
     let playlist: MusicRecommendedPlaylist
 
     @State private var state: LoadState<[MusicSong]> = .idle
     @State private var selectedSong: MusicSong?
-    @State private var playbackSong: MusicSong?
     @State private var mvSong: MusicSong?
+    @State private var message: String?
 
     var body: some View {
         NavigationStack {
             List {
                 Section("歌单") {
                     RecommendedPlaylistRow(playlist: playlist)
+                }
+
+                if let message {
+                    Section {
+                        Text(message)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 switch state {
@@ -517,7 +522,7 @@ private struct RecommendedPlaylistSheet: View {
                         Section("歌曲") {
                             ForEach(songs) { song in
                                 MusicSongRow(song: song) {
-                                    playbackSong = song
+                                    Task { await play(song) }
                                 } onPlayMv: {
                                     mvSong = song
                                 } onAddToPlaylist: {
@@ -537,9 +542,6 @@ private struct RecommendedPlaylistSheet: View {
             .sheet(item: $selectedSong) { song in
                 AddSongToPlaylistSheet(environment: environment, song: song)
             }
-            .sheet(item: $playbackSong) { song in
-                MusicPlaybackSheet(environment: environment, song: song)
-            }
             .sheet(item: $mvSong) { song in
                 MusicMvSheet(environment: environment, song: song)
             }
@@ -554,6 +556,22 @@ private struct RecommendedPlaylistSheet: View {
             state = .loaded(try await environment.musicClient.playlistTracks(id: playlist.id).songs)
         } catch {
             state = .failed(error.localizedDescription)
+        }
+    }
+
+    private func play(_ song: MusicSong) async {
+        message = "正在获取播放地址"
+        do {
+            let response = try await environment.musicClient.url(songID: song.id, level: "standard")
+            guard let item = response.data?.first, let urlString = item.playableURLString, let url = URL(string: urlString) else {
+                message = response.data?.first?.unavailableMessage ?? response.playabilityReason ?? response.message ?? "暂无可播放地址"
+                return
+            }
+            player.play(url: url, track: MusicPlaybackTrack(song: song), queueName: playlist.name)
+            try? await environment.musicClient.addHistory(song: song)
+            message = "已开始播放《\(playlist.name)》"
+        } catch {
+            message = error.localizedDescription
         }
     }
 }

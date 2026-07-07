@@ -4,11 +4,11 @@ import SwiftUI
 struct MusicPlaylistDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var environment: AppEnvironment
+    @Bindable var player: MusicPlaybackController
     let playlistID: Int
     @State private var state: LoadState<UserMusicPlaylistDetail> = .idle
     @State private var message: String?
     @State private var selectedMode = "sequence"
-    @State private var player = MusicPlaybackController()
     @State private var editingPlaylist: UserMusicPlaylistDetail?
     @State private var showingDeleteConfirmation = false
     @State private var songPendingRemoval: PlaylistSong?
@@ -80,7 +80,7 @@ struct MusicPlaylistDetailView: View {
                     } else {
                         ForEach(songs) { song in
                             PlaylistSongRow(song: song) {
-                                Task { await play(song) }
+                                Task { await play(song, queueName: playlist.name) }
                             } onRemove: {
                                 songPendingRemoval = song
                                 showingRemoveConfirmation = true
@@ -208,13 +208,13 @@ struct MusicPlaylistDetailView: View {
         }
         let firstSong = selectedMode == "random" ? songs.randomElement() ?? songs[0] : songs[0]
         try? await environment.musicClient.recordPlaylistPlay(id: playlistID)
-        await play(firstSong)
+        await play(firstSong, queueName: playlist.name)
         if message == "已开始播放" {
             message = "开始播放《\(playlist.name)》"
         }
     }
 
-    private func play(_ song: PlaylistSong) async {
+    private func play(_ song: PlaylistSong, queueName: String? = nil) async {
         message = "正在获取播放地址"
         do {
             let response = try await environment.musicClient.url(songID: song.songId)
@@ -222,7 +222,7 @@ struct MusicPlaylistDetailView: View {
                 message = response.data?.first?.unavailableMessage ?? response.playabilityReason ?? response.message ?? "暂无可播放地址"
                 return
             }
-            player.play(url: url, track: MusicPlaybackTrack(song: song))
+            player.play(url: url, track: MusicPlaybackTrack(song: song), queueName: queueName)
             message = "已开始播放"
         } catch {
             message = error.localizedDescription

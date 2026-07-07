@@ -3,12 +3,12 @@ import SwiftUI
 
 struct MusicHistoryView: View {
     @Bindable var environment: AppEnvironment
+    @Bindable var player: MusicPlaybackController
     @State private var state: LoadState<[MusicHistoryRecord]> = .idle
     @State private var count: Int?
     @State private var message: String?
     @State private var page = 1
     @State private var pageSize = 20
-    @State private var player = MusicPlaybackController()
     @State private var selectedSong: MusicSong?
     @State private var showingClearConfirmation = false
 
@@ -172,7 +172,7 @@ struct MusicHistoryView: View {
                 message = response.data?.first?.unavailableMessage ?? response.playabilityReason ?? response.message ?? "暂无可播放地址"
                 return
             }
-            player.play(url: url, track: MusicPlaybackTrack(record: record))
+            player.play(url: url, track: MusicPlaybackTrack(record: record), queueName: "播放历史")
             try? await environment.musicClient.addHistory(song: record.song)
             message = "已开始播放"
         } catch {

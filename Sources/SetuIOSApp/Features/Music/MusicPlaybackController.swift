@@ -11,6 +11,7 @@ import MediaPlayer
 @Observable
 final class MusicPlaybackController {
     private(set) var currentTrack: MusicPlaybackTrack?
+    private(set) var queueName: String?
     private(set) var isPlaying = false
     private(set) var message: String?
 
@@ -24,7 +25,7 @@ final class MusicPlaybackController {
         }
     }
 
-    func play(url: URL, track: MusicPlaybackTrack) {
+    func play(url: URL, track: MusicPlaybackTrack, queueName: String? = nil) {
         configureAudioSession()
         configureRemoteCommands()
         removeTimeObserver()
@@ -33,6 +34,7 @@ final class MusicPlaybackController {
         let nextPlayer = AVPlayer(playerItem: item)
         player = nextPlayer
         currentTrack = track
+        self.queueName = queueName
         isPlaying = true
         message = "正在播放 \(track.title)"
         addTimeObserver()
@@ -63,6 +65,7 @@ final class MusicPlaybackController {
         player?.pause()
         player = nil
         currentTrack = nil
+        queueName = nil
         isPlaying = false
         message = nil
         removeTimeObserver()

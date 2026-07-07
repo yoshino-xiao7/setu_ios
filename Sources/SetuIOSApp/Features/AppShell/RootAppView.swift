@@ -6,6 +6,7 @@ struct RootAppView: View {
     @State private var selectedTab: AppTab = .home
     @State private var tabRouter = TabRouter()
     @State private var loggedOutRouter = RouterPath()
+    @State private var musicPlayer = MusicPlaybackController()
 
     var body: some View {
         Group {
@@ -41,6 +42,9 @@ struct RootAppView: View {
                 .tag(tab)
             }
         }
+        .safeAreaInset(edge: .bottom) {
+            MusicMiniPlayerBar(environment: environment, player: musicPlayer)
+        }
     }
 
     @ViewBuilder
@@ -53,7 +57,7 @@ struct RootAppView: View {
         case .images:
             RandomImageSwipeView(environment: environment)
         case .music:
-            MusicHomeView(environment: environment)
+            MusicHomeView(environment: environment, player: musicPlayer)
         case .square:
             SquareHubView(environment: environment)
         case .settings:
@@ -119,11 +123,11 @@ struct RootAppView: View {
         case .aiSquare:
             AiSquareView(environment: environment)
         case .musicHistory:
-            MusicHistoryView(environment: environment)
+            MusicHistoryView(environment: environment, player: musicPlayer)
         case .playlists:
             MusicPlaylistsView(environment: environment)
         case .playlistDetail(let id):
-            MusicPlaylistDetailView(environment: environment, playlistID: id)
+            MusicPlaylistDetailView(environment: environment, player: musicPlayer, playlistID: id)
         case .admin:
             AdminOverviewView(environment: environment)
         case .adminUsers:
@@ -211,11 +215,11 @@ struct RootAppView: View {
         case .systemStatus:
             SystemStatusView(environment: environment)
         case .musicPlayer:
-            MusicHomeView(environment: environment)
+            MusicHomeView(environment: environment, player: musicPlayer)
         case .playlists:
             MusicPlaylistsView(environment: environment)
         case .musicHistory:
-            MusicHistoryView(environment: environment)
+            MusicHistoryView(environment: environment, player: musicPlayer)
         case .adminOverview:
             AdminOverviewView(environment: environment)
         case .adminUsers:

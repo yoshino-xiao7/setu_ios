@@ -36,6 +36,7 @@
 		40A01F59C55EA319E3D470A0 /* MusicPlaylistDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BE9E4DDC8AE1829202E1009 /* MusicPlaylistDetailView.swift */; };
 		44CEB24F612AF9D7953A7B57 /* AdminImageInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C599E30B49EEEABA0F352C3A /* AdminImageInfoView.swift */; };
 		46017994CF8F0412079F46E6 /* MusicHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9D3419CDE37B276AEA2AEA2 /* MusicHomeView.swift */; };
+		4A3D7F52B91D4C3F9B32A211 /* MusicMiniPlayerBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A3D7F51B91D4C3F9B32A211 /* MusicMiniPlayerBar.swift */; };
 		499EB97431BB3667A1AA50D0 /* PointsLogsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 285FABC7318C6DEEE5674CBB /* PointsLogsView.swift */; };
 		4A48EFDD4C9435A34F64A498 /* AuthSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54F876E231DF90AD8D414563 /* AuthSession.swift */; };
 		4DEBA835FE429435E15B7480 /* MobileAppClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9ECF9EB7B7BC37A568A019CF /* MobileAppClient.swift */; };
@@ -206,6 +207,7 @@
 		400D9D9174E73EC18E5C5BFF /* AdminBlacklistView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminBlacklistView.swift; sourceTree = "<group>"; };
 		458F606A0F9777C1977BC071 /* CollectionSquareView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollectionSquareView.swift; sourceTree = "<group>"; };
 		4C9935B26CB39A7E5A026D96 /* PointsCallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PointsCallView.swift; sourceTree = "<group>"; };
+		4A3D7F51B91D4C3F9B32A211 /* MusicMiniPlayerBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicMiniPlayerBar.swift; sourceTree = "<group>"; };
 		52AED993536ACA1B072496B2 /* MusicPlaybackController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicPlaybackController.swift; sourceTree = "<group>"; };
 		5354C77E5F6C663CB30DFA73 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		545F27D69810BEB14D1827D3 /* FavoriteClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoriteClientTests.swift; sourceTree = "<group>"; };
@@ -487,6 +489,7 @@
 				18FB40DF075613E294994B82 /* AppRoute.swift */,
 				6DBD3799BD34CC0A909F89EB /* FeatureDetailView.swift */,
 				6EF3C4622B5092D865537A36 /* FeatureMapView.swift */,
+				4A3D7F51B91D4C3F9B32A211 /* MusicMiniPlayerBar.swift */,
 				9EE2B37F69E3C40990952658 /* RootAppView.swift */,
 				FE9C4A86206A4E6CA7B2E9F1 /* UserHubViews.swift */,
 			);
@@ -769,6 +772,7 @@
 				5B092B4B557A62CDBF38B360 /* ImageDeleteRequestsView.swift in Sources */,
 				F65DEEB755FCBE86203CC7FC /* MusicHistoryView.swift in Sources */,
 				46017994CF8F0412079F46E6 /* MusicHomeView.swift in Sources */,
+				4A3D7F52B91D4C3F9B32A211 /* MusicMiniPlayerBar.swift in Sources */,
 				E939663B52B19F07660A8FFB /* MusicPlaybackController.swift in Sources */,
 				40A01F59C55EA319E3D470A0 /* MusicPlaylistDetailView.swift in Sources */,
 				779E1C676A01686AE36F5985 /* MusicPlaylistsView.swift in Sources */,
@@ -956,6 +960,7 @@
 				DEVELOPMENT_TEAM = 7G6J4S76PN;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_UIBackgroundModes = audio;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
@@ -1095,6 +1100,7 @@
 				DEVELOPMENT_TEAM = 7G6J4S76PN;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_UIBackgroundModes = audio;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
