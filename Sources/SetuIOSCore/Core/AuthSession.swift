@@ -23,6 +23,10 @@ public final class AuthSession {
         currentUser != nil
     }
 
+    public func fetchCaptcha() async throws -> CaptchaResponse {
+        try await apiClient.get("/auth/captcha", signed: false)
+    }
+
     public func login(email: String, password: String, captchaCode: String, captchaUuid: String) async {
         lastError = nil
         do {

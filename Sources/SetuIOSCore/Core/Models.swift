@@ -73,6 +73,11 @@ public struct ResetPasswordRequest: Encodable, Sendable {
     }
 }
 
+public struct CaptchaResponse: Decodable, Sendable {
+    public let uuid: String
+    public let img: String
+}
+
 public struct LoginResponse: Decodable, Sendable {
     public let token: String?
     public let role: UserRole

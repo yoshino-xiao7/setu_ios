@@ -1,20 +1,22 @@
 import SetuIOSCore
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 struct AccountView: View {
     @Environment(RouterPath.self) private var router
     @Bindable var environment: AppEnvironment
     @State private var email = ""
     @State private var password = ""
-    @State private var captchaCode = ""
-    @State private var captchaUuid = ""
+    @State private var loginCaptcha = AuthCaptchaState()
     @State private var registerEmail = ""
     @State private var registerPassword = ""
-    @State private var registerCaptchaCode = ""
-    @State private var registerCaptchaUuid = ""
+    @State private var registerCaptcha = AuthCaptchaState()
     @State private var recoveryEmail = ""
-    @State private var recoveryCaptchaCode = ""
-    @State private var recoveryCaptchaUuid = ""
+    @State private var recoveryCaptcha = AuthCaptchaState()
     @State private var resetToken = ""
     @State private var resetPassword = ""
     @State private var passkeyService = PasskeyAuthorizationService()
@@ -77,19 +79,18 @@ struct AccountView: View {
                         .modifier(EmailInputModifier())
                     SecureField("密码", text: $password)
                         .textContentType(.password)
-                    TextField("验证码", text: $captchaCode)
-                    TextField("验证码 UUID", text: $captchaUuid)
-                    Button("登录") {
-                        Task {
-                            await environment.authSession.login(
-                                email: email,
-                                password: password,
-                                captchaCode: captchaCode,
-                                captchaUuid: captchaUuid
-                            )
-                        }
+                    CaptchaInputRow(
+                        code: $loginCaptcha.code,
+                        imageSource: loginCaptcha.imageSource,
+                        isLoading: loginCaptcha.isLoading,
+                        errorMessage: loginCaptcha.errorMessage
+                    ) {
+                        Task { await refreshCaptcha(.login) }
                     }
-                    .disabled(email.isEmpty || password.isEmpty || captchaCode.isEmpty || captchaUuid.isEmpty)
+                    Button("登录") {
+                        Task { await loginWithPassword() }
+                    }
+                    .disabled(email.isEmpty || password.isEmpty || loginCaptcha.code.isEmpty || loginCaptcha.uuid.isEmpty)
                     Button {
                         Task { await loginWithPasskey() }
                     } label: {
@@ -118,8 +119,14 @@ struct AccountView: View {
                         .modifier(EmailInputModifier())
                     SecureField("密码", text: $registerPassword)
                         .textContentType(.newPassword)
-                    TextField("验证码", text: $registerCaptchaCode)
-                    TextField("验证码 UUID", text: $registerCaptchaUuid)
+                    CaptchaInputRow(
+                        code: $registerCaptcha.code,
+                        imageSource: registerCaptcha.imageSource,
+                        isLoading: registerCaptcha.isLoading,
+                        errorMessage: registerCaptcha.errorMessage
+                    ) {
+                        Task { await refreshCaptcha(.register) }
+                    }
                     Button {
                         Task { await registerAccount() }
                     } label: {
@@ -129,15 +136,21 @@ struct AccountView: View {
                             Label("注册", systemImage: "person.badge.plus")
                         }
                     }
-                    .disabled(authActionLoading || registerEmail.isEmpty || registerPassword.isEmpty || registerCaptchaCode.isEmpty || registerCaptchaUuid.isEmpty)
+                    .disabled(authActionLoading || registerEmail.isEmpty || registerPassword.isEmpty || registerCaptcha.code.isEmpty || registerCaptcha.uuid.isEmpty)
                 }
 
                 Section("找回密码") {
                     TextField("邮箱", text: $recoveryEmail)
                         .textContentType(.emailAddress)
                         .modifier(EmailInputModifier())
-                    TextField("验证码", text: $recoveryCaptchaCode)
-                    TextField("验证码 UUID", text: $recoveryCaptchaUuid)
+                    CaptchaInputRow(
+                        code: $recoveryCaptcha.code,
+                        imageSource: recoveryCaptcha.imageSource,
+                        isLoading: recoveryCaptcha.isLoading,
+                        errorMessage: recoveryCaptcha.errorMessage
+                    ) {
+                        Task { await refreshCaptcha(.recovery) }
+                    }
                     Button {
                         Task { await sendPasswordRecoveryEmail() }
                     } label: {
@@ -147,7 +160,7 @@ struct AccountView: View {
                             Label("发送重置邮件", systemImage: "envelope")
                         }
                     }
-                    .disabled(authActionLoading || recoveryEmail.isEmpty || recoveryCaptchaCode.isEmpty || recoveryCaptchaUuid.isEmpty)
+                    .disabled(authActionLoading || recoveryEmail.isEmpty || recoveryCaptcha.code.isEmpty || recoveryCaptcha.uuid.isEmpty)
                 }
 
                 Section("重置密码") {
@@ -204,6 +217,24 @@ struct AccountView: View {
             }
         }
         .navigationTitle("我的")
+        .task {
+            if environment.authSession.currentUser == nil {
+                await refreshCaptchaIfNeeded(.login)
+            }
+        }
+    }
+
+    private func loginWithPassword() async {
+        await environment.authSession.login(
+            email: email,
+            password: password,
+            captchaCode: loginCaptcha.code,
+            captchaUuid: loginCaptcha.uuid
+        )
+        if environment.authSession.currentUser == nil {
+            loginCaptcha.code = ""
+            await refreshCaptcha(.login)
+        }
     }
 
     private func loginWithPasskey() async {
@@ -227,17 +258,17 @@ struct AccountView: View {
         let success = await environment.authSession.register(
             email: registerEmail,
             password: registerPassword,
-            captchaCode: registerCaptchaCode,
-            captchaUuid: registerCaptchaUuid
+            captchaCode: registerCaptcha.code,
+            captchaUuid: registerCaptcha.uuid
         )
         if success {
             authMessage = "注册成功，可以使用新账号登录"
             email = registerEmail
             password = registerPassword
             registerPassword = ""
-            registerCaptchaCode = ""
-            registerCaptchaUuid = ""
         }
+        registerCaptcha.code = ""
+        await refreshCaptcha(.register)
         authActionLoading = false
     }
 
@@ -246,14 +277,14 @@ struct AccountView: View {
         authMessage = nil
         let success = await environment.authSession.forgotPassword(
             email: recoveryEmail,
-            captchaCode: recoveryCaptchaCode,
-            captchaUuid: recoveryCaptchaUuid
+            captchaCode: recoveryCaptcha.code,
+            captchaUuid: recoveryCaptcha.uuid
         )
         if success {
             authMessage = "重置邮件已发送，请打开邮件获取 Token"
-            recoveryCaptchaCode = ""
-            recoveryCaptchaUuid = ""
         }
+        recoveryCaptcha.code = ""
+        await refreshCaptcha(.recovery)
         authActionLoading = false
     }
 
@@ -268,6 +299,57 @@ struct AccountView: View {
         }
         authActionLoading = false
     }
+
+    private func refreshCaptchaIfNeeded(_ kind: AuthCaptchaKind) async {
+        if captchaState(for: kind).uuid.isEmpty {
+            await refreshCaptcha(kind)
+        }
+    }
+
+    private func refreshCaptcha(_ kind: AuthCaptchaKind) async {
+        updateCaptcha(kind) { state in
+            state.isLoading = true
+            state.errorMessage = nil
+        }
+        do {
+            let captcha = try await environment.authSession.fetchCaptcha()
+            updateCaptcha(kind) { state in
+                state.uuid = captcha.uuid
+                state.imageSource = captcha.img
+                state.isLoading = false
+                state.errorMessage = nil
+            }
+        } catch {
+            updateCaptcha(kind) { state in
+                state.uuid = ""
+                state.imageSource = nil
+                state.isLoading = false
+                state.errorMessage = "验证码加载失败"
+            }
+        }
+    }
+
+    private func captchaState(for kind: AuthCaptchaKind) -> AuthCaptchaState {
+        switch kind {
+        case .login:
+            loginCaptcha
+        case .register:
+            registerCaptcha
+        case .recovery:
+            recoveryCaptcha
+        }
+    }
+
+    private func updateCaptcha(_ kind: AuthCaptchaKind, mutate: (inout AuthCaptchaState) -> Void) {
+        switch kind {
+        case .login:
+            mutate(&loginCaptcha)
+        case .register:
+            mutate(&registerCaptcha)
+        case .recovery:
+            mutate(&recoveryCaptcha)
+        }
+    }
 }
 
 private struct EmailInputModifier: ViewModifier {
@@ -281,3 +363,100 @@ private struct EmailInputModifier: ViewModifier {
         #endif
     }
 }
+
+private enum AuthCaptchaKind {
+    case login
+    case register
+    case recovery
+}
+
+private struct AuthCaptchaState {
+    var code = ""
+    var uuid = ""
+    var imageSource: String?
+    var isLoading = false
+    var errorMessage: String?
+}
+
+private struct CaptchaInputRow: View {
+    @Binding var code: String
+    let imageSource: String?
+    let isLoading: Bool
+    let errorMessage: String?
+    let refresh: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            TextField("验证码", text: $code)
+                #if os(iOS)
+                .textInputAutocapitalization(.characters)
+                #endif
+            Button(action: refresh) {
+                CaptchaImage(source: imageSource, isLoading: isLoading, errorMessage: errorMessage)
+            }
+            .buttonStyle(.plain)
+            .disabled(isLoading)
+            .accessibilityLabel("刷新验证码")
+        }
+    }
+}
+
+private struct CaptchaImage: View {
+    let source: String?
+    let isLoading: Bool
+    let errorMessage: String?
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 4)
+                .fill(.secondary.opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(.secondary.opacity(0.18), lineWidth: 1)
+                )
+
+            if isLoading {
+                ProgressView()
+            } else if let image = platformImage(from: source) {
+                captchaImage(image)
+                    .resizable()
+                    .scaledToFit()
+                    .padding(2)
+            } else {
+                Text(errorMessage ?? "点击加载")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(width: 132, height: 44)
+        .clipShape(RoundedRectangle(cornerRadius: 4))
+    }
+
+    @ViewBuilder
+    private func captchaImage(_ image: PlatformImage) -> Image {
+        #if canImport(UIKit)
+        Image(uiImage: image)
+        #elseif canImport(AppKit)
+        Image(nsImage: image)
+        #endif
+    }
+
+    private func platformImage(from source: String?) -> PlatformImage? {
+        guard var value = source, !value.isEmpty else {
+            return nil
+        }
+        if let commaIndex = value.firstIndex(of: ",") {
+            value = String(value[value.index(after: commaIndex)...])
+        }
+        guard let data = Data(base64Encoded: value) else {
+            return nil
+        }
+        return PlatformImage(data: data)
+    }
+}
+
+#if canImport(UIKit)
+private typealias PlatformImage = UIImage
+#elseif canImport(AppKit)
+private typealias PlatformImage = NSImage
+#endif
