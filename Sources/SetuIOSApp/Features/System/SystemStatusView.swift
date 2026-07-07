@@ -5,6 +5,7 @@ struct SystemStatusView: View {
     @Bindable var environment: AppEnvironment
     let title: String
     @State private var state: LoadState<SystemStatusSnapshot> = .idle
+    @State private var lastUpdatedAt: Date?
 
     init(environment: AppEnvironment, title: String = "系统状态") {
         self.environment = environment
@@ -24,9 +25,12 @@ struct SystemStatusView: View {
                 Section("API 状态") {
                     LabeledContent("状态", value: overview.status.status)
                     LabeledContent("今日调用", value: String(overview.status.callsToday))
-                    LabeledContent("可用性", value: overview.status.availability.map { "\($0)%" } ?? "-")
-                    LabeledContent("平均延迟", value: overview.status.avgLatencyMs.map { "\($0) ms" } ?? "-")
+                    LabeledContent("服务可用性 (5min)", value: availabilityText(overview.status.availability))
+                    LabeledContent("平均响应延迟", value: latencyText(overview.status.avgLatencyMs))
                     LabeledContent("图库数量", value: snapshot.imageCount.map(String.init) ?? "-")
+                    if let lastUpdatedAt {
+                        LabeledContent("更新于", value: lastUpdatedAt.formatted(date: .omitted, time: .standard))
+                    }
                 }
 
                 if let health = overview.health {
@@ -49,6 +53,7 @@ struct SystemStatusView: View {
             async let overview = environment.statusClient.overview()
             async let imageCount = optionalImageCount()
             state = .loaded(try await SystemStatusSnapshot(overview: overview, imageCount: imageCount))
+            lastUpdatedAt = Date()
         } catch {
             state = .failed(error.localizedDescription)
         }
@@ -56,6 +61,21 @@ struct SystemStatusView: View {
 
     private func optionalImageCount() async -> Int? {
         try? await environment.statusClient.imageCount()
+    }
+
+    private func availabilityText(_ value: Double?) -> String {
+        guard let value, value.isFinite else {
+            return "暂无样本"
+        }
+        let percent = max(0, min(100, value * 100))
+        return percent.formatted(.number.precision(.fractionLength(1))) + "%"
+    }
+
+    private func latencyText(_ value: Double?) -> String {
+        guard let value, value.isFinite, value > 0 else {
+            return "无近期调用"
+        }
+        return "\(Int(value.rounded())) ms"
     }
 }
 
