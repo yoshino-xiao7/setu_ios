@@ -61,6 +61,10 @@ public struct MusicClient: Sendable {
         let _: String = try await apiClient.requestWithoutBody("/user/playlists/\(id)", method: "DELETE")
     }
 
+    public func recordPlaylistPlay(id: Int) async throws {
+        let _: String = try await apiClient.post("/user/playlists/\(id)/play")
+    }
+
     public func setPlayMode(playlistID: Int, playMode: String) async throws {
         let _: String = try await apiClient.put(
             "/user/playlists/\(playlistID)/play-mode",

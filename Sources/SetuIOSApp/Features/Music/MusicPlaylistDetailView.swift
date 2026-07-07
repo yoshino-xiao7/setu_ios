@@ -48,6 +48,14 @@ struct MusicPlaylistDetailView: View {
                             }
                             .font(.caption)
                             .foregroundStyle(.secondary)
+
+                            Button {
+                                Task { await playAll(playlist) }
+                            } label: {
+                                Label("播放全部", systemImage: "play.circle.fill")
+                            }
+                            .buttonStyle(.borderless)
+                            .disabled(playlist.songs?.isEmpty != false)
                         }
                     }
                 }
@@ -189,6 +197,20 @@ struct MusicPlaylistDetailView: View {
             await load()
         } catch {
             message = error.localizedDescription
+        }
+    }
+
+    private func playAll(_ playlist: UserMusicPlaylistDetail) async {
+        let songs = playlist.songs ?? []
+        guard !songs.isEmpty else {
+            message = "歌单为空"
+            return
+        }
+        let firstSong = selectedMode == "random" ? songs.randomElement() ?? songs[0] : songs[0]
+        try? await environment.musicClient.recordPlaylistPlay(id: playlistID)
+        await play(firstSong)
+        if message == "已开始播放" {
+            message = "开始播放《\(playlist.name)》"
         }
     }
 
