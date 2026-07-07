@@ -33,8 +33,9 @@ struct AccountView: View {
         Form {
             if let user = environment.authSession.currentUser {
                 Section("当前账号") {
-                    LabeledContent("邮箱", value: user.email)
-                    LabeledContent("角色", value: user.role == .admin ? "管理员" : "用户")
+                    AccountProfileCard(user: user) {
+                        router.navigate(to: .profile)
+                    }
                 }
 
                 Section("账号与安全") {
@@ -497,6 +498,96 @@ struct AccountView: View {
         case .recovery:
             mutate(&recoveryCaptcha)
         }
+    }
+}
+
+private struct AccountProfileCard: View {
+    let user: CurrentUser
+    let onEditProfile: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 14) {
+                AccountAvatarView(urlString: user.avatarUrl, name: displayName)
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(spacing: 8) {
+                        Text(displayName)
+                            .font(.title3.weight(.semibold))
+                            .lineLimit(1)
+                        Text(roleTitle)
+                            .font(.caption.weight(.semibold))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(roleColor.opacity(0.14), in: Capsule())
+                            .foregroundStyle(roleColor)
+                    }
+                    Text(user.email)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    if let lastLoginIp = user.lastLoginIp, !lastLoginIp.isEmpty {
+                        Text("最近登录 \(lastLoginIp)")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                    }
+                }
+            }
+
+            Button(action: onEditProfile) {
+                Label("完善个人资料", systemImage: "person.crop.circle.badge.checkmark")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+        }
+        .padding(.vertical, 6)
+    }
+
+    private var displayName: String {
+        let trimmed = user.nickname?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? user.email : trimmed
+    }
+
+    private var roleTitle: String {
+        user.role == .admin ? "管理员" : "普通用户"
+    }
+
+    private var roleColor: Color {
+        user.role == .admin ? .orange : .pink
+    }
+}
+
+private struct AccountAvatarView: View {
+    let urlString: String?
+    let name: String
+
+    var body: some View {
+        Group {
+            if let urlString, let url = URL(string: urlString) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().scaledToFill()
+                    default:
+                        placeholder
+                    }
+                }
+            } else {
+                placeholder
+            }
+        }
+        .frame(width: 62, height: 62)
+        .clipShape(Circle())
+    }
+
+    private var placeholder: some View {
+        Circle()
+            .fill(.pink.opacity(0.14))
+            .overlay {
+                Text(String(name.prefix(1)).uppercased())
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(.pink)
+            }
     }
 }
 
