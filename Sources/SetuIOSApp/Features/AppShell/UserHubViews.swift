@@ -104,19 +104,49 @@ struct ImageHubView: View {
 struct SquareHubView: View {
     @Environment(RouterPath.self) private var router
     @Bindable var environment: AppEnvironment
+    @State private var collectionPreviewState: LoadState<[CollectionInfo]> = .idle
+    @State private var aiPreviewState: LoadState<[AiGenerationJob]> = .idle
 
     var body: some View {
         List {
             Section {
                 HubHeroRow(
                     title: "广场",
-                    subtitle: "集中浏览用户公开内容，后续会把图片预览做成更沉浸的瀑布流。",
+                    subtitle: "浏览公开收藏夹和 AI 作品，直接进入你感兴趣的内容。",
                     systemImage: "rectangle.stack.fill",
                     tint: .blue
                 ) {
                     router.navigate(to: .collectionSquare)
                 }
             }
+
+            SquarePreviewSection(
+                title: "收藏夹广场",
+                state: collectionPreviewState,
+                emptyTitle: "暂无公开收藏夹",
+                openAll: { router.navigate(to: .collectionSquare) },
+                content: { collections in
+                    ForEach(collections) { collection in
+                        SquareCollectionPreviewCard(collection: collection) {
+                            router.navigate(to: .publicCollectionDetail(collection.id))
+                        }
+                    }
+                }
+            )
+
+            SquarePreviewSection(
+                title: "AI 绘图广场",
+                state: aiPreviewState,
+                emptyTitle: "暂无公开 AI 作品",
+                openAll: { router.navigate(to: .aiSquare) },
+                content: { jobs in
+                    ForEach(jobs) { job in
+                        SquareAiPreviewCard(job: job) {
+                            router.navigate(to: .aiGenerationDetail(job.id))
+                        }
+                    }
+                }
+            )
 
             Section("内容广场") {
                 HubNavigationRow(title: "收藏夹广场", subtitle: "查看公开收藏夹和图片集合", systemImage: "rectangle.stack") {
@@ -137,6 +167,34 @@ struct SquareHubView: View {
             }
         }
         .navigationTitle("广场")
+        .task { await loadPreviews() }
+        .refreshable { await loadPreviews() }
+    }
+
+    private func loadPreviews() async {
+        async let collections: Void = loadCollectionPreviews()
+        async let jobs: Void = loadAiPreviews()
+        _ = await (collections, jobs)
+    }
+
+    private func loadCollectionPreviews() async {
+        collectionPreviewState = .loading
+        do {
+            let page = try await environment.collectionClient.square(page: 1, size: 6, sort: "hot")
+            collectionPreviewState = .loaded(page.list)
+        } catch {
+            collectionPreviewState = .failed(error.localizedDescription)
+        }
+    }
+
+    private func loadAiPreviews() async {
+        aiPreviewState = .loading
+        do {
+            let page = try await environment.aiGenerationClient.square(category: "GENERAL", page: 1, pageSize: 6)
+            aiPreviewState = .loaded(page.list)
+        } catch {
+            aiPreviewState = .failed(error.localizedDescription)
+        }
     }
 }
 
@@ -257,5 +315,106 @@ private struct ImageUsageOverviewRow: View {
             }
             .padding(.vertical, 3)
         }
+    }
+}
+
+private struct SquarePreviewSection<Items: RandomAccessCollection, Content: View>: View where Items.Element: Identifiable {
+    let title: String
+    let state: LoadState<Items>
+    let emptyTitle: String
+    let openAll: () -> Void
+    @ViewBuilder let content: (Items) -> Content
+
+    var body: some View {
+        Section {
+            switch state {
+            case .idle, .loading:
+                HStack {
+                    ProgressView()
+                    Text("正在加载\(title)")
+                        .foregroundStyle(.secondary)
+                }
+            case .failed(let message):
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("\(title)加载失败", systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.red)
+                    Text(message)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                    Button("进入完整页面", action: openAll)
+                }
+            case .loaded(let items):
+                if items.isEmpty {
+                    ContentUnavailableView(emptyTitle, systemImage: "rectangle.stack")
+                } else {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 12) {
+                            content(items)
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    Button(action: openAll) {
+                        Label("查看全部", systemImage: "arrow.right.circle")
+                    }
+                }
+            }
+        } header: {
+            Text(title)
+        }
+    }
+}
+
+private struct SquareCollectionPreviewCard: View {
+    let collection: CollectionInfo
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 8) {
+                ImageThumbnailView(urlString: collection.coverUrl ?? collection.previewImages?.first?.bestURLString)
+                    .frame(width: 132, height: 92)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                Text(collection.name)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                    .frame(width: 132, alignment: .leading)
+
+                Label("\(collection.itemCount ?? 0) 张", systemImage: "photo")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(width: 132, alignment: .leading)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct SquareAiPreviewCard: View {
+    let job: AiGenerationJob
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 8) {
+                ImageThumbnailView(urlString: job.imageUrl)
+                    .frame(width: 132, height: 132)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                Text(job.promptCn)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                    .frame(width: 132, alignment: .leading)
+
+                Label("\(job.width)x\(job.height)", systemImage: "aspectratio")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(width: 132, alignment: .leading)
+        }
+        .buttonStyle(.plain)
     }
 }
