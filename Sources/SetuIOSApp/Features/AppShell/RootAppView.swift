@@ -86,6 +86,8 @@ struct RootAppView: View {
             PointsCallView(environment: environment)
         case .pointsLogs:
             PointsLogsView(environment: environment)
+        case .imageSwipe:
+            RandomImageSwipeView(environment: environment)
         case .notifications:
             NotificationsView(environment: environment)
         case .favorites:

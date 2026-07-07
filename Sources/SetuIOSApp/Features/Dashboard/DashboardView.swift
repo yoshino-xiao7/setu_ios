@@ -13,22 +13,20 @@ struct DashboardView: View {
     var body: some View {
         List {
             Section {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 10) {
                     Text("雪涼云")
                         .font(.largeTitle.bold())
-                    Text("原生 iOS 控制台")
+                    Text("创作、刷图、听歌和发现公开内容都从这里开始。")
                         .foregroundStyle(.secondary)
+                        .font(.subheadline)
                 }
                 .padding(.vertical, 8)
             }
 
-            dashboardSummary
-            usageLogsSection
+            primaryActionsSection
+            accountStatusSection
 
-            Section("常用功能") {
-                FeatureRow(title: "API Keys", systemImage: "key") {
-                    router.navigate(to: .apiKeys)
-                }
+            Section("继续使用") {
                 FeatureRow(title: "积分调用", systemImage: "bolt.circle") {
                     router.navigate(to: .points)
                 }
@@ -40,17 +38,28 @@ struct DashboardView: View {
                 }
             }
 
-            Section("创作与内容") {
+            Section("我的内容") {
                 FeatureRow(title: "AI 绘图历史", systemImage: "clock") {
                     router.navigate(to: .aiHistory)
                 }
-                FeatureRow(title: "收藏夹广场", systemImage: "globe.asia.australia") {
-                    router.navigate(to: .collectionSquare)
+                FeatureRow(title: "我的收藏夹", systemImage: "heart.rectangle") {
+                    router.navigate(to: .collections)
                 }
-                FeatureRow(title: "音乐歌单", systemImage: "music.note.list") {
+                FeatureRow(title: "我的歌单", systemImage: "music.note.list") {
                     router.navigate(to: .playlists)
                 }
             }
+
+            Section("开发者工具") {
+                FeatureRow(title: "API Keys", systemImage: "key") {
+                    router.navigate(to: .apiKeys)
+                }
+                FeatureRow(title: "开发文档", systemImage: "doc.text") {
+                    router.navigate(to: .docs)
+                }
+            }
+
+            usageLogsSection
         }
         .navigationTitle("首页")
         .task {
@@ -62,8 +71,46 @@ struct DashboardView: View {
     }
 
     @ViewBuilder
-    private var dashboardSummary: some View {
-        Section("概览") {
+    private var primaryActionsSection: some View {
+        Section("主要功能") {
+            HomeActionRow(
+                title: "AI 绘画",
+                subtitle: "输入提示词创建新作品",
+                systemImage: "sparkles",
+                tint: .purple
+            ) {
+                router.navigate(to: .aiDraw)
+            }
+            HomeActionRow(
+                title: "随机图片",
+                subtitle: "刷图式浏览，支持参数筛选",
+                systemImage: "photo.on.rectangle",
+                tint: .pink
+            ) {
+                router.navigate(to: .imageSwipe)
+            }
+            HomeActionRow(
+                title: "音乐播放器",
+                subtitle: "搜索、播放、歌词和队列",
+                systemImage: "music.note",
+                tint: .green
+            ) {
+                router.navigate(to: .feature(.musicPlayer))
+            }
+            HomeActionRow(
+                title: "广场",
+                subtitle: "浏览收藏夹广场和 AI 作品",
+                systemImage: "rectangle.stack",
+                tint: .blue
+            ) {
+                router.navigate(to: .collectionSquare)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var accountStatusSection: some View {
+        Section("账户状态") {
             switch state {
             case .idle, .loading:
                 ProgressView("正在加载")
@@ -81,26 +128,6 @@ struct DashboardView: View {
                 .padding(.vertical, 4)
             case .loaded(let snapshot):
                 DashboardMetricRow(
-                    title: "今日调用",
-                    value: snapshot.usage.map { String($0.todayCalls) } ?? "-",
-                    systemImage: "chart.line.uptrend.xyaxis"
-                )
-                DashboardMetricRow(
-                    title: "总调用",
-                    value: snapshot.usage.map { String($0.totalCalls) } ?? "-",
-                    systemImage: "sum"
-                )
-                DashboardMetricRow(
-                    title: "Key 使用",
-                    value: snapshot.apiKeyCount.map { "\($0)/10" } ?? "-",
-                    systemImage: "key"
-                )
-                DashboardMetricRow(
-                    title: "上次活跃",
-                    value: snapshot.usage?.lastCalledAt ?? "-",
-                    systemImage: "clock"
-                )
-                DashboardMetricRow(
                     title: "积分余额",
                     value: snapshot.points.map { String($0.points) } ?? "-",
                     systemImage: "bolt.circle"
@@ -111,9 +138,19 @@ struct DashboardView: View {
                     systemImage: "bell"
                 )
                 DashboardMetricRow(
+                    title: "今日调用",
+                    value: snapshot.usage.map { String($0.todayCalls) } ?? "-",
+                    systemImage: "chart.line.uptrend.xyaxis"
+                )
+                DashboardMetricRow(
                     title: "服务状态",
                     value: snapshot.status?.status.status ?? "-",
                     systemImage: "waveform.path.ecg"
+                )
+                DashboardMetricRow(
+                    title: "上次活跃",
+                    value: snapshot.usage?.lastCalledAt ?? "-",
+                    systemImage: "clock"
                 )
             }
         }
@@ -235,6 +272,42 @@ private struct DashboardMetricRow: View {
                 .multilineTextAlignment(.trailing)
                 .lineLimit(2)
         }
+    }
+}
+
+private struct HomeActionRow: View {
+    let title: String
+    let subtitle: String
+    let systemImage: String
+    let tint: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                Image(systemName: systemImage)
+                    .font(.title3)
+                    .foregroundStyle(tint)
+                    .frame(width: 34, height: 34)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    Text(subtitle)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.vertical, 5)
+        }
+        .buttonStyle(.plain)
     }
 }
 

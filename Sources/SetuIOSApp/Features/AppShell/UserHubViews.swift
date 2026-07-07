@@ -46,11 +46,11 @@ struct ImageHubView: View {
             Section {
                 HubHeroRow(
                     title: "随机图片",
-                    subtitle: "使用积分调用图片接口。当前先保留参数配置入口，下一步会改成上下/左右滑刷图。",
+                    subtitle: "使用积分调用图片接口，上下或左右滑动获取新图片。",
                     systemImage: "photo.on.rectangle.angled",
                     tint: .pink
                 ) {
-                    router.navigate(to: .points)
+                    router.navigate(to: .imageSwipe)
                 }
             }
 

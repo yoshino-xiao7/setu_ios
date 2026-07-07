@@ -11,6 +11,7 @@ enum AppRoute: Hashable {
     case passkeys
     case points
     case pointsLogs
+    case imageSwipe
     case collections
     case collectionDetail(Int)
     case collectionSquare
