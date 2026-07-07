@@ -40,6 +40,9 @@ struct AiHubView: View {
 struct ImageHubView: View {
     @Environment(RouterPath.self) private var router
     @Bindable var environment: AppEnvironment
+    @State private var pointsState: LoadState<PointsBalance> = .idle
+
+    private let costPerCall = 20
 
     var body: some View {
         List {
@@ -51,6 +54,20 @@ struct ImageHubView: View {
                     tint: .pink
                 ) {
                     router.navigate(to: .imageSwipe)
+                }
+            }
+
+            Section("本次刷图") {
+                ImageUsageOverviewRow(pointsState: pointsState, costPerCall: costPerCall) {
+                    Task { await loadPoints() }
+                }
+                LabeledContent("默认内容", value: "非 R18")
+                LabeledContent("图片尺寸", value: "regular")
+                LabeledContent("AI 图片", value: "默认排除")
+                Button {
+                    router.navigate(to: .imageSwipe)
+                } label: {
+                    Label("开始刷图", systemImage: "hand.draw")
                 }
             }
 
@@ -70,6 +87,17 @@ struct ImageHubView: View {
             }
         }
         .navigationTitle("图片")
+        .task { await loadPoints() }
+        .refreshable { await loadPoints() }
+    }
+
+    private func loadPoints() async {
+        pointsState = .loading
+        do {
+            pointsState = .loaded(try await environment.pointsClient.balance())
+        } catch {
+            pointsState = .failed(error.localizedDescription)
+        }
     }
 }
 
@@ -176,5 +204,58 @@ private struct HubNavigationRow: View {
             .padding(.vertical, 3)
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct ImageUsageOverviewRow: View {
+    let pointsState: LoadState<PointsBalance>
+    let costPerCall: Int
+    let onRetry: () -> Void
+
+    var body: some View {
+        switch pointsState {
+        case .idle, .loading:
+            HStack {
+                ProgressView()
+                Text("正在加载积分")
+                    .foregroundStyle(.secondary)
+            }
+        case .failed(let message):
+            VStack(alignment: .leading, spacing: 8) {
+                Label("积分加载失败", systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.red)
+                Text(message)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+                Button("重试", action: onRetry)
+            }
+        case .loaded(let balance):
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Label("\(balance.points)", systemImage: "bolt.circle.fill")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.pink)
+                    Text("当前积分")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text("单次 \(costPerCall)")
+                        .font(.footnote.weight(.semibold))
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(.pink.opacity(0.12), in: Capsule())
+                        .foregroundStyle(.pink)
+                }
+
+                ProgressView(value: min(Double(balance.points) / Double(max(costPerCall * 10, 1)), 1))
+                    .tint(.pink)
+
+                Text(balance.points >= costPerCall ? "积分充足，可以直接滑动获取新图片。" : "积分不足，至少需要 \(costPerCall) 积分。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 3)
+        }
     }
 }
