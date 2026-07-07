@@ -68,19 +68,40 @@ enum AppTab: String, CaseIterable, Identifiable {
 
     @ViewBuilder
     var label: some View {
+        Label(title, systemImage: systemImage)
+    }
+
+    var title: String {
         switch self {
         case .home:
-            Label("首页", systemImage: "house")
+            "首页"
         case .ai:
-            Label("AI 绘画", systemImage: "sparkles")
+            "AI 绘画"
         case .images:
-            Label("图片", systemImage: "photo.on.rectangle")
+            "图片"
         case .music:
-            Label("音乐", systemImage: "music.note")
+            "音乐"
         case .square:
-            Label("广场", systemImage: "rectangle.stack")
+            "广场"
         case .settings:
-            Label("我的", systemImage: "person.crop.circle")
+            "我的"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .home:
+            "house"
+        case .ai:
+            "sparkles"
+        case .images:
+            "photo.on.rectangle"
+        case .music:
+            "music.note"
+        case .square:
+            "rectangle.stack"
+        case .settings:
+            "person.crop.circle"
         }
     }
 }

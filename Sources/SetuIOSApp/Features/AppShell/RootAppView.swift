@@ -29,22 +29,23 @@ struct RootAppView: View {
     }
 
     private var appTabs: some View {
-        TabView(selection: $selectedTab) {
-            ForEach(AppTab.allCases) { tab in
-                NavigationStack(path: tabRouter.binding(for: tab)) {
-                    content(for: tab)
-                        .navigationDestination(for: AppRoute.self) { route in
-                            destination(for: route)
-                        }
-                }
-                .environment(tabRouter.router(for: tab))
-                .tabItem { tab.label }
-                .tag(tab)
+        currentTabStack
+        .safeAreaInset(edge: .bottom) {
+            VStack(spacing: 0) {
+                MusicMiniPlayerBar(environment: environment, player: musicPlayer)
+                UserTabBar(selectedTab: $selectedTab)
             }
         }
-        .safeAreaInset(edge: .bottom) {
-            MusicMiniPlayerBar(environment: environment, player: musicPlayer)
+    }
+
+    private var currentTabStack: some View {
+        NavigationStack(path: tabRouter.binding(for: selectedTab)) {
+            content(for: selectedTab)
+                .navigationDestination(for: AppRoute.self) { route in
+                    destination(for: route)
+                }
         }
+        .environment(tabRouter.router(for: selectedTab))
     }
 
     @ViewBuilder
@@ -250,6 +251,43 @@ struct RootAppView: View {
             AdminAiReviewsView(environment: environment)
         case .adminAiDeleteRequests:
             AdminAiDeleteRequestsView(environment: environment)
+        }
+    }
+}
+
+private struct UserTabBar: View {
+    @Binding var selectedTab: AppTab
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(AppTab.allCases) { tab in
+                Button {
+                    selectedTab = tab
+                } label: {
+                    VStack(spacing: 4) {
+                        Image(systemName: tab.systemImage)
+                            .font(.system(size: 17, weight: selectedTab == tab ? .semibold : .regular))
+                        Text(tab.title)
+                            .font(.caption2.weight(selectedTab == tab ? .semibold : .regular))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.72)
+                    }
+                    .foregroundStyle(selectedTab == tab ? .pink : .secondary)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(tab.title)
+                .accessibilityAddTraits(selectedTab == tab ? [.isSelected] : [])
+            }
+        }
+        .padding(.horizontal, 4)
+        .padding(.top, 6)
+        .padding(.bottom, 4)
+        .background(.regularMaterial)
+        .overlay(alignment: .top) {
+            Divider()
         }
     }
 }
