@@ -208,6 +208,12 @@ struct AccountView: View {
                     Label("检查会话状态", systemImage: "checkmark.shield")
                 }
 
+                Button {
+                    copySessionDiagnostics()
+                } label: {
+                    Label("复制诊断摘要", systemImage: "doc.on.doc")
+                }
+
                 if environment.authSession.currentUser != nil {
                     Button {
                         Task { await confirmCurrentSession() }
@@ -350,6 +356,26 @@ struct AccountView: View {
 
     private func updateSessionDiagnostics() {
         sessionDiagnostics = environment.authSession.mobileSessionDiagnostics()
+    }
+
+    private func copySessionDiagnostics() {
+        let diagnostics = environment.authSession.mobileSessionDiagnostics()
+        sessionDiagnostics = diagnostics
+        PlatformClipboard.copy(diagnosticsSummary(diagnostics))
+        sessionMessage = "诊断摘要已复制"
+    }
+
+    private func diagnosticsSummary(_ diagnostics: MobileSessionDiagnostics) -> String {
+        let expireAtText = diagnostics.expireAt?.formatted() ?? "-"
+        return """
+        Setu iOS Session Diagnostics
+        API Host: \(diagnostics.apiHost)
+        Signed In: \(diagnostics.isSignedIn ? "yes" : "no")
+        SID Cookie: \(diagnostics.hasSIDCookie ? "present" : "missing")
+        Cookie Count: \(diagnostics.cookieCount)
+        Sign Secret: \(diagnostics.hasSignSecret ? "present" : "missing")
+        Expire At: \(expireAtText)
+        """
     }
 
     private func confirmCurrentSession() async {
