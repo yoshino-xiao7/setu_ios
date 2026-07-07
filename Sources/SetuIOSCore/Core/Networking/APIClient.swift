@@ -52,6 +52,13 @@ public struct APIClient: Sendable {
         )
     }
 
+    public func clearSessionCookies() {
+        let cookies = HTTPCookieStorage.shared.cookies(for: config.apiBaseURL) ?? []
+        for cookie in cookies {
+            HTTPCookieStorage.shared.deleteCookie(cookie)
+        }
+    }
+
     public func get<Value: Decodable & Sendable>(_ path: String, signed: Bool = true) async throws -> Value {
         try await request(path, method: "GET", body: Optional<Data>.none, signed: signed)
     }

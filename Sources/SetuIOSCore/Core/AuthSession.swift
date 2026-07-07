@@ -214,6 +214,7 @@ public final class AuthSession {
 
     private func clearLocalSession() {
         try? apiClient.signer.clearSignSecret()
+        apiClient.clearSessionCookies()
         try? keychain.remove(expireAtKey)
         try? keychain.remove(currentUserKey)
         currentUser = nil
