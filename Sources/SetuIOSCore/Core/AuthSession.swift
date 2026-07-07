@@ -163,6 +163,11 @@ public final class AuthSession {
         lastError = message
     }
 
+    public func resetLocalSession() {
+        clearLocalSession()
+        lastError = nil
+    }
+
     private func persistExpireAt(_ value: Int64?) {
         guard let value else {
             expireAt = nil

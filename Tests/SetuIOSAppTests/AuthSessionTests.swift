@@ -101,6 +101,30 @@ final class AuthSessionTests: XCTestCase {
         XCTAssertFalse(cookies.contains { $0.name == "SID" })
     }
 
+    func testResetLocalSessionClearsLocalCredentialsAndCookiesWithoutError() throws {
+        let keychain = InMemoryKeychain()
+        let session = makeSession(keychain: keychain)
+        try keychain.setString("secret", for: "signSecret")
+        let cookie = HTTPCookie(properties: [
+            .domain: "api.example.com",
+            .path: "/",
+            .name: "SID",
+            .value: "stale-session",
+            .secure: "TRUE",
+        ])!
+        HTTPCookieStorage.shared.setCookie(cookie)
+        session.lastError = "旧错误"
+
+        session.resetLocalSession()
+
+        let cookies = HTTPCookieStorage.shared.cookies(for: URL(string: "https://api.example.com")!) ?? []
+        XCTAssertNil(try keychain.string(for: "signSecret"))
+        XCTAssertFalse(cookies.contains { $0.name == "SID" })
+        XCTAssertNil(session.currentUser)
+        XCTAssertNil(session.expireAt)
+        XCTAssertNil(session.lastError)
+    }
+
     func testLoginClearsLocalStateWhenSessionConfirmationReturnsUnauthorized() async throws {
         let keychain = InMemoryKeychain()
         let session = makeSession(

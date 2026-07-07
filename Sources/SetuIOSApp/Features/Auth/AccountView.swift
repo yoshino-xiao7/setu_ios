@@ -214,6 +214,14 @@ struct AccountView: View {
                     Label("复制诊断摘要", systemImage: "doc.on.doc")
                 }
 
+                Button(role: .destructive) {
+                    environment.authSession.resetLocalSession()
+                    updateSessionDiagnostics()
+                    sessionMessage = "本地会话已清理"
+                } label: {
+                    Label("清理本地会话", systemImage: "trash")
+                }
+
                 if environment.authSession.currentUser != nil {
                     Button {
                         Task { await confirmCurrentSession() }
