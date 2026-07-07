@@ -69,6 +69,10 @@ struct RootAppView: View {
     @ViewBuilder
     private func destination(for route: AppRoute) -> some View {
         switch route {
+        case .authRegister:
+            AccountView(environment: environment, initialAuthPage: .register)
+        case .authRecovery:
+            AccountView(environment: environment, initialAuthPage: .recovery)
         case .profile:
             ProfileView(environment: environment)
         case .apiKeys:

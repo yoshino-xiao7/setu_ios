@@ -8,6 +8,7 @@ import AppKit
 
 struct AccountView: View {
     @Environment(RouterPath.self) private var router
+    @Environment(\.dismiss) private var dismiss
     @Bindable var environment: AppEnvironment
     @State private var email = ""
     @State private var password = ""
@@ -28,7 +29,12 @@ struct AccountView: View {
     @State private var passkeyLoading = false
     @State private var authActionLoading = false
     @State private var sessionActionLoading = false
-    @State private var authPage: AuthPage = .login
+    @State private var authPage: AuthPage
+
+    init(environment: AppEnvironment, initialAuthPage: AuthPage = .login) {
+        self.environment = environment
+        _authPage = State(initialValue: initialAuthPage)
+    }
 
     var body: some View {
         Form {
@@ -190,7 +196,7 @@ struct AccountView: View {
             if environment.authSession.currentUser == nil, authPage != .login {
                 ToolbarItem(placement: .cancellationAction) {
                     Button {
-                        authPage = .login
+                        dismiss()
                     } label: {
                         Label("登录", systemImage: "chevron.left")
                     }
@@ -259,12 +265,12 @@ struct AccountView: View {
 
             Section("账号") {
                 Button {
-                    authPage = .register
+                    router.navigate(to: .authRegister)
                 } label: {
                     Label("注册账号", systemImage: "person.badge.plus")
                 }
                 Button {
-                    authPage = .recovery
+                    router.navigate(to: .authRecovery)
                 } label: {
                     Label("找回密码", systemImage: "key")
                 }
@@ -304,7 +310,7 @@ struct AccountView: View {
 
             Section {
                 Button {
-                    authPage = .login
+                    dismiss()
                 } label: {
                     Label("已有账号，返回登录", systemImage: "arrow.left")
                 }
@@ -361,7 +367,7 @@ struct AccountView: View {
 
             Section {
                 Button {
-                    authPage = .login
+                    dismiss()
                 } label: {
                     Label("返回登录", systemImage: "arrow.left")
                 }
@@ -422,10 +428,8 @@ struct AccountView: View {
         )
         if success {
             authMessage = "注册成功，可以使用新账号登录"
-            email = registerEmail
-            password = registerPassword
             registerPassword = ""
-            authPage = .login
+            dismiss()
         }
         registerCaptcha.code = ""
         await refreshCaptcha(.register)
@@ -456,7 +460,7 @@ struct AccountView: View {
             authMessage = "密码已重置，可以使用新密码登录"
             resetToken = ""
             resetPassword = ""
-            authPage = .login
+            dismiss()
         }
         authActionLoading = false
     }
@@ -678,7 +682,7 @@ private enum AuthCaptchaKind {
     case recovery
 }
 
-private enum AuthPage {
+enum AuthPage {
     case login
     case register
     case recovery
@@ -691,7 +695,7 @@ private enum AuthPage {
         }
     }
 
-    var captchaKind: AuthCaptchaKind {
+    fileprivate var captchaKind: AuthCaptchaKind {
         switch self {
         case .login: .login
         case .register: .register
