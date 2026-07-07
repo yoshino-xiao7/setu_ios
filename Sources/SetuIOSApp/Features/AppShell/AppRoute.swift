@@ -21,6 +21,7 @@ enum AppRoute: Hashable {
     case galleryUploads
     case galleryUploadDetail(Int)
     case aiDraw
+    case aiAssets
     case aiHistory
     case aiDeleteRequests
     case aiGenerationDetail(Int)

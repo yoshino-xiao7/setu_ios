@@ -187,7 +187,7 @@ struct AiDrawView: View {
     private var assetSection: some View {
         Section("模型资产") {
             Button {
-                router.navigate(to: .feature(.aiAssets))
+                router.navigate(to: .aiAssets)
             } label: {
                 Label("浏览 AI 资产选择", systemImage: "photo.stack")
             }

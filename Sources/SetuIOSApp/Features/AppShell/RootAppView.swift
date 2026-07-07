@@ -119,6 +119,8 @@ struct RootAppView: View {
             GalleryUploadDetailView(environment: environment, batchID: id)
         case .aiDraw:
             AiDrawView(environment: environment)
+        case .aiAssets:
+            AiAssetBrowserView(environment: environment)
         case .aiHistory:
             AiHistoryView(environment: environment)
         case .aiDeleteRequests:
