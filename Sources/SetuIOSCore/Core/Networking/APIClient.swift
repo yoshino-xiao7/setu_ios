@@ -115,11 +115,12 @@ public struct APIClient: Sendable {
         body.append(fileData)
         body.append("\r\n--\(boundary)--\r\n")
 
+        let requestID = Self.makeRequestID()
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.httpShouldHandleCookies = true
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue(Self.makeRequestID(), forHTTPHeaderField: "X-Request-Id")
+        request.setValue(requestID, forHTTPHeaderField: "X-Request-Id")
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         if signed {
             let headers = try signer.signedHeaders(method: "POST", path: url.path)
@@ -136,7 +137,7 @@ public struct APIClient: Sendable {
             await sessionInvalidationNotifier?.notifyUnauthorized()
         }
         guard (200..<300).contains(httpResponse.statusCode) else {
-            throw APIError.httpStatus(httpResponse.statusCode)
+            throw makeHTTPStatusError(status: httpResponse.statusCode, data: data, requestID: requestID)
         }
 
         if let envelope = try? decoder.decode(APIEnvelope<Value>.self, from: data), let value = envelope.data {
@@ -155,12 +156,13 @@ public struct APIClient: Sendable {
             throw APIError.invalidURL(path)
         }
 
+        let requestID = Self.makeRequestID()
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.httpBody = body
         request.httpShouldHandleCookies = true
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue(Self.makeRequestID(), forHTTPHeaderField: "X-Request-Id")
+        request.setValue(requestID, forHTTPHeaderField: "X-Request-Id")
         if body != nil {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
@@ -179,7 +181,7 @@ public struct APIClient: Sendable {
             await sessionInvalidationNotifier?.notifyUnauthorized()
         }
         guard (200..<300).contains(httpResponse.statusCode) else {
-            throw APIError.httpStatus(httpResponse.statusCode)
+            throw makeHTTPStatusError(status: httpResponse.statusCode, data: data, requestID: requestID)
         }
 
         if Value.self == EmptyResponse.self {
@@ -198,6 +200,13 @@ public struct APIClient: Sendable {
 
     private static func makeRequestID() -> String {
         UUID().uuidString.lowercased()
+    }
+
+    private func makeHTTPStatusError(status: Int, data: Data, requestID: String) -> APIError {
+        let payload = try? decoder.decode(APIErrorPayload.self, from: data)
+        let message = payload?.message ?? payload?.msg
+        let traceID = payload?.traceId ?? payload?.traceID ?? payload?.trace_id
+        return .httpStatus(status, message: message, requestID: requestID, traceID: traceID)
     }
 }
 
@@ -226,18 +235,36 @@ public struct EmptyResponse: Codable, Sendable {
 public enum APIError: Error, LocalizedError {
     case invalidURL(String)
     case invalidResponse
-    case httpStatus(Int)
+    case httpStatus(Int, message: String? = nil, requestID: String? = nil, traceID: String? = nil)
 
     public var errorDescription: String? {
         switch self {
         case .invalidURL(let path):
-            "无效接口路径：\(path)"
+            return "无效接口路径：\(path)"
         case .invalidResponse:
-            "服务器响应无效"
-        case .httpStatus(let status):
-            "请求失败：HTTP \(status)"
+            return "服务器响应无效"
+        case .httpStatus(let status, let message, let requestID, let traceID):
+            var parts = ["请求失败：HTTP \(status)"]
+            if let message, !message.isEmpty {
+                parts.append(message)
+            }
+            if let requestID, !requestID.isEmpty {
+                parts.append("Request ID: \(requestID)")
+            }
+            if let traceID, !traceID.isEmpty {
+                parts.append("Trace ID: \(traceID)")
+            }
+            return parts.joined(separator: "；")
         }
     }
+}
+
+private struct APIErrorPayload: Decodable {
+    let message: String?
+    let msg: String?
+    let traceId: String?
+    let traceID: String?
+    let trace_id: String?
 }
 
 private extension Data {

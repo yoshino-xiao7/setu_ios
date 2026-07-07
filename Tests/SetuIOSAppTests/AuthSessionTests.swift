@@ -234,9 +234,28 @@ final class APIClientUnauthorizedTests: XCTestCase {
         do {
             let _: EmptyResponse = try await client.get("/user/info")
             XCTFail("Expected HTTP 401")
-        } catch APIError.httpStatus(401) {
+        } catch APIError.httpStatus(401, _, _, _) {
             let wasInvalidated = await invalidated.wasInvalidated
             XCTAssertTrue(wasInvalidated)
+        }
+    }
+
+    func testHTTPStatusErrorIncludesBackendMessageAndRequestID() async throws {
+        let keychain = InMemoryKeychain()
+        let session = URLSession(configuration: .mock(statusCode: 401, body: #"{"message":"Unauthorized","traceId":"trace-123"}"#))
+        let client = APIClient(
+            config: AppConfig(apiBaseURL: URL(string: "https://api.example.com")!, siteBaseURL: URL(string: "https://example.com")!),
+            signer: AuthSigner(keychain: keychain),
+            session: session
+        )
+
+        do {
+            let _: EmptyResponse = try await client.get("/user/info", signed: false)
+            XCTFail("Expected HTTP 401")
+        } catch APIError.httpStatus(401, let message, let requestID, let traceID) {
+            XCTAssertEqual(message, "Unauthorized")
+            XCTAssertNotNil(UUID(uuidString: requestID ?? ""))
+            XCTAssertEqual(traceID, "trace-123")
         }
     }
 }

@@ -52,7 +52,7 @@ public struct GalleryUploadClient: Sendable {
             throw APIError.invalidResponse
         }
         guard (200..<300).contains(httpResponse.statusCode) else {
-            throw APIError.httpStatus(httpResponse.statusCode)
+            throw APIError.httpStatus(httpResponse.statusCode, message: "图库直传失败")
         }
         return httpResponse.value(forHTTPHeaderField: "etag")?.replacingOccurrences(of: "\"", with: "")
     }
