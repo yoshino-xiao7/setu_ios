@@ -124,7 +124,13 @@ struct MusicHomeView: View {
                 } else {
                     ForEach(result.songs) { song in
                         MusicSongRow(song: song) {
-                            Task { await play(song, queueName: "搜索结果") }
+                            Task {
+                                await play(
+                                    song,
+                                    queueName: "搜索结果",
+                                    queueTracks: result.songs.map { MusicPlaybackTrack(song: $0) }
+                                )
+                            }
                         } onPlayMv: {
                             mvSong = song
                         } onAddToPlaylist: {
@@ -242,9 +248,16 @@ struct MusicHomeView: View {
                 if songs.isEmpty {
                     ContentUnavailableView("暂无推荐新歌", systemImage: "music.note")
                 } else {
-                    ForEach(songs.prefix(5)) { song in
+                    let visibleSongs = Array(songs.prefix(5))
+                    ForEach(visibleSongs) { song in
                         MusicSongRow(song: song) {
-                            Task { await play(song, queueName: "推荐新歌") }
+                            Task {
+                                await play(
+                                    song,
+                                    queueName: "推荐新歌",
+                                    queueTracks: visibleSongs.map { MusicPlaybackTrack(song: $0) }
+                                )
+                            }
                         } onPlayMv: {
                             mvSong = song
                         } onAddToPlaylist: {
@@ -268,9 +281,16 @@ struct MusicHomeView: View {
                 if songs.isEmpty {
                     ContentUnavailableView("暂无每日推荐", systemImage: "sparkles")
                 } else {
-                    ForEach(songs.prefix(5)) { song in
+                    let visibleSongs = Array(songs.prefix(5))
+                    ForEach(visibleSongs) { song in
                         MusicSongRow(song: song) {
-                            Task { await play(song, queueName: "每日推荐") }
+                            Task {
+                                await play(
+                                    song,
+                                    queueName: "每日推荐",
+                                    queueTracks: visibleSongs.map { MusicPlaybackTrack(song: $0) }
+                                )
+                            }
                         } onPlayMv: {
                             mvSong = song
                         } onAddToPlaylist: {
@@ -397,7 +417,7 @@ struct MusicHomeView: View {
         MusicSearchHistoryStore.clear()
     }
 
-    private func play(_ song: MusicSong, queueName: String? = nil) async {
+    private func play(_ song: MusicSong, queueName: String? = nil, queueTracks: [MusicPlaybackTrack] = []) async {
         playbackMessage = "正在获取播放地址"
         do {
             let response = try await environment.musicClient.url(songID: song.id, level: "standard")
@@ -405,7 +425,7 @@ struct MusicHomeView: View {
                 playbackMessage = response.data?.first?.unavailableMessage ?? response.playabilityReason ?? response.message ?? "暂无可播放地址"
                 return
             }
-            player.play(url: url, track: MusicPlaybackTrack(song: song), queueName: queueName)
+            player.play(url: url, track: MusicPlaybackTrack(song: song), queueName: queueName, queueTracks: queueTracks)
             try? await environment.musicClient.addHistory(song: song)
             playbackMessage = "已开始播放"
         } catch {
@@ -522,7 +542,12 @@ private struct RecommendedPlaylistSheet: View {
                         Section("歌曲") {
                             ForEach(songs) { song in
                                 MusicSongRow(song: song) {
-                                    Task { await play(song) }
+                                    Task {
+                                        await play(
+                                            song,
+                                            queueTracks: songs.map { MusicPlaybackTrack(song: $0) }
+                                        )
+                                    }
                                 } onPlayMv: {
                                     mvSong = song
                                 } onAddToPlaylist: {
@@ -559,7 +584,7 @@ private struct RecommendedPlaylistSheet: View {
         }
     }
 
-    private func play(_ song: MusicSong) async {
+    private func play(_ song: MusicSong, queueTracks: [MusicPlaybackTrack] = []) async {
         message = "正在获取播放地址"
         do {
             let response = try await environment.musicClient.url(songID: song.id, level: "standard")
@@ -567,7 +592,7 @@ private struct RecommendedPlaylistSheet: View {
                 message = response.data?.first?.unavailableMessage ?? response.playabilityReason ?? response.message ?? "暂无可播放地址"
                 return
             }
-            player.play(url: url, track: MusicPlaybackTrack(song: song), queueName: playlist.name)
+            player.play(url: url, track: MusicPlaybackTrack(song: song), queueName: playlist.name, queueTracks: queueTracks)
             try? await environment.musicClient.addHistory(song: song)
             message = "已开始播放《\(playlist.name)》"
         } catch {

@@ -80,7 +80,13 @@ struct MusicPlaylistDetailView: View {
                     } else {
                         ForEach(songs) { song in
                             PlaylistSongRow(song: song) {
-                                Task { await play(song, queueName: playlist.name) }
+                                Task {
+                                    await play(
+                                        song,
+                                        queueName: playlist.name,
+                                        queueTracks: songs.map { MusicPlaybackTrack(song: $0) }
+                                    )
+                                }
                             } onRemove: {
                                 songPendingRemoval = song
                                 showingRemoveConfirmation = true
@@ -208,13 +214,13 @@ struct MusicPlaylistDetailView: View {
         }
         let firstSong = selectedMode == "random" ? songs.randomElement() ?? songs[0] : songs[0]
         try? await environment.musicClient.recordPlaylistPlay(id: playlistID)
-        await play(firstSong, queueName: playlist.name)
+        await play(firstSong, queueName: playlist.name, queueTracks: songs.map { MusicPlaybackTrack(song: $0) })
         if message == "已开始播放" {
             message = "开始播放《\(playlist.name)》"
         }
     }
 
-    private func play(_ song: PlaylistSong, queueName: String? = nil) async {
+    private func play(_ song: PlaylistSong, queueName: String? = nil, queueTracks: [MusicPlaybackTrack] = []) async {
         message = "正在获取播放地址"
         do {
             let response = try await environment.musicClient.url(songID: song.songId)
@@ -222,7 +228,7 @@ struct MusicPlaylistDetailView: View {
                 message = response.data?.first?.unavailableMessage ?? response.playabilityReason ?? response.message ?? "暂无可播放地址"
                 return
             }
-            player.play(url: url, track: MusicPlaybackTrack(song: song), queueName: queueName)
+            player.play(url: url, track: MusicPlaybackTrack(song: song), queueName: queueName, queueTracks: queueTracks)
             message = "已开始播放"
         } catch {
             message = error.localizedDescription

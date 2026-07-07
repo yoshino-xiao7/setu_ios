@@ -23,7 +23,7 @@ struct MusicMiniPlayerBar: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
-                        Text("\(player.queueName ?? "当前歌单") · 正在播放")
+                        Text(queueCaption)
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                     }
@@ -61,6 +61,15 @@ struct MusicMiniPlayerBar: View {
             }
         }
     }
+
+    private var queueCaption: String {
+        let name = player.queueName ?? "当前歌单"
+        let count = player.queueTracks.count
+        if count > 1 {
+            return "\(name) · \(count) 首"
+        }
+        return "\(name) · 正在播放"
+    }
 }
 
 private struct MusicNowPlayingDetailView: View {
@@ -68,6 +77,7 @@ private struct MusicNowPlayingDetailView: View {
     @Bindable var environment: AppEnvironment
     @Bindable var player: MusicPlaybackController
     @State private var lyricState: LoadState<MusicLyricResponse> = .idle
+    @State private var queueMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -113,6 +123,8 @@ private struct MusicNowPlayingDetailView: View {
                         .task(id: track.id) {
                             await loadLyric(songID: track.id)
                         }
+
+                    queueSection
                 } else {
                     ContentUnavailableView("暂无播放", systemImage: "music.note")
                 }
@@ -121,6 +133,45 @@ private struct MusicNowPlayingDetailView: View {
             .toolbar {
                 Button("关闭") {
                     dismiss()
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var queueSection: some View {
+        if !player.queueTracks.isEmpty {
+            Section(player.queueName ?? "当前队列") {
+                if let queueMessage {
+                    Text(queueMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
+                ForEach(Array(player.queueTracks.enumerated()), id: \.offset) { index, track in
+                    Button {
+                        Task { await playQueuedTrack(track) }
+                    } label: {
+                        HStack(spacing: 12) {
+                            MusicArtworkView(urlString: track.coverURLString)
+                                .frame(width: 44, height: 44)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(track.title)
+                                    .font(.subheadline.weight(track.id == player.currentTrack?.id ? .semibold : .regular))
+                                    .lineLimit(1)
+                                Text(track.artist)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                            Spacer()
+                            if index == player.currentQueueIndex {
+                                Image(systemName: player.isPlaying ? "speaker.wave.2.fill" : "pause.fill")
+                                    .foregroundStyle(.pink)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -164,6 +215,22 @@ private struct MusicNowPlayingDetailView: View {
             lyricState = .loaded(try await environment.musicClient.lyric(songID: songID))
         } catch {
             lyricState = .failed(error.localizedDescription)
+        }
+    }
+
+    private func playQueuedTrack(_ track: MusicPlaybackTrack) async {
+        guard track.id != player.currentTrack?.id else { return }
+        queueMessage = "正在切换歌曲"
+        do {
+            let response = try await environment.musicClient.url(songID: track.id, level: "standard")
+            guard let item = response.data?.first, let urlString = item.playableURLString, let url = URL(string: urlString) else {
+                queueMessage = response.data?.first?.unavailableMessage ?? response.playabilityReason ?? response.message ?? "暂无可播放地址"
+                return
+            }
+            player.play(url: url, track: track, queueName: player.queueName, queueTracks: player.queueTracks)
+            queueMessage = nil
+        } catch {
+            queueMessage = error.localizedDescription
         }
     }
 }

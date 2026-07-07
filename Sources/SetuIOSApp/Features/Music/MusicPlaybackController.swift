@@ -12,6 +12,8 @@ import MediaPlayer
 final class MusicPlaybackController {
     private(set) var currentTrack: MusicPlaybackTrack?
     private(set) var queueName: String?
+    private(set) var queueTracks: [MusicPlaybackTrack] = []
+    private(set) var currentQueueIndex: Int?
     private(set) var isPlaying = false
     private(set) var message: String?
 
@@ -25,16 +27,24 @@ final class MusicPlaybackController {
         }
     }
 
-    func play(url: URL, track: MusicPlaybackTrack, queueName: String? = nil) {
+    func play(
+        url: URL,
+        track: MusicPlaybackTrack,
+        queueName: String? = nil,
+        queueTracks: [MusicPlaybackTrack] = []
+    ) {
         configureAudioSession()
         configureRemoteCommands()
         removeTimeObserver()
 
         let item = AVPlayerItem(url: url)
         let nextPlayer = AVPlayer(playerItem: item)
+        let nextQueue = queueTracks.isEmpty ? [track] : queueTracks
         player = nextPlayer
         currentTrack = track
         self.queueName = queueName
+        self.queueTracks = nextQueue
+        currentQueueIndex = nextQueue.firstIndex { $0.id == track.id }
         isPlaying = true
         message = "正在播放 \(track.title)"
         addTimeObserver()
@@ -66,6 +76,8 @@ final class MusicPlaybackController {
         player = nil
         currentTrack = nil
         queueName = nil
+        queueTracks = []
+        currentQueueIndex = nil
         isPlaying = false
         message = nil
         removeTimeObserver()
@@ -155,7 +167,7 @@ final class MusicPlaybackController {
     }
 }
 
-struct MusicPlaybackTrack: Sendable {
+struct MusicPlaybackTrack: Identifiable, Sendable {
     let id: Int
     let title: String
     let artist: String

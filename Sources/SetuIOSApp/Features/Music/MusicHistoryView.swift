@@ -38,7 +38,12 @@ struct MusicHistoryView: View {
                     Section(count.map { "共 \($0) 条" } ?? "播放历史") {
                         ForEach(records) { record in
                             MusicHistoryRow(record: record) {
-                                Task { await play(record) }
+                                Task {
+                                    await play(
+                                        record,
+                                        queueTracks: records.map { MusicPlaybackTrack(record: $0) }
+                                    )
+                                }
                             } onAddToPlaylist: {
                                 selectedSong = record.song
                             }
@@ -164,7 +169,7 @@ struct MusicHistoryView: View {
         }
     }
 
-    private func play(_ record: MusicHistoryRecord) async {
+    private func play(_ record: MusicHistoryRecord, queueTracks: [MusicPlaybackTrack] = []) async {
         message = "正在获取播放地址"
         do {
             let response = try await environment.musicClient.url(songID: record.songId)
@@ -172,7 +177,7 @@ struct MusicHistoryView: View {
                 message = response.data?.first?.unavailableMessage ?? response.playabilityReason ?? response.message ?? "暂无可播放地址"
                 return
             }
-            player.play(url: url, track: MusicPlaybackTrack(record: record), queueName: "播放历史")
+            player.play(url: url, track: MusicPlaybackTrack(record: record), queueName: "播放历史", queueTracks: queueTracks)
             try? await environment.musicClient.addHistory(song: record.song)
             message = "已开始播放"
         } catch {
