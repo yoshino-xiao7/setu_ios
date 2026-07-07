@@ -28,6 +28,7 @@ struct AccountView: View {
     @State private var passkeyLoading = false
     @State private var authActionLoading = false
     @State private var sessionActionLoading = false
+    @State private var authPage: AuthPage = .login
 
     var body: some View {
         Form {
@@ -99,112 +100,7 @@ struct AccountView: View {
                     }
                 }
             } else {
-                Section("登录") {
-                    TextField("邮箱", text: $email)
-                        .textContentType(.username)
-                        .modifier(EmailInputModifier())
-                    SecureField("密码", text: $password)
-                        .textContentType(.password)
-                    CaptchaInputRow(
-                        code: $loginCaptcha.code,
-                        imageSource: loginCaptcha.imageSource,
-                        isLoading: loginCaptcha.isLoading,
-                        errorMessage: loginCaptcha.errorMessage
-                    ) {
-                        Task { await refreshCaptcha(.login) }
-                    }
-                    Button("登录") {
-                        Task { await loginWithPassword() }
-                    }
-                    .disabled(email.isEmpty || password.isEmpty || loginCaptcha.code.isEmpty || loginCaptcha.uuid.isEmpty)
-                    Button {
-                        Task { await loginWithPasskey() }
-                    } label: {
-                        if passkeyLoading {
-                            ProgressView()
-                        } else {
-                            Label("使用通行密钥登录", systemImage: "touchid")
-                        }
-                    }
-                    .disabled(passkeyLoading)
-                    if let passkeyMessage {
-                        Text(passkeyMessage)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                    if let authMessage {
-                        Text(authMessage)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                Section("注册账号") {
-                    TextField("邮箱", text: $registerEmail)
-                        .textContentType(.emailAddress)
-                        .modifier(EmailInputModifier())
-                    SecureField("密码", text: $registerPassword)
-                        .textContentType(.newPassword)
-                    CaptchaInputRow(
-                        code: $registerCaptcha.code,
-                        imageSource: registerCaptcha.imageSource,
-                        isLoading: registerCaptcha.isLoading,
-                        errorMessage: registerCaptcha.errorMessage
-                    ) {
-                        Task { await refreshCaptcha(.register) }
-                    }
-                    Button {
-                        Task { await registerAccount() }
-                    } label: {
-                        if authActionLoading {
-                            ProgressView()
-                        } else {
-                            Label("注册", systemImage: "person.badge.plus")
-                        }
-                    }
-                    .disabled(authActionLoading || registerEmail.isEmpty || registerPassword.isEmpty || registerCaptcha.code.isEmpty || registerCaptcha.uuid.isEmpty)
-                }
-
-                Section("找回密码") {
-                    TextField("邮箱", text: $recoveryEmail)
-                        .textContentType(.emailAddress)
-                        .modifier(EmailInputModifier())
-                    CaptchaInputRow(
-                        code: $recoveryCaptcha.code,
-                        imageSource: recoveryCaptcha.imageSource,
-                        isLoading: recoveryCaptcha.isLoading,
-                        errorMessage: recoveryCaptcha.errorMessage
-                    ) {
-                        Task { await refreshCaptcha(.recovery) }
-                    }
-                    Button {
-                        Task { await sendPasswordRecoveryEmail() }
-                    } label: {
-                        if authActionLoading {
-                            ProgressView()
-                        } else {
-                            Label("发送重置邮件", systemImage: "envelope")
-                        }
-                    }
-                    .disabled(authActionLoading || recoveryEmail.isEmpty || recoveryCaptcha.code.isEmpty || recoveryCaptcha.uuid.isEmpty)
-                }
-
-                Section("重置密码") {
-                    TextField("邮件 Token", text: $resetToken)
-                        .modifier(EmailInputModifier())
-                    SecureField("新密码", text: $resetPassword)
-                        .textContentType(.newPassword)
-                    Button {
-                        Task { await submitPasswordReset() }
-                    } label: {
-                        if authActionLoading {
-                            ProgressView()
-                        } else {
-                            Label("重置密码", systemImage: "key")
-                        }
-                    }
-                    .disabled(authActionLoading || resetToken.isEmpty || resetPassword.isEmpty)
-                }
+                unauthenticatedContent
             }
 
             if let error = environment.authSession.lastError {
@@ -214,37 +110,37 @@ struct AccountView: View {
                 }
             }
 
-            Section("故障排查") {
-                DisclosureGroup("会话与登录状态") {
-                    Button("刷新签名密钥") {
-                        Task {
-                            _ = await environment.authSession.refreshSignature()
-                            updateSessionDiagnostics()
+            if environment.authSession.currentUser != nil {
+                Section("故障排查") {
+                    DisclosureGroup("会话与登录状态") {
+                        Button("刷新签名密钥") {
+                            Task {
+                                _ = await environment.authSession.refreshSignature()
+                                updateSessionDiagnostics()
+                            }
                         }
-                    }
-                    .disabled(environment.authSession.isRefreshing)
+                        .disabled(environment.authSession.isRefreshing)
 
-                    Button {
-                        updateSessionDiagnostics()
-                    } label: {
-                        Label("检查会话状态", systemImage: "checkmark.shield")
-                    }
+                        Button {
+                            updateSessionDiagnostics()
+                        } label: {
+                            Label("检查会话状态", systemImage: "checkmark.shield")
+                        }
 
-                    Button {
-                        copySessionDiagnostics()
-                    } label: {
-                        Label("复制诊断摘要", systemImage: "doc.on.doc")
-                    }
+                        Button {
+                            copySessionDiagnostics()
+                        } label: {
+                            Label("复制诊断摘要", systemImage: "doc.on.doc")
+                        }
 
-                    Button(role: .destructive) {
-                        environment.authSession.resetLocalSession()
-                        updateSessionDiagnostics()
-                        sessionMessage = "本地会话已清理"
-                    } label: {
-                        Label("清理本地会话", systemImage: "trash")
-                    }
+                        Button(role: .destructive) {
+                            environment.authSession.resetLocalSession()
+                            updateSessionDiagnostics()
+                            sessionMessage = "本地会话已清理"
+                        } label: {
+                            Label("清理本地会话", systemImage: "trash")
+                        }
 
-                    if environment.authSession.currentUser != nil {
                         Button {
                             Task { await confirmCurrentSession() }
                         } label: {
@@ -255,50 +151,200 @@ struct AccountView: View {
                             }
                         }
                         .disabled(sessionActionLoading)
-                    }
 
-                    if let expireAt = environment.authSession.expireAt {
-                        LabeledContent("过期时间", value: expireAt.formatted())
-                    }
+                        if let expireAt = environment.authSession.expireAt {
+                            LabeledContent("过期时间", value: expireAt.formatted())
+                        }
 
-                    if let sessionDiagnostics {
-                        LabeledContent("API 主机", value: sessionDiagnostics.apiHost)
-                        LabeledContent("本地登录态", value: sessionDiagnostics.isSignedIn ? "存在" : "未登录")
-                        LabeledContent("SID Cookie", value: sessionDiagnostics.hasSIDCookie ? "存在" : "缺失")
-                        LabeledContent("Cookie 数量", value: "\(sessionDiagnostics.cookieCount)")
-                        LabeledContent("签名密钥", value: sessionDiagnostics.hasSignSecret ? "存在" : "缺失")
-                        LabeledContent("上次会话确认", value: sessionConfirmationText)
-                    }
+                        if let sessionDiagnostics {
+                            LabeledContent("API 主机", value: sessionDiagnostics.apiHost)
+                            LabeledContent("本地登录态", value: sessionDiagnostics.isSignedIn ? "存在" : "未登录")
+                            LabeledContent("SID Cookie", value: sessionDiagnostics.hasSIDCookie ? "存在" : "缺失")
+                            LabeledContent("Cookie 数量", value: "\(sessionDiagnostics.cookieCount)")
+                            LabeledContent("签名密钥", value: sessionDiagnostics.hasSignSecret ? "存在" : "缺失")
+                            LabeledContent("上次会话确认", value: sessionConfirmationText)
+                        }
 
-                    if let sessionMessage {
-                        Text(sessionMessage)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-
-            if environment.authSession.currentUser == nil {
-                Section("帮助") {
-                    Button {
-                        router.navigate(to: .docs)
-                    } label: {
-                        Label("开发文档", systemImage: "doc.text")
-                    }
-                    Button {
-                        router.navigate(to: .privacy)
-                    } label: {
-                        Label("隐私政策", systemImage: "hand.raised")
+                        if let sessionMessage {
+                            Text(sessionMessage)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
             }
         }
-        .navigationTitle("我的")
+        .navigationTitle(environment.authSession.currentUser == nil ? authPage.title : "我的")
         .task {
             if environment.authSession.currentUser == nil {
-                await refreshCaptchaIfNeeded(.login)
+                await refreshCaptchaIfNeeded(authPage.captchaKind)
             }
             updateSessionDiagnostics()
+        }
+        .onChange(of: authPage) {
+            authMessage = nil
+            passkeyMessage = nil
+            Task { await refreshCaptchaIfNeeded(authPage.captchaKind) }
+        }
+    }
+
+    @ViewBuilder
+    private var unauthenticatedContent: some View {
+        switch authPage {
+        case .login:
+            loginContent
+        case .register:
+            registerContent
+        case .recovery:
+            recoveryContent
+        }
+    }
+
+    private var loginContent: some View {
+        Group {
+            Section("登录") {
+                TextField("邮箱", text: $email)
+                    .textContentType(.username)
+                    .modifier(EmailInputModifier())
+                SecureField("密码", text: $password)
+                    .textContentType(.password)
+                CaptchaInputRow(
+                    code: $loginCaptcha.code,
+                    imageSource: loginCaptcha.imageSource,
+                    isLoading: loginCaptcha.isLoading,
+                    errorMessage: loginCaptcha.errorMessage
+                ) {
+                    Task { await refreshCaptcha(.login) }
+                }
+                Button("登录") {
+                    Task { await loginWithPassword() }
+                }
+                .disabled(email.isEmpty || password.isEmpty || loginCaptcha.code.isEmpty || loginCaptcha.uuid.isEmpty)
+                Button {
+                    Task { await loginWithPasskey() }
+                } label: {
+                    if passkeyLoading {
+                        ProgressView()
+                    } else {
+                        Label("使用通行密钥登录", systemImage: "touchid")
+                    }
+                }
+                .disabled(passkeyLoading)
+                if let passkeyMessage {
+                    Text(passkeyMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                if let authMessage {
+                    Text(authMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Section("账号") {
+                Button {
+                    authPage = .register
+                } label: {
+                    Label("注册账号", systemImage: "person.badge.plus")
+                }
+                Button {
+                    authPage = .recovery
+                } label: {
+                    Label("找回密码", systemImage: "key")
+                }
+            }
+        }
+    }
+
+    private var registerContent: some View {
+        Group {
+            Section("注册账号") {
+                TextField("邮箱", text: $registerEmail)
+                    .textContentType(.emailAddress)
+                    .modifier(EmailInputModifier())
+                SecureField("密码", text: $registerPassword)
+                    .textContentType(.newPassword)
+                CaptchaInputRow(
+                    code: $registerCaptcha.code,
+                    imageSource: registerCaptcha.imageSource,
+                    isLoading: registerCaptcha.isLoading,
+                    errorMessage: registerCaptcha.errorMessage
+                ) {
+                    Task { await refreshCaptcha(.register) }
+                }
+                Button {
+                    Task { await registerAccount() }
+                } label: {
+                    if authActionLoading {
+                        ProgressView()
+                    } else {
+                        Label("注册", systemImage: "person.badge.plus")
+                    }
+                }
+                .disabled(authActionLoading || registerEmail.isEmpty || registerPassword.isEmpty || registerCaptcha.code.isEmpty || registerCaptcha.uuid.isEmpty)
+            }
+
+            Section {
+                Button {
+                    authPage = .login
+                } label: {
+                    Label("已有账号，返回登录", systemImage: "arrow.left")
+                }
+            }
+        }
+    }
+
+    private var recoveryContent: some View {
+        Group {
+            Section("找回密码") {
+                TextField("邮箱", text: $recoveryEmail)
+                    .textContentType(.emailAddress)
+                    .modifier(EmailInputModifier())
+                CaptchaInputRow(
+                    code: $recoveryCaptcha.code,
+                    imageSource: recoveryCaptcha.imageSource,
+                    isLoading: recoveryCaptcha.isLoading,
+                    errorMessage: recoveryCaptcha.errorMessage
+                ) {
+                    Task { await refreshCaptcha(.recovery) }
+                }
+                Button {
+                    Task { await sendPasswordRecoveryEmail() }
+                } label: {
+                    if authActionLoading {
+                        ProgressView()
+                    } else {
+                        Label("发送重置邮件", systemImage: "envelope")
+                    }
+                }
+                .disabled(authActionLoading || recoveryEmail.isEmpty || recoveryCaptcha.code.isEmpty || recoveryCaptcha.uuid.isEmpty)
+            }
+
+            Section("重置密码") {
+                TextField("邮件 Token", text: $resetToken)
+                    .modifier(EmailInputModifier())
+                SecureField("新密码", text: $resetPassword)
+                    .textContentType(.newPassword)
+                Button {
+                    Task { await submitPasswordReset() }
+                } label: {
+                    if authActionLoading {
+                        ProgressView()
+                    } else {
+                        Label("重置密码", systemImage: "key")
+                    }
+                }
+                .disabled(authActionLoading || resetToken.isEmpty || resetPassword.isEmpty)
+            }
+
+            Section {
+                Button {
+                    authPage = .login
+                } label: {
+                    Label("返回登录", systemImage: "arrow.left")
+                }
+            }
         }
     }
 
@@ -313,7 +359,7 @@ struct AccountView: View {
         updateSessionDiagnostics()
         if environment.authSession.currentUser == nil {
             lastSessionConfirmation = false
-            sessionMessage = "登录未建立有效会话，请查看下方状态"
+            authMessage = "登录未建立有效会话，请重试"
             loginCaptcha.code = ""
             await refreshCaptcha(.login)
         } else {
@@ -339,7 +385,7 @@ struct AccountView: View {
             passkeyMessage = error.localizedDescription
             updateSessionDiagnostics()
             lastSessionConfirmation = false
-            sessionMessage = "通行密钥未建立有效会话，请查看下方状态"
+            sessionMessage = "通行密钥未建立有效会话"
         }
         passkeyLoading = false
     }
@@ -358,6 +404,7 @@ struct AccountView: View {
             email = registerEmail
             password = registerPassword
             registerPassword = ""
+            authPage = .login
         }
         registerCaptcha.code = ""
         await refreshCaptcha(.register)
@@ -388,6 +435,7 @@ struct AccountView: View {
             authMessage = "密码已重置，可以使用新密码登录"
             resetToken = ""
             resetPassword = ""
+            authPage = .login
         }
         authActionLoading = false
     }
@@ -607,6 +655,28 @@ private enum AuthCaptchaKind {
     case login
     case register
     case recovery
+}
+
+private enum AuthPage {
+    case login
+    case register
+    case recovery
+
+    var title: String {
+        switch self {
+        case .login: "登录"
+        case .register: "注册账号"
+        case .recovery: "找回密码"
+        }
+    }
+
+    var captchaKind: AuthCaptchaKind {
+        switch self {
+        case .login: .login
+        case .register: .register
+        case .recovery: .recovery
+        }
+    }
 }
 
 private struct AuthCaptchaState {
