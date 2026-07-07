@@ -1,3 +1,4 @@
+import SetuIOSCore
 import SwiftUI
 
 enum StaticInfoKind {
@@ -40,7 +41,13 @@ enum StaticInfoKind {
 }
 
 struct StaticInfoView: View {
+    @Environment(\.openURL) private var openURL
+    @Bindable var environment: AppEnvironment
     let kind: StaticInfoKind
+    @State private var dailyState: LoadState<SetuImageItem> = .idle
+    @State private var dailyMessage: String?
+    @State private var dailyFavorited = false
+    @State private var dailyActionLoading = false
 
     var body: some View {
         List {
@@ -60,6 +67,7 @@ struct StaticInfoView: View {
             switch kind {
             case .docs:
                 docsContent
+                dailyExampleContent
             case .about:
                 aboutContent
             case .privacy:
@@ -67,6 +75,16 @@ struct StaticInfoView: View {
             }
         }
         .navigationTitle(kind.title)
+        .task(id: kind.title) {
+            if case .docs = kind {
+                await loadDailyExample()
+            }
+        }
+        .refreshable {
+            if case .docs = kind {
+                await loadDailyExample()
+            }
+        }
     }
 
     @ViewBuilder
@@ -89,6 +107,39 @@ struct StaticInfoView: View {
             InfoParagraph("浏览器和 iOS 均沿用 `SID` Cookie + `signSecret` 的 HMAC 签名模型。API Key 主要服务程序化图片和音乐 API 调用。")
             InfoPair(title: "积分", value: "每日登录可获取积分，调用 `/setu/v2` 会消耗积分。")
             InfoPair(title: "密钥", value: "在 API Keys 页面创建、启停、重命名和删除。")
+        }
+    }
+
+    @ViewBuilder
+    private var dailyExampleContent: some View {
+        Section("每日示例图") {
+            switch dailyState {
+            case .idle, .loading:
+                ProgressView("正在加载示例图")
+            case .failed(let message):
+                ContentUnavailableView("示例图加载失败", systemImage: "photo.badge.exclamationmark", description: Text(message))
+            case .loaded(let item):
+                DailySetuExampleCard(
+                    item: item,
+                    isFavorited: dailyFavorited,
+                    isActionLoading: dailyActionLoading,
+                    onFavorite: {
+                        Task { await toggleFavorite(item) }
+                    },
+                    onDownload: {
+                        Task { await openSignedDownload(for: item) }
+                    },
+                    onOpenOriginal: {
+                        openOriginal(item)
+                    }
+                )
+            }
+
+            if let dailyMessage {
+                Text(dailyMessage)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
@@ -139,6 +190,142 @@ struct StaticInfoView: View {
             InfoParagraph("服务按现状提供，可能因维护、升级或第三方服务故障中断。重大服务或条款变更会通过站内公告或邮件通知。")
             InfoPair(title: "最后更新", value: "2025年12月28日")
         }
+    }
+
+    private func loadDailyExample() async {
+        dailyState = .loading
+        dailyMessage = nil
+        do {
+            guard let item = try await environment.publicBlogClient.dailySetu() else {
+                dailyState = .failed("公共示例接口暂未返回图片")
+                return
+            }
+            dailyState = .loaded(item)
+            dailyFavorited = (try? await environment.favoriteClient.exists(pid: item.pid, p: item.page)) == true
+        } catch {
+            dailyState = .failed(error.localizedDescription)
+        }
+    }
+
+    private func toggleFavorite(_ item: SetuImageItem) async {
+        dailyActionLoading = true
+        defer { dailyActionLoading = false }
+
+        do {
+            if dailyFavorited {
+                try await environment.favoriteClient.remove(pid: item.pid, p: item.page)
+                dailyFavorited = false
+                dailyMessage = "已取消收藏"
+            } else {
+                try await environment.favoriteClient.add(pid: item.pid, p: item.page)
+                dailyFavorited = true
+                dailyMessage = "已加入默认收藏夹"
+            }
+        } catch {
+            dailyMessage = error.localizedDescription
+        }
+    }
+
+    private func openSignedDownload(for item: SetuImageItem) async {
+        guard let url = item.originalURLString ?? item.previewURLString else {
+            dailyMessage = "这张图片没有可下载链接"
+            return
+        }
+
+        dailyActionLoading = true
+        defer { dailyActionLoading = false }
+
+        do {
+            let signed = try await environment.downloadClient.sign(url: url, filename: "\(item.pid)_p\(item.page).\(item.ext ?? "jpg")")
+            if let downloadURL = URL(string: signed.downloadUrl) {
+                openURL(downloadURL)
+                dailyMessage = "已打开下载链接"
+            } else {
+                dailyMessage = "下载链接无效"
+            }
+        } catch {
+            dailyMessage = error.localizedDescription
+        }
+    }
+
+    private func openOriginal(_ item: SetuImageItem) {
+        guard let urlString = item.originalURLString ?? item.previewURLString, let url = URL(string: urlString) else {
+            dailyMessage = "这张图片没有可打开链接"
+            return
+        }
+        openURL(url)
+        dailyMessage = "已打开原图"
+    }
+}
+
+private struct DailySetuExampleCard: View {
+    let item: SetuImageItem
+    let isFavorited: Bool
+    let isActionLoading: Bool
+    let onFavorite: () -> Void
+    let onDownload: () -> Void
+    let onOpenOriginal: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            AsyncImage(url: item.previewURLString.flatMap(URL.init(string:))) { phase in
+                switch phase {
+                case .empty:
+                    ZStack {
+                        Rectangle()
+                            .fill(.quaternary)
+                        ProgressView()
+                    }
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFill()
+                case .failure:
+                    ContentUnavailableView("图片加载失败", systemImage: "photo")
+                @unknown default:
+                    EmptyView()
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 220)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(item.title)
+                    .font(.headline)
+                    .lineLimit(2)
+                Text(item.author)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 10) {
+                    Label("\(item.pid)-\(item.page)", systemImage: "number")
+                    Label("\(item.width)x\(item.height)", systemImage: "rectangle")
+                    if item.r18 == 1 {
+                        Text("R18")
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            HStack {
+                Button(action: onFavorite) {
+                    Label(isFavorited ? "取消收藏" : "收藏", systemImage: isFavorited ? "heart.fill" : "heart")
+                }
+                .disabled(isActionLoading)
+
+                Button(action: onDownload) {
+                    Label("下载", systemImage: "arrow.down.circle")
+                }
+                .disabled(isActionLoading)
+
+                Button(action: onOpenOriginal) {
+                    Label("原图", systemImage: "arrow.up.forward.square")
+                }
+            }
+            .buttonStyle(.borderless)
+        }
+        .padding(.vertical, 4)
     }
 }
 

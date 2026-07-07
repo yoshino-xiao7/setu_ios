@@ -69,11 +69,11 @@ struct RootAppView: View {
         case .apiKeys:
             ApiKeyListView(environment: environment)
         case .docs:
-            StaticInfoView(kind: .docs)
+            StaticInfoView(environment: environment, kind: .docs)
         case .about:
-            StaticInfoView(kind: .about)
+            StaticInfoView(environment: environment, kind: .about)
         case .privacy:
-            StaticInfoView(kind: .privacy)
+            StaticInfoView(environment: environment, kind: .privacy)
         case .passkeys:
             PasskeyListView(environment: environment)
         case .points:
@@ -189,11 +189,11 @@ struct RootAppView: View {
         case .qqBinding:
             QqBindingView(environment: environment)
         case .docs:
-            StaticInfoView(kind: .docs)
+            StaticInfoView(environment: environment, kind: .docs)
         case .about:
-            StaticInfoView(kind: .about)
+            StaticInfoView(environment: environment, kind: .about)
         case .privacy:
-            StaticInfoView(kind: .privacy)
+            StaticInfoView(environment: environment, kind: .privacy)
         case .deleteRequests:
             ImageDeleteRequestsView(environment: environment)
         case .pointsLogs:

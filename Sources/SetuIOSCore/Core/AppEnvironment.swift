@@ -7,6 +7,7 @@ public final class AppEnvironment {
     public let keychain: KeychainStoring
     public let apiClient: APIClient
     public let mobileAppClient: MobileAppClient
+    public let publicBlogClient: PublicBlogClient
     public let dashboardClient: DashboardClient
     public let apiKeyClient: ApiKeyClient
     public let pointsClient: PointsClient
@@ -29,6 +30,7 @@ public final class AppEnvironment {
         keychain: KeychainStoring,
         apiClient: APIClient,
         mobileAppClient: MobileAppClient,
+        publicBlogClient: PublicBlogClient,
         dashboardClient: DashboardClient,
         apiKeyClient: ApiKeyClient,
         pointsClient: PointsClient,
@@ -50,6 +52,7 @@ public final class AppEnvironment {
         self.keychain = keychain
         self.apiClient = apiClient
         self.mobileAppClient = mobileAppClient
+        self.publicBlogClient = publicBlogClient
         self.dashboardClient = dashboardClient
         self.apiKeyClient = apiKeyClient
         self.pointsClient = pointsClient
@@ -82,6 +85,7 @@ public final class AppEnvironment {
             signatureRefreshNotifier: signatureRefreshNotifier
         )
         let mobileAppClient = MobileAppClient(apiClient: client)
+        let publicBlogClient = PublicBlogClient(apiClient: client)
         let dashboardClient = DashboardClient(apiClient: client)
         let apiKeyClient = ApiKeyClient(apiClient: client)
         let pointsClient = PointsClient(apiClient: client)
@@ -109,6 +113,7 @@ public final class AppEnvironment {
             keychain: keychain,
             apiClient: client,
             mobileAppClient: mobileAppClient,
+            publicBlogClient: publicBlogClient,
             dashboardClient: dashboardClient,
             apiKeyClient: apiKeyClient,
             pointsClient: pointsClient,
