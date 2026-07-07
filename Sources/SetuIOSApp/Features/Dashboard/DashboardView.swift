@@ -6,9 +6,7 @@ struct DashboardView: View {
     @Environment(RouterPath.self) private var router
     @State private var state: LoadState<HomeDashboardSnapshot> = .idle
     @State private var usageLogPage = 1
-    @State private var usageLogPageSize = 10
-
-    private let usageLogPageSizes = [10, 20, 50]
+    private let usageLogPageSize = 10
 
     var body: some View {
         List {
@@ -27,7 +25,7 @@ struct DashboardView: View {
             accountStatusSection
 
             Section("继续使用") {
-                FeatureRow(title: "图片积分调用", systemImage: "bolt.circle") {
+                FeatureRow(title: "图片参数与批量获取", systemImage: "slider.horizontal.3") {
                     router.navigate(to: .points)
                 }
                 FeatureRow(title: "积分流水", systemImage: "list.bullet.rectangle") {
@@ -107,7 +105,7 @@ struct DashboardView: View {
 
     @ViewBuilder
     private var accountStatusSection: some View {
-        Section("账户状态") {
+        Section("今日状态") {
             switch state {
             case .idle, .loading:
                 ProgressView("正在加载")
@@ -135,9 +133,9 @@ struct DashboardView: View {
                     systemImage: "bell"
                 )
                 DashboardMetricRow(
-                    title: "今日图片调用",
+                    title: "今日刷图",
                     value: snapshot.usage.map { String($0.todayCalls) } ?? "-",
-                    systemImage: "chart.line.uptrend.xyaxis"
+                    systemImage: "photo.on.rectangle"
                 )
             }
         }
@@ -145,10 +143,10 @@ struct DashboardView: View {
 
     @ViewBuilder
     private var usageLogsSection: some View {
-        Section("最近积分调用") {
+        Section("最近刷图记录") {
             switch state {
             case .idle, .loading:
-                ProgressView("正在加载积分记录")
+                ProgressView("正在加载刷图记录")
             case .failed:
                 EmptyView()
             case .loaded(let snapshot):
@@ -160,7 +158,7 @@ struct DashboardView: View {
                         usageLogControls(total: total)
                     }
                 } else {
-                    ContentUnavailableView("暂无积分调用记录", systemImage: "clock.arrow.circlepath")
+                    ContentUnavailableView("暂无刷图记录", systemImage: "clock.arrow.circlepath")
                 }
             }
         }
@@ -168,16 +166,6 @@ struct DashboardView: View {
 
     private func usageLogControls(total: Int) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Menu("每页 \(usageLogPageSize)") {
-                ForEach(usageLogPageSizes, id: \.self) { size in
-                    Button("\(size) 条") {
-                        usageLogPageSize = size
-                        usageLogPage = 1
-                        Task { await load() }
-                    }
-                }
-            }
-
             HStack {
                 Button("上一页") {
                     Task {
@@ -188,7 +176,7 @@ struct DashboardView: View {
                 .disabled(usageLogPage <= 1)
 
                 Spacer()
-                Text("第 \(usageLogPage) / \(max(1, Int(ceil(Double(total) / Double(usageLogPageSize))))) 页，共 \(total) 条")
+                Text("第 \(usageLogPage) / \(max(1, Int(ceil(Double(total) / Double(usageLogPageSize))))) 页")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -217,7 +205,7 @@ private struct UsageLogRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("图片积分调用")
+                Text("随机图片")
                     .font(.headline)
                     .lineLimit(1)
                 Spacer()
