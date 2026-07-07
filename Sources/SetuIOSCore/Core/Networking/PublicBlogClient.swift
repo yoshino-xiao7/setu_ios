@@ -16,6 +16,28 @@ public struct PublicBlogClient: Sendable {
         return response.items.first
     }
 
+    public func searchMusic(
+        keywords: String,
+        limit: Int = 30,
+        offset: Int = 0,
+        type: Int = 1
+    ) async throws -> MusicSearchResult {
+        let trimmedKeywords = String(keywords.trimmingCharacters(in: .whitespacesAndNewlines).prefix(100))
+        guard !trimmedKeywords.isEmpty else {
+            throw APIError.invalidURL("/blog/music/search")
+        }
+
+        let encodedKeywords = trimmedKeywords.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? trimmedKeywords
+        let clampedLimit = min(max(limit, 1), 50)
+        let clampedOffset = min(max(offset, 0), 1000)
+        let clampedType = min(max(type, 1), 1000)
+        return try await apiClient.get(
+            "/blog/music/search?keywords=\(encodedKeywords)&limit=\(clampedLimit)&offset=\(clampedOffset)&type=\(clampedType)",
+            signed: false,
+            headers: sourceHeaders()
+        )
+    }
+
     private func sourceHeaders() -> [String: String] {
         [
             "Origin": siteOrigin(),

@@ -38,6 +38,23 @@ final class PublicBlogClientTests: XCTestCase {
         XCTAssertEqual(request?.value(forHTTPHeaderField: "User-Agent"), "SetuIOSApp/1.0 iOS")
     }
 
+    func testSearchMusicUsesPublicBlogEndpointAndSourceHeaders() async throws {
+        let client = makeClient(body: musicSearchPayload())
+
+        let result = try await client.searchMusic(keywords: " 夜に駆ける ", limit: 99, offset: -5, type: 0)
+
+        XCTAssertEqual(result.result.songs.first?.id, 1409311773)
+        let request = try XCTUnwrap(MockURLProtocol.lastRequest)
+        XCTAssertEqual(request.url?.path, "/blog/music/search")
+        XCTAssertEqual(request.url?.query?.contains("keywords=%E5%A4%9C%E3%81%AB%E9%A7%86%E3%81%91%E3%82%8B"), true)
+        XCTAssertEqual(request.url?.query?.contains("limit=50"), true)
+        XCTAssertEqual(request.url?.query?.contains("offset=0"), true)
+        XCTAssertEqual(request.url?.query?.contains("type=1"), true)
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Origin"), "https://example.com")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Referer"), "https://example.com/docs")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "User-Agent"), "SetuIOSApp/1.0 iOS")
+    }
+
     private func makeClient(body: String) -> PublicBlogClient {
         let session = URLSession(configuration: .publicBlogMock(body: body))
         let apiClient = APIClient(
@@ -67,6 +84,30 @@ final class PublicBlogClientTests: XCTestCase {
             "regular": "https://example.com/regular.jpg",
             "original": "https://example.com/original.jpg",
             "small": null
+          }
+        }
+        """
+    }
+
+    private func musicSearchPayload() -> String {
+        """
+        {
+          "result": {
+            "songs": [
+              {
+                "id": 1409311773,
+                "name": "夜に駆ける",
+                "ar": [{ "id": 33927412, "name": "YOASOBI" }],
+                "al": {
+                  "id": 83898690,
+                  "name": "夜に駆ける",
+                  "picUrl": "https://example.com/cover.jpg"
+                },
+                "dt": 261013,
+                "mv": 10907191
+              }
+            ],
+            "songCount": 1
           }
         }
         """
