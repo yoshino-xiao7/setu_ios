@@ -73,11 +73,13 @@ public final class AppEnvironment {
         let keychain = KeychainStore(service: "com.xueliang.setu-ios")
         let signer = AuthSigner(keychain: keychain)
         let sessionInvalidationNotifier = SessionInvalidationNotifier()
+        let signatureRefreshNotifier = SignatureRefreshNotifier()
         let client = APIClient(
             config: config,
             signer: signer,
             session: APIClient.liveSession(),
-            sessionInvalidationNotifier: sessionInvalidationNotifier
+            sessionInvalidationNotifier: sessionInvalidationNotifier,
+            signatureRefreshNotifier: signatureRefreshNotifier
         )
         let mobileAppClient = MobileAppClient(apiClient: client)
         let dashboardClient = DashboardClient(apiClient: client)
@@ -98,6 +100,9 @@ public final class AppEnvironment {
         let session = AuthSession(apiClient: client, keychain: keychain)
         sessionInvalidationNotifier.setHandler { [weak session] in
             await session?.invalidateLocalSession()
+        }
+        signatureRefreshNotifier.setHandler { [weak session] in
+            await session?.refreshSignature() ?? false
         }
         return AppEnvironment(
             config: config,

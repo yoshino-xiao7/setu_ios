@@ -293,6 +293,39 @@ final class APIClientUnauthorizedTests: XCTestCase {
         XCTAssertNotNil(UUID(uuidString: requestID ?? ""))
     }
 
+    func testSignedRequestRefreshesMissingSignatureBeforeSending() async throws {
+        let keychain = InMemoryKeychain()
+        let capturedRequest = RequestProbe()
+        let refreshNotifier = SignatureRefreshNotifier()
+        refreshNotifier.setHandler {
+            try? keychain.setString("refreshed-secret", for: "signSecret")
+            return true
+        }
+        let session = URLSession(
+            configuration: .mock { request in
+                Task {
+                    await capturedRequest.capture(request)
+                }
+                return MockHTTPResponse(statusCode: 200, body: "{}")
+            }
+        )
+        let client = APIClient(
+            config: AppConfig(apiBaseURL: URL(string: "https://api.example.com")!, siteBaseURL: URL(string: "https://example.com")!),
+            signer: AuthSigner(keychain: keychain),
+            session: session,
+            signatureRefreshNotifier: refreshNotifier
+        )
+
+        let _: EmptyResponse = try await client.get("/user/info")
+
+        let signature = await capturedRequest.lastRequest?.value(forHTTPHeaderField: "X-Signature")
+        let timestamp = await capturedRequest.lastRequest?.value(forHTTPHeaderField: "X-Timestamp")
+        let nonce = await capturedRequest.lastRequest?.value(forHTTPHeaderField: "X-Nonce")
+        XCTAssertFalse(signature?.isEmpty ?? true)
+        XCTAssertFalse(timestamp?.isEmpty ?? true)
+        XCTAssertFalse(nonce?.isEmpty ?? true)
+    }
+
     func testUnauthorizedResponseNotifiesSessionInvalidation() async throws {
         let keychain = InMemoryKeychain()
         try keychain.setString("secret", for: "signSecret")

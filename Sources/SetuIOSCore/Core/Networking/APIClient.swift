@@ -4,6 +4,7 @@ public struct APIClient: Sendable {
     public let config: AppConfig
     public let signer: AuthSigner
     public let sessionInvalidationNotifier: SessionInvalidationNotifier?
+    public let signatureRefreshNotifier: SignatureRefreshNotifier?
     public var session: URLSession = .shared
     public var decoder: JSONDecoder = JSONDecoder()
     public var encoder: JSONEncoder = JSONEncoder()
@@ -14,11 +15,13 @@ public struct APIClient: Sendable {
         session: URLSession = .shared,
         decoder: JSONDecoder = JSONDecoder(),
         encoder: JSONEncoder = JSONEncoder(),
-        sessionInvalidationNotifier: SessionInvalidationNotifier? = nil
+        sessionInvalidationNotifier: SessionInvalidationNotifier? = nil,
+        signatureRefreshNotifier: SignatureRefreshNotifier? = nil
     ) {
         self.config = config
         self.signer = signer
         self.sessionInvalidationNotifier = sessionInvalidationNotifier
+        self.signatureRefreshNotifier = signatureRefreshNotifier
         self.session = session
         self.decoder = decoder
         self.encoder = encoder
@@ -130,6 +133,7 @@ public struct APIClient: Sendable {
         request.setValue(requestID, forHTTPHeaderField: "X-Request-Id")
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         if signed {
+            await refreshSignatureIfNeeded()
             let headers = try signer.signedHeaders(method: "POST", path: url.path)
             for (name, value) in headers {
                 request.setValue(value, forHTTPHeaderField: name)
@@ -163,6 +167,7 @@ public struct APIClient: Sendable {
             throw APIError.invalidURL(path)
         }
 
+        await refreshSignatureIfNeeded(signed: signed)
         let requestID = Self.makeRequestID()
         var request = URLRequest(url: url)
         request.httpMethod = method
@@ -205,6 +210,11 @@ public struct APIClient: Sendable {
         return try decoder.decode(Value.self, from: data)
     }
 
+    private func refreshSignatureIfNeeded(signed: Bool = true) async {
+        guard signed, !signer.hasSignSecret() else { return }
+        _ = await signatureRefreshNotifier?.refreshSignature()
+    }
+
     private static func makeRequestID() -> String {
         UUID().uuidString.lowercased()
     }
@@ -236,6 +246,24 @@ public final class SessionInvalidationNotifier: @unchecked Sendable {
     public func notifyUnauthorized() async {
         let handler = lock.withLock { handler }
         await handler?()
+    }
+}
+
+public final class SignatureRefreshNotifier: @unchecked Sendable {
+    private let lock = NSLock()
+    private var handler: (@Sendable () async -> Bool)?
+
+    public init() {}
+
+    public func setHandler(_ handler: (@Sendable () async -> Bool)?) {
+        lock.withLock {
+            self.handler = handler
+        }
+    }
+
+    public func refreshSignature() async -> Bool {
+        let handler = lock.withLock { handler }
+        return await handler?() ?? false
     }
 }
 
