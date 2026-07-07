@@ -48,6 +48,16 @@ public struct AdminClient: Sendable {
         let _: String = try await apiClient.requestWithoutBody("/admin/user/\(id)", method: "DELETE")
     }
 
+    public func imageInfo(pid: Int, p: Int = 0) async throws -> AdminImageDetail {
+        try await apiClient.get(queryPath(
+            "/admin/image/info",
+            items: [
+                URLQueryItem(name: "pid", value: "\(pid)"),
+                URLQueryItem(name: "p", value: "\(p)")
+            ]
+        ))
+    }
+
     public func grantPoints(userID: Int, amount: Int, reason: String?) async throws -> AdminPointsGrantResponse {
         try await apiClient.post(
             "/admin/users/\(userID)/points",

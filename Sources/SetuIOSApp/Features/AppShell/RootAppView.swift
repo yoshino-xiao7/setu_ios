@@ -122,6 +122,10 @@ struct RootAppView: View {
             SystemStatusView(environment: environment, title: "系统监控")
         case .adminMusicTokens:
             AdminMusicTokensView(environment: environment)
+        case .adminImageInfo:
+            AdminImageInfoView(environment: environment)
+        case .adminImageDetail(let pid, let p):
+            AdminImageInfoView(environment: environment, initialPID: pid, initialPage: p)
         case .adminImageDeleteRequests:
             AdminImageDeleteRequestsView(environment: environment)
         case .adminImageDeleteRequestDetail(let id):

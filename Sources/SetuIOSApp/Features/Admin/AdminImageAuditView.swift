@@ -2,6 +2,7 @@ import SetuIOSCore
 import SwiftUI
 
 struct AdminImageAuditView: View {
+    @Environment(RouterPath.self) private var router
     @Bindable var environment: AppEnvironment
     @State private var state: LoadState<ImageAuditPageResult> = .idle
     @State private var scope = "UNREVIEWED"
@@ -163,6 +164,8 @@ struct AdminImageAuditView: View {
                             reasonDraft = ImageAuditReasonDraft(kind: .deleteRequest, image: image, imageIDs: [image.id])
                         } onCheckAvailability: {
                             Task { await checkAvailability([image.id]) }
+                        } onDetail: {
+                            router.navigate(to: .adminImageDetail(image.pid, image.p))
                         }
                         .disabled(isSubmitting)
                     }
@@ -345,6 +348,7 @@ private struct ImageAuditRow: View {
     let onProblem: () -> Void
     let onDeleteRequest: () -> Void
     let onCheckAvailability: () -> Void
+    let onDetail: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -426,6 +430,11 @@ private struct ImageAuditRow: View {
                 Link(destination: url) {
                     Label("查看", systemImage: "eye")
                 }
+            }
+            Button {
+                onDetail()
+            } label: {
+                Label("详情", systemImage: "info.circle")
             }
             Button {
                 onCheckAvailability()

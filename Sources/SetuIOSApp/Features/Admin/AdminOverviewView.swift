@@ -110,6 +110,11 @@ struct AdminOverviewView: View {
                 Label("新增图片", systemImage: "plus.square.on.square")
             }
             Button {
+                router.navigate(to: .adminImageInfo)
+            } label: {
+                Label("图片详情查询", systemImage: "photo.badge.magnifyingglass")
+            }
+            Button {
                 router.navigate(to: .adminImageAudit)
             } label: {
                 Label("图片库管理", systemImage: "photo.badge.checkmark")

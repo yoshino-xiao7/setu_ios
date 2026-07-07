@@ -36,6 +36,8 @@ enum AppRoute: Hashable {
     case adminBlacklist
     case adminSystemStatus
     case adminMusicTokens
+    case adminImageInfo
+    case adminImageDetail(Int, Int)
     case adminImageDeleteRequests
     case adminImageDeleteRequestDetail(Int)
     case adminImageAudit

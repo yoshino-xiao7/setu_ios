@@ -73,6 +73,37 @@ public struct AdminUserApiKey: Decodable, Identifiable, Sendable {
     }
 }
 
+public struct AdminImageDetail: Decodable, Identifiable, Sendable {
+    public let pid: Int
+    public let p: Int
+    public let uid: Int
+    public let title: String
+    public let author: String
+    public let r18: Int
+    public let width: Int
+    public let height: Int
+    public let ext: String
+    public let aiType: Int
+    public let uploadDate: Int64
+    public let urlOriginal: String?
+    public let tags: [String]?
+
+    public var id: String { "\(pid)-\(p)" }
+    public var pidText: String { "\(pid)_p\(p)" }
+
+    public var ratingTitle: String {
+        r18 == 1 ? "R18" : "全年龄"
+    }
+
+    public var aiTitle: String {
+        switch aiType {
+        case 1: "非 AI"
+        case 2: "AI"
+        default: "未知"
+        }
+    }
+}
+
 public struct AdminPointsGrantRequest: Encodable, Sendable {
     public let amount: Int
     public let reason: String?
