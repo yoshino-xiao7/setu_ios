@@ -73,7 +73,12 @@ public final class AppEnvironment {
         let keychain = KeychainStore(service: "com.xueliang.setu-ios")
         let signer = AuthSigner(keychain: keychain)
         let sessionInvalidationNotifier = SessionInvalidationNotifier()
-        let client = APIClient(config: config, signer: signer, sessionInvalidationNotifier: sessionInvalidationNotifier)
+        let client = APIClient(
+            config: config,
+            signer: signer,
+            session: APIClient.liveSession(),
+            sessionInvalidationNotifier: sessionInvalidationNotifier
+        )
         let mobileAppClient = MobileAppClient(apiClient: client)
         let dashboardClient = DashboardClient(apiClient: client)
         let apiKeyClient = ApiKeyClient(apiClient: client)

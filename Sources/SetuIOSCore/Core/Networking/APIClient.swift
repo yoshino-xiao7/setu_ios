@@ -24,6 +24,18 @@ public struct APIClient: Sendable {
         self.encoder = encoder
     }
 
+    public static func liveSessionConfiguration() -> URLSessionConfiguration {
+        let configuration = URLSessionConfiguration.default
+        configuration.httpCookieStorage = .shared
+        configuration.httpCookieAcceptPolicy = .always
+        configuration.httpShouldSetCookies = true
+        return configuration
+    }
+
+    public static func liveSession() -> URLSession {
+        URLSession(configuration: liveSessionConfiguration())
+    }
+
     public func get<Value: Decodable & Sendable>(_ path: String, signed: Bool = true) async throws -> Value {
         try await request(path, method: "GET", body: Optional<Data>.none, signed: signed)
     }
@@ -89,6 +101,7 @@ public struct APIClient: Sendable {
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
+        request.httpShouldHandleCookies = true
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         if signed {
@@ -128,6 +141,7 @@ public struct APIClient: Sendable {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.httpBody = body
+        request.httpShouldHandleCookies = true
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if body != nil {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")

@@ -139,6 +139,37 @@ final class AuthSessionTests: XCTestCase {
 }
 
 final class APIClientUnauthorizedTests: XCTestCase {
+    func testLiveSessionConfigurationUsesSharedCookies() {
+        let configuration = APIClient.liveSessionConfiguration()
+
+        XCTAssertTrue(configuration.httpShouldSetCookies)
+        XCTAssertEqual(configuration.httpCookieAcceptPolicy, .always)
+        XCTAssertTrue(configuration.httpCookieStorage === HTTPCookieStorage.shared)
+    }
+
+    func testRequestsExplicitlyAllowCookieHandling() async throws {
+        let keychain = InMemoryKeychain()
+        let capturedRequest = RequestProbe()
+        let session = URLSession(
+            configuration: .mock { request in
+                Task {
+                    await capturedRequest.capture(request)
+                }
+                return MockHTTPResponse(statusCode: 200, body: "{}")
+            }
+        )
+        let client = APIClient(
+            config: AppConfig(apiBaseURL: URL(string: "https://api.example.com")!, siteBaseURL: URL(string: "https://example.com")!),
+            signer: AuthSigner(keychain: keychain),
+            session: session
+        )
+
+        let _: EmptyResponse = try await client.get("/auth/captcha", signed: false)
+
+        let handlesCookies = await capturedRequest.lastRequest?.httpShouldHandleCookies
+        XCTAssertEqual(handlesCookies, true)
+    }
+
     func testUnauthorizedResponseNotifiesSessionInvalidation() async throws {
         let keychain = InMemoryKeychain()
         try keychain.setString("secret", for: "signSecret")
@@ -162,6 +193,14 @@ final class APIClientUnauthorizedTests: XCTestCase {
             let wasInvalidated = await invalidated.wasInvalidated
             XCTAssertTrue(wasInvalidated)
         }
+    }
+}
+
+private actor RequestProbe {
+    private(set) var lastRequest: URLRequest?
+
+    func capture(_ request: URLRequest) {
+        lastRequest = request
     }
 }
 
