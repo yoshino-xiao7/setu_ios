@@ -16,10 +16,30 @@ final class MusicPlaybackController {
     private(set) var currentQueueIndex: Int?
     private(set) var isPlaying = false
     private(set) var message: String?
+    private(set) var currentTimeSeconds: Double = 0
 
     @ObservationIgnored private var player: AVPlayer?
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var remoteCommandsConfigured = false
+
+    var durationSeconds: Double {
+        currentTrack?.durationSeconds ?? 0
+    }
+
+    var playbackProgress: Double {
+        guard durationSeconds > 0 else { return 0 }
+        return min(max(currentTimeSeconds / durationSeconds, 0), 1)
+    }
+
+    var canPlayPrevious: Bool {
+        guard let currentQueueIndex else { return false }
+        return currentQueueIndex > 0
+    }
+
+    var canPlayNext: Bool {
+        guard let currentQueueIndex else { return false }
+        return currentQueueIndex + 1 < queueTracks.count
+    }
 
     deinit {
         if let timeObserver {
@@ -46,6 +66,7 @@ final class MusicPlaybackController {
         self.queueTracks = nextQueue
         currentQueueIndex = nextQueue.firstIndex { $0.id == track.id }
         isPlaying = true
+        currentTimeSeconds = 0
         message = "正在播放 \(track.title)"
         addTimeObserver()
         updateNowPlaying(elapsed: 0)
@@ -79,9 +100,25 @@ final class MusicPlaybackController {
         queueTracks = []
         currentQueueIndex = nil
         isPlaying = false
+        currentTimeSeconds = 0
         message = nil
         removeTimeObserver()
         clearNowPlaying()
+    }
+
+    func seek(to seconds: Double) {
+        guard let player else { return }
+        let boundedSeconds = min(max(seconds, 0), max(durationSeconds, 0))
+        currentTimeSeconds = boundedSeconds
+        player.seek(to: CMTime(seconds: boundedSeconds, preferredTimescale: 600))
+        updateNowPlaying(elapsed: boundedSeconds)
+    }
+
+    func queuedTrack(offsetBy offset: Int) -> MusicPlaybackTrack? {
+        guard let currentQueueIndex else { return nil }
+        let nextIndex = currentQueueIndex + offset
+        guard queueTracks.indices.contains(nextIndex) else { return nil }
+        return queueTracks[nextIndex]
     }
 
     private func configureAudioSession() {
@@ -99,6 +136,7 @@ final class MusicPlaybackController {
         guard let player else { return }
         timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 1, preferredTimescale: 1), queue: .main) { [weak self] time in
             Task { @MainActor in
+                self?.currentTimeSeconds = max(0, time.seconds)
                 self?.updateNowPlaying(elapsed: time.seconds)
             }
         }

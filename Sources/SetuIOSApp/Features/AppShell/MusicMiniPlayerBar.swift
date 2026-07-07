@@ -51,6 +51,14 @@ struct MusicMiniPlayerBar: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
                 .background(.regularMaterial)
+                .overlay(alignment: .topLeading) {
+                    GeometryReader { proxy in
+                        Rectangle()
+                            .fill(.pink)
+                            .frame(width: proxy.size.width * player.playbackProgress, height: 2)
+                    }
+                    .frame(height: 2)
+                }
                 .overlay(alignment: .top) {
                     Divider()
                 }
@@ -78,6 +86,8 @@ private struct MusicNowPlayingDetailView: View {
     @Bindable var player: MusicPlaybackController
     @State private var lyricState: LoadState<MusicLyricResponse> = .idle
     @State private var queueMessage: String?
+    @State private var scrubTime: Double = 0
+    @State private var isScrubbing = false
 
     var body: some View {
         NavigationStack {
@@ -103,11 +113,29 @@ private struct MusicNowPlayingDetailView: View {
 
                         HStack {
                             Button {
+                                Task { await playAdjacentTrack(offset: -1) }
+                            } label: {
+                                Image(systemName: "backward.fill")
+                                    .frame(width: 34, height: 34)
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(!player.canPlayPrevious)
+
+                            Button {
                                 player.toggle()
                             } label: {
                                 Label(player.isPlaying ? "暂停" : "播放", systemImage: player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
                             }
                             .buttonStyle(.borderedProminent)
+
+                            Button {
+                                Task { await playAdjacentTrack(offset: 1) }
+                            } label: {
+                                Image(systemName: "forward.fill")
+                                    .frame(width: 34, height: 34)
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(!player.canPlayNext)
 
                             Button(role: .destructive) {
                                 player.stop()
@@ -116,6 +144,37 @@ private struct MusicNowPlayingDetailView: View {
                                 Label("停止", systemImage: "stop.circle")
                             }
                             .buttonStyle(.bordered)
+                        }
+
+                        VStack(spacing: 6) {
+                            Slider(
+                                value: Binding(
+                                    get: { isScrubbing ? scrubTime : player.currentTimeSeconds },
+                                    set: { newValue in
+                                        scrubTime = newValue
+                                        isScrubbing = true
+                                    }
+                                ),
+                                in: 0...max(player.durationSeconds, 1),
+                                onEditingChanged: { editing in
+                                    if editing {
+                                        isScrubbing = true
+                                        scrubTime = player.currentTimeSeconds
+                                    } else {
+                                        player.seek(to: scrubTime)
+                                        isScrubbing = false
+                                    }
+                                }
+                            )
+                            .disabled(player.durationSeconds <= 0)
+
+                            HStack {
+                                Text(formatTime(isScrubbing ? scrubTime : player.currentTimeSeconds))
+                                Spacer()
+                                Text(formatTime(player.durationSeconds))
+                            }
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
                         }
                     }
 
@@ -220,6 +279,15 @@ private struct MusicNowPlayingDetailView: View {
 
     private func playQueuedTrack(_ track: MusicPlaybackTrack) async {
         guard track.id != player.currentTrack?.id else { return }
+        await play(track)
+    }
+
+    private func playAdjacentTrack(offset: Int) async {
+        guard let track = player.queuedTrack(offsetBy: offset) else { return }
+        await play(track)
+    }
+
+    private func play(_ track: MusicPlaybackTrack) async {
         queueMessage = "正在切换歌曲"
         do {
             let response = try await environment.musicClient.url(songID: track.id, level: "standard")
@@ -232,5 +300,11 @@ private struct MusicNowPlayingDetailView: View {
         } catch {
             queueMessage = error.localizedDescription
         }
+    }
+
+    private func formatTime(_ seconds: Double) -> String {
+        guard seconds.isFinite, seconds > 0 else { return "0:00" }
+        let total = Int(seconds.rounded())
+        return "\(total / 60):\(String(format: "%02d", total % 60))"
     }
 }
