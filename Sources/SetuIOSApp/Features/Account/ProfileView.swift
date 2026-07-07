@@ -80,6 +80,7 @@ struct ProfileView: View {
         message = nil
         do {
             let profile = try await environment.userProfileClient.getUserInfo()
+            try? environment.authSession.applyUserProfile(profile)
             nickname = profile.nickname ?? ""
             state = .loaded(profile)
         } catch {

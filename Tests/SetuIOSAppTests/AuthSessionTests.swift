@@ -191,6 +191,42 @@ final class AuthSessionTests: XCTestCase {
         XCTAssertEqual(try keychain.string(for: "signSecret"), "secret")
     }
 
+    func testApplyUserProfileUpdatesAndPersistsCurrentUser() throws {
+        let keychain = InMemoryKeychain()
+        let session = makeSession(keychain: keychain)
+        try session.applyLoginResponse(
+            LoginResponse(
+                token: nil,
+                role: .user,
+                email: "profile@example.com",
+                userId: 9,
+                avatarUrl: nil,
+                signSecret: "secret",
+                expireAt: Int64(Date().addingTimeInterval(3600).timeIntervalSince1970 * 1000),
+                lastLoginIp: nil
+            )
+        )
+
+        try session.applyUserProfile(
+            UserProfile(
+                id: 9,
+                email: "profile@example.com",
+                nickname: "新昵称",
+                avatarUrl: "https://example.com/new-avatar.jpg",
+                role: .user,
+                createdAt: "2026-07-07T00:00:00",
+                lastLoginIp: "127.0.0.2"
+            )
+        )
+
+        let restored = makeSession(keychain: keychain)
+
+        XCTAssertEqual(session.currentUser?.nickname, "新昵称")
+        XCTAssertEqual(session.currentUser?.avatarUrl, "https://example.com/new-avatar.jpg")
+        XCTAssertEqual(restored.currentUser?.nickname, "新昵称")
+        XCTAssertEqual(restored.currentUser?.avatarUrl, "https://example.com/new-avatar.jpg")
+    }
+
     private func makeSession(keychain: InMemoryKeychain, urlSession: URLSession = .shared) -> AuthSession {
         let signer = AuthSigner(keychain: keychain)
         let client = APIClient(

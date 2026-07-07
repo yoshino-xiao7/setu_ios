@@ -120,15 +120,7 @@ public final class AuthSession {
     public func confirmAuthenticatedSession() async -> Bool {
         do {
             let profile: UserProfile = try await apiClient.get("/user/info")
-            currentUser = CurrentUser(
-                id: profile.id,
-                email: profile.email,
-                role: profile.role,
-                avatarUrl: profile.avatarUrl,
-                nickname: profile.nickname,
-                lastLoginIp: profile.lastLoginIp
-            )
-            try persistCurrentUser()
+            try applyUserProfile(profile)
             lastError = nil
             return true
         } catch {
@@ -136,6 +128,18 @@ public final class AuthSession {
             lastError = "登录会话确认失败，请重新登录"
             return false
         }
+    }
+
+    public func applyUserProfile(_ profile: UserProfile) throws {
+        currentUser = CurrentUser(
+            id: profile.id,
+            email: profile.email,
+            role: profile.role,
+            avatarUrl: profile.avatarUrl,
+            nickname: profile.nickname,
+            lastLoginIp: profile.lastLoginIp
+        )
+        try persistCurrentUser()
     }
 
     public func refreshSignature() async -> Bool {
