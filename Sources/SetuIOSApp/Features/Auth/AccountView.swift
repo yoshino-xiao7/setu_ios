@@ -186,6 +186,17 @@ struct AccountView: View {
             passkeyMessage = nil
             Task { await refreshCaptchaIfNeeded(authPage.captchaKind) }
         }
+        .toolbar {
+            if environment.authSession.currentUser == nil, authPage != .login {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button {
+                        authPage = .login
+                    } label: {
+                        Label("登录", systemImage: "chevron.left")
+                    }
+                }
+            }
+        }
     }
 
     @ViewBuilder
@@ -219,6 +230,8 @@ struct AccountView: View {
                 Button("登录") {
                     Task { await loginWithPassword() }
                 }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
                 .disabled(email.isEmpty || password.isEmpty || loginCaptcha.code.isEmpty || loginCaptcha.uuid.isEmpty)
                 Button {
                     Task { await loginWithPasskey() }
@@ -229,6 +242,8 @@ struct AccountView: View {
                         Label("使用通行密钥登录", systemImage: "touchid")
                     }
                 }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
                 .disabled(passkeyLoading)
                 if let passkeyMessage {
                     Text(passkeyMessage)
@@ -282,6 +297,8 @@ struct AccountView: View {
                         Label("注册", systemImage: "person.badge.plus")
                     }
                 }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
                 .disabled(authActionLoading || registerEmail.isEmpty || registerPassword.isEmpty || registerCaptcha.code.isEmpty || registerCaptcha.uuid.isEmpty)
             }
 
@@ -318,6 +335,8 @@ struct AccountView: View {
                         Label("发送重置邮件", systemImage: "envelope")
                     }
                 }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
                 .disabled(authActionLoading || recoveryEmail.isEmpty || recoveryCaptcha.code.isEmpty || recoveryCaptcha.uuid.isEmpty)
             }
 
@@ -335,6 +354,8 @@ struct AccountView: View {
                         Label("重置密码", systemImage: "key")
                     }
                 }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
                 .disabled(authActionLoading || resetToken.isEmpty || resetPassword.isEmpty)
             }
 
