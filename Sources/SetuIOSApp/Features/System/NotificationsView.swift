@@ -94,7 +94,12 @@ struct NotificationsView: View {
 
     private func handleNotificationTap(_ notification: UserNotification) async {
         if !notification.read {
-            try? await environment.notificationClient.markRead(id: notification.id)
+            do {
+                try await environment.notificationClient.markRead(id: notification.id)
+                unreadCount = max(0, unreadCount - 1)
+            } catch {
+                // Keep navigation responsive; the next load will reconcile read state.
+            }
         }
 
         if let route = targetRoute(for: notification) {
