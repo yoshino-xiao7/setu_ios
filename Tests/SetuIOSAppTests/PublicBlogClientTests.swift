@@ -27,6 +27,17 @@ final class PublicBlogClientTests: XCTestCase {
         XCTAssertEqual(item?.pid, 1003)
     }
 
+    func testDailySetuSendsBlogSourceHeaders() async throws {
+        let client = makeClient(body: imagePayload(pid: 1004))
+
+        _ = try await client.dailySetu()
+
+        let request = MockURLProtocol.lastRequest
+        XCTAssertEqual(request?.value(forHTTPHeaderField: "Origin"), "https://example.com")
+        XCTAssertEqual(request?.value(forHTTPHeaderField: "Referer"), "https://example.com/docs")
+        XCTAssertEqual(request?.value(forHTTPHeaderField: "User-Agent"), "SetuIOSApp/1.0 iOS")
+    }
+
     private func makeClient(body: String) -> PublicBlogClient {
         let session = URLSession(configuration: .publicBlogMock(body: body))
         let apiClient = APIClient(
@@ -84,6 +95,7 @@ private final class InMemoryKeychain: KeychainStoring, @unchecked Sendable {
 
 private final class MockURLProtocol: URLProtocol {
     nonisolated(unsafe) static var body = Data()
+    nonisolated(unsafe) static var lastRequest: URLRequest?
 
     override class func canInit(with request: URLRequest) -> Bool {
         true
@@ -94,6 +106,7 @@ private final class MockURLProtocol: URLProtocol {
     }
 
     override func startLoading() {
+        Self.lastRequest = request
         let response = HTTPURLResponse(
             url: request.url!,
             statusCode: 200,
@@ -111,6 +124,7 @@ private final class MockURLProtocol: URLProtocol {
 private extension URLSessionConfiguration {
     static func publicBlogMock(body: String) -> URLSessionConfiguration {
         MockURLProtocol.body = Data(body.utf8)
+        MockURLProtocol.lastRequest = nil
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [MockURLProtocol.self]
         return configuration

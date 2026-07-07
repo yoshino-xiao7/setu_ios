@@ -62,8 +62,12 @@ public struct APIClient: Sendable {
         }
     }
 
-    public func get<Value: Decodable & Sendable>(_ path: String, signed: Bool = true) async throws -> Value {
-        try await request(path, method: "GET", body: Optional<Data>.none, signed: signed)
+    public func get<Value: Decodable & Sendable>(
+        _ path: String,
+        signed: Bool = true,
+        headers: [String: String] = [:]
+    ) async throws -> Value {
+        try await request(path, method: "GET", body: Optional<Data>.none, signed: signed, headers: headers)
     }
 
     public func post<Request: Encodable & Sendable, Value: Decodable & Sendable>(
