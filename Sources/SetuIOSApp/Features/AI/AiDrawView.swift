@@ -62,6 +62,23 @@ struct AiDrawView: View {
         .onChange(of: styleTags) { saveDraft() }
         .onChange(of: negativePrompt) { saveDraft() }
         .onChange(of: styleNotes) { saveDraft() }
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button {
+                    router.navigate(to: .aiHistory)
+                } label: {
+                    Image(systemName: "clock.arrow.circlepath")
+                }
+                .accessibilityLabel("AI 绘画历史")
+
+                Button {
+                    router.navigate(to: .aiDeleteRequests)
+                } label: {
+                    Image(systemName: "xmark.bin")
+                }
+                .accessibilityLabel("我的删除记录")
+            }
+        }
         .task { await loadMetadata() }
         .refreshable { await loadMetadata() }
     }
@@ -115,6 +132,7 @@ struct AiDrawView: View {
 
     private var generationSection: some View {
         Section("生成参数") {
+            canvasPresetGrid
             Stepper("宽度 \(width)", value: $width, in: 512...1536, step: 64)
             Stepper("高度 \(height)", value: $height, in: 512...1536, step: 64)
             Stepper("步数 \(steps)", value: $steps, in: 12...60)
@@ -135,6 +153,34 @@ struct AiDrawView: View {
                 Text("严格").tag("STRONG")
             }
         }
+    }
+
+    private var canvasPresetGrid: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("画布比例")
+                .font(.subheadline.weight(.semibold))
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 8)], spacing: 8) {
+                ForEach(AiCanvasPreset.allCases) { preset in
+                    Button {
+                        width = preset.width
+                        height = preset.height
+                        saveDraft()
+                    } label: {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(preset.title)
+                                .font(.footnote.weight(.semibold))
+                            Text("\(preset.width)x\(preset.height)")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(width == preset.width && height == preset.height ? .pink : .secondary)
+                }
+            }
+        }
+        .padding(.vertical, 4)
     }
 
     @ViewBuilder
@@ -225,6 +271,16 @@ struct AiDrawView: View {
 
             if let createdJob {
                 AiCreatedJobSummary(job: createdJob)
+                Button {
+                    router.navigate(to: .aiGenerationDetail(createdJob.id))
+                } label: {
+                    Label("查看任务详情", systemImage: "sparkles.rectangle.stack")
+                }
+                Button {
+                    router.navigate(to: .aiHistory)
+                } label: {
+                    Label("查看绘画历史", systemImage: "clock.arrow.circlepath")
+                }
             }
         }
     }
@@ -374,6 +430,42 @@ struct AiDrawView: View {
             negativePrompt: negativePrompt,
             styleNotes: styleNotes
         )
+    }
+}
+
+private enum AiCanvasPreset: String, CaseIterable, Identifiable {
+    case portrait
+    case square
+    case landscape
+    case tall
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .portrait: "竖图"
+        case .square: "方图"
+        case .landscape: "横图"
+        case .tall: "长竖图"
+        }
+    }
+
+    var width: Int {
+        switch self {
+        case .portrait: 768
+        case .square: 1024
+        case .landscape: 1024
+        case .tall: 832
+        }
+    }
+
+    var height: Int {
+        switch self {
+        case .portrait: 1024
+        case .square: 1024
+        case .landscape: 768
+        case .tall: 1216
+        }
     }
 }
 
