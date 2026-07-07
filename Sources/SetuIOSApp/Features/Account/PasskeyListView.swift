@@ -15,7 +15,7 @@ struct PasskeyListView: View {
     var body: some View {
         List {
             Section {
-                Label("通行密钥可用于免密码登录。真机使用前请在 Xcode 打开 Associated Domains，并确保后端 WebAuthn RP ID 与域名一致。", systemImage: "touchid")
+                Label("通行密钥可用于免密码登录。若开通失败，通常需要先完成应用域名和后端 WebAuthn 域名配置。", systemImage: "touchid")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -49,7 +49,7 @@ struct PasskeyListView: View {
                 ContentUnavailableView("通行密钥加载失败", systemImage: "touchid", description: Text(message))
             case .loaded(let passkeys):
                 if passkeys.isEmpty {
-                    ContentUnavailableView("未开通通行密钥", systemImage: "touchid", description: Text("你可以先在 Web 控制台绑定通行密钥，iOS 会在这里显示并管理。"))
+                    ContentUnavailableView("未开通通行密钥", systemImage: "touchid", description: Text("在当前设备开通后，下次登录可以直接使用 Face ID、Touch ID 或设备密码验证。"))
                 } else {
                     Section("共 \(passkeys.count) 个") {
                         ForEach(passkeys) { item in

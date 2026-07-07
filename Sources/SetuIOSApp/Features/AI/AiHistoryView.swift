@@ -101,7 +101,7 @@ struct AiHistoryView: View {
                 }
             }
         }
-        .navigationTitle("AI 绘图历史")
+        .navigationTitle("AI 绘画历史")
         .toolbar {
             Button {
                 showingDeleteRequests = true

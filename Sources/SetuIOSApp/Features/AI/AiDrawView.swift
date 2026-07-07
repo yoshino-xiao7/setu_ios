@@ -85,7 +85,7 @@ struct AiDrawView: View {
 
     @ViewBuilder
     private var statusSection: some View {
-        Section("服务状态") {
+        Section("生成队列") {
             switch statusState {
             case .idle, .loading:
                 ProgressView("正在加载")
@@ -100,7 +100,7 @@ struct AiDrawView: View {
                         .foregroundStyle(.secondary)
                 }
                 HStack {
-                    Label("\(status.activeWorkerCount ?? 0)/\(status.workerCount ?? 0)", systemImage: "cpu")
+                    Label("\(status.activeWorkerCount ?? 0)/\(status.workerCount ?? 0) 可用节点", systemImage: "sparkles")
                     Spacer()
                     if let queued = status.queuedCount {
                         Label("\(queued) 排队", systemImage: "clock")

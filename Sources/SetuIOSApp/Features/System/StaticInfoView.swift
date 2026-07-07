@@ -31,9 +31,9 @@ enum StaticInfoKind {
     var subtitle: String {
         switch self {
         case .docs:
-            "图片与音乐 API 接入指南。"
+            "手机端常用功能与使用说明。"
         case .about:
-            "雪涼云的定位、角色和常用入口。"
+            "雪涼云的定位、角色和 App 入口。"
         case .privacy:
             "隐私政策、版权声明和服务条款。"
         }
@@ -89,24 +89,24 @@ struct StaticInfoView: View {
 
     @ViewBuilder
     private var docsContent: some View {
-        Section("图片 API") {
-            InfoParagraph("`/setu/v2` 用于图片检索和随机调用，支持 R18 模式、数量、关键词、标签、图片尺寸和排除 AI 图片。")
-            InfoPair(title: "基础端点", value: "GET /setu/v2")
-            InfoPair(title: "常用参数", value: "r18, num, keyword, tag, size, excludeAI")
-            InfoParagraph("返回字段包含 PID、页码、作者、标题、尺寸、标签和多尺寸图片链接。iOS 的积分调用页已经接入这一接口。")
+        Section("图片") {
+            InfoParagraph("图片页面向日常浏览设计，可以查看当前积分、单次消耗和刷图参数。进入刷图后，通过上下左右滑动继续获取新图片。")
+            InfoPair(title: "积分调用", value: "设置 R18、数量、关键词、标签、尺寸和排除 AI 图片等参数。")
+            InfoPair(title: "积分流水", value: "查看积分获得与消耗记录。")
+            InfoPair(title: "图库投稿", value: "提交图片到图库并查看投稿状态。")
         }
 
-        Section("音乐 API") {
-            InfoParagraph("音乐能力用于搜索、热门关键词、歌单、播放历史、播放链接和原生播放。当前 iOS 已完成搜索、热门搜索、歌单、播放历史和后台播放第一版。")
+        Section("音乐") {
+            InfoParagraph("音乐页提供搜索、热门推荐、歌单、播放历史和原生播放。播放后可以从底部迷你播放器继续控制，进入歌词页查看当前队列。")
             InfoPair(title: "搜索", value: "按歌曲、歌手或专辑关键词检索。")
             InfoPair(title: "歌单", value: "支持创建、删除、详情、添加和移除歌曲。")
-            InfoPair(title: "播放", value: "支持获取播放 URL、歌词、AVPlayer 播放、锁屏信息和远程播放暂停。")
+            InfoPair(title: "播放", value: "支持后台播放、锁屏信息、远程播放暂停和歌词查看。")
         }
 
-        Section("认证与积分") {
-            InfoParagraph("浏览器和 iOS 均沿用 `SID` Cookie + `signSecret` 的 HMAC 签名模型。API Key 主要服务程序化图片和音乐 API 调用。")
-            InfoPair(title: "积分", value: "每日登录可获取积分，调用 `/setu/v2` 会消耗积分。")
-            InfoPair(title: "密钥", value: "在 API Keys 页面创建、启停、重命名和删除。")
+        Section("AI 绘画与账号") {
+            InfoParagraph("AI 绘画页可以输入提示词、选择画布比例和生成参数，并在历史记录中查看作品、申请删除或进入广场浏览公开作品。")
+            InfoPair(title: "我的", value: "管理个人资料、QQ 绑定、修改密码、通行密钥、隐私政策和关于本站。")
+            InfoPair(title: "管理员模式", value: "仅管理员账号会显示入口，普通用户不会看到后台管理功能。")
         }
     }
 
@@ -146,9 +146,9 @@ struct StaticInfoView: View {
     @ViewBuilder
     private var aboutContent: some View {
         Section("SETU CLOUD") {
-            InfoParagraph("雪涼云是一个给开发者、bot 和收藏夹准备的轻量 API 控制台，把图片 API、音乐能力、收藏整理和使用统计放在同一个面板里。")
-            InfoPair(title: "定位", value: "接口文档、调用控制台、内容收藏和使用统计。")
-            InfoPair(title: "用途", value: "学习、研究、个人娱乐和 bot 接入。")
+            InfoParagraph("雪涼云是一个围绕图片浏览、AI 绘画、音乐播放和公开广场展开的个人内容 App。")
+            InfoPair(title: "定位", value: "图片、AI 创作、音乐、收藏整理和个人账户管理。")
+            InfoPair(title: "用途", value: "学习、研究、个人娱乐和内容收藏。")
         }
 
         Section("看板娘") {
@@ -157,17 +157,17 @@ struct StaticInfoView: View {
         }
 
         Section("快捷入口") {
-            InfoPair(title: "API Key 管理", value: "创建和管理你的 API Key。")
-            InfoPair(title: "我的收藏", value: "管理收藏夹和图片。")
-            InfoPair(title: "收藏夹广场", value: "发现其他用户公开收藏。")
-            InfoPair(title: "开发文档", value: "查看图片与音乐 API 使用指南。")
+            InfoPair(title: "AI 绘画", value: "生成作品、查看历史和管理删除申请。")
+            InfoPair(title: "图片", value: "刷随机图片、查看积分流水、投稿图库。")
+            InfoPair(title: "音乐", value: "搜索歌曲、播放歌单、查看播放历史。")
+            InfoPair(title: "广场", value: "发现公开收藏夹和 AI 绘画作品。")
         }
     }
 
     @ViewBuilder
     private var privacyContent: some View {
         Section("服务说明") {
-            InfoParagraph("雪涼云提供图片 API、音乐播放、个人收藏管理和 API Key 管理。本服务仅供学习、研究和个人娱乐使用。")
+            InfoParagraph("雪涼云提供图片浏览、AI 绘画、音乐播放、个人收藏管理和公开广场。本服务仅供学习、研究和个人娱乐使用。")
         }
 
         Section("版权声明") {
@@ -177,13 +177,13 @@ struct StaticInfoView: View {
         }
 
         Section("个人数据") {
-            InfoParagraph("平台会处理账户信息、API 使用数据、积分记录、收藏数据、音乐数据和必要技术日志，用于身份验证、配额管理、防滥用和服务维护。")
-            InfoPair(title: "安全措施", value: "密码加密存储、API Key 不可逆加密、HTTPS 传输、访问日志保留。")
+            InfoParagraph("平台会处理账户信息、图片与 AI 使用数据、积分记录、收藏数据、音乐数据和必要技术日志，用于身份验证、配额管理、防滥用和服务维护。")
+            InfoPair(title: "安全措施", value: "密码加密存储、HTTPS 传输、访问日志保留和必要的权限校验。")
             InfoPair(title: "用户权利", value: "查看、修改、删除个人信息，导出数据，注销账户，撤回同意。")
         }
 
-        Section("API 使用限制") {
-            InfoParagraph("禁止恶意刷接口、批量注册、绕过限制、商业化使用、传播违规内容、攻击服务或泄露 API Key。违规时可能限制账户、封禁 Key 或加入黑名单。")
+        Section("使用限制") {
+            InfoParagraph("禁止恶意刷图、批量注册、绕过限制、商业化使用、传播违规内容或攻击服务。违规时可能限制账户或加入黑名单。")
         }
 
         Section("免责与变更") {
