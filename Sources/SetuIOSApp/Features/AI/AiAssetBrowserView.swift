@@ -133,7 +133,7 @@ struct AiAssetBrowserView: View {
             notes: asset.notes
         )
         let targetTitle = asset.kind == .style ? "全局风格" : (target == .secondary ? "副角色" : "主角色")
-        message = "\(asset.displayName) 已写入 AI 绘图草稿：\(targetTitle)"
+        message = "\(asset.displayName) 已写入 AI 绘画草稿：\(targetTitle)"
         selectedAsset = nil
     }
 }
@@ -352,7 +352,7 @@ private struct AiAssetDetailSheet: View {
                     Button {
                         onUse()
                     } label: {
-                        Label("用于 AI 绘图", systemImage: "wand.and.stars")
+                        Label("用于 AI 绘画", systemImage: "wand.and.stars")
                     }
                 }
             }

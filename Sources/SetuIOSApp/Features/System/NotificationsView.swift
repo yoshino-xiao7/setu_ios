@@ -269,7 +269,7 @@ private struct NotificationTypeBadge: View {
         case "IMAGE_DELETE_REQUEST_REJECTED": "删除申请拒绝"
         case "IMAGE_AUDIT_PROBLEM_CREATED_DELETE_REQUEST": "审核问题"
         case "ADMIN_POINTS_GRANTED": "积分到账"
-        case "AI_GENERATION_COMPLETED": "AI 绘图完成"
+        case "AI_GENERATION_COMPLETED": "AI 绘画完成"
         default: type
         }
     }

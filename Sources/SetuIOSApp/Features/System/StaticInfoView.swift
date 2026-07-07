@@ -153,7 +153,7 @@ struct StaticInfoView: View {
 
         Section("看板娘") {
             InfoPair(title: "雪涼 / Yuki Ryou", value: "负责前端体验、界面提示和 bot 交互，让页面看得舒服、点得顺手。")
-            InfoPair(title: "鈴木 玲奈 / Suzuki Rena", value: "负责后端系统、接口、数据和权限，让服务稳定运行。")
+            InfoPair(title: "鈴木 玲奈 / Suzuki Rena", value: "负责后端系统、数据和权限，让服务稳定运行。")
         }
 
         Section("快捷入口") {
@@ -197,7 +197,7 @@ struct StaticInfoView: View {
         dailyMessage = nil
         do {
             guard let item = try await environment.publicBlogClient.dailySetu() else {
-                dailyState = .failed("公共示例接口暂未返回图片")
+                dailyState = .failed("公共示例服务暂未返回图片")
                 return
             }
             dailyState = .loaded(item)

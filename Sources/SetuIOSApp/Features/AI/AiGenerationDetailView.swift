@@ -202,7 +202,7 @@ struct AiGenerationDetailView: View {
     private func deleteRequestSection(_ job: AiGenerationJob) -> some View {
         Section("删除申请") {
             LabeledContent("当前状态", value: job.deleteStatus ?? "NONE")
-            Text("删除申请通过后，这张图会从你的历史和公共广场中隐藏，并清理 OSS 文件。管理员审计记录和本机归档不会随之删除。")
+            Text("删除申请通过后，这张图会从你的历史和公共广场中隐藏，并清理对应图片文件。")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
             TextField("删除原因", text: $deleteReason, axis: .vertical)

@@ -49,7 +49,7 @@ struct AiHistoryView: View {
                 ContentUnavailableView("历史加载失败", systemImage: "clock.badge.exclamationmark", description: Text(message))
             case .loaded(let page):
                 if page.list.isEmpty {
-                    ContentUnavailableView("暂无 AI 生成记录", systemImage: "sparkles", description: Text("创建绘图任务后，任务状态和结果会显示在这里。"))
+                    ContentUnavailableView("暂无 AI 绘画记录", systemImage: "sparkles", description: Text("创建绘画任务后，任务状态和结果会显示在这里。"))
                 } else {
                     Section("共 \(page.total) 条") {
                         ForEach(page.list) { job in

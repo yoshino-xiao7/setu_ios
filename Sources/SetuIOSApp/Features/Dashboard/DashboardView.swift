@@ -217,7 +217,7 @@ private struct UsageLogRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("图片接口调用")
+                Text("图片积分调用")
                     .font(.headline)
                     .lineLimit(1)
                 Spacer()

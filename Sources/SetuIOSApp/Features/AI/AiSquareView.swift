@@ -38,7 +38,7 @@ struct AiSquareView: View {
             case .idle, .loading:
                 ProgressView("正在加载")
             case .failed(let message):
-                ContentUnavailableView("AI 广场加载失败", systemImage: "photo.on.rectangle", description: Text(message))
+                ContentUnavailableView("AI 绘画广场加载失败", systemImage: "photo.on.rectangle", description: Text(message))
             case .loaded(let page):
                 if page.list.isEmpty {
                     ContentUnavailableView("暂无公开 AI 作品", systemImage: "sparkles")
@@ -54,7 +54,7 @@ struct AiSquareView: View {
                 }
             }
         }
-        .navigationTitle("AI 广场")
+        .navigationTitle("AI 绘画广场")
         .sheet(item: $previewSelection) { selection in
             AiGenerationImagePreviewSheet(
                 environment: environment,

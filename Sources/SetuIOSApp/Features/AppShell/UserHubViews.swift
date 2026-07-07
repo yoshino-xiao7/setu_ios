@@ -10,7 +10,7 @@ struct AiHubView: View {
             Section {
                 HubHeroRow(
                     title: "AI 绘画",
-                    subtitle: "输入提示词、选择尺寸和模型，直接创建新的绘图任务。",
+                    subtitle: "输入提示词、选择尺寸和模型，直接创建新的绘画任务。",
                     systemImage: "paintbrush.pointed",
                     tint: .purple
                 ) {
@@ -28,7 +28,7 @@ struct AiHubView: View {
             }
 
             Section("公开内容") {
-                HubNavigationRow(title: "AI 绘图广场", subtitle: "浏览公开的 AI 作品", systemImage: "sparkles.rectangle.stack") {
+                HubNavigationRow(title: "AI 绘画广场", subtitle: "浏览公开的 AI 作品", systemImage: "sparkles.rectangle.stack") {
                     router.navigate(to: .aiSquare)
                 }
             }
@@ -110,13 +110,10 @@ struct SquareHubView: View {
     var body: some View {
         List {
             Section {
-                HubHeroRow(
-                    title: "广场",
-                    subtitle: "浏览公开收藏夹和 AI 作品，直接进入你感兴趣的内容。",
-                    systemImage: "rectangle.stack.fill",
-                    tint: .blue
-                ) {
+                SquareLandingHeader {
                     router.navigate(to: .collectionSquare)
+                } openAiSquare: {
+                    router.navigate(to: .aiSquare)
                 }
             }
 
@@ -135,7 +132,7 @@ struct SquareHubView: View {
             )
 
             SquarePreviewSection(
-                title: "AI 绘图广场",
+                title: "AI 绘画广场",
                 state: aiPreviewState,
                 emptyTitle: "暂无公开 AI 作品",
                 openAll: { router.navigate(to: .aiSquare) },
@@ -152,7 +149,7 @@ struct SquareHubView: View {
                 HubNavigationRow(title: "收藏夹广场", subtitle: "查看公开收藏夹和图片集合", systemImage: "rectangle.stack") {
                     router.navigate(to: .collectionSquare)
                 }
-                HubNavigationRow(title: "AI 绘图广场", subtitle: "查看公开 AI 生成作品", systemImage: "sparkles") {
+                HubNavigationRow(title: "AI 绘画广场", subtitle: "查看公开 AI 绘画作品", systemImage: "sparkles") {
                     router.navigate(to: .aiSquare)
                 }
             }
@@ -262,6 +259,46 @@ private struct HubNavigationRow: View {
             .padding(.vertical, 3)
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct SquareLandingHeader: View {
+    let openCollections: () -> Void
+    let openAiSquare: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 14) {
+                Image(systemName: "rectangle.stack.fill")
+                    .font(.title2)
+                    .foregroundStyle(.blue)
+                    .frame(width: 38, height: 38)
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("广场")
+                        .font(.title3.weight(.semibold))
+                    Text("浏览公开收藏夹和 AI 绘画作品，直接进入你感兴趣的内容。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            HStack(spacing: 12) {
+                Button(action: openCollections) {
+                    Label("收藏夹", systemImage: "rectangle.stack")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+
+                Button(action: openAiSquare) {
+                    Label("AI 绘画", systemImage: "sparkles")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .controlSize(.large)
+        }
+        .padding(.vertical, 6)
     }
 }
 
