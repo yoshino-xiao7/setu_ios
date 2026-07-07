@@ -6,9 +6,20 @@ struct MusicPlaylistsView: View {
     @Bindable var environment: AppEnvironment
     @State private var state: LoadState<[UserMusicPlaylist]> = .idle
     @State private var showingCreate = false
+    @State private var message: String?
+    @State private var playlistPendingDeletion: UserMusicPlaylist?
+    @State private var showingDeleteConfirmation = false
 
     var body: some View {
         List {
+            if let message {
+                Section {
+                    Text(message)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             switch state {
             case .idle, .loading:
                 ProgressView("正在加载")
@@ -18,12 +29,21 @@ struct MusicPlaylistsView: View {
                 if playlists.isEmpty {
                     ContentUnavailableView("暂无歌单", systemImage: "music.note.list", description: Text("创建歌单后会显示在这里。"))
                 } else {
+                    statsSection(playlists)
                     Section("共 \(playlists.count) 个歌单") {
                         ForEach(playlists) { playlist in
                             Button {
                                 router.navigate(to: .playlistDetail(playlist.id))
                             } label: {
                                 MusicPlaylistRow(playlist: playlist)
+                            }
+                            .swipeActions {
+                                Button(role: .destructive) {
+                                    playlistPendingDeletion = playlist
+                                    showingDeleteConfirmation = true
+                                } label: {
+                                    Label("删除", systemImage: "trash")
+                                }
                             }
                         }
                     }
@@ -43,16 +63,46 @@ struct MusicPlaylistsView: View {
                 Task { await load() }
             }
         }
+        .confirmationDialog("删除这个歌单？", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) {
+            Button("删除歌单", role: .destructive) {
+                if let playlist = playlistPendingDeletion {
+                    Task { await delete(playlist) }
+                }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("确定删除歌单《\(playlistPendingDeletion?.name ?? "这个歌单")》吗？")
+        }
         .task { await load() }
         .refreshable { await load() }
     }
 
+    private func statsSection(_ playlists: [UserMusicPlaylist]) -> some View {
+        Section("概览") {
+            LabeledContent("歌单数量", value: "\(playlists.count)")
+            LabeledContent("歌曲总数", value: "\(playlists.reduce(0) { $0 + ($1.songCount ?? 0) })")
+            LabeledContent("播放总量", value: "\(playlists.reduce(0) { $0 + ($1.playCount ?? 0) })")
+        }
+    }
+
     private func load() async {
         state = .loading
+        message = nil
         do {
             state = .loaded(try await environment.musicClient.playlists())
         } catch {
             state = .failed(error.localizedDescription)
+        }
+    }
+
+    private func delete(_ playlist: UserMusicPlaylist) async {
+        do {
+            try await environment.musicClient.deletePlaylist(id: playlist.id)
+            playlistPendingDeletion = nil
+            await load()
+            message = "已删除《\(playlist.name)》"
+        } catch {
+            message = error.localizedDescription
         }
     }
 }
