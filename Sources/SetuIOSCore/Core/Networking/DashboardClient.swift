@@ -16,8 +16,8 @@ public struct DashboardClient: Sendable {
     }
 
     public func fetchApiKeyCount() async throws -> Int {
-        let keys: [ApiKeyItem] = try await apiClient.get("/api-key/list")
-        return keys.count
+        let response: ApiKeyListResponse = try await apiClient.get("/api-key/list")
+        return response.items.count
     }
 
     public func fetchPointsBalance() async throws -> PointsBalance {
