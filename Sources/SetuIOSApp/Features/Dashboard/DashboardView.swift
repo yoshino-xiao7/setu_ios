@@ -92,7 +92,7 @@ struct DashboardView: View {
                 systemImage: "music.note",
                 tint: .green
             ) {
-                router.navigate(to: .feature(.musicPlayer))
+                router.navigate(to: .musicHome)
             }
             HomeActionRow(
                 title: "广场",

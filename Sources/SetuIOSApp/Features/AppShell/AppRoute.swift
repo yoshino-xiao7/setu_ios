@@ -25,6 +25,7 @@ enum AppRoute: Hashable {
     case aiDeleteRequests
     case aiGenerationDetail(Int)
     case aiSquare
+    case musicHome
     case musicSearch(String?)
     case musicHistory
     case playlists
