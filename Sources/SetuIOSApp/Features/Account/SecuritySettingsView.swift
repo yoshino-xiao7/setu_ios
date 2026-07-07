@@ -32,7 +32,7 @@ struct SecuritySettingsView: View {
                 }
             }
         }
-        .navigationTitle("安全设置")
+        .navigationTitle("修改密码")
     }
 
     private var canSave: Bool {

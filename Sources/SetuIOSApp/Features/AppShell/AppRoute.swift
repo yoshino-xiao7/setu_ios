@@ -72,7 +72,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .home:
             Label("首页", systemImage: "house")
         case .ai:
-            Label("AI", systemImage: "sparkles")
+            Label("AI 绘画", systemImage: "sparkles")
         case .images:
             Label("图片", systemImage: "photo.on.rectangle")
         case .music:

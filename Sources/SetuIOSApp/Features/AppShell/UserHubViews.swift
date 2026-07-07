@@ -33,7 +33,7 @@ struct AiHubView: View {
                 }
             }
         }
-        .navigationTitle("AI")
+        .navigationTitle("AI 绘画")
     }
 }
 

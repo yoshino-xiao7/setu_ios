@@ -41,7 +41,7 @@ struct AiDrawView: View {
             assetSection
             actionSection
         }
-        .navigationTitle("AI 绘图")
+        .navigationTitle("AI 绘画")
         .onAppear { applyDraftIfNeeded() }
         .onChange(of: promptCn) { saveDraft() }
         .onChange(of: positivePrompt) { saveDraft() }

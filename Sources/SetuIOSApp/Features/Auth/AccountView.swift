@@ -52,7 +52,7 @@ struct AccountView: View {
                     Button {
                         router.navigate(to: .security)
                     } label: {
-                        Label("安全设置", systemImage: "lock")
+                        Label("修改密码", systemImage: "lock")
                     }
                     Button {
                         router.navigate(to: .passkeys)
