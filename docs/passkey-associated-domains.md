@@ -2,6 +2,10 @@
 
 This project includes `SetuIOSApp.entitlements` as the Xcode target entitlement template for native Passkey registration and login.
 
+Personal development teams cannot create provisioning profiles with Associated Domains. Keep the default local Debug target without `CODE_SIGN_ENTITLEMENTS` when running on a device with a free personal team. Password login, cookies, HMAC signing, and normal API testing still work in that mode.
+
+Enable Associated Domains only when signing with a paid Apple Developer Team or when preparing a TestFlight/App Store build.
+
 ## Xcode Target
 
 1. Open the iOS app target in Xcode.
