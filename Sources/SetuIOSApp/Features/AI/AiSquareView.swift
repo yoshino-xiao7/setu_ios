@@ -2,14 +2,25 @@ import SetuIOSCore
 import SwiftUI
 
 struct AiSquareView: View {
+    @Environment(RouterPath.self) private var router
     @Bindable var environment: AppEnvironment
     @State private var state: LoadState<PageResult<AiGenerationJob>> = .idle
     @State private var category = "GENERAL"
     @State private var page = 1
+    @State private var previewSelection: AiSquarePreviewSelection?
+    @State private var message: String?
     private let pageSize = 16
 
     var body: some View {
         List {
+            if let message {
+                Section {
+                    Text(message)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             Picker("分类", selection: $category) {
                 Text("全部").tag("")
                 Text("全年龄").tag("GENERAL")
@@ -34,7 +45,9 @@ struct AiSquareView: View {
                 } else {
                     Section("共 \(page.total) 个作品") {
                         ForEach(page.list) { job in
-                            AiSquareRow(job: job)
+                            AiSquareRow(job: job) {
+                                previewSelection = AiSquarePreviewSelection(job: job)
+                            }
                         }
                     }
                     pagerSection(page)
@@ -42,6 +55,17 @@ struct AiSquareView: View {
             }
         }
         .navigationTitle("AI 广场")
+        .sheet(item: $previewSelection) { selection in
+            AiGenerationImagePreviewSheet(
+                environment: environment,
+                job: selection.job,
+                onOpenDetail: {
+                    previewSelection = nil
+                    router.navigate(to: .aiGenerationDetail(selection.job.id))
+                },
+                onMessage: { message = $0 }
+            )
+        }
         .task { await load() }
         .refreshable { await load() }
     }
@@ -84,8 +108,15 @@ struct AiSquareView: View {
     }
 }
 
+private struct AiSquarePreviewSelection: Identifiable {
+    let job: AiGenerationJob
+
+    var id: Int { job.id }
+}
+
 private struct AiSquareRow: View {
     let job: AiGenerationJob
+    let onPreview: () -> Void
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -110,10 +141,13 @@ private struct AiSquareRow: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-                if let imageUrl = job.imageUrl, let url = URL(string: imageUrl) {
-                    Link(destination: url) {
+                if job.imageUrl != nil {
+                    Button {
+                        onPreview()
+                    } label: {
                         Label("查看原图", systemImage: "eye")
                     }
+                    .buttonStyle(.borderless)
                     .font(.footnote)
                 }
             }

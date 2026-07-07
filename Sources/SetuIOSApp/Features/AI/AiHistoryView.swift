@@ -13,6 +13,7 @@ struct AiHistoryView: View {
     @State private var page = 1
     @State private var message: String?
     @State private var showingDeleteRequests = false
+    @State private var previewSelection: AiHistoryPreviewSelection?
     private let pageSize = 12
 
     var body: some View {
@@ -76,9 +77,9 @@ struct AiHistoryView: View {
                                     }
                                     .buttonStyle(.borderless)
 
-                                    if let imageUrl = job.imageUrl, URL(string: imageUrl) != nil {
+                                    if job.status == "COMPLETED" {
                                         Button {
-                                            openURLString(imageUrl, successMessage: "已打开图片")
+                                            previewSelection = AiHistoryPreviewSelection(job: job)
                                         } label: {
                                             Label("查看", systemImage: "eye")
                                         }
@@ -110,6 +111,17 @@ struct AiHistoryView: View {
         }
         .sheet(isPresented: $showingDeleteRequests) {
             AiDeleteRequestsView(environment: environment)
+        }
+        .sheet(item: $previewSelection) { selection in
+            AiGenerationImagePreviewSheet(
+                environment: environment,
+                job: selection.job,
+                onOpenDetail: {
+                    previewSelection = nil
+                    router.navigate(to: .aiGenerationDetail(selection.job.id))
+                },
+                onMessage: { message = $0 }
+            )
         }
         .task { await load() }
         .refreshable { await load() }
@@ -188,12 +200,22 @@ struct AiHistoryView: View {
     }
 }
 
+private struct AiHistoryPreviewSelection: Identifiable {
+    let job: AiGenerationJob
+
+    var id: Int { job.id }
+}
+
 private struct AiGenerationRow: View {
     let job: AiGenerationJob
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top) {
+                if job.status == "COMPLETED" {
+                    ImageThumbnailView(urlString: job.imageUrl)
+                }
+
                 VStack(alignment: .leading, spacing: 4) {
                     Text(job.promptCn)
                         .font(.headline)
@@ -286,6 +308,172 @@ private struct AiGenerationRow: View {
             return "\(bytes) B"
         }
         return String(format: "%.1f %@", value, units[unitIndex])
+    }
+}
+
+struct AiGenerationImagePreviewSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Bindable var environment: AppEnvironment
+    let job: AiGenerationJob
+    let onOpenDetail: () -> Void
+    let onMessage: (String) -> Void
+
+    @State private var imageState: LoadState<String> = .idle
+    @State private var localMessage: String?
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    imageStage
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(job.promptCn)
+                            .font(.headline)
+                            .textSelection(.enabled)
+                        Text("#\(job.id) · \(job.width)x\(job.height) · \(job.statusTitle)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        if let localMessage {
+                            Text(localMessage)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                        }
+                    }
+
+                    actions
+                }
+                .padding()
+            }
+            .navigationTitle("图片预览")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("关闭") {
+                        dismiss()
+                    }
+                }
+            }
+            .task(id: job.id) {
+                await prepareImageURL()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var imageStage: some View {
+        switch imageState {
+        case .idle, .loading:
+            ProgressView("正在加载图片")
+                .frame(maxWidth: .infinity, minHeight: 320)
+        case .failed(let message):
+            ContentUnavailableView("图片加载失败", systemImage: "photo", description: Text(message))
+                .frame(maxWidth: .infinity, minHeight: 320)
+        case .loaded(let urlString):
+            if let url = URL(string: urlString) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFit()
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                    case .failure:
+                        ContentUnavailableView("图片加载失败", systemImage: "photo", description: Text("可以尝试刷新临时链接。"))
+                            .frame(maxWidth: .infinity, minHeight: 320)
+                    default:
+                        ProgressView("正在加载图片")
+                            .frame(maxWidth: .infinity, minHeight: 320)
+                    }
+                }
+            } else {
+                ContentUnavailableView("图片链接无效", systemImage: "link.badge.plus")
+                    .frame(maxWidth: .infinity, minHeight: 320)
+            }
+        }
+    }
+
+    private var actions: some View {
+        VStack(spacing: 10) {
+            Button {
+                Task { await refreshImageURL() }
+            } label: {
+                Label("刷新临时链接", systemImage: "arrow.clockwise")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+
+            Button {
+                Task { await download() }
+            } label: {
+                Label("下载图片", systemImage: "arrow.down.circle")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+
+            Button {
+                copyPrompt()
+            } label: {
+                Label("复制提示词", systemImage: "doc.on.doc")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+
+            Button {
+                onOpenDetail()
+            } label: {
+                Label("查看任务详情", systemImage: "list.bullet.rectangle")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+        }
+    }
+
+    private func prepareImageURL() async {
+        if let imageUrl = job.imageUrl, URL(string: imageUrl) != nil {
+            imageState = .loaded(imageUrl)
+            return
+        }
+        await refreshImageURL()
+    }
+
+    private func refreshImageURL() async {
+        imageState = .loading
+        do {
+            let result = try await environment.aiGenerationClient.imageURL(id: job.id)
+            imageState = .loaded(result.url)
+            localMessage = "\(result.expiresInSeconds) 秒内有效"
+        } catch {
+            imageState = .failed(error.localizedDescription)
+            localMessage = error.localizedDescription
+        }
+    }
+
+    private func download() async {
+        do {
+            let result = try await environment.aiGenerationClient.download(id: job.id)
+            guard let url = URL(string: result.downloadUrl) else {
+                localMessage = "下载地址无效"
+                return
+            }
+            #if os(iOS)
+            await UIApplication.shared.open(url)
+            #endif
+            localMessage = "已打开下载链接"
+            onMessage("已打开下载链接")
+        } catch {
+            localMessage = error.localizedDescription
+        }
+    }
+
+    private func copyPrompt() {
+        let text = [
+            "正向提示词：\(job.promptPositive ?? job.promptCn)",
+            "反向提示词：\(job.promptNegative ?? "")"
+        ].joined(separator: "\n")
+        PlatformClipboard.copy(text)
+        localMessage = "提示词已复制"
+        onMessage("提示词已复制")
     }
 }
 
