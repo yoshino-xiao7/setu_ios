@@ -12,6 +12,7 @@ struct AiHistoryView: View {
     @State private var statusFilter = ""
     @State private var page = 1
     @State private var message: String?
+    @State private var showingDeleteRequests = false
     private let pageSize = 12
 
     var body: some View {
@@ -100,6 +101,16 @@ struct AiHistoryView: View {
             }
         }
         .navigationTitle("AI 绘图历史")
+        .toolbar {
+            Button {
+                showingDeleteRequests = true
+            } label: {
+                Label("删除申请", systemImage: "xmark.bin")
+            }
+        }
+        .sheet(isPresented: $showingDeleteRequests) {
+            AiDeleteRequestsView(environment: environment)
+        }
         .task { await load() }
         .refreshable { await load() }
     }
@@ -278,7 +289,7 @@ private struct AiGenerationRow: View {
     }
 }
 
-private struct StatusBadge: View {
+struct StatusBadge: View {
     let title: String
     let status: String
 
