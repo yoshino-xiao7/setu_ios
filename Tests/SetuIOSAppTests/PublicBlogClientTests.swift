@@ -56,7 +56,7 @@ final class PublicBlogClientTests: XCTestCase {
           "uid": 7,
           "title": "Daily",
           "author": "Yuki",
-          "r18": 0,
+          "r18": false,
           "width": 1200,
           "height": 800,
           "ext": "jpg",
@@ -65,7 +65,8 @@ final class PublicBlogClientTests: XCTestCase {
           "tags": ["daily"],
           "urls": {
             "regular": "https://example.com/regular.jpg",
-            "original": "https://example.com/original.jpg"
+            "original": "https://example.com/original.jpg",
+            "small": null
           }
         }
         """
