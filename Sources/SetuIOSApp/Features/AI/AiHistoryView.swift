@@ -85,12 +85,6 @@ struct AiHistoryView: View {
                                         }
                                         .buttonStyle(.borderless)
 
-                                        Button {
-                                            Task { await download(job) }
-                                        } label: {
-                                            Label("下载", systemImage: "arrow.down.circle")
-                                        }
-                                        .buttonStyle(.borderless)
                                     }
                                 }
                                 .font(.footnote)
@@ -179,25 +173,6 @@ struct AiHistoryView: View {
         message = "提示词已复制"
     }
 
-    private func download(_ job: AiGenerationJob) async {
-        do {
-            let result = try await environment.aiGenerationClient.download(id: job.id)
-            openURLString(result.downloadUrl, successMessage: "已打开下载")
-        } catch {
-            message = error.localizedDescription
-        }
-    }
-
-    private func openURLString(_ value: String, successMessage: String) {
-        guard let url = URL(string: value) else {
-            message = "下载暂时不可用"
-            return
-        }
-        #if os(iOS)
-        UIApplication.shared.open(url)
-        #endif
-        message = successMessage
-    }
 }
 
 private struct AiHistoryPreviewSelection: Identifiable {
