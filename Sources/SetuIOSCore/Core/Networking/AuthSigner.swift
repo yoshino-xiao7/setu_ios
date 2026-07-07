@@ -17,6 +17,13 @@ public struct AuthSigner: Sendable {
         try keychain.remove(secretKey)
     }
 
+    public func hasSignSecret() -> Bool {
+        guard let secret = try? keychain.string(for: secretKey) else {
+            return false
+        }
+        return !secret.isEmpty
+    }
+
     public func signedHeaders(method: String, path: String, date: Date = Date()) throws -> [String: String] {
         guard let secret = try keychain.string(for: secretKey), !secret.isEmpty else {
             return [:]

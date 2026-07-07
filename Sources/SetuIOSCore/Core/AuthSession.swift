@@ -27,6 +27,14 @@ public final class AuthSession {
         try await apiClient.get("/auth/captcha", signed: false)
     }
 
+    public func mobileSessionDiagnostics() -> MobileSessionDiagnostics {
+        apiClient.mobileSessionDiagnostics(
+            hasSignSecret: apiClient.signer.hasSignSecret(),
+            expireAt: expireAt,
+            isSignedIn: isSignedIn
+        )
+    }
+
     public func login(email: String, password: String, captchaCode: String, captchaUuid: String) async {
         lastError = nil
         do {

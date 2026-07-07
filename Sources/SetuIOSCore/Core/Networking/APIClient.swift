@@ -36,6 +36,22 @@ public struct APIClient: Sendable {
         URLSession(configuration: liveSessionConfiguration())
     }
 
+    public func mobileSessionDiagnostics(
+        hasSignSecret: Bool,
+        expireAt: Date?,
+        isSignedIn: Bool
+    ) -> MobileSessionDiagnostics {
+        let cookies = HTTPCookieStorage.shared.cookies(for: config.apiBaseURL) ?? []
+        return MobileSessionDiagnostics(
+            apiHost: config.apiBaseURL.host ?? config.apiBaseURL.absoluteString,
+            cookieCount: cookies.count,
+            hasSIDCookie: cookies.contains { $0.name == "SID" },
+            hasSignSecret: hasSignSecret,
+            expireAt: expireAt,
+            isSignedIn: isSignedIn
+        )
+    }
+
     public func get<Value: Decodable & Sendable>(_ path: String, signed: Bool = true) async throws -> Value {
         try await request(path, method: "GET", body: Optional<Data>.none, signed: signed)
     }

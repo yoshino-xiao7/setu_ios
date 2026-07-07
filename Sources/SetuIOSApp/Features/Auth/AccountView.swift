@@ -22,8 +22,11 @@ struct AccountView: View {
     @State private var passkeyService = PasskeyAuthorizationService()
     @State private var passkeyMessage: String?
     @State private var authMessage: String?
+    @State private var sessionMessage: String?
+    @State private var sessionDiagnostics: MobileSessionDiagnostics?
     @State private var passkeyLoading = false
     @State private var authActionLoading = false
+    @State private var sessionActionLoading = false
 
     var body: some View {
         Form {
@@ -192,12 +195,46 @@ struct AccountView: View {
                 Button("刷新签名密钥") {
                     Task {
                         _ = await environment.authSession.refreshSignature()
+                        updateSessionDiagnostics()
                     }
                 }
                 .disabled(environment.authSession.isRefreshing)
 
+                Button {
+                    updateSessionDiagnostics()
+                } label: {
+                    Label("检查会话状态", systemImage: "checkmark.shield")
+                }
+
+                if environment.authSession.currentUser != nil {
+                    Button {
+                        Task { await confirmCurrentSession() }
+                    } label: {
+                        if sessionActionLoading {
+                            ProgressView()
+                        } else {
+                            Label("确认当前会话", systemImage: "network")
+                        }
+                    }
+                    .disabled(sessionActionLoading)
+                }
+
                 if let expireAt = environment.authSession.expireAt {
                     LabeledContent("过期时间", value: expireAt.formatted())
+                }
+
+                if let sessionDiagnostics {
+                    LabeledContent("API 主机", value: sessionDiagnostics.apiHost)
+                    LabeledContent("本地登录态", value: sessionDiagnostics.isSignedIn ? "存在" : "未登录")
+                    LabeledContent("SID Cookie", value: sessionDiagnostics.hasSIDCookie ? "存在" : "缺失")
+                    LabeledContent("Cookie 数量", value: "\(sessionDiagnostics.cookieCount)")
+                    LabeledContent("签名密钥", value: sessionDiagnostics.hasSignSecret ? "存在" : "缺失")
+                }
+
+                if let sessionMessage {
+                    Text(sessionMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
             }
 
@@ -298,6 +335,18 @@ struct AccountView: View {
             resetPassword = ""
         }
         authActionLoading = false
+    }
+
+    private func updateSessionDiagnostics() {
+        sessionDiagnostics = environment.authSession.mobileSessionDiagnostics()
+    }
+
+    private func confirmCurrentSession() async {
+        sessionActionLoading = true
+        let confirmed = await environment.authSession.confirmAuthenticatedSession()
+        updateSessionDiagnostics()
+        sessionMessage = confirmed ? "当前会话有效" : "当前会话无效，请重新登录"
+        sessionActionLoading = false
     }
 
     private func refreshCaptchaIfNeeded(_ kind: AuthCaptchaKind) async {

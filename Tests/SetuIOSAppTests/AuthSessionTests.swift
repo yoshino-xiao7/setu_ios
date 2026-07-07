@@ -37,6 +37,28 @@ final class AuthSessionTests: XCTestCase {
         XCTAssertEqual(restored.currentUser?.role, .admin)
     }
 
+    func testMobileSessionDiagnosticsDoesNotExposeSecretValues() throws {
+        let keychain = InMemoryKeychain()
+        let session = makeSession(keychain: keychain)
+        try keychain.setString("secret-value", for: "signSecret")
+        let cookie = HTTPCookie(properties: [
+            .domain: "api.example.com",
+            .path: "/",
+            .name: "SID",
+            .value: "sid-secret-value",
+            .secure: "TRUE",
+        ])!
+        HTTPCookieStorage.shared.setCookie(cookie)
+        defer { HTTPCookieStorage.shared.deleteCookie(cookie) }
+
+        let diagnostics = session.mobileSessionDiagnostics()
+
+        XCTAssertEqual(diagnostics.apiHost, "api.example.com")
+        XCTAssertTrue(diagnostics.hasSIDCookie)
+        XCTAssertTrue(diagnostics.hasSignSecret)
+        XCTAssertGreaterThanOrEqual(diagnostics.cookieCount, 1)
+    }
+
     func testExpiredPersistedSessionIsClearedOnStartup() throws {
         let keychain = InMemoryKeychain()
         let session = makeSession(keychain: keychain)

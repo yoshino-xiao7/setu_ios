@@ -78,6 +78,24 @@ public struct CaptchaResponse: Decodable, Sendable {
     public let img: String
 }
 
+public struct MobileSessionDiagnostics: Equatable, Sendable {
+    public let apiHost: String
+    public let cookieCount: Int
+    public let hasSIDCookie: Bool
+    public let hasSignSecret: Bool
+    public let expireAt: Date?
+    public let isSignedIn: Bool
+
+    public init(apiHost: String, cookieCount: Int, hasSIDCookie: Bool, hasSignSecret: Bool, expireAt: Date?, isSignedIn: Bool) {
+        self.apiHost = apiHost
+        self.cookieCount = cookieCount
+        self.hasSIDCookie = hasSIDCookie
+        self.hasSignSecret = hasSignSecret
+        self.expireAt = expireAt
+        self.isSignedIn = isSignedIn
+    }
+}
+
 public struct LoginResponse: Decodable, Sendable {
     public let token: String?
     public let role: UserRole
