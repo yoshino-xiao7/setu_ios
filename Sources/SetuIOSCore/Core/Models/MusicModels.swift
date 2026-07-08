@@ -1,5 +1,47 @@
 import Foundation
 
+public enum MusicArtworkSize: Sendable {
+    case thumbnail
+    case lockScreen
+    case custom(width: Int, height: Int)
+
+    var queryValue: String {
+        switch self {
+        case .thumbnail:
+            return "200y200"
+        case .lockScreen:
+            return "400y400"
+        case .custom(let width, let height):
+            return "\(width)y\(height)"
+        }
+    }
+}
+
+public func secureURLString(_ rawValue: String?, artworkSize: MusicArtworkSize? = nil) -> String? {
+    guard var value = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
+        return nil
+    }
+    if value.hasPrefix("//") {
+        value = "https:\(value)"
+    } else if value.hasPrefix("http://") {
+        value = "https://\(value.dropFirst("http://".count))"
+    }
+
+    guard let artworkSize,
+          let url = URL(string: value),
+          let host = url.host?.lowercased(),
+          host.hasSuffix("music.126.net"),
+          var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+        return value
+    }
+
+    var queryItems = components.queryItems ?? []
+    queryItems.removeAll { $0.name == "param" }
+    queryItems.append(URLQueryItem(name: "param", value: artworkSize.queryValue))
+    components.queryItems = queryItems
+    return components.url?.absoluteString ?? value
+}
+
 public struct MusicArtist: Decodable, Identifiable, Sendable {
     public let id: Int
     public let name: String
@@ -67,7 +109,7 @@ public struct MusicSong: Decodable, Identifiable, Sendable {
     }
 
     public var coverURLString: String? {
-        picUrl ?? album?.picUrl ?? al?.picUrl
+        secureURLString(picUrl ?? album?.picUrl ?? al?.picUrl, artworkSize: .lockScreen)
     }
 
     public var durationMilliseconds: Int {
@@ -157,7 +199,7 @@ public struct MusicUrlItem: Decodable, Identifiable, Sendable {
         guard playability == "FULL", fullPlayable == true else {
             return nil
         }
-        return url
+        return secureURLString(url)
     }
 
     public var unavailableMessage: String {
@@ -376,20 +418,38 @@ public struct UserMusicPlaylist: Decodable, Identifiable, Sendable {
     public let userId: Int?
     public let name: String
     public let description: String?
-    public let coverUrl: String?
+    private let rawCoverUrl: String?
     public let isPublic: Int?
     public let playMode: String?
     public let songCount: Int?
     public let playCount: Int?
     public let createdAt: String?
     public let updatedAt: String?
+
+    public var coverUrl: String? {
+        secureURLString(rawCoverUrl, artworkSize: .lockScreen)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case userId
+        case name
+        case description
+        case rawCoverUrl = "coverUrl"
+        case isPublic
+        case playMode
+        case songCount
+        case playCount
+        case createdAt
+        case updatedAt
+    }
 }
 
 public struct UserMusicPlaylistDetail: Decodable, Identifiable, Sendable {
     public let id: Int
     public let name: String
     public let description: String?
-    public let coverUrl: String?
+    private let rawCoverUrl: String?
     public let isPublic: Int?
     public let playMode: String?
     public let songCount: Int?
@@ -397,6 +457,24 @@ public struct UserMusicPlaylistDetail: Decodable, Identifiable, Sendable {
     public let createdAt: String?
     public let updatedAt: String?
     public let songs: [PlaylistSong]?
+
+    public var coverUrl: String? {
+        secureURLString(rawCoverUrl, artworkSize: .lockScreen)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case description
+        case rawCoverUrl = "coverUrl"
+        case isPublic
+        case playMode
+        case songCount
+        case playCount
+        case createdAt
+        case updatedAt
+        case songs
+    }
 }
 
 public struct PlaylistSong: Decodable, Identifiable, Sendable {
@@ -405,10 +483,26 @@ public struct PlaylistSong: Decodable, Identifiable, Sendable {
     public let songName: String
     public let artistName: String
     public let albumName: String?
-    public let coverUrl: String?
+    private let rawCoverUrl: String?
     public let duration: Int?
     public let sortOrder: Int?
     public let createdAt: String?
+
+    public var coverUrl: String? {
+        secureURLString(rawCoverUrl, artworkSize: .lockScreen)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case songId
+        case songName
+        case artistName
+        case albumName
+        case rawCoverUrl = "coverUrl"
+        case duration
+        case sortOrder
+        case createdAt
+    }
 }
 
 public struct MusicHistoryRecord: Decodable, Identifiable, Sendable {
@@ -418,9 +512,25 @@ public struct MusicHistoryRecord: Decodable, Identifiable, Sendable {
     public let songName: String
     public let artistName: String
     public let albumName: String?
-    public let coverUrl: String?
+    private let rawCoverUrl: String?
     public let duration: Int?
     public let playTime: String
+
+    public var coverUrl: String? {
+        secureURLString(rawCoverUrl, artworkSize: .lockScreen)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case userId
+        case songId
+        case songName
+        case artistName
+        case albumName
+        case rawCoverUrl = "coverUrl"
+        case duration
+        case playTime
+    }
 
     public var song: MusicSong {
         MusicSong(

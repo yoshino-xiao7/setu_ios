@@ -28,7 +28,7 @@ let package = Package(
         ),
         .testTarget(
             name: "SetuIOSAppTests",
-            dependencies: ["SetuIOSCore"],
+            dependencies: ["SetuIOSCore", "SetuIOSApp"],
             path: "Tests/SetuIOSAppTests"
         ),
     ]

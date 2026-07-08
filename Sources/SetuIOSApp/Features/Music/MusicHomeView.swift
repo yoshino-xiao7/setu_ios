@@ -1040,38 +1040,6 @@ struct MusicSongRow: View {
     }
 }
 
-struct MusicArtworkView: View {
-    let urlString: String?
-
-    var body: some View {
-        Group {
-            if let urlString, let url = URL(string: urlString) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFill()
-                    default:
-                        placeholder
-                    }
-                }
-            } else {
-                placeholder
-            }
-        }
-        .frame(width: 54, height: 54)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-    }
-
-    private var placeholder: some View {
-        RoundedRectangle(cornerRadius: 8)
-            .fill(SetuColor.brandSoft.opacity(0.18))
-            .overlay {
-                Image(systemName: "music.note")
-                    .foregroundStyle(SetuColor.brandPink)
-            }
-    }
-}
-
 struct AddSongToPlaylistSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var environment: AppEnvironment
@@ -1355,31 +1323,14 @@ private struct MusicMvCoverView: View {
     let urlString: String
 
     var body: some View {
-        Group {
-            if let url = URL(string: urlString) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFill()
-                    default:
-                        placeholder
-                    }
-                }
-            } else {
-                placeholder
-            }
-        }
+        MusicArtworkView(
+            urlString: urlString,
+            width: nil,
+            height: 180,
+            cornerRadius: 8,
+            artworkSize: .lockScreen,
+            systemImage: "play.rectangle"
+        )
         .frame(maxWidth: .infinity)
-        .frame(height: 180)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-    }
-
-    private var placeholder: some View {
-        RoundedRectangle(cornerRadius: 8)
-            .fill(SetuColor.brandSoft.opacity(0.18))
-            .overlay {
-                Image(systemName: "play.rectangle")
-                    .foregroundStyle(SetuColor.brandPink)
-            }
     }
 }

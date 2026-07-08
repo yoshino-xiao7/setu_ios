@@ -5,6 +5,7 @@ import SetuIOSCore
 
 #if os(iOS)
 import MediaPlayer
+import UIKit
 #endif
 
 /// Queue playback behavior. Raw values match the backend playlist `playMode`.
@@ -72,6 +73,11 @@ final class MusicPlaybackController {
     @ObservationIgnored private var itemObservers: [NSObjectProtocol] = []
     @ObservationIgnored private var sessionObservers: [NSObjectProtocol] = []
     @ObservationIgnored private var remoteCommandsConfigured = false
+    #if os(iOS)
+    @ObservationIgnored private var artworkTask: Task<Void, Never>?
+    @ObservationIgnored private var nowPlayingArtwork: MPMediaItemArtwork?
+    @ObservationIgnored private var nowPlayingArtworkTrackID: Int?
+    #endif
 
     var durationSeconds: Double {
         currentTrack?.durationSeconds ?? 0
@@ -106,6 +112,9 @@ final class MusicPlaybackController {
         let center = NotificationCenter.default
         for token in itemObservers { center.removeObserver(token) }
         for token in sessionObservers { center.removeObserver(token) }
+        #if os(iOS)
+        artworkTask?.cancel()
+        #endif
         if let timeObserver {
             player?.removeTimeObserver(timeObserver)
         }
@@ -165,6 +174,7 @@ final class MusicPlaybackController {
         playbackError = nil
         currentTimeSeconds = 0
         message = nil
+        cancelArtworkTask()
         removeTimeObserver()
         removeItemObservers()
         clearNowPlaying()
@@ -306,7 +316,9 @@ final class MusicPlaybackController {
         message = "正在播放 \(track.title)"
         addTimeObserver()
         addItemObservers(for: item)
+        resetNowPlayingArtwork()
         updateNowPlaying(elapsed: 0)
+        loadNowPlayingArtwork(for: track)
         nextPlayer.play()
     }
 
@@ -437,6 +449,9 @@ final class MusicPlaybackController {
         if currentTrack.durationSeconds > 0 {
             info[MPMediaItemPropertyPlaybackDuration] = currentTrack.durationSeconds
         }
+        if nowPlayingArtworkTrackID == currentTrack.id, let nowPlayingArtwork {
+            info[MPMediaItemPropertyArtwork] = nowPlayingArtwork
+        }
         if let elapsed {
             info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = max(0, elapsed)
         } else if let player {
@@ -449,6 +464,47 @@ final class MusicPlaybackController {
     private func clearNowPlaying() {
         #if os(iOS)
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        #endif
+    }
+
+    private func resetNowPlayingArtwork() {
+        #if os(iOS)
+        artworkTask?.cancel()
+        artworkTask = nil
+        nowPlayingArtwork = nil
+        nowPlayingArtworkTrackID = nil
+        #endif
+    }
+
+    private func cancelArtworkTask() {
+        #if os(iOS)
+        artworkTask?.cancel()
+        artworkTask = nil
+        nowPlayingArtwork = nil
+        nowPlayingArtworkTrackID = nil
+        #endif
+    }
+
+    private func loadNowPlayingArtwork(for track: MusicPlaybackTrack) {
+        #if os(iOS)
+        guard let urlString = secureURLString(track.coverURLString, artworkSize: .lockScreen),
+              let url = URL(string: urlString) else { return }
+        artworkTask?.cancel()
+        artworkTask = Task { [weak self] in
+            do {
+                let data = try await RemoteArtworkLoader.shared.data(from: url)
+                guard !Task.isCancelled, let image = UIImage(data: data) else { return }
+                let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+                await MainActor.run {
+                    guard let self, self.currentTrack?.id == track.id else { return }
+                    self.nowPlayingArtwork = artwork
+                    self.nowPlayingArtworkTrackID = track.id
+                    self.updateNowPlaying()
+                }
+            } catch {
+                // Missing artwork should never interrupt playback.
+            }
+        }
         #endif
     }
 

@@ -48,6 +48,48 @@ final class MusicClientTests: XCTestCase {
         XCTAssertTrue(urls.contains("https://api.example.com/user/music/playlist/track/all?id=123&limit=50"))
     }
 
+    func testSecureURLStringUpgradesHTTPAndAddsArtworkSizeForNeteaseCovers() {
+        let url = secureURLString(
+            "http://p3.music.126.net/abc/109951.jpg",
+            artworkSize: .lockScreen
+        )
+
+        XCTAssertEqual(url, "https://p3.music.126.net/abc/109951.jpg?param=400y400")
+    }
+
+    func testSecureURLStringPreservesQueryAndReplacesExistingArtworkParam() {
+        let url = secureURLString(
+            "http://p4.music.126.net/cover.jpg?foo=bar&param=80y80",
+            artworkSize: .thumbnail
+        )
+
+        XCTAssertEqual(url, "https://p4.music.126.net/cover.jpg?foo=bar&param=200y200")
+    }
+
+    func testSecureURLStringDoesNotAddArtworkParamToPlaybackURL() {
+        let url = secureURLString("http://m701.music.126.net/song.mp3")
+
+        XCTAssertEqual(url, "https://m701.music.126.net/song.mp3")
+    }
+
+    func testMusicSongCoverURLStringUsesSecureArtworkURL() throws {
+        let data = Data(#"{"id":1,"name":"歌","artists":[],"album":{"id":2,"name":"专辑","picUrl":"http://p3.music.126.net/album.jpg"}}"#.utf8)
+        let song = try JSONDecoder().decode(MusicSong.self, from: data)
+
+        XCTAssertEqual(song.coverURLString, "https://p3.music.126.net/album.jpg?param=400y400")
+    }
+
+    func testPlaylistAndHistoryCoverURLsUseSecureArtworkURL() throws {
+        let playlistSongData = Data(#"{"id":1,"songId":2,"songName":"歌","artistName":"歌手","coverUrl":"http://p3.music.126.net/song.jpg","duration":180000}"#.utf8)
+        let historyData = Data(#"{"id":3,"userId":4,"songId":5,"songName":"历史歌","artistName":"歌手","coverUrl":"http://p4.music.126.net/history.jpg","duration":200000,"playTime":"2026-07-08"}"#.utf8)
+
+        let playlistSong = try JSONDecoder().decode(PlaylistSong.self, from: playlistSongData)
+        let history = try JSONDecoder().decode(MusicHistoryRecord.self, from: historyData)
+
+        XCTAssertEqual(playlistSong.coverUrl, "https://p3.music.126.net/song.jpg?param=400y400")
+        XCTAssertEqual(history.coverUrl, "https://p4.music.126.net/history.jpg?param=400y400")
+    }
+
     private func makeAPIClient(session: URLSession) -> APIClient {
         let keychain = MusicClientTestKeychain()
         try? keychain.setString("secret", for: "signSecret")
