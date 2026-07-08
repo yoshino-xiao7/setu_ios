@@ -206,6 +206,7 @@ struct AccountView: View {
                         } label: {
                             if sessionActionLoading {
                                 ProgressView()
+                                    .tint(SetuColor.brandPink)
                             } else {
                                 Label("确认当前会话", systemImage: "network")
                             }
@@ -938,6 +939,7 @@ private struct AuthButtonProgressLabel: View {
         HStack {
             Spacer(minLength: 0)
             ProgressView()
+                .tint(SetuColor.brandPink)
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, minHeight: 24)
@@ -1207,7 +1209,7 @@ private struct AuthHeaderImage: View {
 
     private var authImageBackground: Color {
         #if os(iOS)
-        Color(uiColor: .secondarySystemGroupedBackground)
+        SetuColor.surfaceMuted
         #elseif os(macOS)
         Color(nsColor: .controlBackgroundColor)
         #else

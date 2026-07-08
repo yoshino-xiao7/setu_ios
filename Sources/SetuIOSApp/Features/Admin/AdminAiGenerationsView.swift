@@ -57,10 +57,14 @@ struct AdminAiGenerationsView: View {
                 SetuSectionHeader(title: "筛选", subtitle: "管理后台")
                 TextField("任务 ID", text: $jobIdText)
                     .textFieldStyle(.roundedBorder)
+                    #if os(iOS)
                     .keyboardType(.numberPad)
+                    #endif
                 TextField("用户 ID", text: $userIdText)
                     .textFieldStyle(.roundedBorder)
+                    #if os(iOS)
                     .keyboardType(.numberPad)
+                    #endif
                 Picker("生成状态", selection: $statusFilter) {
                     Text("全部").tag("ALL")
                     Text("排队中").tag("QUEUED")

@@ -62,14 +62,20 @@ struct AdminImageAuditView: View {
                 .pickerStyle(.segmented)
                 TextField("PID", text: $pidText)
                     .textFieldStyle(.roundedBorder)
+                    #if os(iOS)
                     .keyboardType(.numberPad)
+                    #endif
                 TextField("p", text: $pText)
                     .textFieldStyle(.roundedBorder)
+                    #if os(iOS)
                     .keyboardType(.numberPad)
+                    #endif
                 if scope == "DUE_REVIEW" {
                     TextField("复审天数", text: $staleDaysText)
                         .textFieldStyle(.roundedBorder)
+                        #if os(iOS)
                         .keyboardType(.numberPad)
+                        #endif
                 }
                 Picker("可用性", selection: $availabilityStatus) {
                     Text("全部").tag("ALL")

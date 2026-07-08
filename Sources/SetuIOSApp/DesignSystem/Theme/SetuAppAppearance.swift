@@ -6,7 +6,7 @@ enum SetuAppAppearance {
         let tint = UIColor(named: "brand/pink") ?? UIColor.systemPink
         let textPrimary = UIColor(named: "text/primary") ?? UIColor.label
         let textTertiary = UIColor(named: "text/tertiary") ?? UIColor.tertiaryLabel
-        let background = UIColor(named: "bg/base") ?? UIColor.systemGroupedBackground
+        let background = UIColor(named: "bg/base") ?? UIColor.systemBackground
 
         let tabAppearance = UITabBarAppearance()
         tabAppearance.configureWithTransparentBackground()

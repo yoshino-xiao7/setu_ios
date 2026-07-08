@@ -98,6 +98,7 @@ struct AdminOverviewView: View {
                 } label: {
                     if syncing {
                         ProgressView()
+                            .tint(.white)
                     } else {
                         Label("同步图库统计", systemImage: "arrow.triangle.2.circlepath")
                     }

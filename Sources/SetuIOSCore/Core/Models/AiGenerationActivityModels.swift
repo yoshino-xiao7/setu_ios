@@ -1,5 +1,7 @@
-import ActivityKit
 import Foundation
+
+#if os(iOS)
+import ActivityKit
 
 public struct AiGenerationActivityAttributes: ActivityAttributes {
     public struct ContentState: Codable, Hashable {
@@ -24,3 +26,4 @@ public struct AiGenerationActivityAttributes: ActivityAttributes {
         self.title = title
     }
 }
+#endif

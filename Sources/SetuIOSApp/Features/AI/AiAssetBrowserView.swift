@@ -90,8 +90,10 @@ struct AiAssetBrowserView: View {
                         VStack(alignment: .leading, spacing: SetuSpacing.md) {
                             SetuSectionHeader(title: "筛选", subtitle: "\(activeKind.title) 共 \(items.count) 个可用资产")
                             TextField("搜索名称、分类、正向或反向 tags", text: $searchText)
+                                #if os(iOS)
                                 .textInputAutocapitalization(.never)
                                 .autocorrectionDisabled()
+                                #endif
 
                             Picker("内容分级", selection: $audienceFilter) {
                                 ForEach(AiAssetAudienceFilter.allCases) { filter in

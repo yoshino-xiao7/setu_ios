@@ -27,13 +27,19 @@ struct PointsCallView: View {
             requestSection
             if let message {
                 Section {
-                    Text(message)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    SetuCard {
+                        Label(message, systemImage: "sparkles")
+                            .font(SetuTypography.caption)
+                            .foregroundStyle(SetuColor.brandInk)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
+                .setuListRow()
             }
             resultsSection
         }
+        .listStyle(.plain)
+        .setuBackground()
         .navigationTitle("积分调用")
         .toolbar {
             Button {
@@ -58,67 +64,108 @@ struct PointsCallView: View {
     }
 
     private var overviewSection: some View {
-        Section("余额") {
-            switch pointsState {
-            case .idle, .loading:
-                ProgressView("正在加载积分")
-            case .failed(let message):
-                Text(message)
-                    .foregroundStyle(.red)
-            case .loaded(let balance):
-                LabeledContent("当前积分", value: "\(balance.points)")
-                LabeledContent("单次消耗", value: "\(costPerCall)")
-                LabeledContent("参数预览", value: "\(r18Title) / \(size) / 数量\(num)")
-                LabeledContent("本次图片", value: "\(results.count)")
-                LabeledContent("关键词", value: keyword.isEmpty ? "未填写" : keyword)
-                LabeledContent("标签", value: tagText.isEmpty ? "未填写" : tagText)
+        Section {
+            SetuCard {
+                VStack(alignment: .leading, spacing: SetuSpacing.lg) {
+                    SetuSectionHeader(title: "积分概览", subtitle: "每次调用会消耗积分，获取结果后自动刷新余额")
+                    switch pointsState {
+                    case .idle, .loading:
+                        SetuEmptyState(title: "正在加载积分", message: "同步你的当前积分余额", systemImage: "creditcard", isLoading: true)
+                    case .failed(let message):
+                        SetuEmptyState(title: "积分加载失败", message: message, systemImage: "exclamationmark.triangle")
+                    case .loaded(let balance):
+                        HStack(spacing: SetuSpacing.md) {
+                            SetuStatTile(title: "当前积分", value: "\(balance.points)", systemImage: "sparkles", color: SetuColor.brandPink)
+                            SetuStatTile(title: "单次消耗", value: "\(costPerCall)", systemImage: "minus.circle", color: SetuColor.warning)
+                        }
+                        HStack(spacing: SetuSpacing.sm) {
+                            SetuPill(text: r18Title, systemImage: "shield.lefthalf.filled", tone: r18 == 1 ? .danger : .muted)
+                            SetuPill(text: size, systemImage: "rectangle", tone: .info)
+                            SetuPill(text: "数量 \(num)", systemImage: "photo.stack", tone: .brand)
+                            SetuPill(text: "\(results.count) 张结果", systemImage: "photo.on.rectangle", tone: .success)
+                        }
+                        .lineLimit(1)
+                    }
+                    VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+                        Text("关键词：\(keyword.isEmpty ? "未填写" : keyword)")
+                        Text("标签：\(tagText.isEmpty ? "未填写" : tagText)")
+                    }
+                    .font(SetuTypography.caption)
+                    .foregroundStyle(SetuColor.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
         }
+        .setuListRow()
     }
 
     private var requestSection: some View {
-        Section("图片参数") {
-            Picker("R18", selection: $r18) {
-                Text("非 R18").tag(0)
-                Text("R18").tag(1)
-                Text("混合").tag(2)
-            }
-            Picker("图片尺寸", selection: $size) {
-                Text("regular（推荐）").tag("regular")
-                Text("original（原图）").tag("original")
-                Text("small（小图）").tag("small")
-            }
-            Stepper("数量：\(num)", value: $num, in: 1...20)
-            TextField("关键词", text: $keyword)
-            TextField("标签，逗号分隔", text: $tagText)
-            Toggle("排除 AI 图片", isOn: $excludeAI)
-            Button {
-                Task { await callSetu() }
-            } label: {
-                if calling {
-                    ProgressView()
-                } else {
-                    Label("获取图片", systemImage: "photo.on.rectangle")
+        Section {
+            SetuCard {
+                VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                    SetuSectionHeader(title: "图片参数", subtitle: "设置范围、数量与标签后发起积分调用")
+                    Picker("R18", selection: $r18) {
+                        Text("非 R18").tag(0)
+                        Text("R18").tag(1)
+                        Text("混合").tag(2)
+                    }
+                    Picker("图片尺寸", selection: $size) {
+                        Text("regular（推荐）").tag("regular")
+                        Text("original（原图）").tag("original")
+                        Text("small（小图）").tag("small")
+                    }
+                    Stepper("数量：\(num)", value: $num, in: 1...20)
+                    TextField("关键词", text: $keyword)
+                        #if os(iOS)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        #endif
+                    TextField("标签，逗号分隔", text: $tagText)
+                        #if os(iOS)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        #endif
+                    Toggle("排除 AI 图片", isOn: $excludeAI)
+                        .tint(SetuColor.brandPink)
+                    SetuPrimaryButton {
+                        Task { await callSetu() }
+                    } label: {
+                        if calling {
+                            ProgressView()
+                                .tint(.white)
+                        } else {
+                            Label("获取图片", systemImage: "photo.on.rectangle")
+                        }
+                    }
+                    .disabled(calling || !canCall)
+                    .opacity(calling || !canCall ? 0.55 : 1)
                 }
             }
-            .disabled(calling || !canCall)
         }
+        .setuListRow()
     }
 
     @ViewBuilder
     private var resultsSection: some View {
         if results.isEmpty {
             Section {
-                ContentUnavailableView("暂无图片", systemImage: "photo.on.rectangle", description: Text("设置参数后获取图片。"))
+                SetuEmptyState(title: "暂无图片", message: "设置参数后获取图片", systemImage: "photo.on.rectangle")
             }
+            .setuListRow()
         } else {
-            Section("获取结果") {
+            Section {
+                SetuSectionHeader(title: "获取结果", subtitle: "\(results.count) 张图片")
+                    .padding(.horizontal, SetuSpacing.lg)
+                    .setuListRow()
                 ForEach(results) { item in
-                    PointsResultRow(item: item, isDefaultFavorited: defaultFavoriteIDs.contains(item.id)) {
-                        favoriteTarget = item
-                    } onDeleteRequest: {
-                        deleteTarget = item
+                    SetuCard {
+                        PointsResultRow(item: item, isDefaultFavorited: defaultFavoriteIDs.contains(item.id)) {
+                            favoriteTarget = item
+                        } onDeleteRequest: {
+                            deleteTarget = item
+                        }
                     }
+                    .setuListRow()
                 }
             }
         }
@@ -203,23 +250,24 @@ private struct PointsResultRow: View {
             ImageThumbnailView(urlString: item.previewURLString)
             VStack(alignment: .leading, spacing: 6) {
                 Text(item.title)
-                    .font(.headline)
+                    .font(SetuTypography.headline)
+                    .foregroundStyle(SetuColor.textPrimary)
                     .lineLimit(2)
                 Text(item.author)
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(SetuColor.textSecondary)
                 HStack(spacing: 10) {
                     Label("\(item.pid)-\(item.page)", systemImage: "number")
                     Label("\(item.width)x\(item.height)", systemImage: "rectangle")
                     if item.r18 == 1 {
-                        Text("R18")
+                        SetuPill(text: "R18", tone: .danger)
                     }
                     if isDefaultFavorited {
                         Label("已收藏", systemImage: "heart.fill")
                     }
                 }
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(SetuColor.textSecondary)
             }
             Spacer()
             Menu {
@@ -236,6 +284,9 @@ private struct PointsResultRow: View {
                 }
             } label: {
                 Image(systemName: "ellipsis.circle")
+                    .font(.title3)
+                    .foregroundStyle(SetuColor.brandInk)
+                    .frame(width: 44, height: 44)
             }
             .buttonStyle(.borderless)
         }
@@ -255,21 +306,30 @@ private struct PointsFavoriteSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                switch state {
-                case .idle, .loading:
-                    ProgressView("正在加载收藏夹")
-                case .failed(let message):
-                    Text(message)
-                        .foregroundStyle(.red)
-                case .loaded(let collections):
-                    Picker("收藏到", selection: $selectedID) {
-                        ForEach(collections) { collection in
-                            Text(collection.name).tag(Optional(collection.id))
+            List {
+                Section {
+                    SetuCard {
+                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                            SetuSectionHeader(title: "收藏图片", subtitle: item.title)
+                            switch state {
+                            case .idle, .loading:
+                                SetuEmptyState(title: "正在加载收藏夹", message: "请选择要收藏到的位置", systemImage: "heart", isLoading: true)
+                            case .failed(let message):
+                                SetuEmptyState(title: "收藏夹加载失败", message: message, systemImage: "exclamationmark.triangle")
+                            case .loaded(let collections):
+                                Picker("收藏到", selection: $selectedID) {
+                                    ForEach(collections) { collection in
+                                        Text(collection.name).tag(Optional(collection.id))
+                                    }
+                                }
+                            }
                         }
                     }
                 }
+                .setuListRow()
             }
+            .listStyle(.plain)
+            .setuBackground()
             .navigationTitle("收藏图片")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -327,16 +387,32 @@ private struct PointsDeleteRequestSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("图片") {
-                    LabeledContent("标题", value: item.title)
-                    LabeledContent("PID", value: "\(item.pid)_p\(item.page)")
+            List {
+                Section {
+                    SetuCard {
+                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                            SetuSectionHeader(title: "图片", subtitle: "确认要申请删除的图片")
+                            LabeledContent("标题", value: item.title)
+                            LabeledContent("PID", value: "\(item.pid)_p\(item.page)")
+                        }
+                    }
                 }
-                Section("原因") {
-                    TextField("可选", text: $reason, axis: .vertical)
-                        .lineLimit(3...6)
+                .setuListRow()
+
+                Section {
+                    SetuCard {
+                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                            SetuSectionHeader(title: "原因", subtitle: "可选填写，便于管理员判断")
+                            TextField("可选", text: $reason, axis: .vertical)
+                                .lineLimit(3...6)
+                                .textFieldStyle(.roundedBorder)
+                        }
+                    }
                 }
+                .setuListRow()
             }
+            .listStyle(.plain)
+            .setuBackground()
             .navigationTitle("申请删除")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

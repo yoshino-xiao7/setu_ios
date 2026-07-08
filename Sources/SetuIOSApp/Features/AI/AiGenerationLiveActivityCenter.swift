@@ -1,7 +1,7 @@
 import Foundation
 import SetuIOSCore
 
-#if canImport(ActivityKit)
+#if os(iOS) && canImport(ActivityKit)
 import ActivityKit
 #endif
 
@@ -12,7 +12,7 @@ import UIKit
 @MainActor
 enum AiGenerationLiveActivityCenter {
     static func start(job: AiGenerationJob, mobileClient: MobileAppClient) async {
-        #if canImport(ActivityKit)
+        #if os(iOS) && canImport(ActivityKit)
         guard #available(iOS 16.1, *) else { return }
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         guard job.shouldKeepAiLiveActivity else { return }
@@ -38,7 +38,7 @@ enum AiGenerationLiveActivityCenter {
     }
 
     static func update(job: AiGenerationJob, mobileClient: MobileAppClient) async {
-        #if canImport(ActivityKit)
+        #if os(iOS) && canImport(ActivityKit)
         guard #available(iOS 16.1, *) else { return }
         guard let activity = activity(for: job.id) else {
             await start(job: job, mobileClient: mobileClient)
@@ -53,7 +53,7 @@ enum AiGenerationLiveActivityCenter {
         #endif
     }
 
-    #if canImport(ActivityKit)
+    #if os(iOS) && canImport(ActivityKit)
     @available(iOS 16.1, *)
     private static func activity(for jobID: Int) -> Activity<AiGenerationActivityAttributes>? {
         Activity<AiGenerationActivityAttributes>.activities.first { $0.attributes.jobID == jobID }
@@ -76,7 +76,7 @@ enum AiGenerationLiveActivityCenter {
             ActivityContent(state: contentState(for: job), staleDate: nil),
             dismissalPolicy: .after(Date().addingTimeInterval(15 * 60))
         )
-        try? await mobileClient.endLiveActivity(activityId: activity.id)
+        _ = try? await mobileClient.endLiveActivity(activityId: activity.id)
     }
 
     @available(iOS 16.1, *)
@@ -96,7 +96,7 @@ enum AiGenerationLiveActivityCenter {
                     pushToken: token,
                     staleAt: ISO8601DateFormatter().string(from: Date().addingTimeInterval(30 * 60))
                 )
-                try? await mobileClient.registerLiveActivity(request)
+                _ = try? await mobileClient.registerLiveActivity(request)
             }
         }
     }

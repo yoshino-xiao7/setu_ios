@@ -38,7 +38,7 @@ struct MusicMiniPlayerBar: View {
                     } label: {
                         Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                             .foregroundStyle(.white)
-                            .frame(width: 40, height: 40)
+                            .frame(width: 44, height: 44)
                             .background(SetuColor.heroGradient, in: Circle())
                     }
                     .buttonStyle(.borderless)
@@ -355,6 +355,7 @@ private struct MusicNowPlayingDetailView: View {
         } else if player.isBuffering {
             HStack(spacing: SetuSpacing.sm) {
                 ProgressView()
+                    .tint(SetuColor.brandPink)
                 Text("正在缓冲…")
                     .font(SetuTypography.caption)
                     .foregroundStyle(SetuColor.textSecondary)

@@ -289,25 +289,17 @@ private struct ImageUsageOverviewRow: View {
     let onRetry: () -> Void
 
     var body: some View {
-        switch pointsState {
-        case .idle, .loading:
-            HStack {
-                ProgressView()
-                    .tint(SetuColor.brandPink)
-                Text("正在加载积分")
-                    .foregroundStyle(SetuColor.textSecondary)
-            }
-        case .failed(let message):
-            VStack(alignment: .leading, spacing: 8) {
-                Label("积分加载失败", systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(SetuColor.danger)
-                Text(message)
-                    .font(.footnote)
-                    .foregroundStyle(SetuColor.textSecondary)
-                    .lineLimit(3)
-                Button("重试", action: onRetry)
-            }
-        case .loaded(let balance):
+        SetuStateView(
+            state: pointsState,
+            loadingTitle: "正在加载积分",
+            loadingImage: "bolt.circle",
+            failureTitle: "积分加载失败",
+            failureImage: "exclamationmark.triangle",
+            failureActionTitle: "重试",
+            failureAction: onRetry,
+            isEmpty: { _ in false },
+            emptyContent: { EmptyView() }
+        ) { balance in
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Label("\(balance.points)", systemImage: "bolt.circle.fill")
@@ -341,41 +333,26 @@ private struct SquarePreviewSection<Items: RandomAccessCollection, Content: View
 
     var body: some View {
         Section {
-            switch state {
-            case .idle, .loading:
-                SetuCard {
-                    HStack {
-                        ProgressView()
-                            .tint(SetuColor.brandPink)
-                        Text("正在加载\(title)")
-                            .foregroundStyle(SetuColor.textSecondary)
-                    }
-                }
-            case .failed(let message):
-                SetuCard {
-                    VStack(alignment: .leading, spacing: SetuSpacing.sm) {
-                        Label("\(title)加载失败", systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(SetuColor.danger)
-                        Text(message)
-                            .font(.footnote)
-                            .foregroundStyle(SetuColor.textSecondary)
-                            .lineLimit(2)
-                        Button("进入完整页面", action: openAll)
-                    }
-                }
-            case .loaded(let items):
-                SetuCard {
+            SetuCard {
+                SetuStateView(
+                    state: state,
+                    loadingTitle: "正在加载\(title)",
+                    loadingImage: "rectangle.stack",
+                    failureTitle: "\(title)加载失败",
+                    failureImage: "exclamationmark.triangle",
+                    failureActionTitle: "进入完整页面",
+                    failureAction: openAll,
+                    emptyTitle: emptyTitle,
+                    emptyImage: "rectangle.stack",
+                    isEmpty: { $0.isEmpty }
+                ) { items in
                     VStack(alignment: .leading, spacing: SetuSpacing.md) {
                         SetuSectionHeader(title: title, actionTitle: "查看全部", action: openAll)
-                        if items.isEmpty {
-                            SetuEmptyState(title: emptyTitle, systemImage: "rectangle.stack")
-                        } else {
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: SetuSpacing.md) {
-                                    content(items)
-                                }
-                                .padding(.vertical, 2)
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: SetuSpacing.md) {
+                                content(items)
                             }
+                            .padding(.vertical, 2)
                         }
                     }
                 }

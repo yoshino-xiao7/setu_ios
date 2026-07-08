@@ -327,7 +327,9 @@ private struct EditMusicPlaylistSheet: View {
                                 .lineLimit(3...5)
                                 .textFieldStyle(.roundedBorder)
                             TextField("封面图片地址", text: $coverUrl)
+                                #if os(iOS)
                                 .textInputAutocapitalization(.never)
+                                #endif
                                 .textFieldStyle(.roundedBorder)
                             Toggle(isOn: $isPublic) {
                                 Label("公开歌单", systemImage: "eye")

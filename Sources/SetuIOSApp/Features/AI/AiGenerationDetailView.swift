@@ -49,9 +49,15 @@ struct AiGenerationDetailView: View {
         }
         .listStyle(.plain)
         .setuBackground()
+        #if os(iOS)
         .fullScreenCover(item: $fullscreenImage) { item in
             FullscreenImageViewer(url: item.url)
         }
+        #else
+        .sheet(item: $fullscreenImage) { item in
+            FullscreenImageViewer(url: item.url)
+        }
+        #endif
         .navigationTitle("AI 任务 #\(jobID)")
         .task(id: jobID) {
             await load()
@@ -396,7 +402,7 @@ private struct FullscreenImageViewer: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.black.ignoresSafeArea()
+                SetuColor.bgBase.ignoresSafeArea()
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
@@ -406,7 +412,7 @@ private struct FullscreenImageViewer: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     case .failure:
                         SetuEmptyState(title: "图片加载失败", message: "关闭后可以回到详情页刷新图片。", systemImage: "photo")
-                            .background(.black.opacity(0.18), in: RoundedRectangle(cornerRadius: SetuRadius.md, style: .continuous))
+                            .background(SetuColor.surfaceMuted.opacity(0.82), in: RoundedRectangle(cornerRadius: SetuRadius.md, style: .continuous))
                             .padding(SetuSpacing.lg)
                     default:
                         SetuEmptyState(title: "正在加载图片", systemImage: "photo", isLoading: true)
@@ -417,7 +423,9 @@ private struct FullscreenImageViewer: View {
                 .padding(.horizontal, 8)
             }
             .navigationTitle("图片预览")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("关闭") {

@@ -23,7 +23,9 @@ struct ApiKeyListView: View {
                         Stepper("每日调用配额 \(dailyQuota)", value: $dailyQuota, in: 1...100_000, step: 100)
                             .foregroundStyle(SetuColor.textPrimary)
                         TextField("总调用配额（留空为无限制）", text: $totalQuotaText)
+                            #if os(iOS)
                             .keyboardType(.numberPad)
+                            #endif
                             .textFieldStyle(.roundedBorder)
                         SetuPrimaryButton {
                             Task { await createKey() }

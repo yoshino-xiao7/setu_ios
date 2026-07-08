@@ -213,7 +213,7 @@ struct DashboardView: View {
                 Spacer()
                 Text("第 \(usageLogPage) / \(max(1, Int(ceil(Double(total) / Double(usageLogPageSize))))) 页")
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(SetuColor.textSecondary)
                 Spacer()
 
                 Button("下一页") {
@@ -266,7 +266,7 @@ private struct UsageLogRow: View {
                 Label(statusText, systemImage: statusSystemImage)
             }
             .font(.caption)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(SetuColor.textSecondary)
             .lineLimit(1)
         }
         .padding(.vertical, 4)
@@ -358,7 +358,7 @@ private struct HomeAccountAvatar: View {
             .overlay {
                 Image(systemName: user?.role == .admin ? "person.crop.circle.badge.checkmark" : "person.crop.circle")
                     .font(.title3)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(SetuColor.textSecondary)
             }
     }
 
@@ -374,7 +374,7 @@ private struct HomeAccountAvatar: View {
 
     private var backgroundColor: Color {
         #if os(iOS)
-        Color(uiColor: .secondarySystemGroupedBackground)
+        SetuColor.surfaceMuted
         #elseif os(macOS)
         Color(nsColor: .controlBackgroundColor)
         #else

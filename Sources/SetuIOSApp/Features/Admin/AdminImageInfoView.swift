@@ -41,10 +41,14 @@ struct AdminImageInfoView: View {
                 SetuSectionHeader(title: "查询")
                 TextField("PID", text: $pidText)
                     .textFieldStyle(.roundedBorder)
+                    #if os(iOS)
                     .keyboardType(.numberPad)
+                    #endif
                 TextField("p", text: $pText)
                     .textFieldStyle(.roundedBorder)
+                    #if os(iOS)
                     .keyboardType(.numberPad)
+                    #endif
                 Button {
                     Task { await load() }
                 } label: {

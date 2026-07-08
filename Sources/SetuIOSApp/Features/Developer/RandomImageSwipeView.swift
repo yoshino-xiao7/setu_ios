@@ -447,29 +447,51 @@ private struct RandomImageParameterSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("筛选") {
-                    Picker("R18", selection: $r18) {
-                        Text("非 R18").tag(0)
-                        Text("R18").tag(1)
-                        Text("混合").tag(2)
+            List {
+                Section {
+                    SetuCard {
+                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                            SetuSectionHeader(title: "筛选", subtitle: "设置下一次刷图使用的范围和标签")
+                            Picker("R18", selection: $r18) {
+                                Text("非 R18").tag(0)
+                                Text("R18").tag(1)
+                                Text("混合").tag(2)
+                            }
+                            Picker("图片尺寸", selection: $size) {
+                                Text("regular（推荐）").tag("regular")
+                                Text("original（原图）").tag("original")
+                                Text("small（小图）").tag("small")
+                            }
+                            TextField("关键词", text: $keyword)
+                                #if os(iOS)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                #endif
+                            TextField("标签，逗号分隔", text: $tagText)
+                                #if os(iOS)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                #endif
+                            Toggle("排除 AI 图片", isOn: $excludeAI)
+                                .tint(SetuColor.brandPink)
+                        }
                     }
-                    Picker("图片尺寸", selection: $size) {
-                        Text("regular（推荐）").tag("regular")
-                        Text("original（原图）").tag("original")
-                        Text("small（小图）").tag("small")
-                    }
-                    TextField("关键词", text: $keyword)
-                    TextField("标签，逗号分隔", text: $tagText)
-                    Toggle("排除 AI 图片", isOn: $excludeAI)
                 }
+                .setuListRow()
 
                 Section {
-                    Text("每次滑动会获取 1 张图片并消耗积分。收藏、删除申请和批量获取可以在“高级参数与批量获取”里处理。")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    SetuCard {
+                        Label(
+                            "每次滑动会获取 1 张图片并消耗积分。收藏、删除申请和批量获取可以在“高级参数与批量获取”里处理。",
+                            systemImage: "hand.draw"
+                        )
+                        .font(SetuTypography.caption)
+                        .foregroundStyle(SetuColor.textSecondary)
+                    }
                 }
+                .setuListRow()
             }
+            .listStyle(.plain)
             .setuBackground()
             .navigationTitle("刷图参数")
             #if os(iOS)

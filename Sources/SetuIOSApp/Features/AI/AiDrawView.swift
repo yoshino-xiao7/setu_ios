@@ -36,13 +36,14 @@ struct AiDrawView: View {
     @State private var enabledStylePresetNames: [String] = []
 
     var body: some View {
-        Form {
+        List {
             statusSection
             promptSection
             generationSection
             assetSection
             actionSection
         }
+        .listStyle(.plain)
         .setuBackground()
         .navigationTitle("AI 绘画")
         .onAppear {
@@ -98,16 +99,9 @@ struct AiDrawView: View {
                     SetuSectionHeader(title: "生成队列")
                     switch statusState {
                     case .idle, .loading:
-                        HStack {
-                            ProgressView()
-                                .tint(SetuColor.brandPink)
-                            Text("正在加载")
-                                .foregroundStyle(SetuColor.textSecondary)
-                        }
+                        SetuEmptyState(title: "正在加载队列", message: "同步 AI 服务与生成节点状态", systemImage: "sparkles", isLoading: true)
                     case .failed(let message):
-                        Text(message)
-                            .font(SetuTypography.caption)
-                            .foregroundStyle(SetuColor.danger)
+                        SetuEmptyState(title: "队列状态加载失败", message: message, systemImage: "exclamationmark.triangle")
                     case .loaded(let status):
                         HStack(spacing: SetuSpacing.sm) {
                             SetuPill(text: status.statusTitle, systemImage: "sparkles", tone: status.statusTitle == "可用" ? .success : .warning)
@@ -247,7 +241,7 @@ struct AiDrawView: View {
                                 .font(.footnote.weight(.semibold))
                             Text("\(preset.width)x\(preset.height)")
                                 .font(.caption2)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(SetuColor.textSecondary)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -287,11 +281,9 @@ struct AiDrawView: View {
                     }
                     switch capabilityState {
                     case .idle, .loading:
-                        ProgressView("正在加载模型")
-                            .tint(SetuColor.brandPink)
+                        SetuEmptyState(title: "正在加载模型", message: "同步模型、LoRA 与角色资产", systemImage: "photo.stack", isLoading: true)
                     case .failed(let message):
-                        Text(message)
-                            .foregroundStyle(SetuColor.danger)
+                        SetuEmptyState(title: "模型加载失败", message: message, systemImage: "exclamationmark.triangle")
                     case .loaded(let capabilities):
                         Picker("模型", selection: $selectedCheckpoint) {
                             Text("默认").tag("")

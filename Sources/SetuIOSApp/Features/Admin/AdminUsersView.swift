@@ -256,7 +256,9 @@ struct AdminUserDetailView: View {
                 SetuSectionHeader(title: "发放积分")
             TextField("积分数量", text: $pointsAmount)
                     .textFieldStyle(.roundedBorder)
+                    #if os(iOS)
                     .keyboardType(.numberPad)
+                    #endif
             TextField("原因", text: $pointsReason)
                     .textFieldStyle(.roundedBorder)
             Button {
