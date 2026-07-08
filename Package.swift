@@ -21,7 +21,10 @@ let package = Package(
         .executableTarget(
             name: "SetuIOSApp",
             dependencies: ["SetuIOSCore"],
-            path: "Sources/SetuIOSApp"
+            path: "Sources/SetuIOSApp",
+            resources: [
+                .process("Resources")
+            ]
         ),
         .testTarget(
             name: "SetuIOSAppTests",

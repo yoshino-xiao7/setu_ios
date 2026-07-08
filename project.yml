@@ -13,6 +13,8 @@ settings:
     IPHONEOS_DEPLOYMENT_TARGET: "17.0"
     ENABLE_USER_SCRIPT_SANDBOXING: NO
     CODE_SIGN_STYLE: Automatic
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
 
 targets:
   SetuIOSCore:
@@ -33,22 +35,51 @@ targets:
     platform: iOS
     sources:
       - path: Sources/SetuIOSApp
+        excludes:
+          - Resources
+          - Info.plist
+      - path: Sources/SetuIOSApp/Resources/Assets.xcassets
+        buildPhase: resources
     dependencies:
       - target: SetuIOSCore
+      - target: SetuIOSLiveActivityWidget
+        embed: true
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
+        # Supplementary plist merged with the generated keys. Required for the
+        # `audio` background mode, which has no INFOPLIST_KEY_* equivalent.
+        INFOPLIST_FILE: Sources/SetuIOSApp/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: icu.yukiryou.setuios
         TARGETED_DEVICE_FAMILY: "1"
         SUPPORTED_PLATFORMS: "iphoneos iphonesimulator"
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
-        INFOPLIST_KEY_UIBackgroundModes: audio
+        INFOPLIST_KEY_NSSupportsLiveActivities: YES
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait"
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: false
         ASSETCATALOG_COMPILER_APPICON_NAME: ""
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: ""
+
+  SetuIOSLiveActivityWidget:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Sources/SetuIOSLiveActivityWidget
+    dependencies:
+      - target: SetuIOSCore
+    info:
+      path: Sources/SetuIOSLiveActivityWidget/Info.plist
+      properties:
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: icu.yukiryou.setuios.liveactivity
+        APPLICATION_EXTENSION_API_ONLY: YES
+        SKIP_INSTALL: YES
 
   SetuIOSAppTests:
     type: bundle.unit-test

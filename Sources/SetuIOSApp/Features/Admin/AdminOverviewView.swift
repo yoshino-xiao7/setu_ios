@@ -11,20 +11,26 @@ struct AdminOverviewView: View {
     var body: some View {
         List {
             if environment.authSession.currentUser?.role != .admin {
-                ContentUnavailableView("需要管理员权限", systemImage: "shield.slash", description: Text("请使用管理员账号登录后查看后台概览。"))
+                Section {
+                    SetuCard {
+                        SetuEmptyState(title: "需要管理员权限", message: "请使用管理员账号登录后查看后台概览。", systemImage: "shield.slash")
+                    }
+                }
+                .setuListRow()
             } else {
                 headerSection
                 if let message {
                     Section {
-                        Text(message)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+                        SetuPill(text: message, systemImage: "checkmark.circle", tone: .brand)
                     }
+                    .setuListRow()
                 }
                 content
                 adminEntrypoints
             }
         }
+        .listStyle(.plain)
+        .setuBackground()
         .navigationTitle("后台概览")
         .task { await load() }
         .refreshable { await load() }
@@ -32,38 +38,62 @@ struct AdminOverviewView: View {
 
     private var headerSection: some View {
         Section {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(greeting)
-                    .font(.title2.bold())
-                Text(environment.authSession.currentUser?.nickname ?? environment.authSession.currentUser?.email ?? "Administrator")
-                    .foregroundStyle(.secondary)
+            SetuCard(padding: SetuSpacing.xl) {
+                VStack(alignment: .leading, spacing: SetuSpacing.sm) {
+                    Text(greeting)
+                        .font(SetuTypography.display)
+                        .foregroundStyle(SetuColor.textPrimary)
+                    Text(environment.authSession.currentUser?.nickname ?? environment.authSession.currentUser?.email ?? "Administrator")
+                        .font(SetuTypography.caption)
+                        .foregroundStyle(SetuColor.textSecondary)
+                    SetuPill(text: "管理后台", systemImage: "shield.lefthalf.filled", tone: .brand)
+                }
             }
-            .padding(.vertical, 4)
         }
+        .setuListRow()
     }
 
     @ViewBuilder
     private var content: some View {
         switch state {
         case .idle, .loading:
-            ProgressView("正在加载后台概览")
-        case .failed(let message):
-            ContentUnavailableView("后台概览加载失败", systemImage: "chart.bar.xaxis", description: Text(message))
-        case .loaded(let snapshot):
-            Section("统计") {
-                AdminMetricRow(title: "图片 API 总调用", value: "\(snapshot.blogStats.totalCalls ?? 0)", systemImage: "chart.line.uptrend.xyaxis")
-                AdminMetricRow(title: "用户总数", value: "\(snapshot.userCount)", systemImage: "person.2")
-                AdminMetricRow(title: "黑名单 IP", value: "\(snapshot.blockedIpCount)", systemImage: "nosign")
-                AdminMetricRow(title: "图库总数", value: "\(snapshot.imageCount)", systemImage: "photo.stack")
-                AdminMetricRow(title: "AI 生成总量", value: "\(snapshot.blogStats.aiGenerationTotal ?? 0)", systemImage: "sparkles")
-                AdminMetricRow(title: "今日 AI 生成", value: "\(snapshot.blogStats.aiGenerationToday ?? 0)", systemImage: "calendar")
-                if let updatedAt = snapshot.blogStats.updatedAt {
-                    LabeledContent("统计更新时间", value: updatedAt)
+            Section {
+                SetuCard {
+                    SetuEmptyState(title: "正在加载后台概览", systemImage: "chart.bar.xaxis", isLoading: true)
                 }
             }
+            .setuListRow()
+        case .failed(let message):
+            Section {
+                SetuCard {
+                    SetuEmptyState(title: "后台概览加载失败", message: message, systemImage: "chart.bar.xaxis")
+                }
+            }
+            .setuListRow()
+        case .loaded(let snapshot):
+            Section {
+                SetuCard {
+                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                        SetuSectionHeader(title: "统计")
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: SetuSpacing.md) {
+                            SetuStatTile(title: "图片 API 总调用", value: "\(snapshot.blogStats.totalCalls ?? 0)", systemImage: "chart.line.uptrend.xyaxis")
+                            SetuStatTile(title: "用户总数", value: "\(snapshot.userCount)", systemImage: "person.2")
+                            SetuStatTile(title: "黑名单 IP", value: "\(snapshot.blockedIpCount)", systemImage: "nosign")
+                            SetuStatTile(title: "图库总数", value: "\(snapshot.imageCount)", systemImage: "photo.stack")
+                            SetuStatTile(title: "AI 生成总量", value: "\(snapshot.blogStats.aiGenerationTotal ?? 0)", systemImage: "sparkles")
+                            SetuStatTile(title: "今日 AI 生成", value: "\(snapshot.blogStats.aiGenerationToday ?? 0)", systemImage: "calendar")
+                        }
+                        if let updatedAt = snapshot.blogStats.updatedAt {
+                            LabeledContent("统计更新时间", value: updatedAt)
+                                .font(.footnote)
+                        }
+                    }
+                }
+            }
+            .setuListRow()
 
             Section {
-                Button {
+                SetuPrimaryButton {
                     Task { await syncImageCount() }
                 } label: {
                     if syncing {
@@ -74,82 +104,26 @@ struct AdminOverviewView: View {
                 }
                 .disabled(syncing)
             }
+            .setuListRow()
         }
     }
 
     private var adminEntrypoints: some View {
-        Section("管理模块") {
-            Button {
-                router.navigate(to: .adminUsers)
-            } label: {
-                Label("用户管理", systemImage: "person.2")
-            }
-            Button {
-                router.navigate(to: .adminBlacklist)
-            } label: {
-                Label("黑名单", systemImage: "nosign")
-            }
-            Button {
-                router.navigate(to: .adminSystemStatus)
-            } label: {
-                Label("系统监控", systemImage: "waveform.path.ecg.rectangle")
-            }
-            Button {
-                router.navigate(to: .adminMusicTokens)
-            } label: {
-                Label("网易云 Token 管理", systemImage: "music.mic")
-            }
-            Button {
-                router.navigate(to: .adminImageDeleteRequests)
-            } label: {
-                Label("图片删除申请", systemImage: "trash.square")
-            }
-            Button {
-                router.navigate(to: .adminPixivCrawl)
-            } label: {
-                Label("新增图片", systemImage: "plus.square.on.square")
-            }
-            Button {
-                router.navigate(to: .adminImageInfo)
-            } label: {
-                Label("图片详情查询", systemImage: "photo.badge.magnifyingglass")
-            }
-            Button {
-                router.navigate(to: .adminImageAudit)
-            } label: {
-                Label("图片库管理", systemImage: "photo.badge.checkmark")
-            }
-            Button {
-                router.navigate(to: .adminGallerySubmissions)
-            } label: {
-                Label("投稿审核", systemImage: "tray.full")
-            }
-            Button {
-                router.navigate(to: .adminAiGenerations)
-            } label: {
-                Label("AI 生成记录", systemImage: "sparkles.rectangle.stack")
-            }
-            Button {
-                router.navigate(to: .adminAiWorkers)
-            } label: {
-                Label("AI Worker 状态", systemImage: "cpu")
-            }
-            Button {
-                router.navigate(to: .adminAiReviews)
-            } label: {
-                Label("AI 审核队列", systemImage: "checklist")
-            }
-            Button {
-                router.navigate(to: .adminAiDeleteRequests)
-            } label: {
-                Label("AI 删除申请", systemImage: "xmark.bin")
-            }
-            Button {
-                router.navigate(to: .adminOperationLogs)
-            } label: {
-                Label("操作日志", systemImage: "doc.text.magnifyingglass")
+        Section {
+            SetuCard {
+                VStack(spacing: SetuSpacing.lg) {
+                    SetuSectionHeader(title: "管理模块")
+                    SetuNavigationRow(title: "用户管理", subtitle: "用户资料、权限与状态", systemImage: "person.2") { router.navigate(to: .adminUsers) }
+                    SetuNavigationRow(title: "黑名单", subtitle: "管理封禁 IP 与访问控制", systemImage: "nosign") { router.navigate(to: .adminBlacklist) }
+                    SetuNavigationRow(title: "系统监控", subtitle: "服务状态与健康检查", systemImage: "waveform.path.ecg.rectangle") { router.navigate(to: .adminSystemStatus) }
+                    SetuNavigationRow(title: "网易云 Token 管理", subtitle: "音乐服务凭据状态", systemImage: "music.mic") { router.navigate(to: .adminMusicTokens) }
+                    SetuNavigationRow(title: "图片审核与详情", subtitle: "图片库、投稿、删除申请", systemImage: "photo.badge.checkmark") { router.navigate(to: .adminImageAudit) }
+                    SetuNavigationRow(title: "AI 生成与审核", subtitle: "生成记录、Worker、审核队列", systemImage: "sparkles.rectangle.stack") { router.navigate(to: .adminAiGenerations) }
+                    SetuNavigationRow(title: "操作日志", subtitle: "后台行为审计", systemImage: "doc.text.magnifyingglass") { router.navigate(to: .adminOperationLogs) }
+                }
             }
         }
+        .setuListRow()
     }
 
     private var greeting: String {
@@ -190,23 +164,5 @@ struct AdminOverviewView: View {
             message = error.localizedDescription
         }
         syncing = false
-    }
-}
-
-private struct AdminMetricRow: View {
-    let title: String
-    let value: String
-    let systemImage: String
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: systemImage)
-                .foregroundStyle(.pink)
-                .frame(width: 28)
-            Text(title)
-            Spacer()
-            Text(value)
-                .font(.headline.monospacedDigit())
-        }
     }
 }

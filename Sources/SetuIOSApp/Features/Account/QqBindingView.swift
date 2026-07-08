@@ -9,59 +9,106 @@ struct QqBindingView: View {
     @State private var message: String?
 
     var body: some View {
-        Form {
+        List {
             switch state {
             case .idle, .loading:
-                ProgressView("正在加载")
+                Section {
+                    SetuCard {
+                        SetuEmptyState(title: "正在加载", systemImage: "link.badge.plus", isLoading: true)
+                    }
+                }
             case .failed(let message):
-                ContentUnavailableView("QQ 绑定加载失败", systemImage: "link.badge.plus", description: Text(message))
+                Section {
+                    SetuCard {
+                        SetuEmptyState(title: "QQ 绑定加载失败", message: message, systemImage: "link.badge.plus")
+                    }
+                }
             case .loaded(let binding):
-                Section("当前绑定") {
-                    LabeledContent("状态", value: binding.isEnabled ? "已启用" : "未启用")
-                    if let qqNumber = binding.qqNumber, !qqNumber.isEmpty {
-                        LabeledContent("QQ", value: qqNumber)
-                    }
-                    if let updatedAt = binding.updatedAt, !updatedAt.isEmpty {
-                        LabeledContent("更新时间", value: updatedAt)
-                    }
-                    if binding.isEnabled {
-                        Button("停用 QQ 通知", role: .destructive) {
-                            Task { await disable() }
+                Section {
+                    SetuCard {
+                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                            HStack {
+                                SetuSectionHeader(title: "当前绑定", subtitle: "QQ 通知和登录提醒状态")
+                                Spacer()
+                                SetuPill(
+                                    text: binding.isEnabled ? "已启用" : "未启用",
+                                    systemImage: binding.isEnabled ? "checkmark.circle" : "pause.circle",
+                                    tone: binding.isEnabled ? .success : .muted
+                                )
+                            }
+                            QqBindingInfoRow(title: "QQ", value: binding.qqNumber?.isEmpty == false ? binding.qqNumber! : "-")
+                            if let updatedAt = binding.updatedAt, !updatedAt.isEmpty {
+                                QqBindingInfoRow(title: "更新时间", value: updatedAt)
+                            }
+                            if binding.isEnabled {
+                                Button(role: .destructive) {
+                                    Task { await disable() }
+                                } label: {
+                                    Label("停用 QQ 通知", systemImage: "bell.slash")
+                                        .frame(maxWidth: .infinity, minHeight: 44)
+                                }
+                                .buttonStyle(.bordered)
+                            }
                         }
                     }
                 }
             }
 
-            Section("绑定 QQ 邮箱") {
-                TextField("QQ 号", text: $qqNumber)
-                    .textContentType(.username)
-                Button("发送验证码") {
-                    Task { await sendCode() }
-                }
-                .disabled(qqNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            Section {
+                SetuCard {
+                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                        SetuSectionHeader(title: "绑定 QQ 邮箱", subtitle: "输入 QQ 号并使用邮件验证码确认")
+                        TextField("QQ 号", text: $qqNumber)
+                            .textContentType(.username)
+                            .textFieldStyle(.roundedBorder)
+                        Button {
+                            Task { await sendCode() }
+                        } label: {
+                            Label("发送验证码", systemImage: "paperplane")
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(SetuColor.brandPink)
+                        .disabled(trimmedQqNumber.isEmpty)
 
-                TextField("验证码", text: $verificationCode)
-                    .textContentType(.oneTimeCode)
-                Button("保存绑定") {
-                    Task { await save() }
+                        TextField("验证码", text: $verificationCode)
+                            .textContentType(.oneTimeCode)
+                            .textFieldStyle(.roundedBorder)
+                        SetuPrimaryButton {
+                            Task { await save() }
+                        } label: {
+                            Label("保存绑定", systemImage: "checkmark.seal")
+                        }
+                        .disabled(!canSaveBinding)
+                        .opacity(canSaveBinding ? 1 : 0.55)
+                    }
                 }
-                .disabled(
-                    qqNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                        || verificationCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                )
             }
 
             if let message {
                 Section {
-                    Text(message)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    SetuPill(text: message, systemImage: "info.circle", tone: .info)
                 }
             }
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .setuBackground()
         .navigationTitle("QQ 绑定")
         .task { await load() }
         .refreshable { await load() }
+    }
+
+    private var trimmedQqNumber: String {
+        qqNumber.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var trimmedVerificationCode: String {
+        verificationCode.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var canSaveBinding: Bool {
+        !trimmedQqNumber.isEmpty && !trimmedVerificationCode.isEmpty
     }
 
     private func load() async {
@@ -77,7 +124,7 @@ struct QqBindingView: View {
     }
 
     private func sendCode() async {
-        let number = qqNumber.trimmingCharacters(in: .whitespacesAndNewlines)
+        let number = trimmedQqNumber
         guard !number.isEmpty else { return }
         do {
             let response = try await environment.userProfileClient.sendQqBindingVerificationCode(qqNumber: number)
@@ -92,8 +139,8 @@ struct QqBindingView: View {
     }
 
     private func save() async {
-        let number = qqNumber.trimmingCharacters(in: .whitespacesAndNewlines)
-        let code = verificationCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        let number = trimmedQqNumber
+        let code = trimmedVerificationCode
         guard !number.isEmpty, !code.isEmpty else { return }
         do {
             let binding = try await environment.userProfileClient.saveQqBinding(qqNumber: number, verificationCode: code)
@@ -112,6 +159,24 @@ struct QqBindingView: View {
             state = .loaded(binding)
         } catch {
             message = error.localizedDescription
+        }
+    }
+}
+
+private struct QqBindingInfoRow: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .font(SetuTypography.caption)
+                .foregroundStyle(SetuColor.textSecondary)
+            Spacer(minLength: SetuSpacing.md)
+            Text(value)
+                .font(.callout.weight(.medium))
+                .foregroundStyle(SetuColor.textPrimary)
+                .multilineTextAlignment(.trailing)
         }
     }
 }

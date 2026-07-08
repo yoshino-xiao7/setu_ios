@@ -10,52 +10,68 @@ struct GalleryUploadDetailView: View {
     var body: some View {
         List {
             if let message {
-                Section {
-                    Text(message)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                SetuCard {
+                    Label(message, systemImage: "checkmark.circle")
+                        .font(SetuTypography.caption)
+                        .foregroundStyle(SetuColor.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .setuListRow()
             }
 
             switch state {
             case .idle, .loading:
-                ProgressView("正在加载")
+                ContentImageStateSection(title: "正在加载批次详情", message: "正在同步图片状态。", systemImage: "tray.full", isLoading: true)
             case .failed(let message):
-                ContentUnavailableView("批次详情加载失败", systemImage: "tray.full", description: Text(message))
+                ContentImageStateSection(title: "批次详情加载失败", message: message, systemImage: "tray.full")
             case .loaded(let batch):
-                Section("批次") {
-                    LabeledContent("状态", value: batch.statusTitle)
-                    LabeledContent("PID 模式", value: batch.pidMode)
-                    if let title = batch.title, !title.isEmpty {
-                        LabeledContent("标题", value: title)
-                    }
-                    if let author = batch.author, !author.isEmpty {
-                        LabeledContent("作者", value: author)
-                    }
-                    if let aiType = batch.aiType {
-                        LabeledContent("AI 类型", value: "\(aiType)")
-                    }
-                    if let tags = batch.tags, !tags.isEmpty {
-                        Text(tags.joined(separator: " / "))
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                    LabeledContent("创建时间", value: batch.createdAt)
-                    if let reviewedAt = batch.reviewedAt {
-                        LabeledContent("审核时间", value: reviewedAt)
-                    }
-                    if let publishedAt = batch.publishedAt {
-                        LabeledContent("发布时间", value: publishedAt)
+                SetuCard {
+                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                        SetuSectionHeader(title: "批次", subtitle: "#\(batch.batchId)")
+                        GalleryUploadMetadataRow(title: "状态") {
+                            GalleryUploadStatusPill(status: batch.status, title: batch.statusTitle)
+                        }
+                        GalleryUploadMetadataRow(title: "PID 模式", value: batch.pidMode)
+                        if let title = batch.title, !title.isEmpty {
+                            GalleryUploadMetadataRow(title: "标题", value: title)
+                        }
+                        if let author = batch.author, !author.isEmpty {
+                            GalleryUploadMetadataRow(title: "作者", value: author)
+                        }
+                        if let aiType = batch.aiType {
+                            GalleryUploadMetadataRow(title: "AI 类型", value: "\(aiType)")
+                        }
+                        if let tags = batch.tags, !tags.isEmpty {
+                            GalleryUploadMetadataRow(title: "标签", value: tags.joined(separator: " / "))
+                        }
+                        GalleryUploadMetadataRow(title: "创建时间", value: batch.createdAt)
+                        if let reviewedAt = batch.reviewedAt {
+                            GalleryUploadMetadataRow(title: "审核时间", value: reviewedAt)
+                        }
+                        if let publishedAt = batch.publishedAt {
+                            GalleryUploadMetadataRow(title: "发布时间", value: publishedAt)
+                        }
                     }
                 }
+                .setuListRow()
 
-                Section("图片 \(batch.items.count)") {
-                    ForEach(batch.items) { item in
-                        GalleryUploadItemRow(item: item)
+                SetuCard {
+                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                        SetuSectionHeader(title: "图片 \(batch.items.count)", subtitle: "投稿明细")
+                        ForEach(Array(batch.items.enumerated()), id: \.element.id) { index, item in
+                            if index > 0 {
+                                Divider()
+                                    .overlay(SetuColor.separator)
+                            }
+                            GalleryUploadItemRow(item: item)
+                        }
                     }
                 }
+                .setuListRow()
             }
         }
+        .listStyle(.plain)
+        .setuBackground()
         .navigationTitle("投稿 #\(batchID)")
         .toolbar {
             if case .loaded(let batch) = state, canCancel(batch) {
@@ -97,15 +113,16 @@ struct GalleryUploadItemRow: View {
     let item: GalleryUploadItem
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: SetuSpacing.md) {
             ImageThumbnailView(urlString: item.previewUrl)
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: SetuSpacing.xs) {
                 Text(item.title ?? item.filename ?? "投稿图片 #\(item.submissionId)")
-                    .font(.headline)
+                    .font(SetuTypography.headline)
+                    .foregroundStyle(SetuColor.textPrimary)
                     .lineLimit(2)
                 Text(item.author ?? "未知作者")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .font(SetuTypography.caption)
+                    .foregroundStyle(SetuColor.textSecondary)
                 HStack(spacing: 10) {
                     Label(item.statusTitle, systemImage: "flag")
                     if let uploadStatus = item.uploadStatus {
@@ -116,14 +133,45 @@ struct GalleryUploadItemRow: View {
                     }
                 }
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(SetuColor.textTertiary)
                 if let rejectReason = item.rejectReason, !rejectReason.isEmpty {
                     Text(rejectReason)
-                        .font(.footnote)
-                        .foregroundStyle(.red)
+                        .font(SetuTypography.caption)
+                        .foregroundStyle(SetuColor.danger)
                 }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, SetuSpacing.xs)
+    }
+}
+
+private struct GalleryUploadMetadataRow: View {
+    let title: String
+    private let value: AnyView
+
+    init<Value: View>(title: String, @ViewBuilder value: () -> Value) {
+        self.title = title
+        self.value = AnyView(value())
+    }
+
+    init(title: String, value: String) {
+        self.title = title
+        self.value = AnyView(
+            Text(value)
+                .font(SetuTypography.body)
+                .foregroundStyle(SetuColor.textPrimary)
+                .multilineTextAlignment(.trailing)
+        )
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: SetuSpacing.md) {
+            Text(title)
+                .font(SetuTypography.caption)
+                .foregroundStyle(SetuColor.textSecondary)
+                .frame(width: 72, alignment: .leading)
+            value
+                .frame(maxWidth: .infinity, alignment: .trailing)
+        }
     }
 }

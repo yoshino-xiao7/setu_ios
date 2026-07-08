@@ -45,27 +45,38 @@ struct CollectionEditorSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("收藏夹信息") {
+            List {
+                SetuCard {
+                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                        SetuSectionHeader(title: "收藏夹信息", subtitle: visibility.title)
                     TextField("名称", text: $name)
+                            .textFieldStyle(.roundedBorder)
                     TextField("描述", text: $description, axis: .vertical)
                         .lineLimit(3...6)
+                            .textFieldStyle(.roundedBorder)
                     Picker("可见性", selection: $visibility) {
                         ForEach(CollectionVisibility.allCases, id: \.self) { value in
                             Label(value.title, systemImage: value == .publicVisible ? "eye" : "lock")
                                 .tag(value)
                         }
                     }
+                        .pickerStyle(.segmented)
                 }
+                }
+                .setuListRow()
 
                 if let message {
-                    Section {
-                        Text(message)
-                            .font(.footnote)
-                            .foregroundStyle(.red)
+                    SetuCard {
+                        Label(message, systemImage: "exclamationmark.triangle")
+                            .font(SetuTypography.caption)
+                            .foregroundStyle(SetuColor.danger)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
+                    .setuListRow()
                 }
             }
+            .listStyle(.plain)
+            .setuBackground()
             .navigationTitle(title)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

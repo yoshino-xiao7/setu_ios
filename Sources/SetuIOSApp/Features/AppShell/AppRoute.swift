@@ -2,6 +2,7 @@ import SetuIOSCore
 import SwiftUI
 
 enum AppRoute: Hashable {
+    case account
     case authRegister
     case authRecovery
     case profile
@@ -66,7 +67,6 @@ enum AppTab: String, CaseIterable, Identifiable {
     case images
     case music
     case square
-    case settings
 
     var id: String { rawValue }
 
@@ -87,8 +87,6 @@ enum AppTab: String, CaseIterable, Identifiable {
             "音乐"
         case .square:
             "广场"
-        case .settings:
-            "我的"
         }
     }
 
@@ -104,8 +102,6 @@ enum AppTab: String, CaseIterable, Identifiable {
             "music.note"
         case .square:
             "rectangle.stack"
-        case .settings:
-            "person.crop.circle"
         }
     }
 }

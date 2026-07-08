@@ -18,9 +18,10 @@ struct MusicHistoryView: View {
         List {
             if let message {
                 Section {
-                    Text(message)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    SetuCard {
+                        SetuPill(text: message, systemImage: "waveform", tone: .info)
+                    }
+                    .setuListRow()
                 }
             }
 
@@ -28,26 +29,38 @@ struct MusicHistoryView: View {
 
             switch state {
             case .idle, .loading:
-                ProgressView("正在加载")
+                MusicHistoryStateSection(title: "播放历史", stateTitle: "正在加载播放历史", systemImage: "clock.arrow.circlepath", isLoading: true)
             case .failed(let message):
-                ContentUnavailableView("历史加载失败", systemImage: "clock.arrow.circlepath", description: Text(message))
+                MusicHistoryStateSection(title: "播放历史", stateTitle: "历史加载失败", message: message, systemImage: "exclamationmark.triangle")
             case .loaded(let records):
                 if records.isEmpty {
-                    ContentUnavailableView("暂无播放历史", systemImage: "clock.arrow.circlepath")
+                    MusicHistoryStateSection(title: "播放历史", stateTitle: "暂无播放历史", systemImage: "clock.arrow.circlepath")
                 } else {
-                    Section(count.map { "共 \($0) 条" } ?? "播放历史") {
-                        ForEach(records) { record in
-                            MusicHistoryRow(record: record) {
-                                Task {
-                                    await play(
-                                        record,
-                                        queueTracks: records.map { MusicPlaybackTrack(record: $0) }
-                                    )
+                    Section {
+                        SetuCard {
+                            VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                                SetuSectionHeader(title: "播放历史", subtitle: count.map { "共 \($0) 条" })
+                                VStack(spacing: 0) {
+                                    ForEach(Array(records.enumerated()), id: \.element.id) { index, record in
+                                        MusicHistoryRow(record: record) {
+                                            Task {
+                                                await play(
+                                                    record,
+                                                    queueTracks: records.map { MusicPlaybackTrack(record: $0) }
+                                                )
+                                            }
+                                        } onAddToPlaylist: {
+                                            selectedSong = record.song
+                                        }
+
+                                        if index < records.count - 1 {
+                                            Divider().overlay(SetuColor.separator)
+                                        }
+                                    }
                                 }
-                            } onAddToPlaylist: {
-                                selectedSong = record.song
                             }
                         }
+                        .setuListRow()
                     }
                     if let count, count > pageSize {
                         pagerSection(total: count)
@@ -55,6 +68,8 @@ struct MusicHistoryView: View {
                 }
             }
         }
+        .listStyle(.plain)
+        .setuBackground()
         .navigationTitle("播放历史")
         .sheet(item: $selectedSong) { song in
             AddSongToPlaylistSheet(environment: environment, song: song)
@@ -87,72 +102,95 @@ struct MusicHistoryView: View {
         }
         .task { await load() }
         .refreshable { await load() }
+        .safeAreaInset(edge: .bottom) {
+            MusicMiniPlayerBar(environment: environment, player: player)
+                .padding(.horizontal)
+                .padding(.top, 6)
+        }
     }
 
     @ViewBuilder
     private var nowPlayingSection: some View {
         if let track = player.currentTrack {
-            Section("正在播放") {
-                HStack(spacing: 12) {
-                    MusicArtworkView(urlString: track.coverURLString)
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(track.title)
-                            .font(.headline)
-                            .lineLimit(2)
-                        Text(track.artist)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                        if let message = player.message {
-                            Text(message)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+            Section {
+                SetuCard {
+                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                        SetuSectionHeader(title: "正在播放")
+                        HStack(spacing: SetuSpacing.md) {
+                            MusicArtworkView(urlString: track.coverURLString)
+                            VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+                                Text(track.title)
+                                    .font(SetuTypography.headline)
+                                    .foregroundStyle(SetuColor.textPrimary)
+                                    .lineLimit(2)
+                                Text(track.artist)
+                                    .font(SetuTypography.caption)
+                                    .foregroundStyle(SetuColor.textSecondary)
+                                if let message = player.message {
+                                    SetuPill(text: message, systemImage: "waveform", tone: .info)
+                                }
+                            }
+                            Spacer()
+                            MusicHistoryIconButton(
+                                systemImage: player.isPlaying ? "pause.fill" : "play.fill",
+                                accessibilityLabel: player.isPlaying ? "暂停播放" : "继续播放",
+                                tint: SetuColor.brandPink
+                            ) {
+                                player.toggle()
+                            }
+                            MusicHistoryIconButton(
+                                systemImage: "stop.fill",
+                                accessibilityLabel: "停止播放",
+                                tint: SetuColor.danger
+                            ) {
+                                player.stop()
+                            }
                         }
                     }
-                    Spacer()
-                    Button {
-                        player.toggle()
-                    } label: {
-                        Image(systemName: player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                            .font(.title2)
-                    }
-                    .buttonStyle(.borderless)
-                    Button(role: .destructive) {
-                        player.stop()
-                    } label: {
-                        Image(systemName: "stop.circle")
-                            .font(.title2)
-                    }
-                    .buttonStyle(.borderless)
                 }
+                .setuListRow()
             }
         }
     }
 
     private func pagerSection(total: Int) -> some View {
         Section {
-            HStack {
-                Button("上一页") {
-                    Task {
-                        page = max(1, page - 1)
-                        await load()
+            SetuCard {
+                HStack(spacing: SetuSpacing.md) {
+                    Button {
+                        Task {
+                            page = max(1, page - 1)
+                            await load()
+                        }
+                    } label: {
+                        Label("上一页", systemImage: "chevron.left")
                     }
-                }
-                .disabled(page <= 1)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(page <= 1 ? SetuColor.textTertiary : SetuColor.brandInk)
+                    .frame(minHeight: 44)
+                    .disabled(page <= 1)
 
-                Spacer()
-                Text("第 \(page) / \(max(1, Int(ceil(Double(total) / Double(pageSize))))) 页")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                Spacer()
+                    Spacer()
+                    Text("第 \(page) / \(max(1, Int(ceil(Double(total) / Double(pageSize))))) 页")
+                        .font(SetuTypography.caption)
+                        .foregroundStyle(SetuColor.textSecondary)
+                    Spacer()
 
-                Button("下一页") {
-                    Task {
-                        page += 1
-                        await load()
+                    Button {
+                        Task {
+                            page += 1
+                            await load()
+                        }
+                    } label: {
+                        Label("下一页", systemImage: "chevron.right")
                     }
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(page * pageSize >= total ? SetuColor.textTertiary : SetuColor.brandInk)
+                    .frame(minHeight: 44)
+                    .disabled(page * pageSize >= total)
                 }
-                .disabled(page * pageSize >= total)
             }
+            .setuListRow()
         }
     }
 
@@ -198,43 +236,96 @@ struct MusicHistoryView: View {
     }
 }
 
+private struct MusicHistoryStateSection: View {
+    let title: String
+    let stateTitle: String
+    var message: String?
+    var systemImage: String
+    var isLoading = false
+
+    var body: some View {
+        Section {
+            SetuCard {
+                VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                    SetuSectionHeader(title: title)
+                    SetuEmptyState(
+                        title: stateTitle,
+                        message: message,
+                        systemImage: systemImage,
+                        isLoading: isLoading
+                    )
+                }
+            }
+            .setuListRow()
+        }
+    }
+}
+
+private struct MusicHistoryIconButton: View {
+    let systemImage: String
+    let accessibilityLabel: String
+    let tint: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(tint)
+                .frame(width: 44, height: 44)
+                .background(tint.opacity(0.12), in: Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
+    }
+}
+
 private struct MusicHistoryRow: View {
     let record: MusicHistoryRecord
     let onPlay: () -> Void
     let onAddToPlaylist: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: SetuSpacing.md) {
             MusicArtworkView(urlString: record.coverUrl)
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: SetuSpacing.xs) {
                 Text(record.songName)
-                    .font(.headline)
+                    .font(SetuTypography.headline)
+                    .foregroundStyle(SetuColor.textPrimary)
                     .lineLimit(2)
                 Text(record.artistName)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .font(SetuTypography.caption)
+                    .foregroundStyle(SetuColor.textSecondary)
                 HStack(spacing: 10) {
                     if let albumName = record.albumName, !albumName.isEmpty {
                         Label(albumName, systemImage: "opticaldisc")
                     }
                     Label(record.playTime, systemImage: "clock")
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(SetuTypography.caption)
+                .foregroundStyle(SetuColor.textTertiary)
+                .lineLimit(1)
             }
             Spacer()
-            VStack(spacing: 10) {
-                Button(action: onPlay) {
-                    Image(systemName: "play.circle")
+            VStack(spacing: SetuSpacing.xs) {
+                MusicHistoryIconButton(
+                    systemImage: "play.fill",
+                    accessibilityLabel: "播放 \(record.songName)",
+                    tint: SetuColor.brandPink
+                ) {
+                    onPlay()
                 }
-                .buttonStyle(.borderless)
 
-                Button(action: onAddToPlaylist) {
-                    Image(systemName: "text.badge.plus")
+                MusicHistoryIconButton(
+                    systemImage: "text.badge.plus",
+                    accessibilityLabel: "加入歌单",
+                    tint: SetuColor.brandInk
+                ) {
+                    onAddToPlaylist()
                 }
-                .buttonStyle(.borderless)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, SetuSpacing.sm)
+        .contentShape(Rectangle())
     }
 }

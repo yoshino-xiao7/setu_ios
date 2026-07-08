@@ -11,23 +11,44 @@ struct PointsLogsView: View {
         List {
             switch state {
             case .idle, .loading:
-                ProgressView("正在加载")
+                Section {
+                    SetuCard {
+                        SetuEmptyState(title: "正在加载", systemImage: "list.bullet.rectangle", isLoading: true)
+                    }
+                }
             case .failed(let message):
-                Text(message)
-                    .foregroundStyle(.red)
+                Section {
+                    SetuCard {
+                        SetuEmptyState(title: "积分流水加载失败", message: message, systemImage: "exclamationmark.triangle")
+                    }
+                }
             case .loaded(let page):
                 if page.items.isEmpty {
-                    ContentUnavailableView("暂无积分流水", systemImage: "list.bullet.rectangle")
+                    Section {
+                        SetuCard {
+                            SetuEmptyState(title: "暂无积分流水", message: "积分获得和消耗记录会显示在这里。", systemImage: "list.bullet.rectangle")
+                        }
+                    }
                 } else {
-                    Section("共 \(page.total) 条") {
+                    Section {
+                        SetuCard {
+                            SetuSectionHeader(title: "积分流水", subtitle: "共 \(page.total) 条")
+                        }
+                    }
+                    Section {
                         ForEach(page.items) { item in
-                            PointsLogRow(item: item)
+                            SetuCard {
+                                PointsLogRow(item: item)
+                            }
                         }
                     }
                     pagerSection(page)
                 }
             }
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .setuBackground()
         .navigationTitle("积分流水")
         .task { await load() }
         .refreshable { await load() }
@@ -35,7 +56,8 @@ struct PointsLogsView: View {
 
     private func pagerSection(_ result: PointsLogPage) -> some View {
         Section {
-            HStack {
+            SetuCard {
+                HStack {
                 Button("上一页") {
                     Task {
                         page = max(1, page - 1)
@@ -46,8 +68,8 @@ struct PointsLogsView: View {
 
                 Spacer()
                 Text("第 \(result.page) 页")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                        .font(SetuTypography.caption)
+                        .foregroundStyle(SetuColor.textSecondary)
                 Spacer()
 
                 Button("下一页") {
@@ -57,6 +79,9 @@ struct PointsLogsView: View {
                     }
                 }
                 .disabled(result.page * result.size >= result.total)
+                }
+                .buttonStyle(.bordered)
+                .tint(SetuColor.brandPink)
             }
         }
     }
@@ -78,7 +103,8 @@ private struct PointsLogRow: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(displayTitle)
-                    .font(.headline)
+                    .font(SetuTypography.headline)
+                    .foregroundStyle(SetuColor.textPrimary)
                 Spacer()
                 Text(deltaText)
                     .font(.headline.monospacedDigit())
@@ -87,13 +113,13 @@ private struct PointsLogRow: View {
             if let createdAt = item.createdAt {
                 Label(createdAt, systemImage: "clock")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(SetuColor.textSecondary)
             }
             Text(displayDescription)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+                .font(SetuTypography.caption)
+                .foregroundStyle(SetuColor.textSecondary)
         }
-        .padding(.vertical, 3)
+        .padding(.vertical, SetuSpacing.xs)
     }
 
     private var displayTitle: String {
@@ -139,8 +165,8 @@ private struct PointsLogRow: View {
 
     private var deltaColor: Color {
         if item.bizType == "ADMIN_CALL" || item.delta == 0 {
-            return .orange
+            return SetuColor.warning
         }
-        return item.delta >= 0 ? .green : .red
+        return item.delta >= 0 ? SetuColor.success : SetuColor.danger
     }
 }

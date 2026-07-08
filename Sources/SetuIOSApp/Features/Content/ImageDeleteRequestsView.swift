@@ -12,27 +12,41 @@ struct ImageDeleteRequestsView: View {
         List {
             switch state {
             case .idle, .loading:
-                ProgressView("正在加载")
+                ImageDeleteStateSection(title: "删除申请", stateTitle: "正在加载删除申请", systemImage: "trash", isLoading: true)
             case .failed(let message):
-                ContentUnavailableView("删除申请加载失败", systemImage: "trash.slash", description: Text(message))
+                ImageDeleteStateSection(title: "删除申请", stateTitle: "删除申请加载失败", message: message, systemImage: "trash.slash")
             case .loaded(let page):
                 if page.list.isEmpty {
-                    ContentUnavailableView("暂无删除申请", systemImage: "trash", description: Text("你提交过的图片删除申请会显示在这里。"))
+                    ImageDeleteStateSection(title: "删除申请", stateTitle: "暂无删除申请", message: "你提交过的图片删除申请会显示在这里。", systemImage: "trash")
                 } else {
-                    Section("共 \(page.total) 条") {
-                        ForEach(page.list) { request in
-                            Button {
-                                router.navigate(to: .imageDeleteRequestDetail(request.id))
-                            } label: {
-                                ImageDeleteRequestRow(request: request)
+                    Section {
+                        SetuCard {
+                            VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                                SetuSectionHeader(title: "删除申请", subtitle: "共 \(page.total) 条")
+                                VStack(spacing: 0) {
+                                    ForEach(Array(page.list.enumerated()), id: \.element.id) { index, request in
+                                        Button {
+                                            router.navigate(to: .imageDeleteRequestDetail(request.id))
+                                        } label: {
+                                            ImageDeleteRequestRow(request: request)
+                                        }
+                                        .buttonStyle(.plain)
+
+                                        if index < page.list.count - 1 {
+                                            Divider().overlay(SetuColor.separator)
+                                        }
+                                    }
+                                }
                             }
-                            .buttonStyle(.plain)
                         }
+                        .setuListRow()
                     }
                     pagerSection(page)
                 }
             }
         }
+        .listStyle(.plain)
+        .setuBackground()
         .navigationTitle("我的删除申请")
         .task { await load() }
         .refreshable { await load() }
@@ -40,29 +54,42 @@ struct ImageDeleteRequestsView: View {
 
     private func pagerSection(_ result: PageResult<ImageDeleteRequestItem>) -> some View {
         Section {
-            HStack {
-                Button("上一页") {
-                    Task {
-                        page = max(1, page - 1)
-                        await load()
+            SetuCard {
+                HStack(spacing: SetuSpacing.md) {
+                    Button {
+                        Task {
+                            page = max(1, page - 1)
+                            await load()
+                        }
+                    } label: {
+                        Label("上一页", systemImage: "chevron.left")
                     }
-                }
-                .disabled(page <= 1)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(page <= 1 ? SetuColor.textTertiary : SetuColor.brandInk)
+                    .frame(minHeight: 44)
+                    .disabled(page <= 1)
 
-                Spacer()
-                Text("第 \(result.page) 页")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                Spacer()
+                    Spacer()
+                    Text("第 \(result.page) 页")
+                        .font(SetuTypography.caption)
+                        .foregroundStyle(SetuColor.textSecondary)
+                    Spacer()
 
-                Button("下一页") {
-                    Task {
-                        page += 1
-                        await load()
+                    Button {
+                        Task {
+                            page += 1
+                            await load()
+                        }
+                    } label: {
+                        Label("下一页", systemImage: "chevron.right")
                     }
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(result.page * result.pageSize >= result.total ? SetuColor.textTertiary : SetuColor.brandInk)
+                    .frame(minHeight: 44)
+                    .disabled(result.page * result.pageSize >= result.total)
                 }
-                .disabled(result.page * result.pageSize >= result.total)
             }
+            .setuListRow()
         }
     }
 
@@ -76,16 +103,37 @@ struct ImageDeleteRequestsView: View {
     }
 }
 
+struct ImageDeleteStateSection: View {
+    let title: String
+    let stateTitle: String
+    var message: String?
+    var systemImage: String
+    var isLoading = false
+
+    var body: some View {
+        Section {
+            SetuCard {
+                VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                    SetuSectionHeader(title: title)
+                    SetuEmptyState(title: stateTitle, message: message, systemImage: systemImage, isLoading: isLoading)
+                }
+            }
+            .setuListRow()
+        }
+    }
+}
+
 struct ImageDeleteRequestRow: View {
     let request: ImageDeleteRequestItem
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(alignment: .top, spacing: SetuSpacing.md) {
             ImageThumbnailView(urlString: request.thumbnailUrl)
-            VStack(alignment: .leading, spacing: 7) {
+            VStack(alignment: .leading, spacing: SetuSpacing.xs) {
                 HStack(alignment: .top) {
                     Text(request.imageTitle ?? "PID \(request.pid)")
-                        .font(.headline)
+                        .font(SetuTypography.headline)
+                        .foregroundStyle(SetuColor.textPrimary)
                         .lineLimit(2)
                     Spacer()
                     RequestStatusBadge(title: request.statusTitle, status: request.status)
@@ -93,24 +141,28 @@ struct ImageDeleteRequestRow: View {
 
                 if let author = request.imageAuthor, !author.isEmpty {
                     Text(author)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .font(SetuTypography.caption)
+                        .foregroundStyle(SetuColor.textSecondary)
                 }
 
                 Text(request.reason)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .font(SetuTypography.caption)
+                    .foregroundStyle(SetuColor.textSecondary)
                     .lineLimit(2)
 
-                HStack(spacing: 10) {
+                HStack(spacing: SetuSpacing.md) {
                     Label("\(request.pid)-\(request.p)", systemImage: "number")
                     Label(request.createdAt, systemImage: "calendar")
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(SetuTypography.caption)
+                .foregroundStyle(SetuColor.textTertiary)
             }
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(SetuColor.textTertiary)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, SetuSpacing.sm)
+        .contentShape(Rectangle())
     }
 }
 
@@ -130,13 +182,13 @@ struct RequestStatusBadge: View {
     private var color: Color {
         switch status {
         case 0:
-            return .orange
+            return SetuColor.warning
         case 1:
-            return .green
+            return SetuColor.success
         case 2:
-            return .red
+            return SetuColor.danger
         default:
-            return .secondary
+            return SetuColor.textSecondary
         }
     }
 }

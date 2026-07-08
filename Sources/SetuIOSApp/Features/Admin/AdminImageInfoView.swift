@@ -16,12 +16,14 @@ struct AdminImageInfoView: View {
     var body: some View {
         List {
             if environment.authSession.currentUser?.role != .admin {
-                ContentUnavailableView("需要管理员权限", systemImage: "shield.slash", description: Text("请使用管理员账号登录后查询图片详情。"))
+                AdminImageInfoStateSection(title: "权限", stateTitle: "需要管理员权限", message: "请使用管理员账号登录后查询图片详情。", systemImage: "shield.slash")
             } else {
                 querySection
                 contentSection
             }
         }
+        .listStyle(.plain)
+        .setuBackground()
         .navigationTitle("图片详情")
         .task {
             if Int(pidText.trimmingCharacters(in: .whitespacesAndNewlines)) != nil {
@@ -34,54 +36,77 @@ struct AdminImageInfoView: View {
     }
 
     private var querySection: some View {
-        Section("查询") {
-            TextField("PID", text: $pidText)
-            TextField("p", text: $pText)
-            Button {
-                Task { await load() }
-            } label: {
-                Label("查询图片", systemImage: "magnifyingglass")
+        SetuCard {
+            VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                SetuSectionHeader(title: "查询")
+                TextField("PID", text: $pidText)
+                    .textFieldStyle(.roundedBorder)
+                    .keyboardType(.numberPad)
+                TextField("p", text: $pText)
+                    .textFieldStyle(.roundedBorder)
+                    .keyboardType(.numberPad)
+                Button {
+                    Task { await load() }
+                } label: {
+                    Label("查询图片", systemImage: "magnifyingglass")
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(SetuColor.brandPink)
+                .disabled(parsedPID == nil)
             }
-            .disabled(parsedPID == nil)
         }
+        .setuListRow()
     }
 
     @ViewBuilder
     private var contentSection: some View {
         switch state {
         case .idle:
-            ContentUnavailableView("输入 PID 查询", systemImage: "photo.badge.magnifyingglass")
+            AdminImageInfoStateSection(title: "查询结果", stateTitle: "输入 PID 查询", systemImage: "photo.badge.magnifyingglass")
         case .loading:
-            ProgressView("正在加载图片详情")
+            AdminImageInfoStateSection(title: "查询结果", stateTitle: "正在加载图片详情", systemImage: "photo.badge.magnifyingglass", isLoading: true)
         case .failed(let message):
-            ContentUnavailableView("图片详情加载失败", systemImage: "photo.badge.exclamationmark", description: Text(message))
+            AdminImageInfoStateSection(title: "查询结果", stateTitle: "图片详情加载失败", message: message, systemImage: "photo.badge.exclamationmark")
         case .loaded(let image):
-            Section {
+            SetuCard {
                 AdminImageInfoHeader(image: image)
             }
-            Section("基础信息") {
-                LabeledContent("PID", value: image.pidText)
-                LabeledContent("UID", value: "\(image.uid)")
-                LabeledContent("标题", value: image.title)
-                LabeledContent("作者", value: image.author)
-                LabeledContent("分级", value: image.ratingTitle)
-                LabeledContent("AI 类型", value: image.aiTitle)
-                LabeledContent("尺寸", value: "\(image.width)x\(image.height)")
-                LabeledContent("扩展名", value: image.ext)
-                LabeledContent("上传时间", value: "\(image.uploadDate)")
-            }
-            if let tags = image.tags, !tags.isEmpty {
-                Section("标签") {
-                    Text(tags.joined(separator: " / "))
-                        .font(.footnote)
+            .setuListRow()
+            SetuCard {
+                VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                    SetuSectionHeader(title: "基础信息")
+                    AdminImageInfoMetadataRow(title: "PID", value: image.pidText)
+                    AdminImageInfoMetadataRow(title: "UID", value: "\(image.uid)")
+                    AdminImageInfoMetadataRow(title: "标题", value: image.title)
+                    AdminImageInfoMetadataRow(title: "作者", value: image.author)
+                    AdminImageInfoMetadataRow(title: "分级", value: image.ratingTitle)
+                    AdminImageInfoMetadataRow(title: "AI 类型", value: image.aiTitle)
+                    AdminImageInfoMetadataRow(title: "尺寸", value: "\(image.width)x\(image.height)")
+                    AdminImageInfoMetadataRow(title: "扩展名", value: image.ext)
+                    AdminImageInfoMetadataRow(title: "上传时间", value: "\(image.uploadDate)")
                 }
             }
-            if let urlString = image.urlOriginal, let url = URL(string: urlString) {
-                Section {
-                    Link(destination: url) {
-                        Label("打开原图", systemImage: "arrow.up.forward.square")
+            .setuListRow()
+            if let tags = image.tags, !tags.isEmpty {
+                SetuCard {
+                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                        SetuSectionHeader(title: "标签")
+                        Text(tags.joined(separator: " / "))
+                            .font(SetuTypography.caption)
+                            .foregroundStyle(SetuColor.textSecondary)
                     }
                 }
+                .setuListRow()
+            }
+            if let urlString = image.urlOriginal, let url = URL(string: urlString) {
+                SetuCard {
+                    Link(destination: url) {
+                        Label("打开原图", systemImage: "arrow.up.forward.square")
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    }
+                }
+                .setuListRow()
             }
         }
     }
@@ -109,22 +134,23 @@ private struct AdminImageInfoHeader: View {
     let image: AdminImageDetail
 
     var body: some View {
-        HStack(alignment: .top, spacing: 14) {
+        HStack(alignment: .top, spacing: SetuSpacing.md) {
             AdminImageInfoThumbnail(urlString: image.urlOriginal)
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: SetuSpacing.xs) {
                 Text(image.title)
-                    .font(.headline)
+                    .font(SetuTypography.headline)
+                    .foregroundStyle(SetuColor.textPrimary)
                     .lineLimit(2)
                 Text(image.author)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .font(SetuTypography.caption)
+                    .foregroundStyle(SetuColor.textSecondary)
                 HStack(spacing: 8) {
                     RequestStatusBadge(title: image.ratingTitle, status: image.r18 == 1 ? 2 : 1)
                     RequestStatusBadge(title: image.aiTitle, status: image.aiType == 2 ? 0 : 1)
                 }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, SetuSpacing.xs)
     }
 }
 
@@ -149,12 +175,53 @@ private struct AdminImageInfoThumbnail: View {
             }
         }
         .frame(width: 96, height: 120)
-        .background(.pink.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .background(SetuColor.brandSoft.opacity(0.12), in: RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous)
+                .stroke(SetuColor.separator, lineWidth: 1)
+        }
     }
 
     private var placeholder: some View {
         Image(systemName: "photo")
-            .foregroundStyle(.pink)
+            .foregroundStyle(SetuColor.brandPink)
+    }
+}
+
+private struct AdminImageInfoStateSection: View {
+    let title: String
+    let stateTitle: String
+    var message: String?
+    var systemImage: String
+    var isLoading = false
+
+    var body: some View {
+        SetuCard {
+            VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                SetuSectionHeader(title: title)
+                SetuEmptyState(title: stateTitle, message: message, systemImage: systemImage, isLoading: isLoading)
+            }
+        }
+        .setuListRow()
+    }
+}
+
+private struct AdminImageInfoMetadataRow: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: SetuSpacing.md) {
+            Text(title)
+                .font(SetuTypography.caption)
+                .foregroundStyle(SetuColor.textSecondary)
+                .frame(width: 72, alignment: .leading)
+            Text(value)
+                .font(SetuTypography.body)
+                .foregroundStyle(SetuColor.textPrimary)
+                .multilineTextAlignment(.trailing)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+        }
     }
 }

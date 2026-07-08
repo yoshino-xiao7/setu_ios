@@ -20,20 +20,24 @@ struct AdminPixivCrawlView: View {
     var body: some View {
         List {
             if environment.authSession.currentUser?.role != .admin {
-                ContentUnavailableView("需要管理员权限", systemImage: "shield.slash", description: Text("请使用管理员账号登录后创建 Pixiv 抓取任务。"))
+                AdminPixivStateSection(title: "权限", stateTitle: "需要管理员权限", message: "请使用管理员账号登录后创建 Pixiv 抓取任务。", systemImage: "shield.slash")
             } else {
                 healthSection
                 if let message {
-                    Section {
-                        Text(message)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+                    SetuCard {
+                        Label(message, systemImage: "checkmark.circle")
+                            .font(SetuTypography.caption)
+                            .foregroundStyle(SetuColor.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
+                    .setuListRow()
                 }
                 createSection
                 taskSection
             }
         }
+        .listStyle(.plain)
+        .setuBackground()
         .navigationTitle("新增图片")
         .task { await loadAll() }
         .refreshable { await loadAll() }
@@ -41,90 +45,111 @@ struct AdminPixivCrawlView: View {
 
     @ViewBuilder
     private var healthSection: some View {
-        Section("爬虫服务") {
+        SetuCard {
+            VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                SetuSectionHeader(title: "爬虫服务")
             switch health {
             case .idle, .loading:
-                ProgressView("正在检查服务")
+                    SetuEmptyState(title: "正在检查服务", systemImage: "pulse", isLoading: true)
             case .failed(let message):
                 Label(message, systemImage: "xmark.circle")
-                    .foregroundStyle(.red)
+                        .font(SetuTypography.caption)
+                        .foregroundStyle(SetuColor.danger)
             case .loaded(let health):
                 HStack {
                     Label(health.isOnline ? "服务在线" : "服务状态：\(health.status ?? "-")", systemImage: "pulse")
-                        .foregroundStyle(health.isOnline ? .green : .orange)
+                            .foregroundStyle(health.isOnline ? SetuColor.success : SetuColor.warning)
                     Spacer()
                     Text(health.environment ?? "-")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                            .font(SetuTypography.caption)
+                            .foregroundStyle(SetuColor.textSecondary)
                 }
-                LabeledContent("数据库", value: health.database ?? "-")
+                    AdminPixivMetadataRow(title: "数据库", value: health.database ?? "-")
+                }
             }
         }
+        .setuListRow()
     }
 
     private var createSection: some View {
-        Section("新建任务") {
-            Picker("模式", selection: $mode) {
-                Text("按 ID").tag("ids")
-                Text("按画师").tag("user")
-                Text("按标签").tag("tag")
-            }
-            Toggle("跳过已存在", isOn: $skipExisting)
+        SetuCard {
+            VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                SetuSectionHeader(title: "新建任务", subtitle: "Pixiv 抓取")
+                Picker("模式", selection: $mode) {
+                    Text("按 ID").tag("ids")
+                    Text("按画师").tag("user")
+                    Text("按标签").tag("tag")
+                }
+                .pickerStyle(.segmented)
+                Toggle("跳过已存在", isOn: $skipExisting)
 
-            if mode == "ids" {
-                TextEditor(text: $idsInput)
-                    .frame(minHeight: 96)
-                    .overlay(alignment: .topLeading) {
-                        if idsInput.isEmpty {
-                            Text("输入 PID，多个用逗号、空格或换行分隔")
-                                .foregroundStyle(.secondary)
-                                .padding(.top, 8)
-                                .padding(.leading, 5)
+                if mode == "ids" {
+                    TextEditor(text: $idsInput)
+                        .frame(minHeight: 96)
+                        .padding(SetuSpacing.xs)
+                        .background(SetuColor.surfaceMuted, in: RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous))
+                        .overlay(alignment: .topLeading) {
+                            if idsInput.isEmpty {
+                                Text("输入 PID，多个用逗号、空格或换行分隔")
+                                    .font(SetuTypography.caption)
+                                    .foregroundStyle(SetuColor.textTertiary)
+                                    .padding(.top, SetuSpacing.md)
+                                    .padding(.leading, SetuSpacing.md)
+                            }
                         }
-                    }
-            } else if mode == "user" {
-                TextField("画师 UID", text: $userID)
-            } else {
-                TextField("搜索标签", text: $tag)
-                Picker("排序模式", selection: $tagMode) {
-                    Text("热门").tag("popular")
-                    Text("最新").tag("latest")
-                }
-                Stepper("起始页 \(pageFrom)", value: $pageFrom, in: 1...999)
-                Stepper("结束页 \(pageTo)", value: $pageTo, in: pageFrom...999)
-            }
-
-            Button {
-                Task { await submit() }
-            } label: {
-                if isSubmitting {
-                    ProgressView()
+                } else if mode == "user" {
+                    TextField("画师 UID", text: $userID)
+                        .textFieldStyle(.roundedBorder)
                 } else {
-                    Label("开始抓取", systemImage: "play.circle")
+                    TextField("搜索标签", text: $tag)
+                        .textFieldStyle(.roundedBorder)
+                    Picker("排序模式", selection: $tagMode) {
+                        Text("热门").tag("popular")
+                        Text("最新").tag("latest")
+                    }
+                    .pickerStyle(.segmented)
+                    Stepper("起始页 \(pageFrom)", value: $pageFrom, in: 1...999)
+                    Stepper("结束页 \(pageTo)", value: $pageTo, in: pageFrom...999)
                 }
+
+                Button {
+                    Task { await submit() }
+                } label: {
+                    Label(isSubmitting ? "创建中" : "开始抓取", systemImage: isSubmitting ? "hourglass" : "play.circle")
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(SetuColor.brandPink)
+                .disabled(isSubmitting || !canSubmit)
             }
-            .disabled(isSubmitting || !canSubmit)
         }
+        .setuListRow()
     }
 
     @ViewBuilder
     private var taskSection: some View {
-        Section("任务历史") {
+        SetuCard {
+            VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                SetuSectionHeader(title: "任务历史")
             switch tasks {
             case .idle, .loading:
-                ProgressView("正在加载任务")
+                    SetuEmptyState(title: "正在加载任务", systemImage: "tray.full", isLoading: true)
             case .failed(let message):
-                ContentUnavailableView("任务加载失败", systemImage: "tray.full", description: Text(message))
+                    SetuEmptyState(title: "任务加载失败", message: message, systemImage: "tray.full")
             case .loaded(let result):
                 if result.tasks.isEmpty {
-                    ContentUnavailableView("暂无任务", systemImage: "tray")
+                        SetuEmptyState(title: "暂无任务", message: "创建抓取任务后会显示在这里。", systemImage: "tray")
                 } else {
                     if result.total > result.tasks.count {
                         Text("仅展示最近 \(result.tasks.count) / \(result.total) 个任务")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+                                .font(SetuTypography.caption)
+                                .foregroundStyle(SetuColor.textSecondary)
                     }
-                    ForEach(result.tasks) { task in
+                        ForEach(Array(result.tasks.enumerated()), id: \.element.id) { index, task in
+                            if index > 0 {
+                                Divider()
+                                    .overlay(SetuColor.separator)
+                            }
                         PixivTaskRow(task: task) {
                             router.navigate(to: .adminPixivTask(task.taskID))
                         } onCancel: {
@@ -134,6 +159,8 @@ struct AdminPixivCrawlView: View {
                 }
             }
         }
+        }
+        .setuListRow()
     }
 
     private var parsedIDs: [Int] {
@@ -242,18 +269,22 @@ struct AdminPixivTaskDetailView: View {
     var body: some View {
         List {
             if environment.authSession.currentUser?.role != .admin {
-                ContentUnavailableView("需要管理员权限", systemImage: "shield.slash", description: Text("请使用管理员账号登录后查看任务详情。"))
+                AdminPixivStateSection(title: "权限", stateTitle: "需要管理员权限", message: "请使用管理员账号登录后查看任务详情。", systemImage: "shield.slash")
             } else {
                 if let message {
-                    Section {
-                        Text(message)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+                    SetuCard {
+                        Label(message, systemImage: "checkmark.circle")
+                            .font(SetuTypography.caption)
+                            .foregroundStyle(SetuColor.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
+                    .setuListRow()
                 }
                 content
             }
         }
+        .listStyle(.plain)
+        .setuBackground()
         .navigationTitle("任务详情")
         .toolbar {
             if case .loaded(let task) = state, ["pending", "running"].contains(task.status) {
@@ -270,44 +301,61 @@ struct AdminPixivTaskDetailView: View {
     private var content: some View {
         switch state {
         case .idle, .loading:
-            ProgressView("正在加载任务详情")
+            AdminPixivStateSection(title: "任务", stateTitle: "正在加载任务详情", systemImage: "tray.full", isLoading: true)
         case .failed(let message):
-            ContentUnavailableView("任务详情加载失败", systemImage: "tray.full", description: Text(message))
+            AdminPixivStateSection(title: "任务", stateTitle: "任务详情加载失败", message: message, systemImage: "tray.full")
         case .loaded(let task):
-            Section("任务") {
-                LabeledContent("ID", value: task.taskID)
-                LabeledContent("模式", value: task.modeTitle)
-                LabeledContent("状态", value: task.statusTitle)
-                if let serverTimestamp = task.serverTimestamp {
-                    LabeledContent("服务时间", value: serverTimestamp)
-                }
-                if let startedAt = task.startedAt {
-                    LabeledContent("开始时间", value: startedAt)
-                }
-                if let finishedAt = task.finishedAt {
-                    LabeledContent("结束时间", value: finishedAt)
-                }
-                if let message = task.message, !message.isEmpty {
-                    Text(message)
-                        .foregroundStyle(.secondary)
+            SetuCard {
+                VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                    SetuSectionHeader(title: "任务", subtitle: task.taskID)
+                    AdminPixivMetadataRow(title: "ID", value: task.taskID)
+                    AdminPixivMetadataRow(title: "模式", value: task.modeTitle)
+                    AdminPixivMetadataRow(title: "状态") {
+                        PixivStatusPill(status: task.status, title: task.statusTitle)
+                    }
+                    if let serverTimestamp = task.serverTimestamp {
+                        AdminPixivMetadataRow(title: "服务时间", value: serverTimestamp)
+                    }
+                    if let startedAt = task.startedAt {
+                        AdminPixivMetadataRow(title: "开始时间", value: startedAt)
+                    }
+                    if let finishedAt = task.finishedAt {
+                        AdminPixivMetadataRow(title: "结束时间", value: finishedAt)
+                    }
+                    if let message = task.message, !message.isEmpty {
+                        Text(message)
+                            .font(SetuTypography.caption)
+                            .foregroundStyle(SetuColor.textSecondary)
                 }
             }
+            }
+            .setuListRow()
 
             if let progress = task.progress {
-                Section("进度") {
+                SetuCard {
+                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                        SetuSectionHeader(title: "进度", subtitle: "\(progress.percent)%")
                     ProgressView(value: Double(progress.percent), total: 100)
-                    LabeledContent("完成", value: "\(progress.done) / \(progress.total)")
-                    LabeledContent("新增", value: "\(progress.new)")
-                    LabeledContent("跳过", value: "\(progress.skipped)")
-                    LabeledContent("失败", value: "\(progress.failed)")
+                            .tint(SetuColor.brandPink)
+                        AdminPixivMetadataRow(title: "完成", value: "\(progress.done) / \(progress.total)")
+                        AdminPixivMetadataRow(title: "新增", value: "\(progress.new)")
+                        AdminPixivMetadataRow(title: "跳过", value: "\(progress.skipped)")
+                        AdminPixivMetadataRow(title: "失败", value: "\(progress.failed)")
+                    }
                 }
+                .setuListRow()
             }
 
-            Section("日志") {
+            SetuCard {
+                VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                    SetuSectionHeader(title: "日志")
                 Text(task.logs?.suffix(1200).joined(separator: "\n") ?? "No logs available")
                     .font(.footnote.monospaced())
+                        .foregroundStyle(SetuColor.textPrimary)
                     .textSelection(.enabled)
             }
+            }
+            .setuListRow()
         }
     }
 
@@ -339,27 +387,24 @@ private struct PixivTaskRow: View {
     let onCancel: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: SetuSpacing.sm) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(task.taskID)
                         .font(.headline.monospaced())
+                        .foregroundStyle(SetuColor.textPrimary)
                         .lineLimit(1)
                     Text(task.modeTitle)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .font(SetuTypography.caption)
+                        .foregroundStyle(SetuColor.textSecondary)
                 }
                 Spacer()
-                Text(task.statusTitle)
-                    .font(.caption.weight(.semibold))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(statusColor.opacity(0.14), in: Capsule())
-                    .foregroundStyle(statusColor)
+                PixivStatusPill(status: task.status, title: task.statusTitle)
             }
 
             if let progress = task.progress {
                 ProgressView(value: Double(progress.percent), total: 100)
+                    .tint(SetuColor.brandPink)
                 HStack(spacing: 10) {
                     Label("\(progress.done)/\(progress.total)", systemImage: "chart.bar")
                     Label("新 \(progress.new)", systemImage: "plus.circle")
@@ -367,33 +412,97 @@ private struct PixivTaskRow: View {
                     Label("错 \(progress.failed)", systemImage: "exclamationmark.triangle")
                 }
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(SetuColor.textTertiary)
             }
 
             HStack {
-                Button("详情", action: onOpen)
+                Button(action: onOpen) {
+                    Label("详情", systemImage: "doc.text.magnifyingglass")
+                        .frame(minHeight: 44)
+                }
                 Spacer()
                 if ["pending", "running"].contains(task.status) {
-                    Button("取消", role: .destructive, action: onCancel)
+                    Button(role: .destructive, action: onCancel) {
+                        Label("取消", systemImage: "xmark.circle")
+                            .frame(minHeight: 44)
+                    }
                 }
             }
             .buttonStyle(.borderless)
+            .font(SetuTypography.caption)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, SetuSpacing.xs)
+    }
+}
+
+private struct AdminPixivStateSection: View {
+    let title: String
+    let stateTitle: String
+    var message: String?
+    var systemImage: String
+    var isLoading = false
+
+    var body: some View {
+        SetuCard {
+            VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                SetuSectionHeader(title: title)
+                SetuEmptyState(title: stateTitle, message: message, systemImage: systemImage, isLoading: isLoading)
+            }
+        }
+        .setuListRow()
+    }
+}
+
+private struct AdminPixivMetadataRow<Value: View>: View {
+    let title: String
+    private let value: Value
+
+    init(title: String, @ViewBuilder value: () -> Value) {
+        self.title = title
+        self.value = value()
     }
 
-    private var statusColor: Color {
-        switch task.status {
+    var body: some View {
+        HStack(alignment: .top, spacing: SetuSpacing.md) {
+            Text(title)
+                .font(SetuTypography.caption)
+                .foregroundStyle(SetuColor.textSecondary)
+                .frame(width: 72, alignment: .leading)
+            value
+                .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+    }
+}
+
+private extension AdminPixivMetadataRow where Value == Text {
+    init(title: String, value: String) {
+        self.title = title
+        self.value = Text(value)
+            .font(SetuTypography.body)
+            .foregroundStyle(SetuColor.textPrimary)
+    }
+}
+
+private struct PixivStatusPill: View {
+    let status: String
+    let title: String
+
+    var body: some View {
+        SetuPill(text: title, systemImage: "flag", tone: tone)
+    }
+
+    private var tone: SetuPillTone {
+        switch status {
         case "completed":
-            return .green
+            .success
         case "failed":
-            return .red
+            .danger
         case "cancelled":
-            return .orange
+            .warning
         case "running":
-            return .blue
+            .info
         default:
-            return .secondary
+            .muted
         }
     }
 }

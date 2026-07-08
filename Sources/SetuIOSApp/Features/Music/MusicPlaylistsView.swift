@@ -4,6 +4,7 @@ import SwiftUI
 struct MusicPlaylistsView: View {
     @Environment(RouterPath.self) private var router
     @Bindable var environment: AppEnvironment
+    @Bindable var player: MusicPlaybackController
     @State private var state: LoadState<[UserMusicPlaylist]> = .idle
     @State private var showingCreate = false
     @State private var message: String?
@@ -14,29 +15,42 @@ struct MusicPlaylistsView: View {
         List {
             if let message {
                 Section {
-                    Text(message)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    SetuPill(text: message, systemImage: "checkmark.seal", tone: .success)
                 }
             }
 
             switch state {
             case .idle, .loading:
-                ProgressView("正在加载")
+                Section {
+                    SetuCard {
+                        SetuEmptyState(title: "正在加载", systemImage: "music.note.list", isLoading: true)
+                    }
+                }
             case .failed(let message):
-                ContentUnavailableView("歌单加载失败", systemImage: "music.note.list", description: Text(message))
+                Section {
+                    SetuCard {
+                        SetuEmptyState(title: "歌单加载失败", message: message, systemImage: "music.note.list")
+                    }
+                }
             case .loaded(let playlists):
                 if playlists.isEmpty {
-                    ContentUnavailableView("暂无歌单", systemImage: "music.note.list", description: Text("创建歌单后会显示在这里。"))
+                    Section {
+                        SetuCard {
+                            SetuEmptyState(title: "暂无歌单", message: "创建歌单后会显示在这里。", systemImage: "music.note.list")
+                        }
+                    }
                 } else {
                     statsSection(playlists)
-                    Section("共 \(playlists.count) 个歌单") {
+                    Section {
                         ForEach(playlists) { playlist in
                             Button {
                                 router.navigate(to: .playlistDetail(playlist.id))
                             } label: {
-                                MusicPlaylistRow(playlist: playlist)
+                                SetuCard {
+                                    MusicPlaylistRow(playlist: playlist)
+                                }
                             }
+                            .buttonStyle(.plain)
                             .swipeActions {
                                 Button(role: .destructive) {
                                     playlistPendingDeletion = playlist
@@ -50,6 +64,9 @@ struct MusicPlaylistsView: View {
                 }
             }
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .setuBackground()
         .navigationTitle("我的歌单")
         .toolbar {
             Button {
@@ -75,13 +92,28 @@ struct MusicPlaylistsView: View {
         }
         .task { await load() }
         .refreshable { await load() }
+        .safeAreaInset(edge: .bottom) {
+            MusicMiniPlayerBar(environment: environment, player: player)
+                .padding(.horizontal)
+                .padding(.top, 6)
+        }
     }
 
     private func statsSection(_ playlists: [UserMusicPlaylist]) -> some View {
-        Section("概览") {
-            LabeledContent("歌单数量", value: "\(playlists.count)")
-            LabeledContent("歌曲总数", value: "\(playlists.reduce(0) { $0 + ($1.songCount ?? 0) })")
-            LabeledContent("播放总量", value: "\(playlists.reduce(0) { $0 + ($1.playCount ?? 0) })")
+        Section {
+            SetuCard {
+                VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                    SetuSectionHeader(title: "概览", subtitle: "共 \(playlists.count) 个歌单")
+                    LazyVGrid(columns: [
+                        GridItem(.flexible(), spacing: SetuSpacing.sm),
+                        GridItem(.flexible(), spacing: SetuSpacing.sm)
+                    ], spacing: SetuSpacing.sm) {
+                        SetuStatTile(title: "歌单数量", value: "\(playlists.count)", systemImage: "music.note.list", color: SetuColor.brandPink)
+                        SetuStatTile(title: "歌曲总数", value: "\(playlists.reduce(0) { $0 + ($1.songCount ?? 0) })", systemImage: "music.note", color: SetuColor.info)
+                        SetuStatTile(title: "播放总量", value: "\(playlists.reduce(0) { $0 + ($1.playCount ?? 0) })", systemImage: "play.circle", color: SetuColor.success)
+                    }
+                }
+            }
         }
     }
 
@@ -115,11 +147,12 @@ private struct MusicPlaylistRow: View {
             MusicArtworkView(urlString: playlist.coverUrl)
             VStack(alignment: .leading, spacing: 6) {
                 Text(playlist.name)
-                    .font(.headline)
+                    .font(SetuTypography.headline)
+                    .foregroundStyle(SetuColor.textPrimary)
                 if let description = playlist.description, !description.isEmpty {
                     Text(description)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .font(SetuTypography.caption)
+                        .foregroundStyle(SetuColor.textSecondary)
                         .lineLimit(2)
                 }
                 HStack(spacing: 10) {
@@ -128,10 +161,10 @@ private struct MusicPlaylistRow: View {
                     Text(modeTitle(playlist.playMode))
                 }
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(SetuColor.textSecondary)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, SetuSpacing.xs)
     }
 
     private func modeTitle(_ mode: String?) -> String {
@@ -159,21 +192,34 @@ private struct CreatePlaylistSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("歌单信息") {
-                    TextField("名称", text: $name)
-                    TextField("描述", text: $description, axis: .vertical)
-                    Toggle("公开歌单", isOn: $isPublic)
+            List {
+                Section {
+                    SetuCard {
+                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                            SetuSectionHeader(title: "歌单信息", subtitle: "创建后可继续添加歌曲")
+                            TextField("名称", text: $name)
+                                .textFieldStyle(.roundedBorder)
+                            TextField("描述", text: $description, axis: .vertical)
+                                .lineLimit(3...5)
+                                .textFieldStyle(.roundedBorder)
+                            Toggle(isOn: $isPublic) {
+                                Label("公开歌单", systemImage: "eye")
+                                    .foregroundStyle(SetuColor.textPrimary)
+                            }
+                            .tint(SetuColor.brandPink)
+                        }
+                    }
                 }
 
                 if let message {
                     Section {
-                        Text(message)
-                            .font(.footnote)
-                            .foregroundStyle(.red)
+                        SetuPill(text: message, systemImage: "exclamationmark.triangle", tone: .danger)
                     }
                 }
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .setuBackground()
             .navigationTitle("新建歌单")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

@@ -10,18 +10,22 @@ struct AdminAiWorkersView: View {
     var body: some View {
         List {
             if environment.authSession.currentUser?.role != .admin {
-                ContentUnavailableView("需要管理员权限", systemImage: "shield.slash", description: Text("请使用管理员账号登录后查看 AI Worker。"))
+                AdminWorkerStateSection(title: "权限", stateTitle: "需要管理员权限", message: "请使用管理员账号登录后查看 AI Worker。", systemImage: "shield.slash")
             } else {
                 if let message {
-                    Section {
-                        Text(message)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+                    SetuCard {
+                        Label(message, systemImage: "checkmark.circle")
+                            .font(SetuTypography.caption)
+                            .foregroundStyle(SetuColor.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
+                    .setuListRow()
                 }
                 content
             }
         }
+        .listStyle(.plain)
+        .setuBackground()
         .navigationTitle("AI Worker")
         .toolbar {
             Button {
@@ -38,9 +42,9 @@ struct AdminAiWorkersView: View {
     private var content: some View {
         switch state {
         case .idle, .loading:
-            ProgressView("正在加载 AI Worker 状态")
+            AdminWorkerStateSection(title: "Worker", stateTitle: "正在加载 AI Worker 状态", systemImage: "cpu", isLoading: true)
         case .failed(let message):
-            ContentUnavailableView("AI Worker 加载失败", systemImage: "cpu", description: Text(message))
+            AdminWorkerStateSection(title: "Worker", stateTitle: "AI Worker 加载失败", message: message, systemImage: "cpu")
         case .loaded(let snapshot):
             serviceSection(snapshot)
             controlSection(snapshot.control)
@@ -51,140 +55,163 @@ struct AdminAiWorkersView: View {
     }
 
     private func serviceSection(_ snapshot: AiWorkerSnapshot) -> some View {
-        Section("服务状态") {
-            HStack {
+        SetuCard {
+            VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                SetuSectionHeader(title: "服务状态")
+                HStack {
                 Label(snapshot.status.statusTitle, systemImage: snapshot.status.online ? "checkmark.circle" : "xmark.circle")
-                    .foregroundStyle(snapshot.status.online ? .green : .red)
+                        .foregroundStyle(snapshot.status.online ? SetuColor.success : SetuColor.danger)
                 Spacer()
                 Text(snapshot.status.status)
                     .font(.caption.monospaced())
-                    .foregroundStyle(.secondary)
+                        .foregroundStyle(SetuColor.textSecondary)
             }
             if let detail = snapshot.status.message, !detail.isEmpty {
                 Text(detail)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                        .font(SetuTypography.caption)
+                        .foregroundStyle(SetuColor.textSecondary)
             }
-            LabeledContent("在线 Worker", value: "\(snapshot.status.activeWorkerCount ?? 0) / \(snapshot.workerCount)")
-            LabeledContent("预计等待", value: formatWait(snapshot.status.estimatedWaitSeconds))
-            LabeledContent("服务器时间", value: snapshot.status.serverTime ?? "-")
-            LabeledContent("最近心跳", value: snapshot.status.lastSeenAt ?? "-")
+                AdminWorkerMetadataRow(title: "在线 Worker", value: "\(snapshot.status.activeWorkerCount ?? 0) / \(snapshot.workerCount)")
+                AdminWorkerMetadataRow(title: "预计等待", value: formatWait(snapshot.status.estimatedWaitSeconds))
+                AdminWorkerMetadataRow(title: "服务器时间", value: snapshot.status.serverTime ?? "-")
+                AdminWorkerMetadataRow(title: "最近心跳", value: snapshot.status.lastSeenAt ?? "-")
+            }
         }
+        .setuListRow()
     }
 
     private func controlSection(_ control: AiControlStatus?) -> some View {
-        Section("本机控制") {
+        SetuCard {
+            VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                SetuSectionHeader(title: "本机控制")
             if let control {
                 Text(control.stateMessage)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                LabeledContent("最新命令", value: control.actionTitle)
-                LabeledContent("命令状态", value: control.commandStatusTitle)
-                LabeledContent("控制服务", value: control.controlReady == true ? "就绪" : "未知/未就绪")
-                LabeledContent("ComfyUI", value: control.comfyReady == true ? "就绪" : "未知/未就绪")
-                LabeledContent("完成时间", value: control.completedAt ?? "-")
+                        .font(SetuTypography.caption)
+                        .foregroundStyle(SetuColor.textSecondary)
+                AdminWorkerMetadataRow(title: "最新命令", value: control.actionTitle)
+                AdminWorkerMetadataRow(title: "命令状态", value: control.commandStatusTitle)
+                AdminWorkerMetadataRow(title: "控制服务", value: control.controlReady == true ? "就绪" : "未知/未就绪")
+                AdminWorkerMetadataRow(title: "ComfyUI", value: control.comfyReady == true ? "就绪" : "未知/未就绪")
+                AdminWorkerMetadataRow(title: "完成时间", value: control.completedAt ?? "-")
             } else {
                 Text("控制服务状态未知")
-                    .foregroundStyle(.secondary)
+                        .font(SetuTypography.caption)
+                        .foregroundStyle(SetuColor.textSecondary)
             }
 
-            HStack {
+                HStack(spacing: SetuSpacing.md) {
                 controlButton("启动", action: "start", systemImage: "play.circle")
                 controlButton("重启", action: "restart", systemImage: "arrow.clockwise.circle")
                 controlButton("停止", action: "stop", systemImage: "stop.circle", role: .destructive)
             }
         }
+        }
+        .setuListRow()
     }
 
     private func queueSection(_ status: AiServiceStatusResponse) -> some View {
-        Section("队列") {
-            LabeledContent("排队中", value: "\(status.queuedCount ?? 0)")
-            LabeledContent("生成中", value: "\(status.runningCount ?? 0)")
-            LabeledContent("上传中", value: "\(status.uploadingCount ?? 0)")
+        SetuCard {
+            VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                SetuSectionHeader(title: "队列")
+                AdminWorkerMetadataRow(title: "排队中", value: "\(status.queuedCount ?? 0)")
+                AdminWorkerMetadataRow(title: "生成中", value: "\(status.runningCount ?? 0)")
+                AdminWorkerMetadataRow(title: "上传中", value: "\(status.uploadingCount ?? 0)")
+            }
         }
+        .setuListRow()
     }
 
     private func workersSection(_ workers: [AiWorkerNode]) -> some View {
-        Section("Worker 节点") {
+        SetuCard {
+            VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                SetuSectionHeader(title: "Worker 节点")
             if workers.isEmpty {
-                ContentUnavailableView("暂无 Worker 心跳", systemImage: "cpu")
+                    SetuEmptyState(title: "暂无 Worker 心跳", systemImage: "cpu")
             } else {
-                ForEach(workers) { worker in
-                    VStack(alignment: .leading, spacing: 8) {
+                    ForEach(Array(workers.enumerated()), id: \.element.id) { index, worker in
+                        if index > 0 {
+                            Divider()
+                                .overlay(SetuColor.separator)
+                        }
+                    VStack(alignment: .leading, spacing: SetuSpacing.sm) {
                         HStack {
                             Text(worker.nodeName ?? worker.workerId)
-                                .font(.headline)
+                                    .font(SetuTypography.headline)
+                                    .foregroundStyle(SetuColor.textPrimary)
                             Spacer()
-                            Text(worker.status == "ONLINE" ? "在线" : worker.status ?? "未知")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(worker.status == "ONLINE" ? .green : .red)
+                                SetuPill(text: worker.status == "ONLINE" ? "在线" : worker.status ?? "未知", systemImage: "cpu", tone: worker.status == "ONLINE" ? .success : .danger)
                         }
                         Text(worker.workerId)
                             .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
+                                .foregroundStyle(SetuColor.textSecondary)
                         HStack {
                             Label(worker.version ?? "未知版本", systemImage: "cube")
                             Spacer()
                             Label(worker.lastSeenAt ?? "-", systemImage: "clock")
                         }
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                            .foregroundStyle(SetuColor.textTertiary)
                         if let message = worker.message, !message.isEmpty {
                             Text(message)
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
+                                    .font(SetuTypography.caption)
+                                    .foregroundStyle(SetuColor.textSecondary)
                         }
                     }
-                    .padding(.vertical, 4)
+                        .padding(.vertical, SetuSpacing.xs)
                 }
             }
         }
+        }
+        .setuListRow()
     }
 
     private func capabilitySection(_ capabilities: AiCapabilityResponse) -> some View {
-        Section("模型能力") {
-            LabeledContent("Checkpoint", value: "\(capabilities.checkpoints.count)")
-            LabeledContent("LoRA", value: "\(capabilities.loras.count)")
-            LabeledContent("角色", value: "\(capabilities.characters.count)")
-            LabeledContent("提示词预设", value: "\(capabilities.promptPresets.count)")
-            LabeledContent("VAE", value: "\(capabilities.vaes.count)")
+        SetuCard {
+            VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                SetuSectionHeader(title: "模型能力")
+                AdminWorkerMetadataRow(title: "Checkpoint", value: "\(capabilities.checkpoints.count)")
+                AdminWorkerMetadataRow(title: "LoRA", value: "\(capabilities.loras.count)")
+                AdminWorkerMetadataRow(title: "角色", value: "\(capabilities.characters.count)")
+                AdminWorkerMetadataRow(title: "提示词预设", value: "\(capabilities.promptPresets.count)")
+                AdminWorkerMetadataRow(title: "VAE", value: "\(capabilities.vaes.count)")
 
             capabilityPreview("Checkpoint", items: capabilities.checkpoints)
             capabilityPreview("LoRA", items: capabilities.loras)
             capabilityPreview("角色", items: capabilities.characters)
         }
+        }
+        .setuListRow()
     }
 
     private func capabilityPreview(_ title: String, items: [AiCapabilityItem]) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(.footnote.weight(.semibold))
+                .font(SetuTypography.caption.weight(.semibold))
+                .foregroundStyle(SetuColor.textPrimary)
             if items.isEmpty {
                 Text("无")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(SetuColor.textSecondary)
             } else {
                 TagFlow(tags: items.prefix(12).map { $0.displayName ?? $0.name })
                 if items.count > 12 {
                     Text("+\(items.count - 12)")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(SetuColor.textSecondary)
                 }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, SetuSpacing.xs)
     }
 
     private func controlButton(_ title: String, action: String, systemImage: String, role: ButtonRole? = nil) -> some View {
         Button(role: role) {
             Task { await runControl(action) }
         } label: {
-            if controlLoading == action {
-                ProgressView()
-            } else {
-                Label(title, systemImage: systemImage)
-            }
+            Label(controlLoading == action ? "处理中" : title, systemImage: controlLoading == action ? "hourglass" : systemImage)
+                .frame(maxWidth: .infinity, minHeight: 44)
         }
+        .buttonStyle(.bordered)
         .disabled(controlLoading != nil)
     }
 
@@ -255,5 +282,53 @@ private struct AiWorkerSnapshot: Sendable {
 
     var workerCount: Int {
         status.workerCount ?? workers.count
+    }
+}
+
+private struct AdminWorkerStateSection: View {
+    let title: String
+    let stateTitle: String
+    var message: String?
+    var systemImage: String
+    var isLoading = false
+
+    var body: some View {
+        SetuCard {
+            VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                SetuSectionHeader(title: title)
+                SetuEmptyState(title: stateTitle, message: message, systemImage: systemImage, isLoading: isLoading)
+            }
+        }
+        .setuListRow()
+    }
+}
+
+private struct AdminWorkerMetadataRow<Value: View>: View {
+    let title: String
+    private let value: Value
+
+    init(title: String, @ViewBuilder value: () -> Value) {
+        self.title = title
+        self.value = value()
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: SetuSpacing.md) {
+            Text(title)
+                .font(SetuTypography.caption)
+                .foregroundStyle(SetuColor.textSecondary)
+                .frame(width: 84, alignment: .leading)
+            value
+                .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+    }
+}
+
+private extension AdminWorkerMetadataRow where Value == Text {
+    init(title: String, value: String) {
+        self.title = title
+        self.value = Text(value)
+            .font(SetuTypography.body)
+            .foregroundStyle(SetuColor.textPrimary)
     }
 }

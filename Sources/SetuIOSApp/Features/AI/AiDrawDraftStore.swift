@@ -21,6 +21,7 @@ struct AiDrawDraft: Codable {
     var styleTags: String = ""
     var negativePrompt: String = ""
     var styleNotes: String = ""
+    var source: String = "form"
     var updatedAt: Date = Date()
 
     init(
@@ -43,6 +44,7 @@ struct AiDrawDraft: Codable {
         styleTags: String = "",
         negativePrompt: String = "",
         styleNotes: String = "",
+        source: String = "form",
         updatedAt: Date = Date()
     ) {
         self.promptCn = promptCn
@@ -64,6 +66,7 @@ struct AiDrawDraft: Codable {
         self.styleTags = styleTags
         self.negativePrompt = negativePrompt
         self.styleNotes = styleNotes
+        self.source = source
         self.updatedAt = updatedAt
     }
 
@@ -88,6 +91,7 @@ struct AiDrawDraft: Codable {
         styleTags = try container.decodeIfPresent(String.self, forKey: .styleTags) ?? ""
         negativePrompt = try container.decodeIfPresent(String.self, forKey: .negativePrompt) ?? ""
         styleNotes = try container.decodeIfPresent(String.self, forKey: .styleNotes) ?? ""
+        source = try container.decodeIfPresent(String.self, forKey: .source) ?? "form"
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
     }
 }
@@ -108,6 +112,16 @@ enum AiDrawDraftStore {
         UserDefaults.standard.set(data, forKey: key)
     }
 
+    static func loadPendingExternalDraft() -> AiDrawDraft? {
+        let draft = load()
+        guard draft.source == "asset" || draft.source == "history" else { return nil }
+        return draft
+    }
+
+    static func clear() {
+        UserDefaults.standard.removeObject(forKey: key)
+    }
+
     static func applyAsset(
         kind: AiDraftAssetKind,
         target: AiDraftAssetTarget,
@@ -116,8 +130,7 @@ enum AiDrawDraftStore {
         negativeTags: String,
         recommendedStrength: Double?,
         recommendedCheckpoint: String,
-        linkedLoraName: String,
-        notes: String
+        linkedLoraName: String
     ) {
         var draft = load()
         if !recommendedCheckpoint.isEmpty {
@@ -158,16 +171,50 @@ enum AiDrawDraftStore {
                 }
             }
             draft.styleTags = mergeTags(draft.styleTags, triggerWords)
-            if !notes.isEmpty {
-                draft.styleNotes = notes
-            }
         case .style:
             draft.styleTags = mergeTags(draft.styleTags, triggerWords)
-            draft.negativePrompt = mergeTags(draft.negativePrompt, negativeTags)
-            if !notes.isEmpty {
-                draft.styleNotes = notes
-            }
+            draft.negativePrompt = mergeTags(defaultNegativeBase(for: draft.negativePrompt), negativeTags)
         }
+        draft.source = "asset"
+        draft.updatedAt = Date()
+        save(draft)
+    }
+
+    static func updateSelectedStyles(
+        styleTags: String,
+        negativePrompt: String,
+        recommendedCheckpoint: String?
+    ) {
+        var draft = load()
+        draft.styleTags = styleTags
+        draft.negativePrompt = mergeTags(AiDrawDefaults.defaultNegativePrompt, negativePrompt)
+        if let recommendedCheckpoint, !recommendedCheckpoint.isEmpty {
+            draft.checkpoint = recommendedCheckpoint
+        }
+        draft.source = "asset"
+        draft.updatedAt = Date()
+        save(draft)
+    }
+
+    static func removeAsset(kind: AiDraftAssetKind, target: AiDraftAssetTarget) {
+        var draft = load()
+        switch kind {
+        case .lora:
+            if target == .secondary {
+                draft.secondLoraName = ""
+            } else {
+                draft.loraName = ""
+            }
+        case .character:
+            if target == .secondary {
+                draft.secondCharacterId = ""
+            } else {
+                draft.characterId = ""
+            }
+        case .style:
+            break
+        }
+        draft.source = "asset"
         draft.updatedAt = Date()
         save(draft)
     }
@@ -213,6 +260,7 @@ enum AiDrawDraftStore {
             styleTags: styleTags,
             negativePrompt: negativePrompt,
             styleNotes: styleNotes,
+            source: "form",
             updatedAt: Date()
         ))
     }
@@ -236,8 +284,9 @@ enum AiDrawDraftStore {
             secondLoraStrength: job.secondLoraStrength ?? 0.65,
             secondCharacterId: job.secondCharacterId ?? "",
             styleTags: "",
-            negativePrompt: job.promptNegative ?? "",
+            negativePrompt: job.promptNegative ?? AiDrawDefaults.defaultNegativePrompt,
             styleNotes: job.styleNotes ?? "",
+            source: "history",
             updatedAt: Date()
         ))
     }
@@ -255,6 +304,11 @@ enum AiDrawDraftStore {
             }
         }
         return tags.joined(separator: ", ")
+    }
+
+    private static func defaultNegativeBase(for current: String) -> String {
+        let trimmed = current.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? AiDrawDefaults.defaultNegativePrompt : trimmed
     }
 }
 

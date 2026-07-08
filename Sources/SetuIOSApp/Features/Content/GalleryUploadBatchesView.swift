@@ -28,21 +28,26 @@ struct GalleryUploadBatchesView: View {
             createSection
 
             if let actionMessage {
-                Section {
-                    Text(actionMessage)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                SetuCard {
+                    Label(actionMessage, systemImage: "checkmark.circle")
+                        .font(SetuTypography.caption)
+                        .foregroundStyle(SetuColor.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .setuListRow()
             }
 
-            Picker("状态", selection: $statusFilter) {
-                Text("全部").tag("ALL")
-                Text("上传中").tag("UPLOADING")
-                Text("待审核").tag("WAITING_MANUAL_REVIEW")
-                Text("已发布").tag("PUBLISHED")
-                Text("已拒绝").tag("REJECTED")
+            SetuCard {
+                Picker("状态", selection: $statusFilter) {
+                    Text("全部").tag("ALL")
+                    Text("上传中").tag("UPLOADING")
+                    Text("待审核").tag("WAITING_MANUAL_REVIEW")
+                    Text("已发布").tag("PUBLISHED")
+                    Text("已拒绝").tag("REJECTED")
+                }
+                .pickerStyle(.segmented)
             }
-            .pickerStyle(.segmented)
+            .setuListRow()
             .onChange(of: statusFilter) {
                 Task {
                     page = 1
@@ -52,38 +57,48 @@ struct GalleryUploadBatchesView: View {
 
             switch state {
             case .idle, .loading:
-                ProgressView("正在加载")
+                ContentImageStateSection(title: "正在加载投稿批次", message: "正在同步你的投稿记录。", systemImage: "tray.full", isLoading: true)
             case .failed(let message):
-                ContentUnavailableView("投稿批次加载失败", systemImage: "tray.full", description: Text(message))
+                ContentImageStateSection(title: "投稿批次加载失败", message: message, systemImage: "tray.full")
             case .loaded(let page):
                 if page.list.isEmpty {
-                    ContentUnavailableView("暂无投稿批次", systemImage: "tray")
+                    ContentImageStateSection(title: "暂无投稿批次", message: "选择图片并提交后，批次会显示在这里。", systemImage: "tray")
                 } else {
-                    Section("共 \(page.total) 个批次") {
-                        ForEach(page.list) { batch in
-                            VStack(alignment: .leading, spacing: 8) {
+                    SetuCard {
+                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                            SetuSectionHeader(title: "共 \(page.total) 个批次", subtitle: "投稿记录")
+                            ForEach(Array(page.list.enumerated()), id: \.element.id) { index, batch in
+                                if index > 0 {
+                                    Divider()
+                                        .overlay(SetuColor.separator)
+                                }
                                 Button {
                                     router.navigate(to: .galleryUploadDetail(batch.batchId))
                                 } label: {
                                     GalleryUploadBatchRow(batch: batch)
                                 }
+                                .buttonStyle(.plain)
 
                                 if canCancel(batch) {
                                     Button(role: .destructive) {
                                         Task { await cancel(batch) }
                                     } label: {
                                         Label("取消投稿", systemImage: "xmark.circle")
+                                            .frame(minHeight: 44, alignment: .leading)
                                     }
-                                    .font(.footnote)
+                                    .font(SetuTypography.caption)
                                     .buttonStyle(.borderless)
                                 }
                             }
                         }
                     }
+                    .setuListRow()
                     pagerSection(page)
                 }
             }
         }
+        .listStyle(.plain)
+        .setuBackground()
         .navigationTitle("图库投稿")
         .onChange(of: pickedItems) {
             Task { await loadPickedItems() }
@@ -102,77 +117,97 @@ struct GalleryUploadBatchesView: View {
     }
 
     private func pagerSection(_ result: PageResult<GalleryUploadBatchSummary>) -> some View {
-        Section {
+        SetuCard {
             HStack {
-                Button("上一页") {
+                Button {
                     Task {
                         page = max(1, page - 1)
                         await load()
                     }
+                } label: {
+                    Label("上一页", systemImage: "chevron.left")
+                        .frame(minHeight: 44)
                 }
                 .disabled(page <= 1)
 
                 Spacer()
                 Text("第 \(result.page) 页")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .font(SetuTypography.caption)
+                    .foregroundStyle(SetuColor.textSecondary)
                 Spacer()
 
-                Button("下一页") {
+                Button {
                     Task {
                         page += 1
                         await load()
                     }
+                } label: {
+                    Label("下一页", systemImage: "chevron.right")
+                        .frame(minHeight: 44)
                 }
                 .disabled(result.page * result.pageSize >= result.total)
             }
+            .font(SetuTypography.body)
         }
+        .setuListRow()
     }
 
     private var createSection: some View {
-        Section("新建投稿") {
-            Picker("PID 模式", selection: $pidMode) {
-                Text("多 PID 单页").tag("MULTI_PID_P0")
-                Text("单 PID 多页").tag("SINGLE_PID_MULTI_PAGE")
-            }
-            TextField("统一标题", text: $title)
-            TextField("统一作者", text: $author)
-            TextField("标签，用逗号或空格分隔", text: $tagsText)
-            Toggle("R18", isOn: $r18)
-            Picker("AI 类型", selection: $aiType) {
-                Text("非 AI").tag(1)
-                Text("AI").tag(2)
-            }
-            PhotosPicker(selection: $pickedItems, maxSelectionCount: 20, matching: .images) {
-                Label("选择图片", systemImage: "photo.on.rectangle.angled")
-            }
-            if !uploadItems.isEmpty {
-                ForEach(uploadItems) { item in
-                    GalleryLocalUploadItemRow(item: item)
+        SetuCard {
+            VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                SetuSectionHeader(title: "新建投稿", subtitle: "最多选择 20 张图片")
+                Picker("PID 模式", selection: $pidMode) {
+                    Text("多 PID 单页").tag("MULTI_PID_P0")
+                    Text("单 PID 多页").tag("SINGLE_PID_MULTI_PAGE")
                 }
-                Button(role: .destructive) {
-                    clearDraft()
+                .pickerStyle(.segmented)
+                TextField("统一标题", text: $title)
+                    .textFieldStyle(.roundedBorder)
+                TextField("统一作者", text: $author)
+                    .textFieldStyle(.roundedBorder)
+                TextField("标签，用逗号或空格分隔", text: $tagsText)
+                    .textFieldStyle(.roundedBorder)
+                Toggle("R18", isOn: $r18)
+                Picker("AI 类型", selection: $aiType) {
+                    Text("非 AI").tag(1)
+                    Text("AI").tag(2)
+                }
+                .pickerStyle(.segmented)
+                PhotosPicker(selection: $pickedItems, maxSelectionCount: 20, matching: .images) {
+                    Label("选择图片", systemImage: "photo.on.rectangle.angled")
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                }
+                if !uploadItems.isEmpty {
+                    VStack(spacing: SetuSpacing.sm) {
+                        ForEach(uploadItems) { item in
+                            GalleryLocalUploadItemRow(item: item)
+                        }
+                    }
+                    Button(role: .destructive) {
+                        clearDraft()
+                    } label: {
+                        Label("清空草稿", systemImage: "trash")
+                            .frame(minHeight: 44, alignment: .leading)
+                    }
+                    .disabled(isUploading)
+                }
+                if let uploadMessage {
+                    Text(uploadMessage)
+                        .font(SetuTypography.caption)
+                        .foregroundStyle(SetuColor.textSecondary)
+                }
+                Button {
+                    Task { await submitUpload() }
                 } label: {
-                    Label("清空草稿", systemImage: "trash")
+                    Label(isUploading ? "提交中" : "提交投稿", systemImage: isUploading ? "hourglass" : "icloud.and.arrow.up")
+                        .frame(maxWidth: .infinity, minHeight: 44)
                 }
-                .disabled(isUploading)
+                .buttonStyle(.borderedProminent)
+                .tint(SetuColor.brandPink)
+                .disabled(isUploading || uploadItems.isEmpty)
             }
-            if let uploadMessage {
-                Text(uploadMessage)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-            Button {
-                Task { await submitUpload() }
-            } label: {
-                if isUploading {
-                    ProgressView()
-                } else {
-                    Label("提交投稿", systemImage: "icloud.and.arrow.up")
-                }
-            }
-            .disabled(isUploading || uploadItems.isEmpty)
         }
+        .setuListRow()
     }
 
     private func load() async {
@@ -405,20 +440,22 @@ private struct GalleryLocalUploadItemRow: View {
     let item: LocalGalleryUploadItem
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: SetuSpacing.xs) {
             HStack {
                 Text(item.filename)
-                    .font(.footnote.weight(.semibold))
+                    .font(SetuTypography.caption.weight(.semibold))
+                    .foregroundStyle(SetuColor.textPrimary)
                     .lineLimit(1)
                 Spacer()
                 Text(item.status)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(SetuColor.textSecondary)
             }
             ProgressView(value: Double(item.progress), total: 100)
+                .tint(SetuColor.brandPink)
             Text("\(item.data.count / 1024) KB · p\(item.pageIndex)")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(SetuColor.textTertiary)
         }
     }
 }
@@ -536,20 +573,18 @@ struct GalleryUploadBatchRow: View {
     let batch: GalleryUploadBatchSummary
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: SetuSpacing.sm) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(batch.title ?? "投稿批次 #\(batch.batchId)")
-                        .font(.headline)
-                        .foregroundStyle(.primary)
+                        .font(SetuTypography.headline)
+                        .foregroundStyle(SetuColor.textPrimary)
                     Text(batch.author ?? "未知作者")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .font(SetuTypography.caption)
+                        .foregroundStyle(SetuColor.textSecondary)
                 }
                 Spacer()
-                Text(batch.statusTitle)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.pink)
+                GalleryUploadStatusPill(status: batch.status, title: batch.statusTitle)
             }
 
             HStack(spacing: 12) {
@@ -558,12 +593,34 @@ struct GalleryUploadBatchRow: View {
                 Label("\(batch.publishedCount) 已发布", systemImage: "checkmark.circle")
             }
             .font(.caption)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(SetuColor.textTertiary)
 
             Text(batch.createdAt)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(SetuColor.textTertiary)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, SetuSpacing.xs)
+    }
+}
+
+struct GalleryUploadStatusPill: View {
+    let status: String
+    let title: String
+
+    var body: some View {
+        SetuPill(text: title, systemImage: "flag", tone: tone)
+    }
+
+    private var tone: SetuPillTone {
+        switch status {
+        case "PUBLISHED":
+            .success
+        case "REJECTED", "CANCELED":
+            .danger
+        case "UPLOADING", "WAITING_MANUAL_REVIEW":
+            .warning
+        default:
+            .muted
+        }
     }
 }

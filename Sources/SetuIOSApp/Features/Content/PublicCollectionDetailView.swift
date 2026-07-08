@@ -16,18 +16,20 @@ struct PublicCollectionDetailView: View {
     var body: some View {
         List {
             if let actionMessage {
-                Section {
-                    Text(actionMessage)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                SetuCard {
+                    Label(actionMessage, systemImage: "checkmark.circle")
+                        .font(SetuTypography.caption)
+                        .foregroundStyle(SetuColor.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .setuListRow()
             }
 
             switch infoState {
             case .idle, .loading:
-                ProgressView("正在加载公开收藏夹")
+                ContentImageStateSection(title: "正在加载公开收藏夹", message: "正在同步收藏夹信息与分享状态。", systemImage: "rectangle.stack", isLoading: true)
             case .failed(let message):
-                ContentUnavailableView("公开收藏夹加载失败", systemImage: "rectangle.stack.badge.minus", description: Text(message))
+                ContentImageStateSection(title: "公开收藏夹加载失败", message: message, systemImage: "rectangle.stack.badge.minus")
             case .loaded(let info):
                 headerSection(info)
                 publicActionSection(info)
@@ -35,24 +37,34 @@ struct PublicCollectionDetailView: View {
 
             switch itemsState {
             case .idle, .loading:
-                ProgressView("正在加载图片")
+                ContentImageStateSection(title: "正在加载图片", message: "图片列表马上就好。", systemImage: "photo.on.rectangle", isLoading: true)
             case .failed(let message):
-                ContentUnavailableView("图片加载失败", systemImage: "photo.on.rectangle.angled", description: Text(message))
+                ContentImageStateSection(title: "图片加载失败", message: message, systemImage: "photo.on.rectangle.angled")
             case .loaded(let page):
                 if page.items.isEmpty {
-                    ContentUnavailableView("暂无图片", systemImage: "photo")
+                    ContentImageStateSection(title: "暂无图片", message: "这个公开收藏夹还没有可展示的图片。", systemImage: "photo")
                 } else {
-                    Section("共 \(page.total) 张") {
-                        ForEach(page.items) { item in
-                            PublicCollectionImageRow(item: item) {
-                                previewItem = CollectionImagePreviewItem(item: item)
+                    SetuCard {
+                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                            SetuSectionHeader(title: "共 \(page.total) 张", subtitle: "公开图片")
+                            ForEach(Array(page.items.enumerated()), id: \.element.id) { index, item in
+                                if index > 0 {
+                                    Divider()
+                                        .overlay(SetuColor.separator)
+                                }
+                                PublicCollectionImageRow(item: item) {
+                                    previewItem = CollectionImagePreviewItem(item: item)
+                                }
                             }
                         }
                     }
+                    .setuListRow()
                     pagerSection(page)
                 }
             }
         }
+        .listStyle(.plain)
+        .setuBackground()
         .navigationTitle(title)
         .sheet(item: $previewItem) { item in
             CollectionImagePreviewSheet(item: item)
@@ -62,31 +74,39 @@ struct PublicCollectionDetailView: View {
     }
 
     private func pagerSection(_ result: CollectionItemPage) -> some View {
-        Section {
+        SetuCard {
             HStack {
-                Button("上一页") {
+                Button {
                     Task {
                         page = max(1, page - 1)
                         await load()
                     }
+                } label: {
+                    Label("上一页", systemImage: "chevron.left")
+                        .frame(minHeight: 44)
                 }
                 .disabled(page <= 1)
 
                 Spacer()
                 Text("第 \(result.page) 页")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .font(SetuTypography.caption)
+                    .foregroundStyle(SetuColor.textSecondary)
                 Spacer()
 
-                Button("下一页") {
+                Button {
                     Task {
                         page += 1
                         await load()
                     }
+                } label: {
+                    Label("下一页", systemImage: "chevron.right")
+                        .frame(minHeight: 44)
                 }
                 .disabled(result.page * result.size >= result.total)
             }
+            .font(SetuTypography.body)
         }
+        .setuListRow()
     }
 
     private var title: String {
@@ -99,67 +119,95 @@ struct PublicCollectionDetailView: View {
 
     @ViewBuilder
     private func headerSection(_ info: CollectionInfo) -> some View {
-        Section {
-            HStack(alignment: .top, spacing: 12) {
+        SetuCard {
+            VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                HStack(alignment: .top, spacing: SetuSpacing.md) {
                 ImageThumbnailView(urlString: info.coverUrl ?? info.previewImages?.first?.bestURLString)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(info.name)
-                        .font(.headline)
-                    if let description = info.description, !description.isEmpty {
-                        Text(description)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+                        Text(info.name)
+                            .font(SetuTypography.title)
+                            .foregroundStyle(SetuColor.textPrimary)
+                        if let description = info.description, !description.isEmpty {
+                            Text(description)
+                                .font(SetuTypography.caption)
+                                .foregroundStyle(SetuColor.textSecondary)
+                                .lineLimit(3)
+                        }
+                        Button {
+                            router.navigate(to: .publicUserProfile(info.userId))
+                        } label: {
+                            Label(info.ownerNickname ?? "用户#\(info.userId)", systemImage: "person.crop.circle")
+                                .font(SetuTypography.caption)
+                        }
+                        .buttonStyle(.borderless)
+                        HStack(spacing: SetuSpacing.md) {
+                            SetuPill(text: "\(info.itemCount ?? 0) 张", systemImage: "photo", tone: .info)
+                            SetuPill(text: "\(info.shareViewCount ?? 0)", systemImage: "eye", tone: .muted)
+                            SetuPill(text: "\(info.likeCount ?? info.shareLikeCount ?? 0)", systemImage: "hand.thumbsup", tone: .brand)
+                        }
                     }
-                    Button {
-                        router.navigate(to: .publicUserProfile(info.userId))
-                    } label: {
-                        Label(info.ownerNickname ?? "用户#\(info.userId)", systemImage: "person.crop.circle")
+                }
+
+                if let tags = info.tags, !tags.isEmpty {
+                    TagFlow(tags: tags)
+                }
+
+                if let note = info.curatorNote, !note.isEmpty {
+                    VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+                        Text("推荐语")
+                            .font(SetuTypography.caption)
+                            .foregroundStyle(SetuColor.textSecondary)
+                        Text(note)
+                            .font(SetuTypography.body)
+                            .foregroundStyle(SetuColor.textPrimary)
                     }
-                    .buttonStyle(.borderless)
-                    HStack(spacing: 10) {
-                        Label("\(info.itemCount ?? 0) 张", systemImage: "photo")
-                        Label("\(info.shareViewCount ?? 0)", systemImage: "eye")
-                        Label("\(info.likeCount ?? info.shareLikeCount ?? 0)", systemImage: "hand.thumbsup")
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
                 }
             }
-
-            if let tags = info.tags, !tags.isEmpty {
-                TagFlow(tags: tags)
-            }
-
-            if let note = info.curatorNote, !note.isEmpty {
-                LabeledContent("推荐语", value: note)
-            }
         }
+        .setuListRow()
     }
 
     private func publicActionSection(_ info: CollectionInfo) -> some View {
-        Section {
-            Button {
-                Task { await like(info) }
-            } label: {
-                Label(info.likedByMe == true ? "取消点赞" : "点赞", systemImage: "hand.thumbsup")
-            }
+        SetuCard {
+            VStack(spacing: SetuSpacing.sm) {
+                Button {
+                    Task { await like(info) }
+                } label: {
+                    Label(info.likedByMe == true ? "取消点赞" : "点赞", systemImage: "hand.thumbsup")
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                }
 
-            Button {
-                Task { await favorite(info) }
-            } label: {
-                Label(info.favoritedByMe == true ? "取消收藏" : "收藏", systemImage: "star")
-            }
+                Divider()
+                    .overlay(SetuColor.separator)
 
-            Button {
-                copyShareLink(info)
-            } label: {
-                Label("复制分享链接", systemImage: "doc.on.doc")
-            }
+                Button {
+                    Task { await favorite(info) }
+                } label: {
+                    Label(info.favoritedByMe == true ? "取消收藏" : "收藏", systemImage: "star")
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                }
 
-            Link(destination: publicShareURL(for: info)) {
-                Label("打开公开预览", systemImage: "arrow.up.forward.square")
+                Divider()
+                    .overlay(SetuColor.separator)
+
+                Button {
+                    copyShareLink(info)
+                } label: {
+                    Label("复制分享链接", systemImage: "doc.on.doc")
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                }
+
+                Divider()
+                    .overlay(SetuColor.separator)
+
+                Link(destination: publicShareURL(for: info)) {
+                    Label("打开公开预览", systemImage: "arrow.up.forward.square")
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                }
             }
+            .font(SetuTypography.body)
         }
+        .setuListRow()
     }
 
     private func publicShareURL(for info: CollectionInfo) -> URL {
@@ -217,35 +265,37 @@ private struct PublicCollectionImageRow: View {
     let onPreview: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: SetuSpacing.md) {
             ImageThumbnailView(urlString: item.image?.urlSmall ?? item.image?.urlRegular ?? item.image?.urlOriginal)
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: SetuSpacing.xs) {
                 Text(item.image?.title ?? "PID \(item.pid)")
-                    .font(.headline)
+                    .font(SetuTypography.headline)
+                    .foregroundStyle(SetuColor.textPrimary)
                     .lineLimit(2)
                 Text(item.image?.author ?? "未知作者")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .font(SetuTypography.caption)
+                    .foregroundStyle(SetuColor.textSecondary)
                 HStack(spacing: 10) {
                     Label("\(item.pid)-\(item.p)", systemImage: "number")
                     if let image = item.image {
                         Label("\(image.width)x\(image.height)", systemImage: "aspectratio")
                     }
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(.caption2)
+                .foregroundStyle(SetuColor.textTertiary)
 
                 if item.image != nil {
                     Button {
                         onPreview()
                     } label: {
                         Label("查看图片", systemImage: "eye")
+                            .frame(minHeight: 44)
                     }
                     .buttonStyle(.borderless)
-                    .font(.footnote)
+                    .font(SetuTypography.caption)
                 }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, SetuSpacing.xs)
     }
 }

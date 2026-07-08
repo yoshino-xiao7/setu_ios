@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Supplementary Info.plist merged on top of the generated one
+	  (GENERATE_INFOPLIST_FILE=YES). UIBackgroundModes is not produced by any
+	  INFOPLIST_KEY_* build setting, so it must live here for background audio
+	  to actually work; without it iOS suspends the app and playback stops.
+	-->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
+</dict>
+</plist>

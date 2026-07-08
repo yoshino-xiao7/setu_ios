@@ -20,81 +20,93 @@ struct AiHistoryView: View {
         List {
             if let message {
                 Section {
-                    Text(message)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
+                    SetuPill(text: message, systemImage: "checkmark.circle", tone: .brand)
                 }
+                .setuListRow()
             }
 
-            Picker("状态", selection: $statusFilter) {
-                Text("全部").tag("")
-                Text("排队中").tag("QUEUED")
-                Text("生成中").tag("RUNNING")
-                Text("已完成").tag("COMPLETED")
-                Text("失败").tag("FAILED")
-            }
-            .pickerStyle(.segmented)
-            .onChange(of: statusFilter) {
-                Task {
-                    page = 1
-                    await load()
+            Section {
+                Picker("状态", selection: $statusFilter) {
+                    Text("全部").tag("")
+                    Text("排队中").tag("QUEUED")
+                    Text("生成中").tag("RUNNING")
+                    Text("已完成").tag("COMPLETED")
+                    Text("失败").tag("FAILED")
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: statusFilter) {
+                    Task {
+                        page = 1
+                        await load()
+                    }
                 }
             }
+            .setuListRow()
 
             switch state {
             case .idle, .loading:
-                ProgressView("正在加载")
+                Section {
+                    SetuCard {
+                        SetuEmptyState(title: "正在加载 AI 绘画历史", systemImage: "sparkles", isLoading: true)
+                    }
+                }
+                .setuListRow()
             case .failed(let message):
-                ContentUnavailableView("历史加载失败", systemImage: "clock.badge.exclamationmark", description: Text(message))
+                Section {
+                    SetuCard {
+                        SetuEmptyState(title: "历史加载失败", message: message, systemImage: "clock.badge.exclamationmark")
+                    }
+                }
+                .setuListRow()
             case .loaded(let page):
                 if page.list.isEmpty {
-                    ContentUnavailableView("暂无 AI 绘画记录", systemImage: "sparkles", description: Text("创建绘画任务后，任务状态和结果会显示在这里。"))
+                    Section {
+                        SetuCard {
+                            SetuEmptyState(title: "暂无 AI 绘画记录", message: "创建绘画任务后，任务状态和结果会显示在这里。", systemImage: "sparkles")
+                        }
+                    }
+                    .setuListRow()
                 } else {
-                    Section("共 \(page.total) 条") {
-                        ForEach(page.list) { job in
-                            VStack(alignment: .leading, spacing: 8) {
-                                Button {
-                                    router.navigate(to: .aiGenerationDetail(job.id))
-                                } label: {
-                                    AiGenerationRow(job: job)
-                                }
-                                .buttonStyle(.plain)
-
-                                Button {
-                                    reuse(job)
-                                } label: {
-                                    Label("复用参数", systemImage: "arrow.triangle.2.circlepath")
-                                }
-                                .font(.footnote)
-                                .buttonStyle(.borderless)
-
-                                HStack {
-                                    Button {
-                                        copyPrompt(job)
-                                    } label: {
-                                        Label("复制提示词", systemImage: "doc.on.doc")
-                                    }
-                                    .buttonStyle(.borderless)
-
-                                    if job.status == "COMPLETED" {
-                                        Button {
-                                            previewSelection = AiHistoryPreviewSelection(job: job)
-                                        } label: {
-                                            Label("查看", systemImage: "eye")
+                    Section {
+                        SetuCard {
+                            VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                                SetuSectionHeader(title: "共 \(page.total) 条")
+                                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: SetuSpacing.md) {
+                                    ForEach(page.list) { job in
+                                        AiGenerationGridTile(job: job, footerTitle: job.createdAt) {
+                                            router.navigate(to: .aiGenerationDetail(job.id))
                                         }
-                                        .buttonStyle(.borderless)
-
+                                        .contextMenu {
+                                            Button {
+                                                reuse(job)
+                                            } label: {
+                                                Label("复用参数", systemImage: "arrow.triangle.2.circlepath")
+                                            }
+                                            Button {
+                                                copyPrompt(job)
+                                            } label: {
+                                                Label("复制提示词", systemImage: "doc.on.doc")
+                                            }
+                                            if job.status == "COMPLETED" {
+                                                Button {
+                                                    previewSelection = AiHistoryPreviewSelection(job: job)
+                                                } label: {
+                                                    Label("查看图片", systemImage: "eye")
+                                                }
+                                            }
+                                        }
                                     }
                                 }
-                                .font(.footnote)
                             }
                         }
                     }
+                    .setuListRow()
                     pagerSection(page)
                 }
             }
         }
+        .listStyle(.plain)
+        .setuBackground()
         .navigationTitle("AI 绘画历史")
         .toolbar {
             Button {
@@ -104,7 +116,9 @@ struct AiHistoryView: View {
             }
         }
         .sheet(isPresented: $showingDeleteRequests) {
-            AiDeleteRequestsView(environment: environment)
+            NavigationStack {
+                AiDeleteRequestsView(environment: environment, showsCloseButton: true)
+            }
         }
         .sheet(item: $previewSelection) { selection in
             AiGenerationImagePreviewSheet(
@@ -123,7 +137,7 @@ struct AiHistoryView: View {
 
     private func pagerSection(_ result: PageResult<AiGenerationJob>) -> some View {
         Section {
-            HStack {
+            HStack(spacing: SetuSpacing.md) {
                 Button("上一页") {
                     Task {
                         page = max(1, page - 1)
@@ -131,11 +145,12 @@ struct AiHistoryView: View {
                     }
                 }
                 .disabled(page <= 1)
+                .buttonStyle(.bordered)
 
                 Spacer()
                 Text("第 \(result.page) 页")
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(SetuColor.textSecondary)
                 Spacer()
 
                 Button("下一页") {
@@ -145,8 +160,10 @@ struct AiHistoryView: View {
                     }
                 }
                 .disabled(result.page * result.pageSize >= result.total)
+                .buttonStyle(.bordered)
             }
         }
+        .setuListRow()
     }
 
     private func load() async {
@@ -193,11 +210,12 @@ private struct AiGenerationRow: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(job.promptCn)
-                        .font(.headline)
+                        .font(SetuTypography.headline)
+                        .foregroundStyle(SetuColor.textPrimary)
                         .lineLimit(2)
                     Text("#\(job.id) · \(job.width)x\(job.height) · \(job.steps) 步")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(SetuColor.textSecondary)
                 }
                 Spacer()
                 StatusBadge(title: job.statusTitle, status: job.status)
@@ -205,8 +223,8 @@ private struct AiGenerationRow: View {
 
             if let detail = job.userErrorMessage ?? job.workerDetail, !detail.isEmpty {
                 Text(detail)
-                    .font(.footnote)
-                    .foregroundStyle(job.status == "FAILED" ? .red : .secondary)
+                    .font(SetuTypography.caption)
+                    .foregroundStyle(job.status == "FAILED" ? SetuColor.danger : SetuColor.textSecondary)
                     .lineLimit(2)
             }
 
@@ -225,7 +243,7 @@ private struct AiGenerationRow: View {
                 }
             }
             .font(.caption)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(SetuColor.textTertiary)
 
             if job.status == "COMPLETED" {
                 HStack(spacing: 8) {
@@ -242,11 +260,11 @@ private struct AiGenerationRow: View {
             if job.privateOssStatus == "EXPIRED" || job.privateOssStatus == "EXPLICITLY_DELETED" {
                 Label("图片文件已清理，生成历史仍会保留", systemImage: "info.circle")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(SetuColor.textSecondary)
             } else if job.status == "COMPLETED", let expiresAt = job.privateOssExpiresAt {
                 Label("图片仅保留 30 天，预计 \(expiresAt) 清理", systemImage: "clock")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(SetuColor.textSecondary)
             }
         }
         .padding(.vertical, 4)
@@ -299,28 +317,32 @@ struct AiGenerationImagePreviewSheet: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: SetuSpacing.lg) {
                     imageStage
 
-                    VStack(alignment: .leading, spacing: 8) {
+                    SetuCard {
+                        VStack(alignment: .leading, spacing: SetuSpacing.sm) {
                         Text(job.promptCn)
-                            .font(.headline)
+                                .font(SetuTypography.headline)
+                                .foregroundStyle(SetuColor.textPrimary)
                             .textSelection(.enabled)
                         Text("#\(job.id) · \(job.width)x\(job.height) · \(job.statusTitle)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                                .font(.caption)
+                                .foregroundStyle(SetuColor.textSecondary)
                         if let localMessage {
                             Text(localMessage)
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
+                                    .font(SetuTypography.caption)
+                                    .foregroundStyle(SetuColor.textSecondary)
                                 .textSelection(.enabled)
                         }
+                    }
                     }
 
                     actions
                 }
-                .padding()
+                .padding(SetuSpacing.lg)
             }
+            .background(SetuColor.pageGradient.ignoresSafeArea())
             .navigationTitle("图片预览")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -339,42 +361,55 @@ struct AiGenerationImagePreviewSheet: View {
     private var imageStage: some View {
         switch imageState {
         case .idle, .loading:
-            ProgressView("正在加载图片")
+            SetuCard {
+                SetuEmptyState(title: "正在加载图片", systemImage: "photo", isLoading: true)
                 .frame(maxWidth: .infinity, minHeight: 320)
+            }
         case .failed(let message):
-            ContentUnavailableView("图片加载失败", systemImage: "photo", description: Text(message))
+            SetuCard {
+                SetuEmptyState(title: "图片加载失败", message: message, systemImage: "photo")
                 .frame(maxWidth: .infinity, minHeight: 320)
+            }
         case .loaded(let urlString):
             if let url = URL(string: urlString) {
+                SetuCard {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
                         image
                             .resizable()
                             .scaledToFit()
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                                .clipShape(RoundedRectangle(cornerRadius: SetuRadius.md, style: .continuous))
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: SetuRadius.md, style: .continuous)
+                                        .stroke(SetuColor.separator, lineWidth: 1)
+                                }
                     case .failure:
-                        ContentUnavailableView("图片加载失败", systemImage: "photo", description: Text("可以尝试刷新图片。"))
-                            .frame(maxWidth: .infinity, minHeight: 320)
+                            SetuEmptyState(title: "图片加载失败", message: "可以尝试刷新图片。", systemImage: "photo")
+                                .frame(maxWidth: .infinity, minHeight: 320)
                     default:
-                        ProgressView("正在加载图片")
+                            SetuEmptyState(title: "正在加载图片", systemImage: "photo", isLoading: true)
                             .frame(maxWidth: .infinity, minHeight: 320)
                     }
                 }
+                }
             } else {
-                ContentUnavailableView("图片暂时不可用", systemImage: "photo.badge.exclamationmark")
+                SetuCard {
+                    SetuEmptyState(title: "图片暂时不可用", systemImage: "photo.badge.exclamationmark")
                     .frame(maxWidth: .infinity, minHeight: 320)
+                }
             }
         }
     }
 
     private var actions: some View {
-        VStack(spacing: 10) {
+        SetuCard {
+            VStack(spacing: SetuSpacing.sm) {
             Button {
                 Task { await refreshImageURL() }
             } label: {
                 Label("刷新图片", systemImage: "arrow.clockwise")
-                    .frame(maxWidth: .infinity)
+                        .frame(maxWidth: .infinity, minHeight: 44)
             }
             .buttonStyle(.bordered)
 
@@ -382,7 +417,7 @@ struct AiGenerationImagePreviewSheet: View {
                 Task { await download() }
             } label: {
                 Label("下载图片", systemImage: "arrow.down.circle")
-                    .frame(maxWidth: .infinity)
+                        .frame(maxWidth: .infinity, minHeight: 44)
             }
             .buttonStyle(.bordered)
 
@@ -390,7 +425,7 @@ struct AiGenerationImagePreviewSheet: View {
                 copyPrompt()
             } label: {
                 Label("复制提示词", systemImage: "doc.on.doc")
-                    .frame(maxWidth: .infinity)
+                        .frame(maxWidth: .infinity, minHeight: 44)
             }
             .buttonStyle(.bordered)
 
@@ -398,9 +433,11 @@ struct AiGenerationImagePreviewSheet: View {
                 onOpenDetail()
             } label: {
                 Label("查看任务详情", systemImage: "list.bullet.rectangle")
-                    .frame(maxWidth: .infinity)
+                        .frame(maxWidth: .infinity, minHeight: 44)
             }
             .buttonStyle(.borderedProminent)
+                .tint(SetuColor.brandPink)
+            }
         }
     }
 
@@ -457,23 +494,16 @@ struct StatusBadge: View {
     let status: String
 
     var body: some View {
-        Text(title)
-            .font(.caption.weight(.semibold))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(color.opacity(0.14), in: Capsule())
-            .foregroundStyle(color)
+        SetuPill(text: title, tone: tone)
     }
 
-    private var color: Color {
+    private var tone: SetuPillTone {
         switch status {
-        case "COMPLETED": .green
-        case "FAILED": .red
-        case "RUNNING", "UPLOADING": .blue
-        case "APPROVED", "GENERAL": .green
-        case "REJECTED", "R18": .red
-        case "WAITING": .orange
-        default: .orange
+        case "COMPLETED", "APPROVED", "GENERAL": .success
+        case "FAILED", "REJECTED", "R18": .danger
+        case "RUNNING", "UPLOADING": .info
+        case "WAITING": .warning
+        default: .warning
         }
     }
 }

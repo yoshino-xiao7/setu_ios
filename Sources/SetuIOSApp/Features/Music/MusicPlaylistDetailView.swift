@@ -18,84 +18,112 @@ struct MusicPlaylistDetailView: View {
         List {
             if let message {
                 Section {
-                    Text(message)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    SetuPill(text: message, systemImage: "info.circle", tone: .info)
                 }
             }
             nowPlayingSection
 
             switch state {
             case .idle, .loading:
-                ProgressView("正在加载")
+                Section {
+                    SetuCard {
+                        SetuEmptyState(title: "正在加载", systemImage: "music.note.list", isLoading: true)
+                    }
+                }
             case .failed(let message):
-                ContentUnavailableView("歌单加载失败", systemImage: "music.note.list", description: Text(message))
+                Section {
+                    SetuCard {
+                        SetuEmptyState(title: "歌单加载失败", message: message, systemImage: "music.note.list")
+                    }
+                }
             case .loaded(let playlist):
                 Section {
-                    HStack(spacing: 12) {
-                        MusicArtworkView(urlString: playlist.coverUrl)
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(playlist.name)
-                                .font(.headline)
-                            if let description = playlist.description, !description.isEmpty {
-                                Text(description)
-                                    .font(.footnote)
-                                    .foregroundStyle(.secondary)
-                            }
-                            HStack(spacing: 10) {
-                                Label("\(playlist.songCount ?? playlist.songs?.count ?? 0) 首", systemImage: "music.note")
-                                Label("\(playlist.playCount ?? 0)", systemImage: "play.circle")
-                            }
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    SetuCard {
+                        HStack(spacing: SetuSpacing.md) {
+                            MusicArtworkView(urlString: playlist.coverUrl)
+                            VStack(alignment: .leading, spacing: SetuSpacing.sm) {
+                                Text(playlist.name)
+                                    .font(SetuTypography.title)
+                                    .foregroundStyle(SetuColor.textPrimary)
+                                if let description = playlist.description, !description.isEmpty {
+                                    Text(description)
+                                        .font(SetuTypography.caption)
+                                        .foregroundStyle(SetuColor.textSecondary)
+                                        .lineLimit(3)
+                                }
+                                HStack(spacing: SetuSpacing.md) {
+                                    Label("\(playlist.songCount ?? playlist.songs?.count ?? 0) 首", systemImage: "music.note")
+                                    Label("\(playlist.playCount ?? 0)", systemImage: "play.circle")
+                                }
+                                .font(.caption)
+                                .foregroundStyle(SetuColor.textSecondary)
 
-                            Button {
-                                Task { await playAll(playlist) }
-                            } label: {
-                                Label("播放全部", systemImage: "play.circle.fill")
+                                Button {
+                                    Task { await playAll(playlist) }
+                                } label: {
+                                    Label("播放全部", systemImage: "play.circle.fill")
+                                        .frame(maxWidth: .infinity, minHeight: 44)
+                                }
+                                .buttonStyle(.bordered)
+                                .tint(SetuColor.brandPink)
+                                .disabled(playlist.songs?.isEmpty != false)
                             }
-                            .buttonStyle(.borderless)
-                            .disabled(playlist.songs?.isEmpty != false)
                         }
                     }
                 }
 
-                Section("播放模式") {
-                    Picker("播放模式", selection: $selectedMode) {
-                        Text("顺序").tag("sequence")
-                        Text("随机").tag("random")
-                        Text("循环").tag("loop")
-                        Text("单曲").tag("single")
-                    }
-                    .pickerStyle(.segmented)
-                    .onChange(of: selectedMode) {
-                        Task { await setMode(selectedMode) }
+                Section {
+                    SetuCard {
+                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                            SetuSectionHeader(title: "播放模式")
+                            Picker("播放模式", selection: $selectedMode) {
+                                Text("顺序").tag("sequence")
+                                Text("随机").tag("random")
+                                Text("循环").tag("loop")
+                                Text("单曲").tag("single")
+                            }
+                            .pickerStyle(.segmented)
+                            .tint(SetuColor.brandPink)
+                            .onChange(of: selectedMode) {
+                                Task { await setMode(selectedMode) }
+                            }
+                        }
                     }
                 }
 
-                Section("歌曲") {
+                Section {
                     let songs = playlist.songs ?? []
                     if songs.isEmpty {
-                        ContentUnavailableView("暂无歌曲", systemImage: "music.note")
+                        SetuCard {
+                            SetuEmptyState(title: "暂无歌曲", systemImage: "music.note")
+                        }
                     } else {
+                        SetuCard {
+                            SetuSectionHeader(title: "歌曲", subtitle: "共 \(songs.count) 首")
+                        }
                         ForEach(songs) { song in
-                            PlaylistSongRow(song: song) {
-                                Task {
-                                    await play(
-                                        song,
-                                        queueName: playlist.name,
-                                        queueTracks: songs.map { MusicPlaybackTrack(song: $0) }
-                                    )
+                            SetuCard {
+                                PlaylistSongRow(song: song) {
+                                    Task {
+                                        await play(
+                                            song,
+                                            queueName: playlist.name,
+                                            queueTracks: songs.map { MusicPlaybackTrack(song: $0) }
+                                        )
+                                    }
+                                } onRemove: {
+                                    songPendingRemoval = song
+                                    showingRemoveConfirmation = true
                                 }
-                            } onRemove: {
-                                songPendingRemoval = song
-                                showingRemoveConfirmation = true
                             }
                         }
                     }
                 }
             }
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .setuBackground()
         .navigationTitle("歌单详情")
         .toolbar {
             Menu {
@@ -140,36 +168,51 @@ struct MusicPlaylistDetailView: View {
         }
         .task { await load() }
         .refreshable { await load() }
+        .safeAreaInset(edge: .bottom) {
+            MusicMiniPlayerBar(environment: environment, player: player)
+                .padding(.horizontal)
+                .padding(.top, 6)
+        }
     }
 
     @ViewBuilder
     private var nowPlayingSection: some View {
         if let track = player.currentTrack {
-            Section("正在播放") {
-                HStack(spacing: 12) {
-                    MusicArtworkView(urlString: track.coverURLString)
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(track.title)
-                            .font(.headline)
-                        Text(track.artist)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+            Section {
+                SetuCard {
+                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                        SetuSectionHeader(title: "正在播放")
+                        HStack(spacing: SetuSpacing.md) {
+                            MusicArtworkView(urlString: track.coverURLString)
+                            VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+                                Text(track.title)
+                                    .font(SetuTypography.headline)
+                                    .foregroundStyle(SetuColor.textPrimary)
+                                Text(track.artist)
+                                    .font(SetuTypography.caption)
+                                    .foregroundStyle(SetuColor.textSecondary)
+                            }
+                            Spacer()
+                            Button {
+                                player.toggle()
+                            } label: {
+                                Image(systemName: player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                                    .font(.title2)
+                                    .foregroundStyle(SetuColor.brandPink)
+                                    .frame(width: 44, height: 44)
+                            }
+                            .buttonStyle(.borderless)
+                            Button(role: .destructive) {
+                                player.stop()
+                            } label: {
+                                Image(systemName: "stop.circle")
+                                    .font(.title2)
+                                    .foregroundStyle(SetuColor.danger)
+                                    .frame(width: 44, height: 44)
+                            }
+                            .buttonStyle(.borderless)
+                        }
                     }
-                    Spacer()
-                    Button {
-                        player.toggle()
-                    } label: {
-                        Image(systemName: player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                            .font(.title2)
-                    }
-                    .buttonStyle(.borderless)
-                    Button(role: .destructive) {
-                        player.stop()
-                    } label: {
-                        Image(systemName: "stop.circle")
-                            .font(.title2)
-                    }
-                    .buttonStyle(.borderless)
                 }
             }
         }
@@ -214,13 +257,18 @@ struct MusicPlaylistDetailView: View {
         }
         let firstSong = selectedMode == "random" ? songs.randomElement() ?? songs[0] : songs[0]
         try? await environment.musicClient.recordPlaylistPlay(id: playlistID)
-        await play(firstSong, queueName: playlist.name, queueTracks: songs.map { MusicPlaybackTrack(song: $0) })
+        await play(
+            firstSong,
+            queueName: playlist.name,
+            queueTracks: songs.map { MusicPlaybackTrack(song: $0) },
+            playMode: MusicPlayMode(playlistMode: selectedMode)
+        )
         if message == "已开始播放" {
             message = "开始播放《\(playlist.name)》"
         }
     }
 
-    private func play(_ song: PlaylistSong, queueName: String? = nil, queueTracks: [MusicPlaybackTrack] = []) async {
+    private func play(_ song: PlaylistSong, queueName: String? = nil, queueTracks: [MusicPlaybackTrack] = [], playMode: MusicPlayMode? = nil) async {
         message = "正在准备播放"
         do {
             let response = try await environment.musicClient.url(songID: song.songId)
@@ -228,7 +276,7 @@ struct MusicPlaylistDetailView: View {
                 message = response.data?.first?.unavailableMessage ?? response.playabilityReason ?? response.message ?? "这首歌暂时无法播放"
                 return
             }
-            player.play(url: url, track: MusicPlaybackTrack(song: song), queueName: queueName, queueTracks: queueTracks)
+            player.play(url: url, track: MusicPlaybackTrack(song: song), queueName: queueName, queueTracks: queueTracks, playMode: playMode)
             message = "已开始播放"
         } catch {
             message = error.localizedDescription
@@ -268,21 +316,36 @@ private struct EditMusicPlaylistSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("歌单信息") {
-                    TextField("名称", text: $name)
-                    TextField("描述", text: $description, axis: .vertical)
-                    TextField("封面图片地址", text: $coverUrl)
-                    Toggle("公开歌单", isOn: $isPublic)
+            List {
+                Section {
+                    SetuCard {
+                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                            SetuSectionHeader(title: "歌单信息", subtitle: "编辑名称、描述和公开状态")
+                            TextField("名称", text: $name)
+                                .textFieldStyle(.roundedBorder)
+                            TextField("描述", text: $description, axis: .vertical)
+                                .lineLimit(3...5)
+                                .textFieldStyle(.roundedBorder)
+                            TextField("封面图片地址", text: $coverUrl)
+                                .textInputAutocapitalization(.never)
+                                .textFieldStyle(.roundedBorder)
+                            Toggle(isOn: $isPublic) {
+                                Label("公开歌单", systemImage: "eye")
+                                    .foregroundStyle(SetuColor.textPrimary)
+                            }
+                            .tint(SetuColor.brandPink)
+                        }
+                    }
                 }
                 if let message {
                     Section {
-                        Text(message)
-                            .font(.footnote)
-                            .foregroundStyle(.red)
+                        SetuPill(text: message, systemImage: "exclamationmark.triangle", tone: .danger)
                     }
                 }
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .setuBackground()
             .navigationTitle("编辑歌单")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -327,27 +390,34 @@ private struct PlaylistSongRow: View {
             MusicArtworkView(urlString: song.coverUrl)
             VStack(alignment: .leading, spacing: 5) {
                 Text(song.songName)
-                    .font(.headline)
+                    .font(SetuTypography.headline)
+                    .foregroundStyle(SetuColor.textPrimary)
                     .lineLimit(2)
                 Text(song.artistName)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .font(SetuTypography.caption)
+                    .foregroundStyle(SetuColor.textSecondary)
                 if let albumName = song.albumName, !albumName.isEmpty {
                     Text(albumName)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(SetuColor.textSecondary)
                 }
             }
             Spacer()
             Button(action: onPlay) {
                 Image(systemName: "play.circle")
+                    .font(.title3)
+                    .foregroundStyle(SetuColor.brandPink)
+                    .frame(width: 44, height: 44)
             }
             .buttonStyle(.borderless)
             Button(role: .destructive, action: onRemove) {
                 Image(systemName: "minus.circle")
+                    .font(.title3)
+                    .foregroundStyle(SetuColor.danger)
+                    .frame(width: 44, height: 44)
             }
             .buttonStyle(.borderless)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, SetuSpacing.xs)
     }
 }

@@ -14,12 +14,15 @@ struct CollectionSquareView: View {
 
     var body: some View {
         List {
-            Picker("排序", selection: $sort) {
-                Text("热门").tag("hot")
-                Text("最新").tag("new")
-                Text("点赞").tag("like")
+            SetuCard {
+                Picker("排序", selection: $sort) {
+                    Text("热门").tag("hot")
+                    Text("最新").tag("new")
+                    Text("点赞").tag("like")
+                }
+                .pickerStyle(.segmented)
             }
-            .pickerStyle(.segmented)
+            .setuListRow()
             .onChange(of: sort) {
                 Task {
                     page = 1
@@ -28,41 +31,54 @@ struct CollectionSquareView: View {
             }
 
             if let actionMessage {
-                Section {
-                    Text(actionMessage)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                SetuCard {
+                    Label(actionMessage, systemImage: "checkmark.circle")
+                        .font(SetuTypography.caption)
+                        .foregroundStyle(SetuColor.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .setuListRow()
             }
 
             switch state {
             case .idle, .loading:
-                ProgressView("正在加载")
+                ContentImageStateSection(title: "正在加载收藏夹广场", message: "正在整理公开收藏夹。", systemImage: "globe.asia.australia", isLoading: true)
             case .failed(let message):
-                ContentUnavailableView("广场加载失败", systemImage: "globe.asia.australia", description: Text(message))
+                ContentImageStateSection(title: "广场加载失败", message: message, systemImage: "globe.asia.australia")
             case .loaded(let page):
                 if page.list.isEmpty {
-                    ContentUnavailableView("暂无公开收藏夹", systemImage: "rectangle.stack")
+                    ContentImageStateSection(title: "暂无公开收藏夹", message: "换个关键词或排序方式再试试。", systemImage: "rectangle.stack")
                 } else {
-                    Section("共 \(page.total) 个") {
-                        ForEach(page.list) { collection in
-                            Button {
-                                router.navigate(to: .publicCollectionDetail(collection.id))
-                            } label: {
-                                CollectionSquareRow(collection: collection) {
-                                    Task { await like(collection) }
-                                } onFavorite: {
-                                    Task { await favorite(collection) }
-                                } onOwner: {
-                                    router.navigate(to: .publicUserProfile(collection.userId))
+                    SetuCard {
+                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                            SetuSectionHeader(title: "共 \(page.total) 个", subtitle: "公开收藏夹")
+                            ForEach(Array(page.list.enumerated()), id: \.element.id) { index, collection in
+                                if index > 0 {
+                                    Divider()
+                                        .overlay(SetuColor.separator)
                                 }
+                                Button {
+                                    router.navigate(to: .publicCollectionDetail(collection.id))
+                                } label: {
+                                    CollectionSquareRow(collection: collection) {
+                                        Task { await like(collection) }
+                                    } onFavorite: {
+                                        Task { await favorite(collection) }
+                                    } onOwner: {
+                                        router.navigate(to: .publicUserProfile(collection.userId))
+                                    }
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
                     }
+                    .setuListRow()
                     pagerSection(page)
                 }
             }
         }
+        .listStyle(.plain)
+        .setuBackground()
         .navigationTitle("收藏夹广场")
         .searchable(text: $searchText, prompt: "搜索收藏夹")
         .onSubmit(of: .search) {
@@ -82,31 +98,39 @@ struct CollectionSquareView: View {
     }
 
     private func pagerSection(_ result: PageResult<CollectionInfo>) -> some View {
-        Section {
+        SetuCard {
             HStack {
-                Button("上一页") {
+                Button {
                     Task {
                         page = max(1, page - 1)
                         await load()
                     }
+                } label: {
+                    Label("上一页", systemImage: "chevron.left")
+                        .frame(minHeight: 44)
                 }
                 .disabled(page <= 1)
 
                 Spacer()
                 Text("第 \(result.page) 页")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .font(SetuTypography.caption)
+                    .foregroundStyle(SetuColor.textSecondary)
                 Spacer()
 
-                Button("下一页") {
+                Button {
                     Task {
                         page += 1
                         await load()
                     }
+                } label: {
+                    Label("下一页", systemImage: "chevron.right")
+                        .frame(minHeight: 44)
                 }
                 .disabled(result.page * result.pageSize >= result.total)
             }
+            .font(SetuTypography.body)
         }
+        .setuListRow()
     }
 
     private func load() async {
@@ -151,21 +175,23 @@ private struct CollectionSquareRow: View {
     let onOwner: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 12) {
+        VStack(alignment: .leading, spacing: SetuSpacing.md) {
+            HStack(alignment: .top, spacing: SetuSpacing.md) {
                 ImageThumbnailView(urlString: collection.coverUrl ?? collection.previewImages?.first?.bestURLString)
-                VStack(alignment: .leading, spacing: 5) {
+                VStack(alignment: .leading, spacing: SetuSpacing.xs) {
                     Text(collection.name)
-                        .font(.headline)
+                        .font(SetuTypography.headline)
+                        .foregroundStyle(SetuColor.textPrimary)
                     if let description = collection.description, !description.isEmpty {
                         Text(description)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+                            .font(SetuTypography.caption)
+                            .foregroundStyle(SetuColor.textSecondary)
                             .lineLimit(2)
                     }
                     Button(action: onOwner) {
                         Label(collection.ownerNickname ?? "匿名分享者", systemImage: "person.crop.circle")
-                            .font(.caption)
+                            .font(SetuTypography.caption)
+                            .frame(minHeight: 44, alignment: .leading)
                     }
                     .buttonStyle(.borderless)
                 }
@@ -187,16 +213,23 @@ private struct CollectionSquareRow: View {
                 Label("\(collection.likeCount ?? collection.shareLikeCount ?? 0)", systemImage: "hand.thumbsup")
                 Label("\(collection.favoriteCount ?? collection.shareFavCount ?? 0)", systemImage: "star")
             }
-            .font(.caption)
-            .foregroundStyle(.secondary)
+            .font(.caption2)
+            .foregroundStyle(SetuColor.textTertiary)
 
             HStack {
-                Button(collection.likedByMe == true ? "取消点赞" : "点赞", action: onLike)
+                Button(action: onLike) {
+                    Label(collection.likedByMe == true ? "取消点赞" : "点赞", systemImage: "hand.thumbsup")
+                        .frame(minHeight: 44)
+                }
                 Spacer()
-                Button(collection.favoritedByMe == true ? "取消收藏" : "收藏", action: onFavorite)
+                Button(action: onFavorite) {
+                    Label(collection.favoritedByMe == true ? "取消收藏" : "收藏", systemImage: "star")
+                        .frame(minHeight: 44)
+                }
             }
             .buttonStyle(.borderless)
+            .font(SetuTypography.caption)
         }
-        .padding(.vertical, 5)
+        .padding(.vertical, SetuSpacing.xs)
     }
 }

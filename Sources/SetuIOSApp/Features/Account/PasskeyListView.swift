@@ -15,55 +15,95 @@ struct PasskeyListView: View {
     var body: some View {
         List {
             Section {
-                Label("通行密钥可用于免密码登录。若开通失败，通常需要先完成应用域名配置。", systemImage: "touchid")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section("开通") {
-                TextField("通行密钥名称", text: $nickname)
-                Button {
-                    Task { await registerPasskey() }
-                } label: {
-                    if isRegistering {
-                        ProgressView()
-                    } else {
-                        Label("开通通行密钥", systemImage: "touchid")
+                SetuCard {
+                    Label {
+                        Text("通行密钥可用于免密码登录。若开通失败，通常需要先完成应用域名配置。")
+                            .font(SetuTypography.caption)
+                            .foregroundStyle(SetuColor.textSecondary)
+                    } icon: {
+                        Image(systemName: "touchid")
+                            .foregroundStyle(SetuColor.brandPink)
                     }
                 }
-                .disabled(isRegistering || trimmedNickname.isEmpty)
+            }
+
+            Section {
+                SetuCard {
+                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                        SetuSectionHeader(title: "开通", subtitle: "为当前设备创建一枚新的通行密钥")
+                        TextField("通行密钥名称", text: $nickname)
+                            .textFieldStyle(.roundedBorder)
+                        SetuPrimaryButton {
+                            Task { await registerPasskey() }
+                        } label: {
+                            if isRegistering {
+                                ProgressView()
+                                    .tint(.white)
+                            } else {
+                                Label("开通通行密钥", systemImage: "touchid")
+                            }
+                        }
+                        .disabled(isRegistering || trimmedNickname.isEmpty)
+                        .opacity(isRegistering || trimmedNickname.isEmpty ? 0.55 : 1)
+                    }
+                }
             }
 
             if let message {
                 Section {
-                    Text(message)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    SetuPill(text: message, systemImage: "checkmark.seal", tone: .info)
                 }
             }
 
             switch state {
             case .idle, .loading:
-                ProgressView("正在加载")
+                Section {
+                    SetuCard {
+                        SetuEmptyState(title: "正在加载", systemImage: "touchid", isLoading: true)
+                    }
+                }
             case .failed(let message):
-                ContentUnavailableView("通行密钥加载失败", systemImage: "touchid", description: Text(message))
+                Section {
+                    SetuCard {
+                        SetuEmptyState(title: "通行密钥加载失败", message: message, systemImage: "touchid")
+                    }
+                }
             case .loaded(let passkeys):
                 if passkeys.isEmpty {
-                    ContentUnavailableView("未开通通行密钥", systemImage: "touchid", description: Text("在当前设备开通后，下次登录可以直接使用 Face ID、Touch ID 或设备密码验证。"))
+                    Section {
+                        SetuCard {
+                            SetuEmptyState(
+                                title: "未开通通行密钥",
+                                message: "在当前设备开通后，下次登录可以直接使用 Face ID、Touch ID 或设备密码验证。",
+                                systemImage: "touchid"
+                            )
+                        }
+                    }
                 } else {
-                    Section("共 \(passkeys.count) 个") {
-                        ForEach(passkeys) { item in
-                            PasskeyRow(item: item) {
-                                renameTarget = item
-                            } onDelete: {
-                                deleteTarget = item
-                                showingDeleteConfirmation = true
+                    Section {
+                        SetuCard {
+                            VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                                SetuSectionHeader(title: "已开通", subtitle: "共 \(passkeys.count) 个")
+                                ForEach(passkeys) { item in
+                                    PasskeyRow(item: item) {
+                                        renameTarget = item
+                                    } onDelete: {
+                                        deleteTarget = item
+                                        showingDeleteConfirmation = true
+                                    }
+                                    if item.id != passkeys.last?.id {
+                                        Divider()
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .setuBackground()
         .navigationTitle("通行密钥")
         .sheet(item: $renameTarget) { item in
             PasskeyRenameSheet(environment: environment, item: item) {
@@ -108,7 +148,7 @@ struct PasskeyListView: View {
             message = "通行密钥已删除"
             await load()
         } catch {
-            message = error.localizedDescription
+            message = PasskeyAuthorizationService.userMessage(for: error)
         }
     }
 
@@ -127,7 +167,7 @@ struct PasskeyListView: View {
             message = "通行密钥已开通"
             await load()
         } catch {
-            message = error.localizedDescription
+            message = PasskeyAuthorizationService.userMessage(for: error)
         }
         isRegistering = false
     }
@@ -141,12 +181,14 @@ private struct PasskeyRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "touchid")
-                .font(.title2)
-                .foregroundStyle(.pink)
-                .frame(width: 36)
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(SetuColor.brandPink)
+                .frame(width: 40, height: 40)
+                .background(SetuColor.brandSoft.opacity(0.2), in: RoundedRectangle(cornerRadius: SetuRadius.md, style: .continuous))
             VStack(alignment: .leading, spacing: 6) {
                 Text(item.displayName)
-                    .font(.headline)
+                    .font(SetuTypography.headline)
+                    .foregroundStyle(SetuColor.textPrimary)
                 HStack(spacing: 10) {
                     if let createdAt = item.createdAt {
                         Label(createdAt, systemImage: "calendar")
@@ -156,12 +198,12 @@ private struct PasskeyRow: View {
                     }
                 }
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(SetuColor.textSecondary)
 
                 if let transports = item.transports, !transports.isEmpty {
                     Text(transports.joined(separator: ", "))
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(SetuColor.textSecondary)
                 }
             }
             Spacer()
@@ -174,10 +216,13 @@ private struct PasskeyRow: View {
                 }
             } label: {
                 Image(systemName: "ellipsis.circle")
+                    .font(.title3)
+                    .foregroundStyle(SetuColor.textSecondary)
+                    .frame(width: 44, height: 44)
             }
             .buttonStyle(.borderless)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, SetuSpacing.xs)
     }
 }
 
@@ -200,18 +245,25 @@ private struct PasskeyRenameSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("名称") {
-                    TextField("通行密钥名称", text: $nickname)
+            List {
+                Section {
+                    SetuCard {
+                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                            SetuSectionHeader(title: "名称", subtitle: "换一个更容易识别的设备名称")
+                            TextField("通行密钥名称", text: $nickname)
+                                .textFieldStyle(.roundedBorder)
+                        }
+                    }
                 }
                 if let message {
                     Section {
-                        Text(message)
-                            .font(.footnote)
-                            .foregroundStyle(.red)
+                        SetuPill(text: message, systemImage: "exclamationmark.triangle", tone: .danger)
                     }
                 }
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .setuBackground()
             .navigationTitle("重命名")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -240,7 +292,7 @@ private struct PasskeyRenameSheet: View {
             onSaved()
             dismiss()
         } catch {
-            message = error.localizedDescription
+            message = PasskeyAuthorizationService.userMessage(for: error)
         }
         saving = false
     }

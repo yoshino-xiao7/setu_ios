@@ -15,45 +15,72 @@ struct AiSquareView: View {
         List {
             if let message {
                 Section {
-                    Text(message)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    SetuPill(text: message, systemImage: "checkmark.circle", tone: .brand)
                 }
+                .setuListRow()
             }
 
-            Picker("分类", selection: $category) {
-                Text("全部").tag("")
-                Text("全年龄").tag("GENERAL")
-                Text("R18").tag("R18")
-            }
-            .pickerStyle(.segmented)
-            .onChange(of: category) {
-                Task {
-                    page = 1
-                    await load()
+            Section {
+                Picker("分类", selection: $category) {
+                    Text("全部").tag("")
+                    Text("全年龄").tag("GENERAL")
+                    Text("R18").tag("R18")
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: category) {
+                    Task {
+                        page = 1
+                        await load()
+                    }
                 }
             }
+            .setuListRow()
 
             switch state {
             case .idle, .loading:
-                ProgressView("正在加载")
+                Section {
+                    SetuCard {
+                        SetuEmptyState(title: "正在加载 AI 绘画广场", systemImage: "photo.on.rectangle", isLoading: true)
+                    }
+                }
+                .setuListRow()
             case .failed(let message):
-                ContentUnavailableView("AI 绘画广场加载失败", systemImage: "photo.on.rectangle", description: Text(message))
+                Section {
+                    SetuCard {
+                        SetuEmptyState(title: "AI 绘画广场加载失败", message: message, systemImage: "photo.on.rectangle")
+                    }
+                }
+                .setuListRow()
             case .loaded(let page):
                 if page.list.isEmpty {
-                    ContentUnavailableView("暂无公开 AI 作品", systemImage: "sparkles")
+                    Section {
+                        SetuCard {
+                            SetuEmptyState(title: "暂无公开 AI 作品", systemImage: "sparkles")
+                        }
+                    }
+                    .setuListRow()
                 } else {
-                    Section("共 \(page.total) 个作品") {
-                        ForEach(page.list) { job in
-                            AiSquareRow(job: job) {
-                                previewSelection = AiSquarePreviewSelection(job: job)
+                    Section {
+                        SetuCard {
+                            VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                                SetuSectionHeader(title: "共 \(page.total) 个作品")
+                                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: SetuSpacing.md) {
+                                    ForEach(page.list) { job in
+                                        AiGenerationGridTile(job: job, footerTitle: job.createdAt) {
+                                            previewSelection = AiSquarePreviewSelection(job: job)
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
+                    .setuListRow()
                     pagerSection(page)
                 }
             }
         }
+        .listStyle(.plain)
+        .setuBackground()
         .navigationTitle("AI 绘画广场")
         .sheet(item: $previewSelection) { selection in
             AiGenerationImagePreviewSheet(
@@ -72,7 +99,7 @@ struct AiSquareView: View {
 
     private func pagerSection(_ result: PageResult<AiGenerationJob>) -> some View {
         Section {
-            HStack {
+            HStack(spacing: SetuSpacing.md) {
                 Button("上一页") {
                     Task {
                         page = max(1, page - 1)
@@ -80,11 +107,12 @@ struct AiSquareView: View {
                     }
                 }
                 .disabled(page <= 1)
+                .buttonStyle(.bordered)
 
                 Spacer()
                 Text("第 \(result.page) 页")
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(SetuColor.textSecondary)
                 Spacer()
 
                 Button("下一页") {
@@ -94,8 +122,10 @@ struct AiSquareView: View {
                     }
                 }
                 .disabled(result.page * result.pageSize >= result.total)
+                .buttonStyle(.bordered)
             }
         }
+        .setuListRow()
     }
 
     private func load() async {
@@ -112,46 +142,4 @@ private struct AiSquarePreviewSelection: Identifiable {
     let job: AiGenerationJob
 
     var id: Int { job.id }
-}
-
-private struct AiSquareRow: View {
-    let job: AiGenerationJob
-    let onPreview: () -> Void
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            ImageThumbnailView(urlString: job.imageUrl)
-            VStack(alignment: .leading, spacing: 7) {
-                Text(job.promptCn)
-                    .font(.headline)
-                    .lineLimit(2)
-                if let styleNotes = job.styleNotes, !styleNotes.isEmpty {
-                    Text(styleNotes)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-                HStack(spacing: 10) {
-                    Label(job.publicCategory ?? "公开", systemImage: "globe")
-                    Label("\(job.width)x\(job.height)", systemImage: "aspectratio")
-                    if let createdAt = job.createdAt {
-                        Label(createdAt, systemImage: "calendar")
-                    }
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-                if job.imageUrl != nil {
-                    Button {
-                        onPreview()
-                    } label: {
-                        Label("查看图片", systemImage: "eye")
-                    }
-                    .buttonStyle(.borderless)
-                    .font(.footnote)
-                }
-            }
-        }
-        .padding(.vertical, 5)
-    }
 }

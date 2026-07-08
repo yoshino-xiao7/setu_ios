@@ -14,49 +14,66 @@ struct ApiKeyListView: View {
 
     var body: some View {
         List {
-            Section("新建") {
-                TextField("Key 名称", text: $newKeyName)
-                Stepper("每日调用配额 \(dailyQuota)", value: $dailyQuota, in: 1...100_000, step: 100)
-                TextField("总调用配额（留空为无限制）", text: $totalQuotaText)
-                Button("创建 API Key") {
-                    Task { await createKey() }
-                }
-                .disabled(!canCreate)
-
-                if let createdKey {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(createdKey)
-                            .font(.footnote.monospaced())
-                            .textSelection(.enabled)
-
-                        Button {
-                            copyCreatedKey(createdKey)
+            Section {
+                SetuCard {
+                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                        SetuSectionHeader(title: "新建", subtitle: "用于程序化调用图片和音乐接口")
+                        TextField("Key 名称", text: $newKeyName)
+                            .textFieldStyle(.roundedBorder)
+                        Stepper("每日调用配额 \(dailyQuota)", value: $dailyQuota, in: 1...100_000, step: 100)
+                            .foregroundStyle(SetuColor.textPrimary)
+                        TextField("总调用配额（留空为无限制）", text: $totalQuotaText)
+                            .keyboardType(.numberPad)
+                            .textFieldStyle(.roundedBorder)
+                        SetuPrimaryButton {
+                            Task { await createKey() }
                         } label: {
-                            Label("复制新 Key", systemImage: "doc.on.doc")
+                            Label("创建 API Key", systemImage: "key")
+                        }
+                        .disabled(!canCreate)
+                        .opacity(canCreate ? 1 : 0.55)
+
+                        if let createdKey {
+                            VStack(alignment: .leading, spacing: SetuSpacing.sm) {
+                                Text(createdKey)
+                                    .font(.footnote.monospaced())
+                                    .foregroundStyle(SetuColor.textPrimary)
+                                    .textSelection(.enabled)
+                                    .padding(SetuSpacing.md)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(SetuColor.surfaceMuted, in: RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous))
+
+                                Button {
+                                    copyCreatedKey(createdKey)
+                                } label: {
+                                    Label("复制新 Key", systemImage: "doc.on.doc")
+                                        .frame(maxWidth: .infinity, minHeight: 44)
+                                }
+                                .buttonStyle(.bordered)
+                                .tint(SetuColor.brandPink)
+                            }
+                        }
+
+                        if let copyMessage {
+                            SetuPill(text: copyMessage, systemImage: "checkmark.seal", tone: .success)
                         }
                     }
-                }
-
-                if let copyMessage {
-                    Text(copyMessage)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
                 }
             }
 
             if let errorMessage {
                 Section {
-                    Text(errorMessage)
-                        .foregroundStyle(.red)
+                    SetuPill(text: errorMessage, systemImage: "exclamationmark.triangle", tone: .danger)
                 }
             }
 
             apiKeyStats
 
-            Section("我的 API Keys") {
-                content
-            }
+            content
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .setuBackground()
         .navigationTitle("API Keys")
         .sheet(item: $renameTarget) { key in
             ApiKeyRenameSheet(environment: environment, key: key) {
@@ -70,11 +87,21 @@ struct ApiKeyListView: View {
     @ViewBuilder
     private var apiKeyStats: some View {
         if case .loaded(let keys) = state, !keys.isEmpty {
-            Section("概览") {
-                ApiKeyMetricRow(title: "全部 Key", value: "\(keys.count)", systemImage: "key")
-                ApiKeyMetricRow(title: "启用中", value: "\(keys.filter(\.isEnabled).count)", systemImage: "checkmark.circle")
-                ApiKeyMetricRow(title: "今日调用", value: "\(keys.reduce(0) { $0 + $1.callsToday })", systemImage: "calendar")
-                ApiKeyMetricRow(title: "历史总量", value: "\(keys.reduce(0) { $0 + $1.totalCalls })", systemImage: "chart.line.uptrend.xyaxis")
+            Section {
+                SetuCard {
+                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                        SetuSectionHeader(title: "概览", subtitle: "API Key 使用情况")
+                        LazyVGrid(columns: [
+                            GridItem(.flexible(), spacing: SetuSpacing.sm),
+                            GridItem(.flexible(), spacing: SetuSpacing.sm)
+                        ], spacing: SetuSpacing.sm) {
+                            SetuStatTile(title: "全部 Key", value: "\(keys.count)", systemImage: "key", color: SetuColor.brandPink)
+                            SetuStatTile(title: "启用中", value: "\(keys.filter(\.isEnabled).count)", systemImage: "checkmark.circle", color: SetuColor.success)
+                            SetuStatTile(title: "今日调用", value: "\(keys.reduce(0) { $0 + $1.callsToday })", systemImage: "calendar", color: SetuColor.info)
+                            SetuStatTile(title: "历史总量", value: "\(keys.reduce(0) { $0 + $1.totalCalls })", systemImage: "chart.line.uptrend.xyaxis", color: SetuColor.warning)
+                        }
+                    }
+                }
             }
         }
     }
@@ -83,29 +110,51 @@ struct ApiKeyListView: View {
     private var content: some View {
         switch state {
         case .idle, .loading:
-            ProgressView("正在加载")
+            Section {
+                SetuCard {
+                    SetuEmptyState(title: "正在加载", systemImage: "key", isLoading: true)
+                }
+            }
         case .failed(let message):
-            VStack(alignment: .leading, spacing: 8) {
-                Text("加载失败")
-                    .font(.headline)
-                Text(message)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                Button("重试") {
-                    Task { await load() }
+            Section {
+                SetuCard {
+                    VStack(spacing: SetuSpacing.md) {
+                        SetuEmptyState(title: "API Key 加载失败", message: message, systemImage: "key.slash")
+                        Button {
+                            Task { await load() }
+                        } label: {
+                            Label("重试", systemImage: "arrow.clockwise")
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(SetuColor.brandPink)
+                    }
                 }
             }
         case .loaded(let keys):
             if keys.isEmpty {
-                ContentUnavailableView("暂无 API Key", systemImage: "key", description: Text("创建一个 Key 后即可用于程序化调用。"))
+                Section {
+                    SetuCard {
+                        SetuEmptyState(title: "暂无 API Key", message: "创建一个 Key 后即可用于程序化调用。", systemImage: "key")
+                    }
+                }
             } else {
-                ForEach(keys) { key in
-                    ApiKeyRow(key: key) {
-                        Task { await toggle(key) }
-                    } onRename: {
-                        renameTarget = key
-                    } onDelete: {
-                        Task { await delete(key) }
+                Section {
+                    SetuCard {
+                        SetuSectionHeader(title: "我的 API Keys", subtitle: "共 \(keys.count) 个")
+                    }
+                }
+                Section {
+                    ForEach(keys) { key in
+                        SetuCard {
+                            ApiKeyRow(key: key) {
+                                Task { await toggle(key) }
+                            } onRename: {
+                                renameTarget = key
+                            } onDelete: {
+                                Task { await delete(key) }
+                            }
+                        }
                     }
                 }
             }
@@ -180,24 +229,6 @@ struct ApiKeyListView: View {
     }
 }
 
-private struct ApiKeyMetricRow: View {
-    let title: String
-    let value: String
-    let systemImage: String
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: systemImage)
-                .foregroundStyle(.pink)
-                .frame(width: 24)
-            Text(title)
-            Spacer()
-            Text(value)
-                .font(.headline.monospacedDigit())
-        }
-    }
-}
-
 private struct ApiKeyRow: View {
     let key: ApiKeyItem
     let onToggle: () -> Void
@@ -208,11 +239,14 @@ private struct ApiKeyRow: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(key.name)
-                    .font(.headline)
+                    .font(SetuTypography.headline)
+                    .foregroundStyle(SetuColor.textPrimary)
                 Spacer()
-                Text(key.isEnabled ? "启用" : "禁用")
-                    .font(.caption)
-                    .foregroundStyle(key.isEnabled ? .green : .secondary)
+                SetuPill(
+                    text: key.isEnabled ? "启用" : "禁用",
+                    systemImage: key.isEnabled ? "checkmark.circle" : "pause.circle",
+                    tone: key.isEnabled ? .success : .muted
+                )
             }
             HStack {
                 Label("今日 \(key.callsToday)", systemImage: "calendar")
@@ -220,14 +254,14 @@ private struct ApiKeyRow: View {
                 Label("总计 \(key.totalCalls)", systemImage: "sum")
             }
             .font(.footnote)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(SetuColor.textSecondary)
             HStack {
                 Label("每日限额 \(key.dailyQuota)", systemImage: "speedometer")
                 Spacer()
                 Label("总限额 \(key.totalQuota.map(String.init) ?? "∞")", systemImage: "chart.bar")
             }
             .font(.footnote)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(SetuColor.textSecondary)
             HStack {
                 Button(key.isEnabled ? "禁用" : "启用", action: onToggle)
                 Button("重命名", action: onRename)
@@ -236,7 +270,7 @@ private struct ApiKeyRow: View {
             }
             .buttonStyle(.borderless)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, SetuSpacing.xs)
     }
 }
 
@@ -258,20 +292,27 @@ private struct ApiKeyRenameSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("API Key") {
-                    LabeledContent("当前名称", value: key.name)
-                    TextField("新名称", text: $name)
+            List {
+                Section {
+                    SetuCard {
+                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                            SetuSectionHeader(title: "API Key", subtitle: "为这枚 Key 换一个易识别的名称")
+                            ApiKeyInfoRow(title: "当前名称", value: key.name)
+                            TextField("新名称", text: $name)
+                                .textFieldStyle(.roundedBorder)
+                        }
+                    }
                 }
 
                 if let message {
                     Section {
-                        Text(message)
-                            .font(.footnote)
-                            .foregroundStyle(.red)
+                        SetuPill(text: message, systemImage: "exclamationmark.triangle", tone: .danger)
                     }
                 }
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .setuBackground()
             .navigationTitle("重命名 API Key")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -302,6 +343,24 @@ private struct ApiKeyRenameSheet: View {
             dismiss()
         } catch {
             message = error.localizedDescription
+        }
+    }
+}
+
+private struct ApiKeyInfoRow: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .font(SetuTypography.caption)
+                .foregroundStyle(SetuColor.textSecondary)
+            Spacer(minLength: SetuSpacing.md)
+            Text(value)
+                .font(.callout.weight(.medium))
+                .foregroundStyle(SetuColor.textPrimary)
+                .multilineTextAlignment(.trailing)
         }
     }
 }

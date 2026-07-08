@@ -12,35 +12,66 @@ struct NotificationsView: View {
 
     var body: some View {
         List {
-            Toggle("仅看未读", isOn: $unreadOnly)
-                .onChange(of: unreadOnly) {
-                    Task {
-                        page = 1
-                        await load()
+            Section {
+                SetuCard {
+                    Toggle("仅看未读", isOn: $unreadOnly)
+                        .tint(SetuColor.brandPink)
+                        .onChange(of: unreadOnly) {
+                            Task {
+                                page = 1
+                                await load()
+                            }
+                        }
+                    if unreadCount > 0 {
+                        SetuPill(text: "\(unreadCount) 条未读", systemImage: "bell.badge", tone: .brand)
                     }
                 }
+            }
+            .setuListRow()
 
             switch state {
             case .idle, .loading:
-                ProgressView("正在加载")
+                Section {
+                    SetuCard {
+                        SetuEmptyState(title: "正在加载通知", systemImage: "bell", isLoading: true)
+                    }
+                }
+                .setuListRow()
             case .failed(let message):
-                Text(message)
-                    .foregroundStyle(.red)
+                Section {
+                    SetuCard {
+                        SetuEmptyState(title: "通知加载失败", message: message, systemImage: "bell.badge")
+                    }
+                }
+                .setuListRow()
             case .loaded(let page):
                 if page.list.isEmpty {
-                    ContentUnavailableView("暂无通知", systemImage: "bell")
+                    Section {
+                        SetuCard {
+                            SetuEmptyState(title: "暂无通知", systemImage: "bell")
+                        }
+                    }
+                    .setuListRow()
                 } else {
-                    Section("共 \(page.total) 条") {
-                        ForEach(page.list) { notification in
-                            NotificationRow(notification: notification) {
-                                Task { await handleNotificationTap(notification) }
+                    Section {
+                        SetuCard {
+                            VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                                SetuSectionHeader(title: "共 \(page.total) 条")
+                                ForEach(page.list) { notification in
+                                    NotificationRow(notification: notification) {
+                                        Task { await handleNotificationTap(notification) }
+                                    }
+                                }
                             }
                         }
                     }
+                    .setuListRow()
                     pagerSection(page)
                 }
             }
         }
+        .listStyle(.plain)
+        .setuBackground()
         .navigationTitle(unreadCount > 0 ? "通知中心 (\(unreadCount))" : "通知中心")
         .toolbar {
             Button("全部已读") {
@@ -54,7 +85,7 @@ struct NotificationsView: View {
 
     private func pagerSection(_ result: UserNotificationPage) -> some View {
         Section {
-            HStack {
+            HStack(spacing: SetuSpacing.md) {
                 Button("上一页") {
                     Task {
                         page = max(1, page - 1)
@@ -62,11 +93,12 @@ struct NotificationsView: View {
                     }
                 }
                 .disabled(page <= 1)
+                .buttonStyle(.bordered)
 
                 Spacer()
                 Text("第 \(result.page) 页")
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(SetuColor.textSecondary)
                 Spacer()
 
                 Button("下一页") {
@@ -76,8 +108,10 @@ struct NotificationsView: View {
                     }
                 }
                 .disabled(result.page * result.pageSize >= result.total)
+                .buttonStyle(.bordered)
             }
         }
+        .setuListRow()
     }
 
     private func load() async {
@@ -214,11 +248,11 @@ private struct NotificationRow: View {
                 HStack {
                     Text(notification.title)
                         .font(.headline)
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(SetuColor.textPrimary)
                     Spacer()
                     if !notification.read {
                         Circle()
-                            .fill(.pink)
+                            .fill(SetuColor.brandPink)
                             .frame(width: 8, height: 8)
                     }
                 }
@@ -227,18 +261,19 @@ private struct NotificationRow: View {
                     if let targetText = targetText {
                         Text(targetText)
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(SetuColor.textSecondary)
                     }
                 }
                 Text(notification.content)
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(SetuColor.textSecondary)
                 Text(notification.createdAt)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(SetuColor.textTertiary)
             }
-            .padding(.vertical, 3)
+            .padding(.vertical, SetuSpacing.sm)
         }
+        .buttonStyle(.plain)
     }
 
     private var targetText: String? {
@@ -253,12 +288,7 @@ private struct NotificationTypeBadge: View {
     let type: String
 
     var body: some View {
-        Text(title)
-            .font(.caption.weight(.semibold))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(color.opacity(0.14), in: Capsule())
-            .foregroundStyle(color)
+        SetuPill(text: title, tone: tone)
     }
 
     private var title: String {
@@ -274,18 +304,18 @@ private struct NotificationTypeBadge: View {
         }
     }
 
-    private var color: Color {
+    private var tone: SetuPillTone {
         switch type {
         case "GALLERY_SUBMISSION_APPROVED", "ADMIN_POINTS_GRANTED", "AI_GENERATION_COMPLETED":
-            .green
+            .success
         case "GALLERY_SUBMISSION_REJECTED":
-            .red
+            .danger
         case "IMAGE_DELETE_REQUEST_APPROVED":
-            .green
+            .success
         case "IMAGE_DELETE_REQUEST_REJECTED", "IMAGE_AUDIT_PROBLEM_CREATED_DELETE_REQUEST":
-            .orange
+            .warning
         default:
-            .secondary
+            .muted
         }
     }
 }

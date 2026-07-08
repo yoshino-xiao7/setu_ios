@@ -11,64 +11,85 @@ struct FavoriteListView: View {
     var body: some View {
         List {
             if let errorMessage {
-                Section {
-                    Text(errorMessage)
-                        .font(.footnote)
-                        .foregroundStyle(.red)
+                SetuCard {
+                    Label(errorMessage, systemImage: "exclamationmark.triangle")
+                        .font(SetuTypography.caption)
+                        .foregroundStyle(SetuColor.danger)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .setuListRow()
             }
 
             switch state {
             case .idle, .loading:
-                ProgressView("正在加载")
+                ContentImageStateSection(title: "正在加载收藏", message: "默认收藏会按最新顺序展示。", systemImage: "heart", isLoading: true)
             case .failed(let message):
-                ContentUnavailableView("收藏加载失败", systemImage: "heart.slash", description: Text(message))
+                ContentImageStateSection(title: "收藏加载失败", message: message, systemImage: "heart.slash")
             case .loaded(let page):
                 if page.items.isEmpty {
-                    ContentUnavailableView("暂无默认收藏", systemImage: "heart", description: Text("收藏图片后会显示在这里。"))
+                    ContentImageStateSection(title: "暂无默认收藏", message: "收藏图片后会显示在这里。", systemImage: "heart")
                 } else {
-                    Section("共 \(page.total) 张") {
-                        ForEach(page.items) { item in
-                            FavoriteImageRow(item: item) {
-                                Task { await remove(item) }
+                    SetuCard {
+                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                            SetuSectionHeader(title: "共 \(page.total) 张", subtitle: "默认收藏")
+                            ForEach(Array(page.items.enumerated()), id: \.element.id) { index, item in
+                                if index > 0 {
+                                    Divider()
+                                        .overlay(SetuColor.separator)
+                                }
+                                FavoriteImageRow(item: item) {
+                                    Task { await remove(item) }
+                                }
                             }
                         }
                     }
+                    .setuListRow()
                     pagerSection(page)
                 }
             }
         }
+        .listStyle(.plain)
+        .setuBackground()
         .navigationTitle("默认收藏")
         .task { await load() }
         .refreshable { await load() }
     }
 
     private func pagerSection(_ result: FavoritePage) -> some View {
-        Section {
+        SetuCard {
             HStack {
-                Button("上一页") {
+                Button {
                     Task {
                         page = max(1, page - 1)
                         await load()
                     }
+                } label: {
+                    Label("上一页", systemImage: "chevron.left")
+                        .frame(minHeight: 44)
                 }
                 .disabled(page <= 1)
 
                 Spacer()
                 Text("第 \(result.page) 页")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .font(SetuTypography.caption)
+                    .foregroundStyle(SetuColor.textSecondary)
                 Spacer()
 
-                Button("下一页") {
+                Button {
                     Task {
                         page += 1
                         await load()
                     }
+                } label: {
+                    Label("下一页", systemImage: "chevron.right")
+                        .labelStyle(.titleAndIcon)
+                        .frame(minHeight: 44)
                 }
                 .disabled(result.page * result.size >= result.total)
             }
+            .font(SetuTypography.body)
         }
+        .setuListRow()
     }
 
     private func load() async {
@@ -97,31 +118,47 @@ private struct FavoriteImageRow: View {
     let onRemove: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: SetuSpacing.md) {
             ImageThumbnailView(urlString: item.image?.urlSmall ?? item.image?.urlRegular)
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: SetuSpacing.xs) {
                 Text(item.image?.title ?? "PID \(item.pid)")
-                    .font(.headline)
+                    .font(SetuTypography.headline)
+                    .foregroundStyle(SetuColor.textPrimary)
                     .lineLimit(2)
                 Text(item.image?.author ?? "未知作者")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .font(SetuTypography.caption)
+                    .foregroundStyle(SetuColor.textSecondary)
                 HStack(spacing: 10) {
                     Label("\(item.pid)-\(item.p)", systemImage: "number")
                     if let favoritedAt = item.favoritedAt {
                         Label(favoritedAt, systemImage: "calendar")
                     }
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(.caption2)
+                .foregroundStyle(SetuColor.textTertiary)
             }
             Spacer()
             Button(role: .destructive, action: onRemove) {
                 Image(systemName: "heart.slash")
+                    .frame(width: 44, height: 44)
             }
             .buttonStyle(.borderless)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, SetuSpacing.xs)
+    }
+}
+
+struct ContentImageStateSection: View {
+    let title: String
+    var message: String?
+    var systemImage: String
+    var isLoading = false
+
+    var body: some View {
+        SetuCard {
+            SetuEmptyState(title: title, message: message, systemImage: systemImage, isLoading: isLoading)
+        }
+        .setuListRow()
     }
 }
 
@@ -146,15 +183,19 @@ struct ImageThumbnailView: View {
             }
         }
         .frame(width: width, height: height)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .clipShape(RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous)
+                .stroke(SetuColor.separator, lineWidth: 1)
+        }
     }
 
     private var placeholder: some View {
-        RoundedRectangle(cornerRadius: 8)
-            .fill(.pink.opacity(0.12))
+        RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous)
+            .fill(SetuColor.brandSoft.opacity(0.18))
             .overlay {
                 Image(systemName: "photo")
-                    .foregroundStyle(.pink)
+                    .foregroundStyle(SetuColor.brandPink)
             }
     }
 }

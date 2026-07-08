@@ -15,58 +15,93 @@ struct ProfileView: View {
         List {
             switch state {
             case .idle, .loading:
-                ProgressView("正在加载")
+                Section {
+                    SetuCard {
+                        SetuEmptyState(title: "正在加载资料", systemImage: "person.crop.circle", isLoading: true)
+                    }
+                }
+                .setuListRow()
             case .failed(let message):
-                ContentUnavailableView("资料加载失败", systemImage: "person.crop.circle.badge.exclamationmark", description: Text(message))
+                Section {
+                    SetuCard {
+                        SetuEmptyState(title: "资料加载失败", message: message, systemImage: "person.crop.circle.badge.exclamationmark")
+                    }
+                }
+                .setuListRow()
             case .loaded(let profile):
                 Section {
-                    HStack(spacing: 14) {
-                        AvatarView(urlString: profile.avatarUrl, name: profile.displayName)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(profile.displayName)
-                                .font(.headline)
-                            Text(profile.email)
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
+                    SetuCard(padding: SetuSpacing.xl) {
+                        HStack(spacing: SetuSpacing.lg) {
+                            AvatarView(urlString: profile.avatarUrl, name: profile.displayName)
+                            VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+                                Text(profile.displayName)
+                                    .font(SetuTypography.title)
+                                    .foregroundStyle(SetuColor.textPrimary)
+                                Text(profile.email)
+                                    .font(SetuTypography.caption)
+                                    .foregroundStyle(SetuColor.textSecondary)
+                                SetuPill(text: profile.role == .admin ? "管理员" : "用户", systemImage: "person.crop.circle.fill", tone: .brand)
+                            }
+                        }
+
+                        PhotosPicker(selection: $selectedAvatarItem, matching: .images) {
+                            if isUploadingAvatar {
+                                ProgressView()
+                                    .tint(SetuColor.brandPink)
+                            } else {
+                                Label("更换头像", systemImage: "photo.badge.plus")
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(SetuColor.brandPink)
+                        .disabled(isUploadingAvatar)
+                        .padding(.top, SetuSpacing.md)
+                    }
+                }
+                .setuListRow()
+
+                Section {
+                    SetuCard {
+                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                            SetuSectionHeader(title: "账号")
+                            LabeledContent("用户 ID", value: "\(profile.id)")
+                            LabeledContent("角色", value: profile.role == .admin ? "管理员" : "用户")
+                            LabeledContent("注册时间", value: profile.createdAt)
+                            if profile.lastLoginIp?.isEmpty == false {
+                                LabeledContent("最近登录", value: "已记录")
+                            }
                         }
                     }
-                    .padding(.vertical, 4)
-                    PhotosPicker(selection: $selectedAvatarItem, matching: .images) {
-                        if isUploadingAvatar {
-                            ProgressView()
-                        } else {
-                            Label("更换头像", systemImage: "photo.badge.plus")
+                }
+                .setuListRow()
+
+                Section {
+                    SetuCard {
+                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                            SetuSectionHeader(title: "昵称")
+                            TextField("昵称", text: $nickname)
+                                .textFieldStyle(.roundedBorder)
+                            SetuPrimaryButton {
+                                Task { await saveNickname() }
+                            } label: {
+                                Label("保存昵称", systemImage: "checkmark.circle")
+                            }
+                            .disabled(nickname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         }
                     }
-                    .disabled(isUploadingAvatar)
                 }
-
-                Section("账号") {
-                    LabeledContent("用户 ID", value: "\(profile.id)")
-                    LabeledContent("角色", value: profile.role == .admin ? "管理员" : "用户")
-                    LabeledContent("注册时间", value: profile.createdAt)
-                    if profile.lastLoginIp?.isEmpty == false {
-                        LabeledContent("最近登录", value: "已记录")
-                    }
-                }
-
-                Section("昵称") {
-                    TextField("昵称", text: $nickname)
-                    Button("保存昵称") {
-                        Task { await saveNickname() }
-                    }
-                    .disabled(nickname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
+                .setuListRow()
             }
 
             if let message {
                 Section {
-                    Text(message)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    SetuPill(text: message, systemImage: "checkmark.circle", tone: .brand)
                 }
+                .setuListRow()
             }
         }
+        .listStyle(.plain)
+        .setuBackground()
         .navigationTitle("个人中心")
         .onChange(of: selectedAvatarItem) {
             Task { await uploadSelectedAvatar() }
@@ -155,11 +190,11 @@ private struct AvatarView: View {
 
     private var placeholder: some View {
         Circle()
-            .fill(.pink.opacity(0.14))
+            .fill(SetuColor.brandSoft.opacity(0.22))
             .overlay {
                 Text(String(name.prefix(1)).uppercased())
                     .font(.title3.weight(.semibold))
-                    .foregroundStyle(.pink)
+                    .foregroundStyle(SetuColor.brandInk)
             }
     }
 }

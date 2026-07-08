@@ -14,19 +14,23 @@ struct AdminMusicTokensView: View {
     var body: some View {
         List {
             if environment.authSession.currentUser?.role != .admin {
-                ContentUnavailableView("需要管理员权限", systemImage: "shield.slash", description: Text("请使用管理员账号登录后管理网易云 Token。"))
+                AdminMusicTokenStateSection(title: "权限", stateTitle: "需要管理员权限", message: "请使用管理员账号登录后管理网易云 Token。", systemImage: "shield.slash")
             } else {
                 controlSection
                 if let message {
-                    Section {
-                        Text(message)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+                    SetuCard {
+                        Label(message, systemImage: "checkmark.circle")
+                            .font(SetuTypography.caption)
+                            .foregroundStyle(SetuColor.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
+                    .setuListRow()
                 }
                 tokenSection
             }
         }
+        .listStyle(.plain)
+        .setuBackground()
         .navigationTitle("网易云 Token")
         .toolbar {
             Button {
@@ -45,38 +49,51 @@ struct AdminMusicTokensView: View {
     }
 
     private var controlSection: some View {
-        Section("检测") {
+        SetuCard {
+            VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                SetuSectionHeader(title: "检测")
             TextField("VIP 测试歌曲 ID", text: $probeSongID)
+                    .textFieldStyle(.roundedBorder)
             Text("默认使用 32358362，并以 exhigh 音质检测 Cookie 登录态和完整可播性。")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+                    .font(SetuTypography.caption)
+                    .foregroundStyle(SetuColor.textSecondary)
+            }
         }
+        .setuListRow()
     }
 
     @ViewBuilder
     private var tokenSection: some View {
-        Section("Token 列表") {
-            switch state {
-            case .idle, .loading:
-                ProgressView("正在加载 Token")
-            case .failed(let message):
-                ContentUnavailableView("Token 加载失败", systemImage: "music.note.list", description: Text(message))
-            case .loaded(let tokens):
-                if tokens.isEmpty {
-                    ContentUnavailableView("暂无 Token", systemImage: "music.mic", description: Text("添加网易云 Cookie 后即可用于代理音乐服务。"))
-                } else {
-                    ForEach(tokens) { token in
-                        TokenRow(
-                            token: token,
-                            checkResult: checkResults[token.id],
-                            isChecking: checkingIDs.contains(token.id),
-                            onToggle: { Task { await toggle(token) } },
-                            onCheck: { Task { await check(token) } },
-                            onEdit: { editor = TokenEditor(token: token) },
-                            onDelete: { Task { await delete(token) } }
-                        )
+        switch state {
+        case .idle, .loading:
+            AdminMusicTokenStateSection(title: "Token 列表", stateTitle: "正在加载 Token", systemImage: "music.note.list", isLoading: true)
+        case .failed(let message):
+            AdminMusicTokenStateSection(title: "Token 列表", stateTitle: "Token 加载失败", message: message, systemImage: "music.note.list")
+        case .loaded(let tokens):
+            if tokens.isEmpty {
+                AdminMusicTokenStateSection(title: "Token 列表", stateTitle: "暂无 Token", message: "添加网易云 Cookie 后即可用于代理音乐服务。", systemImage: "music.mic")
+            } else {
+                SetuCard {
+                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                        SetuSectionHeader(title: "Token 列表", subtitle: "\(tokens.count) 个")
+                        ForEach(Array(tokens.enumerated()), id: \.element.id) { index, token in
+                            if index > 0 {
+                                Divider()
+                                    .overlay(SetuColor.separator)
+                            }
+                            TokenRow(
+                                token: token,
+                                checkResult: checkResults[token.id],
+                                isChecking: checkingIDs.contains(token.id),
+                                onToggle: { Task { await toggle(token) } },
+                                onCheck: { Task { await check(token) } },
+                                onEdit: { editor = TokenEditor(token: token) },
+                                onDelete: { Task { await delete(token) } }
+                            )
+                        }
                     }
                 }
+                .setuListRow()
             }
         }
     }
@@ -173,41 +190,37 @@ private struct TokenRow: View {
     let onDelete: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: SetuSpacing.md) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(token.nickname.isEmpty ? "Token #\(token.id)" : token.nickname)
-                        .font(.headline)
+                        .font(SetuTypography.headline)
+                        .foregroundStyle(SetuColor.textPrimary)
                     Text("#\(token.id)")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(SetuColor.textSecondary)
                 }
                 Spacer()
-                Text(token.statusTitle)
-                    .font(.caption.weight(.semibold))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background((token.status == 1 ? Color.green : Color.secondary).opacity(0.14), in: Capsule())
-                    .foregroundStyle(token.status == 1 ? .green : .secondary)
+                SetuPill(text: token.statusTitle, systemImage: token.status == 1 ? "checkmark.circle" : "pause.circle", tone: token.status == 1 ? .success : .muted)
             }
 
             Text(token.maskedCookie)
                 .font(.footnote.monospaced())
-                .foregroundStyle(.secondary)
+                .foregroundStyle(SetuColor.textSecondary)
 
             if let checkResult {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(checkResult.label)
                         .font(.footnote.weight(.semibold))
-                        .foregroundStyle(checkResult.cookieValid ? .green : .red)
+                        .foregroundStyle(checkResult.cookieValid ? SetuColor.success : SetuColor.danger)
                     Text(checkResult.reason)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(SetuColor.textSecondary)
                 }
             } else {
                 Text("点击检测确认 Cookie 与 VIP 歌曲可播性")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(SetuColor.textSecondary)
             }
 
             HStack(spacing: 10) {
@@ -215,17 +228,14 @@ private struct TokenRow: View {
                 Button {
                     onCheck()
                 } label: {
-                    if isChecking {
-                        ProgressView()
-                    } else {
-                        Text("检测")
-                    }
+                    Text(isChecking ? "检测中" : "检测")
                 }
                 Button("编辑", action: onEdit)
                 Spacer()
                 Button("删除", role: .destructive, action: onDelete)
             }
             .buttonStyle(.borderless)
+            .font(SetuTypography.caption)
 
             HStack(spacing: 12) {
                 if let createdAt = token.createdAt {
@@ -236,9 +246,9 @@ private struct TokenRow: View {
                 }
             }
             .font(.caption)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(SetuColor.textTertiary)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, SetuSpacing.xs)
     }
 }
 
@@ -250,22 +260,36 @@ private struct TokenEditorSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Cookie") {
+            List {
+                SetuCard {
+                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                        SetuSectionHeader(title: "Cookie")
                     TextEditor(text: $editor.cookie)
                         .frame(minHeight: 140)
+                            .padding(SetuSpacing.xs)
+                            .background(SetuColor.surfaceMuted, in: RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous))
                     Text("请粘贴完整网易云 Cookie，例如 MUSIC_U=...; __csrf=...")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                            .font(SetuTypography.caption)
+                            .foregroundStyle(SetuColor.textSecondary)
                 }
-                Section("信息") {
+                }
+                .setuListRow()
+                SetuCard {
+                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                        SetuSectionHeader(title: "信息")
                     TextField("昵称", text: $editor.nickname)
+                            .textFieldStyle(.roundedBorder)
                     Picker("状态", selection: $editor.status) {
                         Text("启用").tag(1)
                         Text("禁用").tag(0)
                     }
+                        .pickerStyle(.segmented)
                 }
+                }
+                .setuListRow()
             }
+            .listStyle(.plain)
+            .setuBackground()
             .navigationTitle(editor.id == nil ? "添加 Token" : "编辑 Token")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -275,16 +299,30 @@ private struct TokenEditorSheet: View {
                     Button {
                         onSave(editor)
                     } label: {
-                        if isSubmitting {
-                            ProgressView()
-                        } else {
-                            Text("保存")
-                        }
+                        Text(isSubmitting ? "保存中" : "保存")
                     }
                     .disabled(isSubmitting)
                 }
             }
         }
+    }
+}
+
+private struct AdminMusicTokenStateSection: View {
+    let title: String
+    let stateTitle: String
+    var message: String?
+    var systemImage: String
+    var isLoading = false
+
+    var body: some View {
+        SetuCard {
+            VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                SetuSectionHeader(title: title)
+                SetuEmptyState(title: stateTitle, message: message, systemImage: systemImage, isLoading: isLoading)
+            }
+        }
+        .setuListRow()
     }
 }
 

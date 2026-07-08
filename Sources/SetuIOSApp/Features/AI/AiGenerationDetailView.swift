@@ -16,23 +16,28 @@ struct AiGenerationDetailView: View {
     @State private var download: AiImageDownload?
     @State private var message: String?
     @State private var capabilities: AiCapabilityResponse?
+    @State private var fullscreenImage: FullscreenImageItem?
+    @State private var isPolling = false
+    @State private var lastRefreshedAt: Date?
 
     var body: some View {
         List {
             if let message {
-                Section {
-                    Text(message)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                SetuCard {
+                    Label(message, systemImage: "checkmark.circle")
+                        .font(SetuTypography.caption)
+                        .foregroundStyle(SetuColor.textSecondary)
                         .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .setuListRow()
             }
 
             switch state {
             case .idle, .loading:
-                ProgressView("正在加载")
+                AiGenerationStateSection(title: "AI 任务", stateTitle: "正在加载任务", systemImage: "sparkles.rectangle.stack", isLoading: true)
             case .failed(let message):
-                ContentUnavailableView("任务加载失败", systemImage: "sparkles.rectangle.stack", description: Text(message))
+                AiGenerationStateSection(title: "AI 任务", stateTitle: "任务加载失败", message: message, systemImage: "sparkles.rectangle.stack")
             case .loaded(let job):
                 previewSection(job)
                 imageActionsSection(job)
@@ -42,33 +47,61 @@ struct AiGenerationDetailView: View {
                 deleteRequestSection(job)
             }
         }
+        .listStyle(.plain)
+        .setuBackground()
+        .fullScreenCover(item: $fullscreenImage) { item in
+            FullscreenImageViewer(url: item.url)
+        }
         .navigationTitle("AI 任务 #\(jobID)")
-        .task { await load() }
-        .refreshable { await load() }
+        .task(id: jobID) {
+            await load()
+            await pollUntilTerminalStatus()
+        }
+        .refreshable { await load(showLoading: false) }
     }
 
     @ViewBuilder
     private func previewSection(_ job: AiGenerationJob) -> some View {
-        Section("预览") {
+        SetuCard {
+            VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                SetuSectionHeader(title: "预览", subtitle: job.statusTitle)
             let urlString = imageURL?.url ?? job.imageUrl
             if let urlString, let url = URL(string: urlString) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFit()
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                    case .failure:
-                        ContentUnavailableView("图片加载失败", systemImage: "photo")
-                    default:
-                        ProgressView("正在加载图片")
+                Button {
+                    fullscreenImage = FullscreenImageItem(url: url)
+                } label: {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .scaledToFit()
+                                .clipShape(RoundedRectangle(cornerRadius: SetuRadius.md, style: .continuous))
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: SetuRadius.md, style: .continuous)
+                                        .stroke(SetuColor.separator, lineWidth: 1)
+                                }
+                        case .failure:
+                            SetuEmptyState(title: "图片加载失败", message: "可以尝试刷新图片。", systemImage: "photo")
+                                .frame(maxWidth: .infinity, minHeight: 280)
+                        default:
+                            SetuEmptyState(title: "正在加载图片", systemImage: "photo", isLoading: true)
+                                .frame(maxWidth: .infinity, minHeight: 280)
+                        }
                     }
                 }
+                .buttonStyle(.plain)
             } else {
-                ContentUnavailableView("暂无图片", systemImage: "photo", description: Text(job.status == "COMPLETED" ? "可以尝试刷新图片。" : "任务完成后会显示预览。"))
+                SetuEmptyState(
+                    title: "暂无图片",
+                    message: job.status == "COMPLETED" ? "可以尝试刷新图片。" : "任务完成后会显示预览。",
+                    systemImage: "photo"
+                )
+                .frame(maxWidth: .infinity, minHeight: 280)
+            }
             }
         }
+        .setuListRow()
     }
 
     private func imageActionsSection(_ job: AiGenerationJob) -> some View {
@@ -89,8 +122,8 @@ struct AiGenerationDetailView: View {
 
             if let imageURL {
                 Label("\(imageURL.expiresInSeconds) 秒内有效", systemImage: "clock")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .font(SetuTypography.caption)
+                    .foregroundStyle(SetuColor.textSecondary)
             }
         }
     }
@@ -98,6 +131,19 @@ struct AiGenerationDetailView: View {
     private func infoSection(_ job: AiGenerationJob) -> some View {
         Section("状态") {
             LabeledContent("状态", value: job.statusTitle)
+            if !job.isTrackingFinished {
+                Label("正在自动刷新任务状态", systemImage: "arrow.triangle.2.circlepath")
+                    .font(SetuTypography.caption)
+                    .foregroundStyle(SetuColor.textSecondary)
+            }
+            if let lastRefreshedAt {
+                LabeledContent("最近刷新", value: lastRefreshedAt.formatted(date: .omitted, time: .standard))
+            }
+            if let detail = job.workerDetail, !detail.isEmpty {
+                LabeledContent("节点状态", value: detail)
+            } else if let stage = job.workerStage, !stage.isEmpty {
+                LabeledContent("节点阶段", value: stage)
+            }
             LabeledContent("尺寸", value: "\(job.width)x\(job.height)")
             LabeledContent("步数", value: "\(job.steps)")
             LabeledContent("CFG", value: job.cfg.formatted(.number.precision(.fractionLength(1))))
@@ -124,7 +170,7 @@ struct AiGenerationDetailView: View {
             }
             if let error = job.userErrorMessage ?? job.errorMessage, !error.isEmpty {
                 Text(error)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(SetuColor.danger)
             }
         }
     }
@@ -203,8 +249,8 @@ struct AiGenerationDetailView: View {
         Section("删除申请") {
             LabeledContent("当前状态", value: job.deleteStatus ?? "NONE")
             Text("删除申请通过后，这张图会从你的历史和公共广场中隐藏，并清理对应图片文件。")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+                .font(SetuTypography.caption)
+                .foregroundStyle(SetuColor.textSecondary)
             TextField("删除原因", text: $deleteReason, axis: .vertical)
             Button("提交删除申请", role: .destructive) {
                 Task { await submitDeleteRequest() }
@@ -213,16 +259,34 @@ struct AiGenerationDetailView: View {
         }
     }
 
-    private func load() async {
-        state = .loading
+    private func load(showLoading: Bool = true) async {
+        if showLoading {
+            state = .loading
+        }
         message = nil
         do {
             async let job = environment.aiGenerationClient.get(id: jobID)
             async let capabilityResponse = try? environment.aiGenerationClient.capabilities()
-            state = .loaded(try await job)
+            let loadedJob = try await job
+            state = .loaded(loadedJob)
             capabilities = await capabilityResponse
+            lastRefreshedAt = Date()
+            await AiGenerationLiveActivityCenter.update(job: loadedJob, mobileClient: environment.mobileAppClient)
         } catch {
             state = .failed(error.localizedDescription)
+        }
+    }
+
+    private func pollUntilTerminalStatus() async {
+        guard !isPolling else { return }
+        isPolling = true
+        defer { isPolling = false }
+
+        while !Task.isCancelled {
+            guard case .loaded(let job) = state, !job.isTrackingFinished else { return }
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            if Task.isCancelled { return }
+            await load(showLoading: false)
         }
     }
 
@@ -293,6 +357,74 @@ struct AiGenerationDetailView: View {
             await load()
         } catch {
             message = error.localizedDescription
+        }
+    }
+}
+
+private struct FullscreenImageItem: Identifiable {
+    let id: String
+    let url: URL
+
+    init(url: URL) {
+        self.url = url
+        id = url.absoluteString
+    }
+}
+
+private struct AiGenerationStateSection: View {
+    let title: String
+    let stateTitle: String
+    var message: String?
+    var systemImage: String
+    var isLoading = false
+
+    var body: some View {
+        SetuCard {
+            VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                SetuSectionHeader(title: title)
+                SetuEmptyState(title: stateTitle, message: message, systemImage: systemImage, isLoading: isLoading)
+            }
+        }
+        .setuListRow()
+    }
+}
+
+private struct FullscreenImageViewer: View {
+    @Environment(\.dismiss) private var dismiss
+    let url: URL
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color.black.ignoresSafeArea()
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    case .failure:
+                        SetuEmptyState(title: "图片加载失败", message: "关闭后可以回到详情页刷新图片。", systemImage: "photo")
+                            .background(.black.opacity(0.18), in: RoundedRectangle(cornerRadius: SetuRadius.md, style: .continuous))
+                            .padding(SetuSpacing.lg)
+                    default:
+                        SetuEmptyState(title: "正在加载图片", systemImage: "photo", isLoading: true)
+                            .background(.black.opacity(0.18), in: RoundedRectangle(cornerRadius: SetuRadius.md, style: .continuous))
+                            .padding(SetuSpacing.lg)
+                    }
+                }
+                .padding(.horizontal, 8)
+            }
+            .navigationTitle("图片预览")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("关闭") {
+                        dismiss()
+                    }
+                }
+            }
         }
     }
 }

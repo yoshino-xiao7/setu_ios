@@ -68,7 +68,10 @@ struct PointsCallView: View {
             case .loaded(let balance):
                 LabeledContent("当前积分", value: "\(balance.points)")
                 LabeledContent("单次消耗", value: "\(costPerCall)")
+                LabeledContent("参数预览", value: "\(r18Title) / \(size) / 数量\(num)")
                 LabeledContent("本次图片", value: "\(results.count)")
+                LabeledContent("关键词", value: keyword.isEmpty ? "未填写" : keyword)
+                LabeledContent("标签", value: tagText.isEmpty ? "未填写" : tagText)
             }
         }
     }
@@ -130,6 +133,14 @@ struct PointsCallView: View {
 
     private var canCall: Bool {
         currentPoints >= costPerCall
+    }
+
+    private var r18Title: String {
+        switch r18 {
+        case 1: "R18"
+        case 2: "混合"
+        default: "非R18"
+        }
     }
 
     private var parsedTags: [String] {

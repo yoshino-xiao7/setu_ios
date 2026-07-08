@@ -10,28 +10,67 @@ struct CollectionListView: View {
     var body: some View {
         List {
             Section {
-                Button {
-                    router.navigate(to: .favorites)
-                } label: {
-                    Label("默认收藏", systemImage: "heart.fill")
+                SetuCard {
+                    Button {
+                        router.navigate(to: .favorites)
+                    } label: {
+                        HStack(spacing: SetuSpacing.md) {
+                            Image(systemName: "heart.fill")
+                                .foregroundStyle(SetuColor.brandPink)
+                                .frame(width: 40, height: 40)
+                                .background(SetuColor.brandSoft.opacity(0.22), in: RoundedRectangle(cornerRadius: SetuRadius.md, style: .continuous))
+                            VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+                                Text("默认收藏")
+                                    .font(SetuTypography.headline)
+                                    .foregroundStyle(SetuColor.textPrimary)
+                                Text("快速查看默认收藏夹中的图片")
+                                    .font(SetuTypography.caption)
+                                    .foregroundStyle(SetuColor.textSecondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(SetuColor.textTertiary)
+                        }
+                    }
+                    .buttonStyle(.plain)
                 }
             }
 
             switch state {
             case .idle, .loading:
-                ProgressView("正在加载")
+                Section {
+                    SetuCard {
+                        SetuEmptyState(title: "正在加载", systemImage: "heart", isLoading: true)
+                    }
+                }
             case .failed(let message):
-                ContentUnavailableView("收藏夹加载失败", systemImage: "heart.slash", description: Text(message))
+                Section {
+                    SetuCard {
+                        SetuEmptyState(title: "收藏夹加载失败", message: message, systemImage: "heart.slash")
+                    }
+                }
             case .loaded(let collections):
                 if collections.isEmpty {
-                    ContentUnavailableView("暂无收藏夹", systemImage: "heart", description: Text("创建收藏夹后会显示在这里。"))
+                    Section {
+                        SetuCard {
+                            SetuEmptyState(title: "暂无收藏夹", message: "创建收藏夹后会显示在这里。", systemImage: "heart")
+                        }
+                    }
                 } else {
-                    Section("共 \(collections.count) 个收藏夹") {
+                    Section {
+                        SetuCard {
+                            SetuSectionHeader(title: "我的收藏夹", subtitle: "共 \(collections.count) 个收藏夹")
+                        }
+                    }
+                    Section {
                         ForEach(collections) { collection in
                             Button {
                                 router.navigate(to: .collectionDetail(collection.id))
                             } label: {
-                                CollectionRow(collection: collection)
+                                SetuCard {
+                                    CollectionRow(collection: collection)
+                                }
                             }
                             .buttonStyle(.plain)
                         }
@@ -39,6 +78,9 @@ struct CollectionListView: View {
                 }
             }
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .setuBackground()
         .navigationTitle("我的收藏夹")
         .toolbar {
             Button {
@@ -73,19 +115,18 @@ private struct CollectionRow: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(collection.name)
-                    .font(.headline)
+                    .font(SetuTypography.headline)
+                    .foregroundStyle(SetuColor.textPrimary)
                 Spacer()
                 if collection.isDefault {
-                    Label("默认", systemImage: "checkmark.seal")
-                        .font(.caption)
-                        .foregroundStyle(.pink)
+                    SetuPill(text: "默认", systemImage: "checkmark.seal", tone: .brand)
                 }
             }
 
             if let description = collection.description, !description.isEmpty {
                 Text(description)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .font(SetuTypography.caption)
+                    .foregroundStyle(SetuColor.textSecondary)
             }
 
             HStack(spacing: 12) {
@@ -96,8 +137,8 @@ private struct CollectionRow: View {
                 }
             }
             .font(.caption)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(SetuColor.textSecondary)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, SetuSpacing.xs)
     }
 }

@@ -15,146 +15,173 @@ struct AdminBlacklistView: View {
     var body: some View {
         List {
             if environment.authSession.currentUser?.role != .admin {
-                ContentUnavailableView("需要管理员权限", systemImage: "shield.slash", description: Text("请使用管理员账号登录后管理黑名单。"))
+                AdminBlacklistStateSection(title: "权限", stateTitle: "需要管理员权限", message: "请使用管理员账号登录后管理黑名单。", systemImage: "shield.slash")
             } else {
                 addSection
                 if let message {
-                    Section {
-                        Text(message)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+                    SetuCard {
+                        Label(message, systemImage: "checkmark.circle")
+                            .font(SetuTypography.caption)
+                            .foregroundStyle(SetuColor.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
+                    .setuListRow()
                 }
                 searchSection
                 blacklistSection
                 tempBlockSection
             }
         }
+        .listStyle(.plain)
+        .setuBackground()
         .navigationTitle("黑名单")
         .task { await loadAll() }
         .refreshable { await loadAll() }
     }
 
     private var addSection: some View {
-        Section("添加封禁") {
-            TextEditor(text: $ipInput)
-                .frame(minHeight: 96)
-                .overlay(alignment: .topLeading) {
-                    if ipInput.isEmpty {
-                        Text("每行一个 IP，也支持逗号分隔")
-                            .foregroundStyle(.secondary)
-                            .padding(.top, 8)
-                            .padding(.leading, 5)
+        SetuCard {
+            VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                SetuSectionHeader(title: "添加封禁")
+                TextEditor(text: $ipInput)
+                    .frame(minHeight: 96)
+                    .padding(SetuSpacing.xs)
+                    .background(SetuColor.surfaceMuted, in: RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous))
+                    .overlay(alignment: .topLeading) {
+                        if ipInput.isEmpty {
+                            Text("每行一个 IP，也支持逗号分隔")
+                                .font(SetuTypography.caption)
+                                .foregroundStyle(SetuColor.textTertiary)
+                                .padding(.top, SetuSpacing.md)
+                                .padding(.leading, SetuSpacing.md)
+                        }
                     }
+                TextField("封禁原因", text: $reason)
+                    .textFieldStyle(.roundedBorder)
+                Button {
+                    Task { await addIps() }
+                } label: {
+                    Label(isSubmitting ? "提交中" : "添加到黑名单", systemImage: isSubmitting ? "hourglass" : "nosign")
+                        .frame(maxWidth: .infinity, minHeight: 44)
                 }
-            TextField("封禁原因", text: $reason)
-            Button {
-                Task { await addIps() }
-            } label: {
-                if isSubmitting {
-                    ProgressView()
-                } else {
-                    Label("添加到黑名单", systemImage: "nosign")
-                }
+                .buttonStyle(.borderedProminent)
+                .tint(SetuColor.brandPink)
+                .disabled(isSubmitting || parsedIps.isEmpty)
             }
-            .disabled(isSubmitting || parsedIps.isEmpty)
         }
+        .setuListRow()
     }
 
     private var searchSection: some View {
-        Section {
+        SetuCard {
             TextField("搜索 IP 或原因", text: $searchText)
+                .textFieldStyle(.roundedBorder)
         }
+        .setuListRow()
     }
 
     @ViewBuilder
     private var blacklistSection: some View {
-        Section("固定黑名单") {
-            switch blacklistState {
-            case .idle, .loading:
-                ProgressView("正在加载黑名单")
-            case .failed(let message):
-                ContentUnavailableView("黑名单加载失败", systemImage: "exclamationmark.shield", description: Text(message))
-            case .loaded(let items):
-                let filtered = filteredBlacklist(items)
-                let filteredIPs = Set(filtered.map(\.ip))
-                if filtered.isEmpty {
-                    ContentUnavailableView("暂无封禁记录", systemImage: "shield")
-                } else {
-                    HStack {
-                        Button(selectedBlacklistIPs.isSuperset(of: filteredIPs) ? "取消选择当前结果" : "选择当前结果") {
-                            if selectedBlacklistIPs.isSuperset(of: filteredIPs) {
-                                selectedBlacklistIPs.subtract(filteredIPs)
-                            } else {
-                                selectedBlacklistIPs.formUnion(filteredIPs)
+        switch blacklistState {
+        case .idle, .loading:
+            AdminBlacklistStateSection(title: "固定黑名单", stateTitle: "正在加载黑名单", systemImage: "shield", isLoading: true)
+        case .failed(let message):
+            AdminBlacklistStateSection(title: "固定黑名单", stateTitle: "黑名单加载失败", message: message, systemImage: "exclamationmark.shield")
+        case .loaded(let items):
+            let filtered = filteredBlacklist(items)
+            let filteredIPs = Set(filtered.map(\.ip))
+            if filtered.isEmpty {
+                AdminBlacklistStateSection(title: "固定黑名单", stateTitle: "暂无封禁记录", message: "当前筛选条件下没有固定封禁记录。", systemImage: "shield")
+            } else {
+                SetuCard {
+                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                        SetuSectionHeader(title: "固定黑名单", subtitle: "\(filtered.count) 条")
+                        HStack {
+                            Button(selectedBlacklistIPs.isSuperset(of: filteredIPs) ? "取消选择当前结果" : "选择当前结果") {
+                                if selectedBlacklistIPs.isSuperset(of: filteredIPs) {
+                                    selectedBlacklistIPs.subtract(filteredIPs)
+                                } else {
+                                    selectedBlacklistIPs.formUnion(filteredIPs)
+                                }
                             }
+                            .disabled(isSubmitting)
+
+                            Spacer()
+
+                            Text("已选 \(selectedBlacklistIPs.intersection(filteredIPs).count) / \(filtered.count)")
+                                .font(SetuTypography.caption)
+                                .foregroundStyle(SetuColor.textSecondary)
                         }
-                        .disabled(isSubmitting)
 
-                        Spacer()
-
-                        Text("已选 \(selectedBlacklistIPs.intersection(filteredIPs).count) / \(filtered.count)")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    HStack {
-                        Button("清空选择") {
-                            selectedBlacklistIPs.removeAll()
-                        }
-                        .disabled(isSubmitting || selectedBlacklistIPs.isEmpty)
-
-                        Spacer()
-
-                        Button(role: .destructive) {
-                            Task { await batchRemoveIps(currentIPs: filteredIPs) }
-                        } label: {
-                            if isSubmitting {
-                                ProgressView()
-                            } else {
-                                Label("批量解封", systemImage: "lock.open")
+                        HStack {
+                            Button("清空选择") {
+                                selectedBlacklistIPs.removeAll()
                             }
-                        }
-                        .disabled(isSubmitting || selectedBlacklistIPs.intersection(filteredIPs).isEmpty)
-                    }
+                            .disabled(isSubmitting || selectedBlacklistIPs.isEmpty)
 
-                    ForEach(filtered, id: \.stableID) { item in
-                        BlacklistRow(item: item, isSelected: selectedBlacklistIPs.contains(item.ip)) {
-                            toggleBlacklistSelection(item.ip)
-                        } onRemove: {
-                            Task { await removeIp(item.ip) }
+                            Spacer()
+
+                            Button(role: .destructive) {
+                                Task { await batchRemoveIps(currentIPs: filteredIPs) }
+                            } label: {
+                                Label(isSubmitting ? "处理中" : "批量解封", systemImage: isSubmitting ? "hourglass" : "lock.open")
+                                    .frame(minHeight: 44)
+                            }
+                            .disabled(isSubmitting || selectedBlacklistIPs.intersection(filteredIPs).isEmpty)
+                        }
+
+                        ForEach(Array(filtered.enumerated()), id: \.element.stableID) { index, item in
+                            if index > 0 {
+                                Divider()
+                                    .overlay(SetuColor.separator)
+                            }
+                            BlacklistRow(item: item, isSelected: selectedBlacklistIPs.contains(item.ip)) {
+                                toggleBlacklistSelection(item.ip)
+                            } onRemove: {
+                                Task { await removeIp(item.ip) }
+                            }
                         }
                     }
                 }
+                .setuListRow()
             }
         }
     }
 
     @ViewBuilder
     private var tempBlockSection: some View {
-        Section("临时封禁") {
-            switch tempBlockState {
-            case .idle, .loading:
-                ProgressView("正在加载临时封禁")
-            case .failed(let message):
-                ContentUnavailableView("临时封禁加载失败", systemImage: "clock.badge.exclamationmark", description: Text(message))
-            case .loaded(let items):
-                if items.isEmpty {
-                    ContentUnavailableView("暂无临时封禁", systemImage: "clock")
-                } else {
-                    Button(role: .destructive) {
-                        Task { await clearAllTempBlocks() }
-                    } label: {
-                        Label("清空全部临时封禁", systemImage: "trash")
-                    }
-                    .disabled(isSubmitting)
+        switch tempBlockState {
+        case .idle, .loading:
+            AdminBlacklistStateSection(title: "临时封禁", stateTitle: "正在加载临时封禁", systemImage: "clock", isLoading: true)
+        case .failed(let message):
+            AdminBlacklistStateSection(title: "临时封禁", stateTitle: "临时封禁加载失败", message: message, systemImage: "clock.badge.exclamationmark")
+        case .loaded(let items):
+            if items.isEmpty {
+                AdminBlacklistStateSection(title: "临时封禁", stateTitle: "暂无临时封禁", systemImage: "clock")
+            } else {
+                SetuCard {
+                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                        SetuSectionHeader(title: "临时封禁", subtitle: "\(items.count) 条")
+                        Button(role: .destructive) {
+                            Task { await clearAllTempBlocks() }
+                        } label: {
+                            Label("清空全部临时封禁", systemImage: "trash")
+                                .frame(minHeight: 44)
+                        }
+                        .disabled(isSubmitting)
 
-                    ForEach(items) { item in
-                        TempBlockRow(item: item) {
-                            Task { await clearTempBlock(item.ip) }
+                        ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                            if index > 0 {
+                                Divider()
+                                    .overlay(SetuColor.separator)
+                            }
+                            TempBlockRow(item: item) {
+                                Task { await clearTempBlock(item.ip) }
+                            }
                         }
                     }
                 }
+                .setuListRow()
             }
         }
     }
@@ -308,31 +335,34 @@ private struct BlacklistRow: View {
     let onRemove: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: SetuSpacing.sm) {
             HStack {
                 Button(action: onToggleSelection) {
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(isSelected ? .orange : .secondary)
+                        .foregroundStyle(isSelected ? SetuColor.warning : SetuColor.textTertiary)
+                        .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.borderless)
                 Label(item.ip, systemImage: "network")
                     .font(.headline.monospaced())
+                    .foregroundStyle(SetuColor.textPrimary)
                 Spacer()
                 Button(role: .destructive, action: onRemove) {
                     Image(systemName: "trash")
+                        .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.borderless)
             }
             Text(item.reason?.isEmpty == false ? item.reason ?? "" : "未填写原因")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+                .font(SetuTypography.caption)
+                .foregroundStyle(SetuColor.textSecondary)
             if let createdAt = item.createdAt {
                 Label(createdAt, systemImage: "calendar")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(SetuColor.textTertiary)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, SetuSpacing.xs)
     }
 }
 
@@ -341,18 +371,22 @@ private struct TempBlockRow: View {
     let onClear: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: SetuSpacing.sm) {
             HStack {
                 Label(item.ip, systemImage: "clock.badge.exclamationmark")
                     .font(.headline.monospaced())
+                    .foregroundStyle(SetuColor.textPrimary)
                 Spacer()
-                Button("解除", role: .destructive, action: onClear)
+                Button(role: .destructive, action: onClear) {
+                    Label("解除", systemImage: "lock.open")
+                        .frame(minHeight: 44)
+                }
                     .buttonStyle(.borderless)
             }
             if let reason = item.reason, !reason.isEmpty {
                 Text(reason)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .font(SetuTypography.caption)
+                    .foregroundStyle(SetuColor.textSecondary)
             }
             HStack(spacing: 12) {
                 if let blockedAt = item.blockedAt {
@@ -363,8 +397,26 @@ private struct TempBlockRow: View {
                 }
             }
             .font(.caption)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(SetuColor.textTertiary)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, SetuSpacing.xs)
+    }
+}
+
+private struct AdminBlacklistStateSection: View {
+    let title: String
+    let stateTitle: String
+    var message: String?
+    var systemImage: String
+    var isLoading = false
+
+    var body: some View {
+        SetuCard {
+            VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                SetuSectionHeader(title: title)
+                SetuEmptyState(title: stateTitle, message: message, systemImage: systemImage, isLoading: isLoading)
+            }
+        }
+        .setuListRow()
     }
 }

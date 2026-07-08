@@ -8,74 +8,157 @@ struct AiAssetBrowserView: View {
     @State private var target: AiDraftAssetTarget = .primary
     @State private var searchText = ""
     @State private var categoryFilter = "ALL"
+    @State private var audienceFilter: AiAssetAudienceFilter = .all
+    @State private var recommendedCheckpointFilter = "ALL"
+    @State private var selectedStyles: [AiSelectedStyleAsset] = []
+    @State private var generationMode = "SINGLE"
+    @State private var currentDraft = AiDrawDraftStore.load()
+    @State private var didRestoreCache = false
     @State private var selectedAsset: AiAssetDisplayItem?
     @State private var message: String?
 
     var body: some View {
         List {
-            Picker("资产", selection: $activeKind) {
-                ForEach(AiAssetKind.allCases) { kind in
-                    Text(kind.title).tag(kind)
-                }
-            }
-            .pickerStyle(.segmented)
-            .onChange(of: activeKind) {
-                searchText = ""
-                categoryFilter = "ALL"
-            }
+            Section {
+                SetuCard {
+                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                        SetuSectionHeader(title: "资产选择", subtitle: "选择 LoRA、角色或风格，写入 AI 绘画草稿")
+                        Picker("资产", selection: $activeKind) {
+                            ForEach(AiAssetKind.allCases) { kind in
+                                Text(kind.title).tag(kind)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .onChange(of: activeKind) {
+                            categoryFilter = "ALL"
+                            applyDefaultRecommendedCheckpointFilter()
+                            saveCache()
+                        }
 
-            if activeKind != .style {
-                Picker("写入目标", selection: $target) {
-                    Text("主角色").tag(AiDraftAssetTarget.primary)
-                    Text("副角色").tag(AiDraftAssetTarget.secondary)
+                        if allowsTargetSelection {
+                            Picker("写入目标", selection: $target) {
+                                Text("主角色").tag(AiDraftAssetTarget.primary)
+                                Text("副角色").tag(AiDraftAssetTarget.secondary)
+                            }
+                            .pickerStyle(.segmented)
+                        }
+                    }
                 }
-                .pickerStyle(.segmented)
+            }
+            .setuListRow()
+
+            if activeKind == .style {
+                currentStylesSection
             }
 
             if let message {
                 Section {
-                    Text(message)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    SetuCard {
+                        Label(message, systemImage: "sparkles")
+                            .font(SetuTypography.caption)
+                            .foregroundStyle(SetuColor.brandInk)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
+                .setuListRow()
             }
 
             switch state {
             case .idle, .loading:
-                ProgressView("正在加载资产")
+                Section {
+                    SetuEmptyState(
+                        title: "正在加载资产",
+                        message: "正在同步可用的模型、角色与风格预设",
+                        systemImage: activeKind.systemImage,
+                        isLoading: true
+                    )
+                }
+                .setuListRow()
             case .failed(let message):
-                ContentUnavailableView("资产加载失败", systemImage: "photo.stack", description: Text(message))
+                Section {
+                    SetuEmptyState(title: "资产加载失败", message: message, systemImage: "photo.stack")
+                }
+                .setuListRow()
             case .loaded(let capabilities):
                 let items = activeKind.items(from: capabilities)
                 let categories = categories(for: items)
+                let checkpoints = recommendedCheckpoints(for: items)
                 let filteredItems = filtered(items)
 
                 Section {
-                    TextField("搜索名称、文件名、触发词或说明", text: $searchText)
-                    Picker("分类", selection: $categoryFilter) {
-                        Text("全部").tag("ALL")
-                        ForEach(categories, id: \.self) { category in
-                            Text(category).tag(category)
+                    SetuCard {
+                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                            SetuSectionHeader(title: "筛选", subtitle: "\(activeKind.title) 共 \(items.count) 个可用资产")
+                            TextField("搜索名称、分类、正向或反向 tags", text: $searchText)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+
+                            Picker("内容分级", selection: $audienceFilter) {
+                                ForEach(AiAssetAudienceFilter.allCases) { filter in
+                                    Text(filter.title(countIn: items)).tag(filter)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+
+                            Picker("推荐模型", selection: $recommendedCheckpointFilter) {
+                                Text("全部推荐模型").tag("ALL")
+                                ForEach(checkpoints, id: \.self) { checkpoint in
+                                    Text(checkpoint).tag(checkpoint)
+                                }
+                            }
+
+                            Picker("分类", selection: $categoryFilter) {
+                                Text("全部").tag("ALL")
+                                ForEach(categories, id: \.self) { category in
+                                    Text(category).tag(category)
+                                }
+                            }
                         }
                     }
                 }
+                .setuListRow()
 
-                Section("\(activeKind.title) · \(filteredItems.count)/\(items.count)") {
+                Section {
+                    SetuSectionHeader(
+                        title: activeKind.title,
+                        subtitle: "\(filteredItems.count)/\(items.count) 个匹配结果"
+                    )
+                    .padding(.horizontal, SetuSpacing.lg)
+                    .padding(.top, SetuSpacing.xs)
+                    .setuListRow()
+
                     if filteredItems.isEmpty {
-                        ContentUnavailableView("暂无匹配资产", systemImage: activeKind.systemImage)
+                        SetuEmptyState(
+                            title: "暂无匹配资产",
+                            message: "试试调整搜索词、分类或内容分级",
+                            systemImage: activeKind.systemImage
+                        )
+                        .setuListRow()
                     } else {
                         ForEach(filteredItems) { asset in
-                            Button {
-                                selectedAsset = asset
-                            } label: {
-                                AiAssetRow(asset: asset)
+                            SetuCard {
+                                AiAssetActionRow(
+                                    asset: asset,
+                                    selectionState: selectionState(for: asset),
+                                    onSelect: { applyToDrawDraft(asset) },
+                                    onDetail: { selectedAsset = asset }
+                                )
                             }
+                            .setuListRow()
                         }
                     }
                 }
             }
         }
+        .listStyle(.plain)
+        .setuBackground()
         .navigationTitle("AI 资产选择")
+        .onAppear { restoreCacheIfNeeded() }
+        .onChange(of: searchText) { saveCache() }
+        .onChange(of: categoryFilter) { saveCache() }
+        .onChange(of: audienceFilter) { saveCache() }
+        .onChange(of: recommendedCheckpointFilter) { saveCache() }
+        .onChange(of: target) { saveCache() }
         .task { await load() }
         .refreshable { await load() }
         .sheet(item: $selectedAsset) { asset in
@@ -83,6 +166,53 @@ struct AiAssetBrowserView: View {
                 applyToDrawDraft(asset)
             }
         }
+    }
+
+    private var allowsTargetSelection: Bool {
+        activeKind != .style && generationMode == "DUAL"
+    }
+
+    @ViewBuilder
+    private var currentStylesSection: some View {
+        Section {
+            SetuCard {
+                VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                    SetuSectionHeader(title: "当前风格", subtitle: "点击风格可启用或暂停，移除后会同步草稿")
+                    if selectedStyles.isEmpty {
+                        SetuEmptyState(
+                            title: "还没有选择风格",
+                            message: "从下方风格资产中选择一个预设",
+                            systemImage: "paintpalette"
+                        )
+                        .padding(.vertical, -SetuSpacing.sm)
+                    } else {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: SetuSpacing.sm) {
+                                ForEach(selectedStyles) { style in
+                                    AiSelectedStyleChip(
+                                        style: style,
+                                        onToggle: { toggleStyle(style.id) },
+                                        onRemove: { removeStyle(style.id) }
+                                    )
+                                }
+                            }
+                            .padding(.vertical, SetuSpacing.xs)
+                        }
+
+                        Button(role: .destructive) {
+                            selectedStyles.removeAll()
+                            persistSelectedStyles()
+                            syncSelectedStylesToDraft()
+                        } label: {
+                            Label("清空风格", systemImage: "trash")
+                                .frame(minHeight: 44)
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+            }
+        }
+        .setuListRow()
     }
 
     private func load() async {
@@ -100,10 +230,22 @@ struct AiAssetBrowserView: View {
             .sorted { $0.localizedCompare($1) == .orderedAscending }
     }
 
+    private func recommendedCheckpoints(for items: [AiAssetDisplayItem]) -> [String] {
+        Array(Set(items.map(\.recommendedCheckpoint)))
+            .filter { !$0.isEmpty }
+            .sorted { $0.localizedCompare($1) == .orderedAscending }
+    }
+
     private func filtered(_ items: [AiAssetDisplayItem]) -> [AiAssetDisplayItem] {
         let keyword = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return items.filter { asset in
             if categoryFilter != "ALL", asset.categoryPath != categoryFilter {
+                return false
+            }
+            if !audienceFilter.includes(asset) {
+                return false
+            }
+            if recommendedCheckpointFilter != "ALL", asset.recommendedCheckpoint != recommendedCheckpointFilter {
                 return false
             }
             guard !keyword.isEmpty else { return true }
@@ -121,24 +263,163 @@ struct AiAssetBrowserView: View {
     }
 
     private func applyToDrawDraft(_ asset: AiAssetDisplayItem) {
+        if selectionState(for: asset) != nil {
+            deselectAsset(asset)
+            selectedAsset = nil
+            return
+        }
+        if asset.kind == .style {
+            addOrEnableStyle(asset)
+            message = "\(asset.displayName) 已加入当前风格"
+            selectedAsset = nil
+            return
+        }
         AiDrawDraftStore.applyAsset(
             kind: asset.draftKind,
-            target: target,
+            target: allowsTargetSelection ? target : .primary,
             name: asset.name,
             triggerWords: asset.triggerWords,
             negativeTags: asset.negativeTags,
             recommendedStrength: asset.recommendedStrength,
             recommendedCheckpoint: asset.recommendedCheckpoint,
-            linkedLoraName: asset.linkedLoraName,
-            notes: asset.notes
+            linkedLoraName: asset.linkedLoraName
         )
+        currentDraft = AiDrawDraftStore.load()
         let targetTitle = asset.kind == .style ? "全局风格" : (target == .secondary ? "副角色" : "主角色")
         message = "\(asset.displayName) 已写入 AI 绘画草稿：\(targetTitle)"
         selectedAsset = nil
     }
+
+    private func deselectAsset(_ asset: AiAssetDisplayItem) {
+        if asset.kind == .style {
+            removeStyle(asset.id)
+            message = "\(asset.displayName) 已从当前风格移除"
+            return
+        }
+        AiDrawDraftStore.removeAsset(
+            kind: asset.draftKind,
+            target: allowsTargetSelection ? target : .primary
+        )
+        currentDraft = AiDrawDraftStore.load()
+        message = "\(asset.displayName) 已取消选择"
+    }
+
+    private func addOrEnableStyle(_ asset: AiAssetDisplayItem) {
+        let selected = AiSelectedStyleAsset(asset: asset)
+        if let index = selectedStyles.firstIndex(where: { $0.id == selected.id }) {
+            selectedStyles[index].isEnabled = true
+        } else {
+            selectedStyles.append(selected)
+        }
+        persistSelectedStyles()
+        syncSelectedStylesToDraft()
+    }
+
+    private func toggleStyle(_ id: String) {
+        guard let index = selectedStyles.firstIndex(where: { $0.id == id }) else { return }
+        selectedStyles[index].isEnabled.toggle()
+        persistSelectedStyles()
+        syncSelectedStylesToDraft()
+    }
+
+    private func removeStyle(_ id: String) {
+        selectedStyles.removeAll { $0.id == id }
+        persistSelectedStyles()
+        syncSelectedStylesToDraft()
+    }
+
+    private func syncSelectedStylesToDraft() {
+        let enabled = selectedStyles.filter(\.isEnabled)
+        AiDrawDraftStore.updateSelectedStyles(
+            styleTags: mergeTags(enabled.map(\.triggerWords)),
+            negativePrompt: mergeTags(enabled.map(\.negativeTags)),
+            recommendedCheckpoint: enabled.first(where: { !$0.recommendedCheckpoint.isEmpty })?.recommendedCheckpoint
+        )
+        currentDraft = AiDrawDraftStore.load()
+    }
+
+    private func selectionState(for asset: AiAssetDisplayItem) -> AiAssetSelectionState? {
+        switch asset.kind {
+        case .style:
+            guard let style = selectedStyles.first(where: { $0.id == asset.id }) else { return nil }
+            return style.isEnabled ? .enabledStyle : .disabledStyle
+        case .lora:
+            let selectedName = allowsTargetSelection && target == .secondary ? currentDraft.secondLoraName : currentDraft.loraName
+            guard selectedName == asset.name else { return nil }
+            return allowsTargetSelection && target == .secondary ? .secondarySelected : .primarySelected
+        case .character:
+            let selectedName = allowsTargetSelection && target == .secondary ? currentDraft.secondCharacterId : currentDraft.characterId
+            guard selectedName == asset.name else { return nil }
+            return allowsTargetSelection && target == .secondary ? .secondarySelected : .primarySelected
+        }
+    }
+
+    private func mergeTags(_ values: [String]) -> String {
+        var seen = Set<String>()
+        var tags: [String] = []
+        for value in values {
+            for rawTag in value.split(separator: ",") {
+                let tag = rawTag.trimmingCharacters(in: .whitespacesAndNewlines)
+                let normalized = tag.lowercased().replacingOccurrences(of: "_", with: " ")
+                guard !tag.isEmpty, !seen.contains(normalized) else { continue }
+                seen.insert(normalized)
+                tags.append(tag)
+            }
+        }
+        return tags.joined(separator: ", ")
+    }
+
+    private func restoreCacheIfNeeded() {
+        guard !didRestoreCache else { return }
+        let cache = AiAssetBrowserCacheStore.load()
+        currentDraft = AiDrawDraftStore.load()
+        activeKind = cache.activeKind
+        target = cache.target
+        searchText = cache.searchText
+        categoryFilter = cache.categoryFilter
+        audienceFilter = cache.audienceFilter
+        recommendedCheckpointFilter = cache.recommendedCheckpointFilter
+        selectedStyles = cache.selectedStyles
+        generationMode = AiDrawDraftStore.load().generationMode
+        if generationMode != "DUAL" {
+            target = .primary
+        }
+        if activeKind == .style {
+            applyDefaultRecommendedCheckpointFilter()
+        }
+        didRestoreCache = true
+    }
+
+    private func applyDefaultRecommendedCheckpointFilter() {
+        guard activeKind == .style else {
+            recommendedCheckpointFilter = "ALL"
+            return
+        }
+        let checkpoint = currentDraft.checkpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        recommendedCheckpointFilter = checkpoint.isEmpty ? "ALL" : checkpoint
+    }
+
+    private func saveCache() {
+        guard didRestoreCache else { return }
+        AiAssetBrowserCacheStore.save(
+            AiAssetBrowserCache(
+                activeKind: activeKind,
+                target: target,
+                searchText: searchText,
+                categoryFilter: categoryFilter,
+                audienceFilter: audienceFilter,
+                recommendedCheckpointFilter: recommendedCheckpointFilter,
+                selectedStyles: selectedStyles
+            )
+        )
+    }
+
+    private func persistSelectedStyles() {
+        saveCache()
+    }
 }
 
-private enum AiAssetKind: String, CaseIterable, Identifiable {
+private enum AiAssetKind: String, CaseIterable, Identifiable, Codable {
     case lora
     case character
     case style
@@ -170,6 +451,202 @@ private enum AiAssetKind: String, CaseIterable, Identifiable {
         case .style:
             capabilities.promptPresets.map { AiAssetDisplayItem(styleItem: $0, kind: self) }
         }
+    }
+}
+
+private enum AiAssetAudienceFilter: String, CaseIterable, Identifiable, Codable {
+    case all
+    case sfw
+    case nsfw
+
+    var id: String { rawValue }
+
+    func title(countIn items: [AiAssetDisplayItem]) -> String {
+        let count = items.filter { includes($0) }.count
+        switch self {
+        case .all:
+            return "全部 \(count)"
+        case .sfw:
+            return "SFW \(count)"
+        case .nsfw:
+            return "NSFW \(count)"
+        }
+    }
+
+    func includes(_ asset: AiAssetDisplayItem) -> Bool {
+        switch self {
+        case .all: true
+        case .sfw: !asset.nsfwOnly
+        case .nsfw: asset.nsfwOnly
+        }
+    }
+}
+
+private enum AiAssetSelectionState {
+    case primarySelected
+    case secondarySelected
+    case enabledStyle
+    case disabledStyle
+
+    var title: String {
+        switch self {
+        case .primarySelected:
+            return "已选主项"
+        case .secondarySelected:
+            return "已选副项"
+        case .enabledStyle:
+            return "已启用"
+        case .disabledStyle:
+            return "已禁用"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .disabledStyle:
+            return "pause.circle.fill"
+        default:
+            return "checkmark.circle.fill"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .disabledStyle:
+            return SetuColor.danger
+        case .enabledStyle:
+            return SetuColor.success
+        case .primarySelected, .secondarySelected:
+            return SetuColor.brandInk
+        }
+    }
+
+    var pillTone: SetuPillTone {
+        switch self {
+        case .disabledStyle:
+            return .danger
+        case .enabledStyle:
+            return .success
+        case .primarySelected, .secondarySelected:
+            return .brand
+        }
+    }
+}
+
+private struct AiSelectedStyleAsset: Identifiable, Codable, Equatable {
+    let id: String
+    let displayName: String
+    let triggerWords: String
+    let negativeTags: String
+    let recommendedCheckpoint: String
+    var isEnabled: Bool
+
+    init(
+        id: String,
+        displayName: String,
+        triggerWords: String,
+        negativeTags: String,
+        recommendedCheckpoint: String,
+        isEnabled: Bool = true
+    ) {
+        self.id = id
+        self.displayName = displayName
+        self.triggerWords = triggerWords
+        self.negativeTags = negativeTags
+        self.recommendedCheckpoint = recommendedCheckpoint
+        self.isEnabled = isEnabled
+    }
+
+    init(asset: AiAssetDisplayItem) {
+        self.init(
+            id: asset.id,
+            displayName: asset.displayName,
+            triggerWords: asset.triggerWords,
+            negativeTags: asset.negativeTags,
+            recommendedCheckpoint: asset.recommendedCheckpoint
+        )
+    }
+}
+
+private struct AiAssetBrowserCache: Codable {
+    var activeKind: AiAssetKind = .lora
+    var target: AiDraftAssetTarget = .primary
+    var searchText: String = ""
+    var categoryFilter: String = "ALL"
+    var audienceFilter: AiAssetAudienceFilter = .all
+    var recommendedCheckpointFilter: String = "ALL"
+    var selectedStyles: [AiSelectedStyleAsset] = []
+}
+
+enum AiAssetBrowserCacheStore {
+    private static let key = "icu.yukiryou.setu.aiAssetBrowserCache"
+
+    fileprivate static func load() -> AiAssetBrowserCache {
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let cache = try? JSONDecoder().decode(AiAssetBrowserCache.self, from: data) else {
+            return AiAssetBrowserCache()
+        }
+        return cache
+    }
+
+    fileprivate static func save(_ cache: AiAssetBrowserCache) {
+        guard let data = try? JSONEncoder().encode(cache) else { return }
+        UserDefaults.standard.set(data, forKey: key)
+    }
+
+    static func enabledStyleDisplayNames() -> [String] {
+        load()
+            .selectedStyles
+            .filter(\.isEnabled)
+            .map(\.displayName)
+    }
+
+    static func clearSelectedStyles() {
+        var cache = load()
+        cache.selectedStyles.removeAll()
+        save(cache)
+    }
+}
+
+private struct AiSelectedStyleChip: View {
+    let style: AiSelectedStyleAsset
+    let onToggle: () -> Void
+    let onRemove: () -> Void
+
+    var body: some View {
+        let tone: SetuPillTone = style.isEnabled ? .success : .danger
+
+        HStack(spacing: 6) {
+            Button {
+                onToggle()
+            } label: {
+                Text(style.displayName)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                    .frame(minHeight: 44)
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                onRemove()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.caption.weight(.bold))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("移除 \(style.displayName)")
+        }
+        .foregroundStyle(tone.color)
+        .padding(.horizontal, SetuSpacing.md)
+        .padding(.vertical, SetuSpacing.xs)
+        .background(tone.color.opacity(0.12))
+        .clipShape(Capsule())
+        .overlay {
+            Capsule()
+                .stroke(tone.color.opacity(0.22), lineWidth: 1)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(style.displayName)，\(style.isEnabled ? "已启用" : "已禁用")")
     }
 }
 
@@ -255,6 +732,7 @@ private struct AiAssetDisplayItem: Identifiable {
 
 private struct AiAssetRow: View {
     let asset: AiAssetDisplayItem
+    let selectionState: AiAssetSelectionState?
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -263,22 +741,27 @@ private struct AiAssetRow: View {
             VStack(alignment: .leading, spacing: 5) {
                 HStack {
                     Text(asset.displayName)
-                        .font(.headline)
-                        .foregroundStyle(.primary)
+                        .font(SetuTypography.headline)
+                        .foregroundStyle(SetuColor.textPrimary)
                     Spacer()
                     if asset.nsfwOnly {
-                        Text("NSFW")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.pink)
+                        SetuPill(text: "NSFW", systemImage: "exclamationmark.triangle", tone: .danger)
+                    }
+                    if let selectionState {
+                        SetuPill(
+                            text: selectionState.title,
+                            systemImage: selectionState.systemImage,
+                            tone: selectionState.pillTone
+                        )
                     }
                 }
                 Text(asset.fileName)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(SetuColor.textSecondary)
                     .lineLimit(1)
                 Text(asset.summary)
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(SetuColor.textSecondary)
                     .lineLimit(2)
                 HStack(spacing: 10) {
                     Label(asset.categoryPath.isEmpty ? "未分组" : asset.categoryPath, systemImage: asset.kind.systemImage)
@@ -290,11 +773,54 @@ private struct AiAssetRow: View {
                     }
                 }
                 .font(.caption2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(SetuColor.textTertiary)
                 .lineLimit(1)
             }
         }
         .padding(.vertical, 4)
+        .padding(.horizontal, selectionState == nil ? 0 : 8)
+        .background {
+            if let selectionState {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(selectionState.color.opacity(0.10))
+            }
+        }
+        .overlay {
+            if let selectionState {
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(selectionState.color.opacity(0.35), lineWidth: 1)
+            }
+        }
+    }
+}
+
+private struct AiAssetActionRow: View {
+    let asset: AiAssetDisplayItem
+    let selectionState: AiAssetSelectionState?
+    let onSelect: () -> Void
+    let onDetail: () -> Void
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Button {
+                onSelect()
+            } label: {
+                AiAssetRow(asset: asset, selectionState: selectionState)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                onDetail()
+            } label: {
+                Image(systemName: "info.circle")
+                    .font(.title3)
+                    .foregroundStyle(SetuColor.brandInk)
+                    .frame(width: 44, height: 44)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("查看 \(asset.displayName) 详情")
+        }
     }
 }
 
@@ -307,55 +833,76 @@ private struct AiAssetDetailSheet: View {
         NavigationStack {
             List {
                 Section {
-                    HStack(spacing: 14) {
-                        AiAssetPreview(asset: asset)
-                            .frame(width: 86, height: 86)
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(asset.displayName)
-                                .font(.headline)
-                            Text(asset.fileName)
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                            if asset.nsfwOnly {
-                                Label("NSFW 专用", systemImage: "exclamationmark.triangle")
-                                    .font(.caption)
-                                    .foregroundStyle(.pink)
+                    SetuCard {
+                        HStack(spacing: 14) {
+                            AiAssetPreview(asset: asset)
+                                .frame(width: 86, height: 86)
+                            VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+                                Text(asset.displayName)
+                                    .font(SetuTypography.headline)
+                                    .foregroundStyle(SetuColor.textPrimary)
+                                Text(asset.fileName)
+                                    .font(SetuTypography.caption)
+                                    .foregroundStyle(SetuColor.textSecondary)
+                                if asset.nsfwOnly {
+                                    SetuPill(text: "NSFW 专用", systemImage: "exclamationmark.triangle", tone: .danger)
+                                }
+                            }
+                            Spacer(minLength: 0)
+                        }
+                    }
+                }
+                .setuListRow()
+
+                Section {
+                    SetuCard {
+                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                            SetuSectionHeader(title: "详情", subtitle: "用于回填 AI 绘画草稿的资产参数")
+                            AiAssetDetailRow(title: "类型", value: asset.kind.title)
+                            AiAssetDetailRow(title: "目录", value: asset.categoryPath.isEmpty ? "未分组" : asset.categoryPath)
+                            if !asset.triggerWords.isEmpty {
+                                AiAssetDetailRow(title: "触发词", value: asset.triggerWords)
+                            }
+                            if !asset.negativeTags.isEmpty {
+                                AiAssetDetailRow(title: "负向词", value: asset.negativeTags)
+                            }
+                            if let strength = asset.recommendedStrength {
+                                AiAssetDetailRow(
+                                    title: "推荐强度",
+                                    value: strength.formatted(.number.precision(.fractionLength(2)))
+                                )
+                            }
+                            if !asset.recommendedCheckpoint.isEmpty {
+                                AiAssetDetailRow(title: "推荐模型", value: asset.recommendedCheckpoint)
+                            }
+                            if !asset.notes.isEmpty {
+                                Text(asset.notes)
+                                    .font(SetuTypography.caption)
+                                    .foregroundStyle(SetuColor.textSecondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                             }
                         }
                     }
-                    .padding(.vertical, 4)
                 }
-
-                Section("详情") {
-                    LabeledContent("类型", value: asset.kind.title)
-                    LabeledContent("目录", value: asset.categoryPath.isEmpty ? "未分组" : asset.categoryPath)
-                    if !asset.triggerWords.isEmpty {
-                        LabeledContent("触发词", value: asset.triggerWords)
-                    }
-                    if !asset.negativeTags.isEmpty {
-                        LabeledContent("负向词", value: asset.negativeTags)
-                    }
-                    if let strength = asset.recommendedStrength {
-                        LabeledContent("推荐强度", value: strength.formatted(.number.precision(.fractionLength(2))))
-                    }
-                    if !asset.recommendedCheckpoint.isEmpty {
-                        LabeledContent("推荐模型", value: asset.recommendedCheckpoint)
-                    }
-                    if !asset.notes.isEmpty {
-                        Text(asset.notes)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                }
+                .setuListRow()
 
                 Section {
-                    Button {
-                        onUse()
-                    } label: {
-                        Label("用于 AI 绘画", systemImage: "wand.and.stars")
+                    SetuCard {
+                        Button {
+                            onUse()
+                        } label: {
+                            Label("用于 AI 绘画", systemImage: "wand.and.stars")
+                                .font(.body.weight(.semibold))
+                                .foregroundStyle(SetuColor.brandInk)
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
+                .setuListRow()
             }
+            .listStyle(.plain)
+            .setuBackground()
             .navigationTitle("资产详情")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -363,6 +910,25 @@ private struct AiAssetDetailSheet: View {
                 }
             }
         }
+    }
+}
+
+private struct AiAssetDetailRow: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(SetuColor.textTertiary)
+            Text(value)
+                .font(SetuTypography.body)
+                .foregroundStyle(SetuColor.textPrimary)
+                .textSelection(.enabled)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, SetuSpacing.xs)
     }
 }
 
@@ -389,11 +955,11 @@ private struct AiAssetPreview: View {
 
     private var placeholder: some View {
         RoundedRectangle(cornerRadius: 8)
-            .fill(.pink.opacity(0.12))
+            .fill(SetuColor.brandSoft.opacity(0.18))
             .overlay {
                 Text(String(asset.displayName.prefix(2)))
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.pink)
+                    .foregroundStyle(SetuColor.brandInk)
             }
     }
 }

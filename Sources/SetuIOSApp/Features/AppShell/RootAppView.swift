@@ -7,45 +7,91 @@ struct RootAppView: View {
     @State private var tabRouter = TabRouter()
     @State private var loggedOutRouter = RouterPath()
     @State private var musicPlayer = MusicPlaybackController()
+    @State private var isSessionReady = false
+
+    init(environment: AppEnvironment) {
+        self.environment = environment
+        SetuAppAppearance.configure()
+    }
 
     var body: some View {
         Group {
-            if environment.authSession.isSignedIn {
-                appTabs
-            } else {
-                NavigationStack(path: Binding(
-                    get: { loggedOutRouter.path },
-                    set: { loggedOutRouter.path = $0 }
-                )) {
-                    AccountView(environment: environment)
-                        .navigationDestination(for: AppRoute.self) { route in
-                            destination(for: route)
-                        }
+            if isSessionReady {
+                if environment.authSession.isSignedIn {
+                    appTabs
+                } else {
+                    NavigationStack(path: Binding(
+                        get: { loggedOutRouter.path },
+                        set: { loggedOutRouter.path = $0 }
+                    )) {
+                        AccountView(environment: environment)
+                            .navigationDestination(for: AppRoute.self) { route in
+                                destination(for: route)
+                            }
+                    }
+                    .environment(loggedOutRouter)
                 }
-                .environment(loggedOutRouter)
+            } else {
+                ZStack {
+                    SetuColor.pageGradient
+                        .ignoresSafeArea()
+                    SetuEmptyState(title: "正在确认登录状态", systemImage: "person.crop.circle.badge.checkmark", isLoading: true)
+                        .padding()
+                }
             }
         }
-        .tint(.pink)
+        .task(id: environment.authSession.currentUser?.id) {
+            await ensureSessionState()
+        }
+        .task {
+            configureMusicPlayerResolver()
+        }
+        .tint(SetuColor.brandPink)
+    }
+
+    /// Lets the playback controller fetch a fresh URL for the next track on its own, so
+    /// end-of-track auto-play and lock-screen/headphone skip work without a visible view.
+    private func configureMusicPlayerResolver() {
+        musicPlayer.resolveTrackURL = { track in
+            do {
+                let response = try await environment.musicClient.url(songID: track.id, level: "standard")
+                if let item = response.data?.first,
+                   let urlString = item.playableURLString,
+                   let url = URL(string: urlString) {
+                    return .success(url)
+                }
+                let reason = response.data?.first?.unavailableMessage
+                    ?? response.playabilityReason
+                    ?? response.message
+                    ?? "这首歌暂时无法播放"
+                return .unavailable(reason)
+            } catch {
+                return .unavailable(error.localizedDescription)
+            }
+        }
     }
 
     private var appTabs: some View {
-        currentTabStack
-        .safeAreaInset(edge: .bottom) {
-            VStack(spacing: 0) {
-                MusicMiniPlayerBar(environment: environment, player: musicPlayer)
-                UserTabBar(selectedTab: $selectedTab)
+        TabView(selection: $selectedTab) {
+            ForEach(AppTab.allCases) { tab in
+                tabContent(for: tab)
+                    .tabItem {
+                        tab.label
+                    }
+                    .tag(tab)
             }
         }
+        .background(SetuColor.pageGradient.ignoresSafeArea())
     }
 
-    private var currentTabStack: some View {
-        NavigationStack(path: tabRouter.binding(for: selectedTab)) {
-            content(for: selectedTab)
+    private func tabContent(for tab: AppTab) -> some View {
+        NavigationStack(path: tabRouter.binding(for: tab)) {
+            content(for: tab)
                 .navigationDestination(for: AppRoute.self) { route in
                     destination(for: route)
                 }
         }
-        .environment(tabRouter.router(for: selectedTab))
+        .environment(tabRouter.router(for: tab))
     }
 
     @ViewBuilder
@@ -61,14 +107,14 @@ struct RootAppView: View {
             MusicHomeView(environment: environment, player: musicPlayer)
         case .square:
             SquareHubView(environment: environment)
-        case .settings:
-            AccountView(environment: environment)
         }
     }
 
     @ViewBuilder
     private func destination(for route: AppRoute) -> some View {
         switch route {
+        case .account:
+            AccountView(environment: environment)
         case .authRegister:
             AccountView(environment: environment, initialAuthPage: .register)
         case .authRecovery:
@@ -136,7 +182,7 @@ struct RootAppView: View {
         case .musicHistory:
             MusicHistoryView(environment: environment, player: musicPlayer)
         case .playlists:
-            MusicPlaylistsView(environment: environment)
+            MusicPlaylistsView(environment: environment, player: musicPlayer)
         case .playlistDetail(let id):
             MusicPlaylistDetailView(environment: environment, player: musicPlayer, playlistID: id)
         case .admin:
@@ -183,41 +229,13 @@ struct RootAppView: View {
             AdminAiDeleteRequestsView(environment: environment)
         }
     }
-}
 
-private struct UserTabBar: View {
-    @Binding var selectedTab: AppTab
-
-    var body: some View {
-        HStack(spacing: 0) {
-            ForEach(AppTab.allCases) { tab in
-                Button {
-                    selectedTab = tab
-                } label: {
-                    VStack(spacing: 4) {
-                        Image(systemName: tab.systemImage)
-                            .font(.system(size: 17, weight: selectedTab == tab ? .semibold : .regular))
-                        Text(tab.title)
-                            .font(.caption2.weight(selectedTab == tab ? .semibold : .regular))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.72)
-                    }
-                    .foregroundStyle(selectedTab == tab ? .pink : .secondary)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 48)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(tab.title)
-                .accessibilityAddTraits(selectedTab == tab ? [.isSelected] : [])
-            }
+    private func ensureSessionState() async {
+        guard environment.authSession.currentUser != nil else {
+            isSessionReady = true
+            return
         }
-        .padding(.horizontal, 4)
-        .padding(.top, 6)
-        .padding(.bottom, 4)
-        .background(.regularMaterial)
-        .overlay(alignment: .top) {
-            Divider()
-        }
+        _ = await environment.authSession.confirmAuthenticatedSession()
+        isSessionReady = true
     }
 }

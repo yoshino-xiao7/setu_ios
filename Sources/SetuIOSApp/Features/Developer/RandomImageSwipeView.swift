@@ -27,10 +27,10 @@ struct RandomImageSwipeView: View {
 
     var body: some View {
         ZStack {
-            groupedBackgroundColor
+            SetuColor.pageGradient
                 .ignoresSafeArea()
 
-            VStack(spacing: 12) {
+            VStack(spacing: SetuSpacing.md) {
                 statusStrip
                 if let message {
                     messageStrip(message)
@@ -38,8 +38,8 @@ struct RandomImageSwipeView: View {
                 imageStage
                 actionBar
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 10)
+            .padding(.horizontal, SetuSpacing.lg)
+            .padding(.bottom, SetuSpacing.sm)
         }
         .navigationTitle("随机图片")
         .toolbar {
@@ -99,7 +99,7 @@ struct RandomImageSwipeView: View {
     }
 
     private var statusStrip: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: SetuSpacing.sm) {
             Label(pointsText, systemImage: "bolt.circle")
             Divider()
                 .frame(height: 18)
@@ -107,15 +107,20 @@ struct RandomImageSwipeView: View {
             Spacer()
             if isLoadingImage {
                 ProgressView()
+                    .tint(SetuColor.brandPink)
             } else {
                 Label("滑动换图", systemImage: "hand.draw")
             }
         }
         .font(.footnote)
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .foregroundStyle(SetuColor.textSecondary)
+        .padding(.horizontal, SetuSpacing.md)
+        .padding(.vertical, SetuSpacing.sm)
+        .background(.thinMaterial, in: Capsule())
+        .overlay {
+            Capsule()
+                .stroke(SetuColor.separator, lineWidth: 1)
+        }
     }
 
     private func messageStrip(_ text: String) -> some View {
@@ -126,18 +131,22 @@ struct RandomImageSwipeView: View {
             Spacer()
         }
         .font(.footnote)
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .foregroundStyle(text.contains("失败") || text.contains("不足") ? SetuColor.danger : SetuColor.textSecondary)
+        .padding(.horizontal, SetuSpacing.md)
+        .padding(.vertical, SetuSpacing.sm)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous)
+                .stroke(SetuColor.separator, lineWidth: 1)
+        }
     }
 
     @ViewBuilder
     private var imageStage: some View {
         GeometryReader { proxy in
             ZStack {
-                RoundedRectangle(cornerRadius: 22)
-                    .fill(secondaryGroupedBackgroundColor)
+                RoundedRectangle(cornerRadius: SetuRadius.lg)
+                    .fill(SetuColor.surfaceMuted)
 
                 switch imageState {
                 case .idle where currentImage == nil:
@@ -145,18 +154,19 @@ struct RandomImageSwipeView: View {
                 case .loading where currentImage == nil:
                     loadingPlaceholder
                 case .failed(let text) where currentImage == nil:
-                    ContentUnavailableView("图片加载失败", systemImage: "photo.on.rectangle", description: Text(text))
+                    SetuEmptyState(title: "图片加载失败", message: text, systemImage: "photo.on.rectangle")
                 default:
                     if let currentImage {
                         RandomImageCard(item: currentImage, stageSize: proxy.size)
                     } else {
-                        ContentUnavailableView("暂无图片", systemImage: "photo.on.rectangle")
+                        SetuEmptyState(title: "暂无图片", systemImage: "photo.on.rectangle")
                     }
                 }
 
                 if isLoadingImage && currentImage != nil {
                     VStack {
                         ProgressView()
+                            .tint(SetuColor.brandPink)
                         Text("正在切换")
                             .font(.caption)
                     }
@@ -164,7 +174,11 @@ struct RandomImageSwipeView: View {
                     .background(.thinMaterial, in: Capsule())
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: 22))
+            .clipShape(RoundedRectangle(cornerRadius: SetuRadius.lg, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: SetuRadius.lg, style: .continuous)
+                    .stroke(SetuColor.separator, lineWidth: 1)
+            }
             .overlay(alignment: .bottom) {
                 if let currentImage {
                     imageMetadataOverlay(currentImage)
@@ -196,32 +210,53 @@ struct RandomImageSwipeView: View {
     private var loadingPlaceholder: some View {
         VStack(spacing: 12) {
             ProgressView()
+                .tint(SetuColor.brandPink)
             Text("正在获取图片")
                 .font(.footnote)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(SetuColor.textSecondary)
         }
     }
 
     private var actionBar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: SetuSpacing.lg) {
             Button {
                 openOriginal()
             } label: {
-                Label("原图", systemImage: "arrow.up.forward.square")
-                    .frame(maxWidth: .infinity)
+                Image(systemName: "arrow.up.forward.square")
+                    .frame(width: 48, height: 48)
+                    .background(SetuColor.surface.opacity(0.62), in: Circle())
             }
-            .buttonStyle(.bordered)
             .disabled(currentImage?.originalURLString == nil)
+            .accessibilityLabel("打开原图")
 
             Button {
                 showingParameters = true
             } label: {
-                Label("参数", systemImage: "slider.horizontal.3")
-                    .frame(maxWidth: .infinity)
+                Image(systemName: "slider.horizontal.3")
+                    .frame(width: 48, height: 48)
+                    .background(SetuColor.surface.opacity(0.62), in: Circle())
             }
-            .buttonStyle(.bordered)
+            .accessibilityLabel("刷图参数")
+
+            Button {
+                Task { await loadNextImage(reason: "已换到下一张图片") }
+            } label: {
+                Image(systemName: "arrow.down.circle.fill")
+                    .frame(width: 48, height: 48)
+                    .background(SetuColor.surface.opacity(0.62), in: Circle())
+            }
+            .accessibilityLabel("下一张")
         }
-        .controlSize(.large)
+        .font(.title3.weight(.semibold))
+        .foregroundStyle(SetuColor.brandPink)
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, SetuSpacing.sm)
+        .background(.ultraThinMaterial, in: Capsule())
+        .overlay {
+            Capsule()
+                .stroke(SetuColor.separator, lineWidth: 1)
+        }
     }
 
     private func imageMetadataOverlay(_ item: SetuImageItem) -> some View {
@@ -233,16 +268,11 @@ struct RandomImageSwipeView: View {
                         .lineLimit(2)
                     Text(item.author)
                         .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.white.opacity(0.86))
                 }
                 Spacer()
                 if item.r18 == 1 {
-                    Text("R18")
-                        .font(.caption.weight(.semibold))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(.red.opacity(0.16), in: Capsule())
-                        .foregroundStyle(.red)
+                    SetuPill(text: "R18", tone: .danger)
                 }
             }
 
@@ -254,9 +284,10 @@ struct RandomImageSwipeView: View {
                 }
             }
             .font(.caption)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(.white.opacity(0.86))
         }
-        .padding(14)
+        .foregroundStyle(.white)
+        .padding(SetuSpacing.md)
         .background(.ultraThinMaterial)
     }
 
@@ -381,25 +412,26 @@ private struct RandomImageCard: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.04)
+            SetuColor.surfaceMuted
             if let url = item.previewURLString.flatMap(URL.init(string:)) {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .empty:
                         ProgressView()
+                            .tint(SetuColor.brandPink)
                     case .success(let image):
                         image
                             .resizable()
                             .scaledToFit()
                             .frame(maxWidth: stageSize.width, maxHeight: stageSize.height)
                     case .failure:
-                        ContentUnavailableView("图片加载失败", systemImage: "photo")
+                        SetuEmptyState(title: "图片加载失败", systemImage: "photo")
                     @unknown default:
                         EmptyView()
                     }
                 }
             } else {
-                ContentUnavailableView("没有可用图片地址", systemImage: "photo")
+                SetuEmptyState(title: "没有可用图片地址", systemImage: "photo")
             }
         }
     }
@@ -438,6 +470,7 @@ private struct RandomImageParameterSheet: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            .setuBackground()
             .navigationTitle("刷图参数")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -445,28 +478,9 @@ private struct RandomImageParameterSheet: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("应用", action: onApply)
+                        .foregroundStyle(SetuColor.brandInk)
                 }
             }
         }
     }
-}
-
-private var groupedBackgroundColor: Color {
-    #if os(iOS)
-    Color(uiColor: .systemGroupedBackground)
-    #elseif os(macOS)
-    Color(nsColor: .windowBackgroundColor)
-    #else
-    Color.gray.opacity(0.08)
-    #endif
-}
-
-private var secondaryGroupedBackgroundColor: Color {
-    #if os(iOS)
-    Color(uiColor: .secondarySystemGroupedBackground)
-    #elseif os(macOS)
-    Color(nsColor: .controlBackgroundColor)
-    #else
-    Color.gray.opacity(0.12)
-    #endif
 }

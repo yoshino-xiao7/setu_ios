@@ -21,27 +21,47 @@ struct MusicHomeView: View {
     var body: some View {
         List {
             Section {
-                Button {
+                SetuHeroCard(
+                    title: "搜索音乐",
+                    subtitle: "查找歌曲、歌手或专辑，加入歌单或立即播放。",
+                    systemImage: "magnifyingglass"
+                ) {
                     router.navigate(to: .musicSearch(nil))
-                } label: {
-                    Label("搜索音乐", systemImage: "magnifyingglass")
                 }
-                Button {
-                    router.navigate(to: .playlists)
-                } label: {
-                    Label("我的歌单", systemImage: "music.note.list")
+                .setuListRow()
+
+                SetuCard {
+                    VStack(spacing: SetuSpacing.md) {
+                        SetuNavigationRow(
+                            title: "我的歌单",
+                            subtitle: "管理收藏的歌曲与个人歌单。",
+                            systemImage: "music.note.list"
+                        ) {
+                            router.navigate(to: .playlists)
+                        }
+
+                        Divider().overlay(SetuColor.separator)
+
+                        SetuNavigationRow(
+                            title: "播放历史",
+                            subtitle: "回到最近听过的音乐。",
+                            systemImage: "clock.arrow.circlepath"
+                        ) {
+                            router.navigate(to: .musicHistory)
+                        }
+                    }
                 }
-                Button {
-                    router.navigate(to: .musicHistory)
-                } label: {
-                    Label("播放历史", systemImage: "clock.arrow.circlepath")
-                }
+                .setuListRow()
             }
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
 
             nowPlayingSection
             recommendationsContent
             hotSearchContent
         }
+        .listStyle(.plain)
+        .setuBackground()
         .navigationTitle("音乐")
         .sheet(item: $selectedSong) { song in
             AddSongToPlaylistSheet(environment: environment, song: song)
@@ -54,49 +74,60 @@ struct MusicHomeView: View {
         }
         .task { await loadLandingContent() }
         .refreshable { await loadLandingContent() }
+        .safeAreaInset(edge: .bottom) {
+            MusicMiniPlayerBar(environment: environment, player: player)
+                .padding(.horizontal)
+                .padding(.top, 6)
+        }
     }
 
     @ViewBuilder
     private var nowPlayingSection: some View {
         if let track = player.currentTrack {
-            Section("正在播放") {
-                HStack(spacing: 12) {
-                    MusicArtworkView(urlString: track.coverURLString)
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(track.title)
-                            .font(.headline)
-                            .lineLimit(2)
-                        Text(track.artist)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                        if let message = playbackMessage ?? player.message {
-                            Text(message)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+            Section {
+                SetuCard {
+                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                        SetuSectionHeader(title: "正在播放")
+                        HStack(spacing: SetuSpacing.md) {
+                            MusicArtworkView(urlString: track.coverURLString)
+                            VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+                                Text(track.title)
+                                    .font(SetuTypography.headline)
+                                    .foregroundStyle(SetuColor.textPrimary)
+                                    .lineLimit(2)
+                                Text(track.artist)
+                                    .font(SetuTypography.caption)
+                                    .foregroundStyle(SetuColor.textSecondary)
+                                if let message = playbackMessage ?? player.message {
+                                    SetuPill(text: message, systemImage: "waveform", tone: .info)
+                                }
+                            }
+                            Spacer()
+                            MusicIconButton(
+                                systemImage: player.isPlaying ? "pause.fill" : "play.fill",
+                                accessibilityLabel: player.isPlaying ? "暂停播放" : "继续播放",
+                                tint: SetuColor.brandPink
+                            ) {
+                                player.toggle()
+                            }
+                            MusicIconButton(
+                                systemImage: "stop.fill",
+                                accessibilityLabel: "停止播放",
+                                tint: SetuColor.danger
+                            ) {
+                                player.stop()
+                            }
                         }
                     }
-                    Spacer()
-                    Button {
-                        player.toggle()
-                    } label: {
-                        Image(systemName: player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                            .font(.title2)
-                    }
-                    .buttonStyle(.borderless)
-                    Button(role: .destructive) {
-                        player.stop()
-                    } label: {
-                        Image(systemName: "stop.circle")
-                            .font(.title2)
-                    }
-                    .buttonStyle(.borderless)
                 }
+                .setuListRow()
             }
         } else if let playbackMessage {
             Section {
-                Text(playbackMessage)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                SetuCard {
+                    SetuPill(text: playbackMessage, systemImage: "music.note", tone: .info)
+                }
+                .setuListRow()
             }
         }
     }
@@ -105,31 +136,60 @@ struct MusicHomeView: View {
     private var hotSearchContent: some View {
         switch hotState {
         case .idle, .loading:
-            ProgressView("正在加载热门搜索")
+            MusicStateSection(
+                title: "热门搜索",
+                stateTitle: "正在加载热门搜索",
+                systemImage: "magnifyingglass",
+                isLoading: true
+            )
         case .failed(let message):
-            Section("热门搜索") {
-                Text(message)
-                    .foregroundStyle(.red)
-            }
+            MusicStateSection(
+                title: "热门搜索",
+                stateTitle: "热门搜索加载失败",
+                message: message,
+                systemImage: "exclamationmark.triangle"
+            )
         case .loaded(let hots):
             if !hots.isEmpty {
-                Section("热门搜索") {
-                    ForEach(hots.prefix(10)) { item in
-                        Button {
-                            router.navigate(to: .musicSearch(item.first))
-                        } label: {
-                            HStack {
-                                Text(item.first)
-                                    .foregroundStyle(.primary)
-                                Spacer()
-                                if let score = item.second {
-                                    Text("\(score)")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
+                Section {
+                    SetuCard {
+                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                            SetuSectionHeader(title: "热门搜索")
+                            VStack(spacing: 0) {
+                                ForEach(Array(hots.prefix(10).enumerated()), id: \.element.id) { index, item in
+                                    Button {
+                                        router.navigate(to: .musicSearch(item.first))
+                                    } label: {
+                                        HStack(spacing: SetuSpacing.md) {
+                                            Text("\(index + 1)")
+                                                .font(.caption.weight(.bold))
+                                                .foregroundStyle(SetuColor.brandInk)
+                                                .frame(width: 28, height: 28)
+                                                .background(SetuColor.brandSoft.opacity(0.18), in: Circle())
+                                            Text(item.first)
+                                                .font(SetuTypography.body)
+                                                .foregroundStyle(SetuColor.textPrimary)
+                                                .lineLimit(1)
+                                            Spacer()
+                                            if let score = item.second {
+                                                Text("\(score)")
+                                                    .font(SetuTypography.caption)
+                                                    .foregroundStyle(SetuColor.textSecondary)
+                                            }
+                                        }
+                                        .frame(minHeight: 44)
+                                        .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
+
+                                    if index < min(hots.count, 10) - 1 {
+                                        Divider().overlay(SetuColor.separator)
+                                    }
                                 }
                             }
                         }
                     }
+                    .setuListRow()
                 }
             }
         }
@@ -137,90 +197,106 @@ struct MusicHomeView: View {
 
     @ViewBuilder
     private var recommendationsContent: some View {
-        Section("推荐新歌") {
-            switch newSongsState {
-            case .idle, .loading:
-                ProgressView("正在加载推荐新歌")
-            case .failed(let message):
-                Text(message)
-                    .foregroundStyle(.red)
-            case .loaded(let songs):
-                if songs.isEmpty {
-                    ContentUnavailableView("暂无推荐新歌", systemImage: "music.note")
-                } else {
-                    let visibleSongs = Array(songs.prefix(5))
-                    ForEach(visibleSongs) { song in
-                        MusicSongRow(song: song) {
-                            Task {
-                                await play(
-                                    song,
-                                    queueName: "推荐新歌",
-                                    queueTracks: visibleSongs.map { MusicPlaybackTrack(song: $0) }
-                                )
+        musicSongSection(
+            title: "推荐新歌",
+            loadingTitle: "正在加载推荐新歌",
+            emptyTitle: "暂无推荐新歌",
+            systemImage: "music.note",
+            queueName: "推荐新歌",
+            state: newSongsState
+        )
+
+        musicSongSection(
+            title: "每日推荐",
+            loadingTitle: "正在加载每日推荐",
+            emptyTitle: "暂无每日推荐",
+            systemImage: "sparkles",
+            queueName: "每日推荐",
+            state: dailySongsState
+        )
+
+        recommendedPlaylistSection
+    }
+
+    @ViewBuilder
+    private func musicSongSection(
+        title: String,
+        loadingTitle: String,
+        emptyTitle: String,
+        systemImage: String,
+        queueName: String,
+        state: LoadState<[MusicSong]>
+    ) -> some View {
+        switch state {
+        case .idle, .loading:
+            MusicStateSection(title: title, stateTitle: loadingTitle, systemImage: systemImage, isLoading: true)
+        case .failed(let message):
+            MusicStateSection(title: title, stateTitle: "\(title)加载失败", message: message, systemImage: "exclamationmark.triangle")
+        case .loaded(let songs):
+            let visibleSongs = Array(songs.prefix(5))
+            if visibleSongs.isEmpty {
+                MusicStateSection(title: title, stateTitle: emptyTitle, systemImage: systemImage)
+            } else {
+                Section {
+                    SetuCard {
+                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                            SetuSectionHeader(title: title)
+                            MusicSongList(songs: visibleSongs) { song in
+                                Task {
+                                    await play(
+                                        song,
+                                        queueName: queueName,
+                                        queueTracks: visibleSongs.map { MusicPlaybackTrack(song: $0) }
+                                    )
+                                }
+                            } onPlayMv: { song in
+                                mvSong = song
+                            } onAddToPlaylist: { song in
+                                selectedSong = song
+                            } onDownload: { song in
+                                Task { await download(song) }
                             }
-                        } onPlayMv: {
-                            mvSong = song
-                        } onAddToPlaylist: {
-                            selectedSong = song
-                        } onDownload: {
-                            Task { await download(song) }
                         }
                     }
+                    .setuListRow()
                 }
             }
         }
+    }
 
-        Section("每日推荐") {
-            switch dailySongsState {
-            case .idle, .loading:
-                ProgressView("正在加载每日推荐")
-            case .failed(let message):
-                Text(message)
-                    .foregroundStyle(.red)
-            case .loaded(let songs):
-                if songs.isEmpty {
-                    ContentUnavailableView("暂无每日推荐", systemImage: "sparkles")
-                } else {
-                    let visibleSongs = Array(songs.prefix(5))
-                    ForEach(visibleSongs) { song in
-                        MusicSongRow(song: song) {
-                            Task {
-                                await play(
-                                    song,
-                                    queueName: "每日推荐",
-                                    queueTracks: visibleSongs.map { MusicPlaybackTrack(song: $0) }
-                                )
+    @ViewBuilder
+    private var recommendedPlaylistSection: some View {
+        switch recommendedPlaylistState {
+        case .idle, .loading:
+            MusicStateSection(title: "推荐歌单", stateTitle: "正在加载推荐歌单", systemImage: "music.note.list", isLoading: true)
+        case .failed(let message):
+            MusicStateSection(title: "推荐歌单", stateTitle: "推荐歌单加载失败", message: message, systemImage: "exclamationmark.triangle")
+        case .loaded(let playlists):
+            let visiblePlaylists = Array(playlists.prefix(6))
+            if visiblePlaylists.isEmpty {
+                MusicStateSection(title: "推荐歌单", stateTitle: "暂无推荐歌单", systemImage: "music.note.list")
+            } else {
+                Section {
+                    SetuCard {
+                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                            SetuSectionHeader(title: "推荐歌单")
+                            VStack(spacing: 0) {
+                                ForEach(Array(visiblePlaylists.enumerated()), id: \.element.id) { index, playlist in
+                                    Button {
+                                        selectedRecommendedPlaylist = playlist
+                                    } label: {
+                                        RecommendedPlaylistRow(playlist: playlist)
+                                    }
+                                    .buttonStyle(.plain)
+
+                                    if index < visiblePlaylists.count - 1 {
+                                        Divider().overlay(SetuColor.separator)
+                                    }
+                                }
                             }
-                        } onPlayMv: {
-                            mvSong = song
-                        } onAddToPlaylist: {
-                            selectedSong = song
-                        } onDownload: {
-                            Task { await download(song) }
                         }
                     }
-                }
-            }
-        }
-
-        Section("推荐歌单") {
-            switch recommendedPlaylistState {
-            case .idle, .loading:
-                ProgressView("正在加载推荐歌单")
-            case .failed(let message):
-                Text(message)
-                    .foregroundStyle(.red)
-            case .loaded(let playlists):
-                if playlists.isEmpty {
-                    ContentUnavailableView("暂无推荐歌单", systemImage: "music.note.list")
-                } else {
-                    ForEach(playlists.prefix(6)) { playlist in
-                        Button {
-                            selectedRecommendedPlaylist = playlist
-                        } label: {
-                            RecommendedPlaylistRow(playlist: playlist)
-                        }
-                    }
+                    .setuListRow()
                 }
             }
         }
@@ -317,35 +393,126 @@ struct MusicHomeView: View {
     }
 }
 
+private struct MusicStateSection: View {
+    let title: String
+    let stateTitle: String
+    var message: String?
+    var systemImage: String
+    var isLoading = false
+
+    var body: some View {
+        Section {
+            SetuCard {
+                VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                    SetuSectionHeader(title: title)
+                    SetuEmptyState(
+                        title: stateTitle,
+                        message: message,
+                        systemImage: systemImage,
+                        isLoading: isLoading
+                    )
+                }
+            }
+            .setuListRow()
+        }
+    }
+}
+
+private struct MusicSongList: View {
+    let songs: [MusicSong]
+    let onPlay: (MusicSong) -> Void
+    var onPlayMv: ((MusicSong) -> Void)?
+    var onAddToPlaylist: ((MusicSong) -> Void)?
+    var onDownload: ((MusicSong) -> Void)?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
+                MusicSongRow(
+                    song: song,
+                    onPlay: { onPlay(song) },
+                    onPlayMv: onPlayMv.map { handler in { handler(song) } },
+                    onAddToPlaylist: onAddToPlaylist.map { handler in { handler(song) } },
+                    onDownload: onDownload.map { handler in { handler(song) } }
+                )
+
+                if index < songs.count - 1 {
+                    Divider().overlay(SetuColor.separator)
+                }
+            }
+        }
+    }
+}
+
+private struct MusicIconButton: View {
+    let systemImage: String
+    let accessibilityLabel: String
+    let tint: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(tint)
+                .frame(width: 44, height: 44)
+                .background(tint.opacity(0.12), in: Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
+    }
+}
+
+private struct MusicMetadataRow: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: SetuSpacing.md) {
+            Text(title)
+                .font(SetuTypography.caption)
+                .foregroundStyle(SetuColor.textSecondary)
+                .frame(width: 72, alignment: .leading)
+            Text(value)
+                .font(SetuTypography.body)
+                .foregroundStyle(SetuColor.textPrimary)
+                .multilineTextAlignment(.leading)
+            Spacer(minLength: 0)
+        }
+        .frame(minHeight: 32)
+    }
+}
+
 private struct RecommendedPlaylistRow: View {
     let playlist: MusicRecommendedPlaylist
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: SetuSpacing.md) {
             MusicArtworkView(urlString: playlist.picUrl)
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: SetuSpacing.xs) {
                 Text(playlist.name)
-                    .font(.headline)
-                    .foregroundStyle(.primary)
+                    .font(SetuTypography.headline)
+                    .foregroundStyle(SetuColor.textPrimary)
                     .lineLimit(2)
                 if let description = playlist.description, !description.isEmpty {
                     Text(description)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(SetuTypography.caption)
+                        .foregroundStyle(SetuColor.textSecondary)
                         .lineLimit(2)
                 }
                 if let playCount = playlist.playCount {
                     Label(formatPlayCount(playCount), systemImage: "play.circle")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(SetuTypography.caption)
+                        .foregroundStyle(SetuColor.textSecondary)
                 }
             }
             Spacer()
             Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(SetuColor.textTertiary)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, SetuSpacing.sm)
+        .contentShape(Rectangle())
     }
 
     private func formatPlayCount(_ value: Int) -> String {
@@ -370,46 +537,59 @@ private struct RecommendedPlaylistSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("歌单") {
-                    RecommendedPlaylistRow(playlist: playlist)
+                Section {
+                    SetuCard {
+                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                            SetuSectionHeader(title: "歌单")
+                            RecommendedPlaylistRow(playlist: playlist)
+                        }
+                    }
+                    .setuListRow()
                 }
 
                 if let message {
                     Section {
-                        Text(message)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+                        SetuCard {
+                            SetuPill(text: message, systemImage: "waveform", tone: .info)
+                        }
+                        .setuListRow()
                     }
                 }
 
                 switch state {
                 case .idle, .loading:
-                    ProgressView("正在加载歌单歌曲")
+                    MusicStateSection(title: "歌曲", stateTitle: "正在加载歌单歌曲", systemImage: "music.note.list", isLoading: true)
                 case .failed(let message):
-                    ContentUnavailableView("歌单加载失败", systemImage: "music.note.list", description: Text(message))
+                    MusicStateSection(title: "歌曲", stateTitle: "歌单加载失败", message: message, systemImage: "exclamationmark.triangle")
                 case .loaded(let songs):
                     if songs.isEmpty {
-                        ContentUnavailableView("暂无歌曲", systemImage: "music.note")
+                        MusicStateSection(title: "歌曲", stateTitle: "暂无歌曲", systemImage: "music.note")
                     } else {
-                        Section("歌曲") {
-                            ForEach(songs) { song in
-                                MusicSongRow(song: song) {
-                                    Task {
-                                        await play(
-                                            song,
-                                            queueTracks: songs.map { MusicPlaybackTrack(song: $0) }
-                                        )
+                        Section {
+                            SetuCard {
+                                VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                                    SetuSectionHeader(title: "歌曲", subtitle: "\(songs.count) 首")
+                                    MusicSongList(songs: songs) { song in
+                                        Task {
+                                            await play(
+                                                song,
+                                                queueTracks: songs.map { MusicPlaybackTrack(song: $0) }
+                                            )
+                                        }
+                                    } onPlayMv: { song in
+                                        mvSong = song
+                                    } onAddToPlaylist: { song in
+                                        selectedSong = song
                                     }
-                                } onPlayMv: {
-                                    mvSong = song
-                                } onAddToPlaylist: {
-                                    selectedSong = song
                                 }
                             }
+                            .setuListRow()
                         }
                     }
                 }
             }
+            .listStyle(.plain)
+            .setuBackground()
             .navigationTitle(playlist.name)
             .toolbar {
                 Button("关闭") {
@@ -473,34 +653,43 @@ struct MusicSearchView: View {
 
     var body: some View {
         List {
-            Section("搜索") {
-                TextField("歌曲、歌手或专辑", text: $query)
-                    .modifier(MusicSearchInputModifier())
-                    .onSubmit {
-                        Task { await search() }
-                    }
+            Section {
+                SetuCard {
+                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                        SetuSectionHeader(title: "搜索")
+                        TextField("歌曲、歌手或专辑", text: $query)
+                            .modifier(MusicSearchInputModifier())
+                            .textFieldStyle(.roundedBorder)
+                            .onSubmit {
+                                Task { await search() }
+                            }
 
-                Button {
-                    Task { await search() }
-                } label: {
-                    Label("搜索音乐", systemImage: "magnifyingglass")
+                        SetuPrimaryButton {
+                            Task { await search() }
+                        } label: {
+                            Label("搜索音乐", systemImage: "magnifyingglass")
+                        }
+                        .opacity(query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.55 : 1)
+                        .disabled(query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .disabled(query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .setuListRow()
             }
 
             if let message {
                 Section {
-                    Text(message)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    SetuCard {
+                        SetuPill(text: message, systemImage: "waveform", tone: .info)
+                    }
+                    .setuListRow()
                 }
             }
 
             historySection
             resultSection
         }
+        .listStyle(.plain)
+        .setuBackground()
         .navigationTitle("搜索音乐")
         .sheet(item: $selectedSong) { song in
             AddSongToPlaylistSheet(environment: environment, song: song)
@@ -516,36 +705,68 @@ struct MusicSearchView: View {
                 await search()
             }
         }
+        .safeAreaInset(edge: .bottom) {
+            MusicMiniPlayerBar(environment: environment, player: player)
+                .padding(.horizontal)
+                .padding(.top, 6)
+        }
     }
 
     @ViewBuilder
     private var historySection: some View {
         if !searchHistory.isEmpty {
-            Section("搜索历史") {
-                ForEach(searchHistory, id: \.self) { keyword in
-                    HStack {
-                        Button {
-                            query = keyword
-                            Task { await search() }
-                        } label: {
-                            Label(keyword, systemImage: "clock.arrow.circlepath")
+            Section {
+                SetuCard {
+                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                        SetuSectionHeader(title: "搜索历史")
+                        VStack(spacing: 0) {
+                            ForEach(Array(searchHistory.enumerated()), id: \.element) { index, keyword in
+                                HStack(spacing: SetuSpacing.md) {
+                                    Button {
+                                        query = keyword
+                                        Task { await search() }
+                                    } label: {
+                                        Label(keyword, systemImage: "clock.arrow.circlepath")
+                                            .font(SetuTypography.body)
+                                            .foregroundStyle(SetuColor.textPrimary)
+                                            .lineLimit(1)
+                                    }
+                                    .buttonStyle(.plain)
+
+                                    Spacer()
+
+                                    MusicIconButton(
+                                        systemImage: "xmark",
+                                        accessibilityLabel: "删除搜索记录",
+                                        tint: SetuColor.danger
+                                    ) {
+                                        removeSearchHistory(keyword)
+                                    }
+
+                                    if index < searchHistory.count - 1 {
+                                        EmptyView()
+                                    }
+                                }
+                                .frame(minHeight: 44)
+
+                                if index < searchHistory.count - 1 {
+                                    Divider().overlay(SetuColor.separator)
+                                }
+                            }
                         }
-                        Spacer()
+
                         Button(role: .destructive) {
-                            removeSearchHistory(keyword)
+                            clearSearchHistory()
                         } label: {
-                            Image(systemName: "xmark.circle")
+                            Label("清空搜索历史", systemImage: "trash")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(SetuColor.danger)
+                                .frame(minHeight: 44)
                         }
-                        .buttonStyle(.borderless)
-                        .accessibilityLabel("删除搜索记录")
+                        .buttonStyle(.plain)
                     }
                 }
-
-                Button(role: .destructive) {
-                    clearSearchHistory()
-                } label: {
-                    Label("清空搜索历史", systemImage: "trash")
-                }
+                .setuListRow()
             }
         }
     }
@@ -554,47 +775,51 @@ struct MusicSearchView: View {
     private var resultSection: some View {
         switch state {
         case .idle:
-            ContentUnavailableView("搜索音乐", systemImage: "magnifyingglass", description: Text("输入歌曲、歌手或专辑开始搜索。"))
+            MusicStateSection(title: "搜索结果", stateTitle: "搜索音乐", message: "输入歌曲、歌手或专辑开始搜索。", systemImage: "magnifyingglass")
         case .loading:
-            ProgressView("正在搜索")
+            MusicStateSection(title: "搜索结果", stateTitle: "正在搜索", systemImage: "magnifyingglass", isLoading: true)
         case .failed(let message):
-            Section {
-                Text(message)
-                    .foregroundStyle(.red)
-            }
+            MusicStateSection(title: "搜索结果", stateTitle: "搜索失败", message: message, systemImage: "exclamationmark.triangle")
         case .loaded(let result):
-            Section("搜索结果 \(result.songs.count)/\(result.total)") {
-                if result.songs.isEmpty {
-                    ContentUnavailableView("没有找到音乐", systemImage: "magnifyingglass")
-                } else {
-                    ForEach(result.songs) { song in
-                        MusicSongRow(song: song) {
-                            Task {
-                                await play(
-                                    song,
-                                    queueTracks: result.songs.map { MusicPlaybackTrack(song: $0) }
-                                )
+            if result.songs.isEmpty {
+                MusicStateSection(title: "搜索结果", stateTitle: "没有找到音乐", systemImage: "magnifyingglass")
+            } else {
+                Section {
+                    SetuCard {
+                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                            SetuSectionHeader(title: "搜索结果", subtitle: "\(result.songs.count)/\(result.total)")
+                            MusicSongList(songs: result.songs) { song in
+                                Task {
+                                    await play(
+                                        song,
+                                        queueTracks: result.songs.map { MusicPlaybackTrack(song: $0) }
+                                    )
+                                }
+                            } onPlayMv: { song in
+                                mvSong = song
+                            } onAddToPlaylist: { song in
+                                selectedSong = song
+                            } onDownload: { song in
+                                Task { await download(song) }
                             }
-                        } onPlayMv: {
-                            mvSong = song
-                        } onAddToPlaylist: {
-                            selectedSong = song
-                        } onDownload: {
-                            Task { await download(song) }
-                        }
-                    }
 
-                    if result.hasMore {
-                        Button {
-                            Task { await loadMore() }
-                        } label: {
-                            Label("加载更多 \(result.songs.count)/\(result.total)", systemImage: "plus.circle")
+                            if result.hasMore {
+                                Button {
+                                    Task { await loadMore() }
+                                } label: {
+                                    Label("加载更多 \(result.songs.count)/\(result.total)", systemImage: "plus.circle")
+                                        .font(.footnote.weight(.semibold))
+                                        .foregroundStyle(SetuColor.brandInk)
+                                        .frame(maxWidth: .infinity, minHeight: 44)
+                                }
+                                .buttonStyle(.plain)
+                            } else {
+                                SetuPill(text: "已加载全部 \(result.total) 首歌曲", systemImage: "checkmark.circle", tone: .success)
+                                    .frame(maxWidth: .infinity, alignment: .center)
+                            }
                         }
-                    } else {
-                        Label("已加载全部 \(result.total) 首歌曲", systemImage: "checkmark.circle")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
                     }
+                    .setuListRow()
                 }
             }
         }
@@ -749,53 +974,69 @@ struct MusicSongRow: View {
     var onDownload: (() -> Void)?
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: SetuSpacing.md) {
             MusicArtworkView(urlString: song.coverURLString)
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: SetuSpacing.xs) {
                 Text(song.name)
-                    .font(.headline)
+                    .font(SetuTypography.headline)
+                    .foregroundStyle(SetuColor.textPrimary)
                     .lineLimit(2)
                 Text(song.artistNames.isEmpty ? "未知歌手" : song.artistNames)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .font(SetuTypography.caption)
+                    .foregroundStyle(SetuColor.textSecondary)
                 Text(song.albumName)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(SetuTypography.caption)
+                    .foregroundStyle(SetuColor.textTertiary)
+                    .lineLimit(1)
             }
             Spacer()
-            VStack(spacing: 10) {
+            VStack(spacing: SetuSpacing.xs) {
                 if let onPlay {
-                    Button(action: onPlay) {
-                        Image(systemName: "play.circle")
+                    MusicIconButton(
+                        systemImage: "play.fill",
+                        accessibilityLabel: "播放 \(song.name)",
+                        tint: SetuColor.brandPink
+                    ) {
+                        onPlay()
                     }
-                    .buttonStyle(.borderless)
                 }
                 if song.mv ?? 0 > 0 {
                     if let onPlayMv {
-                        Button(action: onPlayMv) {
-                            Image(systemName: "play.rectangle")
+                        MusicIconButton(
+                            systemImage: "play.rectangle.fill",
+                            accessibilityLabel: "播放 MV",
+                            tint: SetuColor.info
+                        ) {
+                            onPlayMv()
                         }
-                        .buttonStyle(.borderless)
                     } else {
                         Image(systemName: "play.rectangle")
-                            .foregroundStyle(.pink)
+                            .foregroundStyle(SetuColor.brandPink)
+                            .frame(width: 44, height: 44)
                     }
                 }
                 if let onAddToPlaylist {
-                    Button(action: onAddToPlaylist) {
-                        Image(systemName: "text.badge.plus")
+                    MusicIconButton(
+                        systemImage: "text.badge.plus",
+                        accessibilityLabel: "加入歌单",
+                        tint: SetuColor.brandInk
+                    ) {
+                        onAddToPlaylist()
                     }
-                    .buttonStyle(.borderless)
                 }
                 if let onDownload {
-                    Button(action: onDownload) {
-                        Image(systemName: "arrow.down.circle")
+                    MusicIconButton(
+                        systemImage: "arrow.down",
+                        accessibilityLabel: "下载 \(song.name)",
+                        tint: SetuColor.success
+                    ) {
+                        onDownload()
                     }
-                    .buttonStyle(.borderless)
                 }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, SetuSpacing.sm)
+        .contentShape(Rectangle())
     }
 }
 
@@ -823,10 +1064,10 @@ struct MusicArtworkView: View {
 
     private var placeholder: some View {
         RoundedRectangle(cornerRadius: 8)
-            .fill(.pink.opacity(0.12))
+            .fill(SetuColor.brandSoft.opacity(0.18))
             .overlay {
                 Image(systemName: "music.note")
-                    .foregroundStyle(.pink)
+                    .foregroundStyle(SetuColor.brandPink)
             }
     }
 }
@@ -841,39 +1082,75 @@ struct AddSongToPlaylistSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("歌曲") {
-                    MusicSongRow(song: song)
+                Section {
+                    SetuCard {
+                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                            SetuSectionHeader(title: "歌曲")
+                            MusicSongRow(song: song)
+                        }
+                    }
+                    .setuListRow()
                 }
 
                 if let message {
                     Section {
-                        Text(message)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+                        SetuCard {
+                            SetuPill(text: message, systemImage: "checkmark.circle", tone: .success)
+                        }
+                        .setuListRow()
                     }
                 }
 
                 switch state {
                 case .idle, .loading:
-                    ProgressView("正在加载歌单")
+                    MusicStateSection(title: "选择歌单", stateTitle: "正在加载歌单", systemImage: "music.note.list", isLoading: true)
                 case .failed(let message):
-                    ContentUnavailableView("歌单加载失败", systemImage: "music.note.list", description: Text(message))
+                    MusicStateSection(title: "选择歌单", stateTitle: "歌单加载失败", message: message, systemImage: "exclamationmark.triangle")
                 case .loaded(let playlists):
                     if playlists.isEmpty {
-                        ContentUnavailableView("暂无歌单", systemImage: "music.note.list")
+                        MusicStateSection(title: "选择歌单", stateTitle: "暂无歌单", systemImage: "music.note.list")
                     } else {
-                        Section("选择歌单") {
-                            ForEach(playlists) { playlist in
-                                Button {
-                                    Task { await add(to: playlist) }
-                                } label: {
-                                    Text(playlist.name)
+                        Section {
+                            SetuCard {
+                                VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                                    SetuSectionHeader(title: "选择歌单")
+                                    VStack(spacing: 0) {
+                                        ForEach(Array(playlists.enumerated()), id: \.element.id) { index, playlist in
+                                            Button {
+                                                Task { await add(to: playlist) }
+                                            } label: {
+                                                HStack(spacing: SetuSpacing.md) {
+                                                    Image(systemName: "music.note.list")
+                                                        .foregroundStyle(SetuColor.brandPink)
+                                                        .frame(width: 36, height: 36)
+                                                        .background(SetuColor.brandSoft.opacity(0.18), in: RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous))
+                                                    Text(playlist.name)
+                                                        .font(SetuTypography.body)
+                                                        .foregroundStyle(SetuColor.textPrimary)
+                                                        .lineLimit(2)
+                                                    Spacer()
+                                                    Image(systemName: "plus.circle.fill")
+                                                        .foregroundStyle(SetuColor.brandInk)
+                                                }
+                                                .frame(minHeight: 44)
+                                                .contentShape(Rectangle())
+                                            }
+                                            .buttonStyle(.plain)
+
+                                            if index < playlists.count - 1 {
+                                                Divider().overlay(SetuColor.separator)
+                                            }
+                                        }
+                                    }
                                 }
                             }
+                            .setuListRow()
                         }
                     }
                 }
             }
+            .listStyle(.plain)
+            .setuBackground()
             .navigationTitle("加入歌单")
             .toolbar {
                 Button("关闭") {
@@ -916,13 +1193,21 @@ private struct MusicMvSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("歌曲") {
-                    MusicSongRow(song: song)
+                Section {
+                    SetuCard {
+                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                            SetuSectionHeader(title: "歌曲")
+                            MusicSongRow(song: song)
+                        }
+                    }
+                    .setuListRow()
                 }
 
                 detailSection
                 urlSection
             }
+            .listStyle(.plain)
+            .setuBackground()
             .navigationTitle("MV")
             .toolbar {
                 Button("关闭") {
@@ -940,74 +1225,91 @@ private struct MusicMvSheet: View {
 
     @ViewBuilder
     private var detailSection: some View {
-        Section("MV 详情") {
-            switch detailState {
-            case .idle, .loading:
-                ProgressView("正在加载 MV 详情")
-            case .failed(let message):
-                Text(message)
-                    .foregroundStyle(.red)
-            case .loaded(let detail):
-                if let cover = detail.cover {
-                    MusicMvCoverView(urlString: cover)
-                }
-                LabeledContent("标题", value: detail.name)
-                LabeledContent("艺人", value: detail.artistName ?? detail.artists?.map(\.name).joined(separator: " / ") ?? song.artistNames)
-                if let publishTime = detail.publishTime {
-                    LabeledContent("发布时间", value: publishTime)
-                }
-                if let playCount = detail.playCount {
-                    LabeledContent("播放量", value: "\(playCount)")
-                }
-                if let duration = detail.duration {
-                    LabeledContent("时长", value: formatDuration(duration))
-                }
-                if let description = detail.desc ?? detail.briefDesc, !description.isEmpty {
-                    Text(description)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-                if let brs = detail.brs, !brs.isEmpty {
-                    Picker("清晰度", selection: $selectedResolution) {
-                        Text("默认").tag(Optional<Int>.none)
-                        ForEach(brs) { quality in
-                            Text("\(quality.br)p").tag(Optional(quality.br))
+        switch detailState {
+        case .idle, .loading:
+            MusicStateSection(title: "MV 详情", stateTitle: "正在加载 MV 详情", systemImage: "play.rectangle", isLoading: true)
+        case .failed(let message):
+            MusicStateSection(title: "MV 详情", stateTitle: "MV 详情加载失败", message: message, systemImage: "exclamationmark.triangle")
+        case .loaded(let detail):
+            Section {
+                SetuCard {
+                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                        SetuSectionHeader(title: "MV 详情")
+                        if let cover = detail.cover {
+                            MusicMvCoverView(urlString: cover)
+                        }
+                        VStack(spacing: SetuSpacing.sm) {
+                            MusicMetadataRow(title: "标题", value: detail.name)
+                            MusicMetadataRow(title: "艺人", value: detail.artistName ?? detail.artists?.map(\.name).joined(separator: " / ") ?? song.artistNames)
+                            if let publishTime = detail.publishTime {
+                                MusicMetadataRow(title: "发布时间", value: publishTime)
+                            }
+                            if let playCount = detail.playCount {
+                                MusicMetadataRow(title: "播放量", value: "\(playCount)")
+                            }
+                            if let duration = detail.duration {
+                                MusicMetadataRow(title: "时长", value: formatDuration(duration))
+                            }
+                        }
+                        if let description = detail.desc ?? detail.briefDesc, !description.isEmpty {
+                            Text(description)
+                                .font(SetuTypography.caption)
+                                .foregroundStyle(SetuColor.textSecondary)
+                        }
+                        if let brs = detail.brs, !brs.isEmpty {
+                            Picker("清晰度", selection: $selectedResolution) {
+                                Text("默认").tag(Optional<Int>.none)
+                                ForEach(brs) { quality in
+                                    Text("\(quality.br)p").tag(Optional(quality.br))
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            .onChange(of: selectedResolution) {
+                                Task { await loadUrl() }
+                            }
                         }
                     }
-                    .onChange(of: selectedResolution) {
-                        Task { await loadUrl() }
-                    }
                 }
+                .setuListRow()
             }
         }
     }
 
     @ViewBuilder
     private var urlSection: some View {
-        Section("播放 MV") {
-            switch urlState {
-            case .idle, .loading:
-                ProgressView("正在准备 MV")
-            case .failed(let message):
-                Text(message)
-                    .foregroundStyle(.red)
-            case .loaded(let data):
-                if let data, let urlString = data.httpsURLString, let url = URL(string: urlString) {
-                    if let resolution = data.r ?? data.br {
-                        LabeledContent("清晰度", value: "\(resolution)p")
+        switch urlState {
+        case .idle, .loading:
+            MusicStateSection(title: "播放 MV", stateTitle: "正在准备 MV", systemImage: "play.rectangle", isLoading: true)
+        case .failed(let message):
+            MusicStateSection(title: "播放 MV", stateTitle: "MV 暂时不可播放", message: message, systemImage: "exclamationmark.triangle")
+        case .loaded(let data):
+            if let data, let urlString = data.httpsURLString, let url = URL(string: urlString) {
+                Section {
+                    SetuCard {
+                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                            SetuSectionHeader(title: "播放 MV")
+                            if let resolution = data.r ?? data.br {
+                                MusicMetadataRow(title: "清晰度", value: "\(resolution)p")
+                            }
+                            if let size = data.size {
+                                MusicMetadataRow(title: "大小", value: "\(size)")
+                            }
+                            if let type = data.type {
+                                MusicMetadataRow(title: "类型", value: type)
+                            }
+                            Link(destination: url) {
+                                Label("打开 MV", systemImage: "play.rectangle")
+                                    .font(.body.weight(.semibold))
+                                    .foregroundStyle(.white)
+                                    .frame(maxWidth: .infinity, minHeight: 48)
+                                    .background(SetuColor.heroGradient, in: Capsule())
+                            }
+                        }
                     }
-                    if let size = data.size {
-                        LabeledContent("大小", value: "\(size)")
-                    }
-                    if let type = data.type {
-                        LabeledContent("类型", value: type)
-                    }
-                    Link(destination: url) {
-                        Label("打开 MV", systemImage: "play.rectangle")
-                    }
-                } else {
-                    ContentUnavailableView("暂无 MV", systemImage: "play.rectangle")
+                    .setuListRow()
                 }
+            } else {
+                MusicStateSection(title: "播放 MV", stateTitle: "暂无 MV", systemImage: "play.rectangle")
             }
         }
     }
@@ -1074,10 +1376,10 @@ private struct MusicMvCoverView: View {
 
     private var placeholder: some View {
         RoundedRectangle(cornerRadius: 8)
-            .fill(.pink.opacity(0.12))
+            .fill(SetuColor.brandSoft.opacity(0.18))
             .overlay {
                 Image(systemName: "play.rectangle")
-                    .foregroundStyle(.pink)
+                    .foregroundStyle(SetuColor.brandPink)
             }
     }
 }
