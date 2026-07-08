@@ -90,6 +90,89 @@ final class MusicClientTests: XCTestCase {
         XCTAssertEqual(history.coverUrl, "https://p4.music.126.net/history.jpg?param=400y400")
     }
 
+    func testAddHistoryRequestPostsPlaybackTrackPayload() async throws {
+        let capturedRequests = MusicClientRequestProbe()
+        let session = URLSession(
+            configuration: .musicClientMock { request in
+                Task {
+                    await capturedRequests.capture(request)
+                }
+                return #""ok""#
+            }
+        )
+        let client = MusicClient(apiClient: makeAPIClient(session: session))
+
+        try await client.addHistory(
+            AddMusicHistoryRequest(
+                songId: 42,
+                songName: "自动连播歌曲",
+                artistName: "歌手",
+                albumName: "专辑",
+                coverUrl: "https://p3.music.126.net/cover.jpg?param=400y400",
+                duration: 188000
+            )
+        )
+
+        let requests = await capturedRequests.requests
+        XCTAssertEqual(requests.first?.method, "POST")
+        XCTAssertEqual(requests.first?.url, "https://api.example.com/user/music/history")
+        let body = try XCTUnwrap(requests.first?.body)
+        XCTAssertTrue(body.contains(#""songId":42"#))
+        XCTAssertTrue(body.contains(#""songName":"自动连播歌曲""#))
+        XCTAssertTrue(body.contains(#""duration":188000"#))
+    }
+
+    func testAddPlaylistSongToAnotherPlaylistPostsSongPayload() async throws {
+        let capturedRequests = MusicClientRequestProbe()
+        let session = URLSession(
+            configuration: .musicClientMock { request in
+                Task {
+                    await capturedRequests.capture(request)
+                }
+                return #""ok""#
+            }
+        )
+        let client = MusicClient(apiClient: makeAPIClient(session: session))
+        let song = try JSONDecoder().decode(
+            PlaylistSong.self,
+            from: Data(#"{"id":1,"songId":77,"songName":"歌单歌曲","artistName":"歌手","albumName":"专辑","coverUrl":"http://p3.music.126.net/song.jpg","duration":210000}"#.utf8)
+        )
+
+        try await client.add(song: song, toPlaylist: 9)
+
+        let requests = await capturedRequests.requests
+        XCTAssertEqual(requests.first?.method, "POST")
+        XCTAssertEqual(requests.first?.url, "https://api.example.com/user/playlists/9/songs")
+        let body = try XCTUnwrap(requests.first?.body)
+        XCTAssertTrue(body.contains(#""songId":77"#))
+        XCTAssertTrue(body.contains(#""songName":"歌单歌曲""#))
+        XCTAssertTrue(body.contains(#""duration":210000"#))
+    }
+
+    func testMvUrlAcceptsArrayPayloadLikeFrontendMvPlayback() async throws {
+        let session = URLSession(
+            configuration: .musicClientMock { request in
+                XCTAssertEqual(request.url?.absoluteString, "https://api.example.com/user/music/mv/url?id=5436712")
+                return #"{"code":200,"data":[{"id":5436712,"url":"http://example.com/mv.mp4","r":720,"size":300000,"br":720}]}"#
+            }
+        )
+        let client = MusicClient(apiClient: makeAPIClient(session: session))
+
+        let response = try await client.mvUrl(id: 5_436_712)
+
+        XCTAssertEqual(response.data?.id, 5_436_712)
+        XCTAssertEqual(response.data?.httpsURLString, "https://example.com/mv.mp4")
+    }
+
+    func testMvUrlAcceptsRawPayloadLikeFrontendMvPlayback() throws {
+        let data = Data(#"{"id":5436712,"url":"//example.com/mv.mp4","r":720,"size":300000,"br":720}"#.utf8)
+
+        let response = try JSONDecoder().decode(MusicMvUrlResponse.self, from: data)
+
+        XCTAssertEqual(response.data?.id, 5_436_712)
+        XCTAssertEqual(response.data?.httpsURLString, "https://example.com/mv.mp4")
+    }
+
     private func makeAPIClient(session: URLSession) -> APIClient {
         let keychain = MusicClientTestKeychain()
         try? keychain.setString("secret", for: "signSecret")
@@ -106,10 +189,48 @@ final class MusicClientTests: XCTestCase {
 
 private actor MusicClientRequestProbe {
     private(set) var urls: [String] = []
+    private(set) var requests: [CapturedMusicClientRequest] = []
 
     func capture(_ request: URLRequest) {
         urls.append(request.url?.absoluteString ?? "")
+        requests.append(
+            CapturedMusicClientRequest(
+                method: request.httpMethod ?? "GET",
+                url: request.url?.absoluteString ?? "",
+                body: Self.bodyString(from: request)
+            )
+        )
     }
+
+    private static func bodyString(from request: URLRequest) -> String? {
+        if let body = request.httpBody {
+            return String(data: body, encoding: .utf8)
+        }
+        guard let stream = request.httpBodyStream else { return nil }
+        stream.open()
+        defer { stream.close() }
+
+        var data = Data()
+        let bufferSize = 1024
+        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
+        defer { buffer.deallocate() }
+
+        while stream.hasBytesAvailable {
+            let read = stream.read(buffer, maxLength: bufferSize)
+            if read > 0 {
+                data.append(buffer, count: read)
+            } else {
+                break
+            }
+        }
+        return String(data: data, encoding: .utf8)
+    }
+}
+
+private struct CapturedMusicClientRequest: Sendable {
+    let method: String
+    let url: String
+    let body: String?
 }
 
 private final class MusicClientTestKeychain: KeychainStoring, @unchecked Sendable {

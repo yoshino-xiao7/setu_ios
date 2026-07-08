@@ -95,6 +95,20 @@ public struct MusicClient: Sendable {
         )
     }
 
+    public func add(song: PlaylistSong, toPlaylist playlistID: Int) async throws {
+        let _: String = try await apiClient.post(
+            "/user/playlists/\(playlistID)/songs",
+            body: AddSongToPlaylistRequest(song: song)
+        )
+    }
+
+    public func add(_ request: AddSongToPlaylistRequest, toPlaylist playlistID: Int) async throws {
+        let _: String = try await apiClient.post(
+            "/user/playlists/\(playlistID)/songs",
+            body: request
+        )
+    }
+
     public func removeSong(playlistID: Int, songID: Int) async throws {
         let _: String = try await apiClient.requestWithoutBody("/user/playlists/\(playlistID)/songs/\(songID)", method: "DELETE")
     }
@@ -108,7 +122,11 @@ public struct MusicClient: Sendable {
     }
 
     public func addHistory(song: MusicSong) async throws {
-        let _: String = try await apiClient.post("/user/music/history", body: AddMusicHistoryRequest(song: song))
+        try await addHistory(AddMusicHistoryRequest(song: song))
+    }
+
+    public func addHistory(_ request: AddMusicHistoryRequest) async throws {
+        let _: String = try await apiClient.post("/user/music/history", body: request)
     }
 
     public func clearHistory() async throws {

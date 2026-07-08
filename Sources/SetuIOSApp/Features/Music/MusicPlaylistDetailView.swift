@@ -13,6 +13,10 @@ struct MusicPlaylistDetailView: View {
     @State private var showingDeleteConfirmation = false
     @State private var songPendingRemoval: PlaylistSong?
     @State private var showingRemoveConfirmation = false
+    @State private var isSelectionMode = false
+    @State private var selectedSongIDs: Set<Int> = []
+    @State private var showingBulkRemoveConfirmation = false
+    @State private var showingBulkAddSheet = false
 
     var body: some View {
         List {
@@ -99,11 +103,34 @@ struct MusicPlaylistDetailView: View {
                         }
                     } else {
                         SetuCard {
-                            SetuSectionHeader(title: "歌曲", subtitle: "共 \(songs.count) 首")
+                            HStack(spacing: SetuSpacing.md) {
+                                SetuSectionHeader(
+                                    title: "歌曲",
+                                    subtitle: isSelectionMode ? "已选 \(selectedSongIDs.count) 首" : "共 \(songs.count) 首"
+                                )
+                                Spacer()
+                                Button(isSelectionMode ? "完成" : "多选") {
+                                    withAnimation {
+                                        isSelectionMode.toggle()
+                                        if !isSelectionMode {
+                                            selectedSongIDs.removeAll()
+                                        }
+                                    }
+                                }
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(SetuColor.brandInk)
+                                .frame(minHeight: 44)
+                            }
                         }
                         ForEach(songs) { song in
                             SetuCard {
-                                PlaylistSongRow(song: song) {
+                                PlaylistSongRow(
+                                    song: song,
+                                    isSelectionMode: isSelectionMode,
+                                    isSelected: selectedSongIDs.contains(song.songId)
+                                ) {
+                                    toggleSelection(song)
+                                } onPlay: {
                                     Task {
                                         await play(
                                             song,
@@ -148,6 +175,15 @@ struct MusicPlaylistDetailView: View {
                 Task { await load() }
             }
         }
+        .sheet(isPresented: $showingBulkAddSheet) {
+            BulkAddPlaylistSongsSheet(
+                environment: environment,
+                sourcePlaylistID: playlistID,
+                songs: selectedSongsForBulkAction
+            ) {
+                finishSelectionMode(message: "已加入其它歌单")
+            }
+        }
         .confirmationDialog("删除这个歌单？", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) {
             Button("删除歌单", role: .destructive) {
                 Task { await deletePlaylist() }
@@ -166,13 +202,58 @@ struct MusicPlaylistDetailView: View {
         } message: {
             Text("确定从歌单中移除《\(songPendingRemoval?.songName ?? "这首歌")》吗？")
         }
+        .confirmationDialog("批量移除歌曲？", isPresented: $showingBulkRemoveConfirmation, titleVisibility: .visible) {
+            Button("移除 \(selectedSongIDs.count) 首歌曲", role: .destructive) {
+                Task { await bulkRemoveSelectedSongs() }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("这些歌曲会从当前歌单移除，稍后可从其它入口重新加入。")
+        }
         .task { await load() }
         .refreshable { await load() }
         .safeAreaInset(edge: .bottom) {
-            MusicMiniPlayerBar(environment: environment, player: player)
-                .padding(.horizontal)
-                .padding(.top, 6)
+            VStack(spacing: SetuSpacing.sm) {
+                if isSelectionMode {
+                    playlistBatchActionBar
+                }
+                MusicMiniPlayerBar(environment: environment, player: player)
+                    .padding(.horizontal)
+                    .padding(.top, 6)
+            }
         }
+    }
+
+    private var selectedSongsForBulkAction: [PlaylistSong] {
+        guard case .loaded(let playlist) = state else { return [] }
+        return (playlist.songs ?? []).filter { selectedSongIDs.contains($0.songId) }
+    }
+
+    private var playlistBatchActionBar: some View {
+        HStack(spacing: SetuSpacing.sm) {
+            Text("已选 \(selectedSongIDs.count) 首")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(SetuColor.textPrimary)
+            Spacer()
+            Button {
+                showingBulkAddSheet = true
+            } label: {
+                Label("加入歌单", systemImage: "text.badge.plus")
+            }
+            .disabled(selectedSongIDs.isEmpty)
+            Button(role: .destructive) {
+                showingBulkRemoveConfirmation = true
+            } label: {
+                Label("移除", systemImage: "trash")
+            }
+            .disabled(selectedSongIDs.isEmpty)
+        }
+        .font(.caption.weight(.semibold))
+        .padding(.horizontal, SetuSpacing.md)
+        .padding(.vertical, SetuSpacing.sm)
+        .background(SetuColor.surface, in: Capsule())
+        .padding(.horizontal)
+        .shadow(color: SetuColor.brandPink.opacity(0.16), radius: 14, y: 8)
     }
 
     @ViewBuilder
@@ -249,6 +330,35 @@ struct MusicPlaylistDetailView: View {
         }
     }
 
+    private func toggleSelection(_ song: PlaylistSong) {
+        guard isSelectionMode else { return }
+        if selectedSongIDs.contains(song.songId) {
+            selectedSongIDs.remove(song.songId)
+        } else {
+            selectedSongIDs.insert(song.songId)
+        }
+    }
+
+    private func bulkRemoveSelectedSongs() async {
+        let songs = selectedSongsForBulkAction
+        guard !songs.isEmpty else { return }
+        do {
+            for song in songs {
+                try await environment.musicClient.removeSong(playlistID: playlistID, songID: song.songId)
+            }
+            finishSelectionMode(message: "已移除 \(songs.count) 首歌曲")
+            await load()
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    private func finishSelectionMode(message: String) {
+        selectedSongIDs.removeAll()
+        isSelectionMode = false
+        self.message = message
+    }
+
     private func playAll(_ playlist: UserMusicPlaylistDetail) async {
         let songs = playlist.songs ?? []
         guard !songs.isEmpty else {
@@ -270,16 +380,27 @@ struct MusicPlaylistDetailView: View {
 
     private func play(_ song: PlaylistSong, queueName: String? = nil, queueTracks: [MusicPlaybackTrack] = [], playMode: MusicPlayMode? = nil) async {
         message = "正在准备播放"
-        do {
-            let response = try await environment.musicClient.url(songID: song.songId)
-            guard let item = response.data?.first, let urlString = item.playableURLString, let url = URL(string: urlString) else {
-                message = response.data?.first?.unavailableMessage ?? response.playabilityReason ?? response.message ?? "这首歌暂时无法播放"
-                return
-            }
-            player.play(url: url, track: MusicPlaybackTrack(song: song), queueName: queueName, queueTracks: queueTracks, playMode: playMode)
-            message = "已开始播放"
-        } catch {
-            message = error.localizedDescription
+        let track = MusicPlaybackTrack(song: song)
+        guard let resolution = await player.resolveTrackURL?(track) else {
+            message = "播放器尚未准备好"
+            return
+        }
+        switch resolution {
+        case .success(let url, let notice):
+            player.play(url: url, track: track, queueName: queueName, queueTracks: queueTracks, playMode: playMode, notice: notice)
+            try? await environment.musicClient.addHistory(
+                AddMusicHistoryRequest(
+                    songId: track.id,
+                    songName: track.title,
+                    artistName: track.artist,
+                    albumName: track.album,
+                    coverUrl: track.coverURLString,
+                    duration: track.durationMilliseconds
+                )
+            )
+            message = notice ?? "已开始播放"
+        case .unavailable(let reason):
+            message = reason
         }
     }
 
@@ -382,15 +503,134 @@ private struct EditMusicPlaylistSheet: View {
     }
 }
 
+private struct BulkAddPlaylistSongsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Bindable var environment: AppEnvironment
+    let sourcePlaylistID: Int
+    let songs: [PlaylistSong]
+    let onDone: () -> Void
+    @State private var state: LoadState<[UserMusicPlaylist]> = .idle
+    @State private var message: String?
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    SetuCard {
+                        SetuSectionHeader(title: "批量加入歌单", subtitle: "已选 \(songs.count) 首歌曲")
+                    }
+                    .setuListRow()
+                }
+
+                if let message {
+                    Section {
+                        SetuPill(text: message, systemImage: "info.circle", tone: .info)
+                    }
+                }
+
+                switch state {
+                case .idle, .loading:
+                    Section {
+                        SetuEmptyState(title: "正在加载歌单", systemImage: "music.note.list", isLoading: true)
+                    }
+                case .failed(let error):
+                    Section {
+                        SetuEmptyState(title: "歌单加载失败", message: error, systemImage: "exclamationmark.triangle")
+                    }
+                case .loaded(let playlists):
+                    let targets = playlists.filter { $0.id != sourcePlaylistID }
+                    if targets.isEmpty {
+                        Section {
+                            SetuEmptyState(title: "暂无其它歌单", message: "先创建另一个歌单再进行批量加入。", systemImage: "music.note.list")
+                        }
+                    } else {
+                        Section("选择目标歌单") {
+                            ForEach(targets) { playlist in
+                                Button {
+                                    Task { await add(to: playlist) }
+                                } label: {
+                                    HStack(spacing: SetuSpacing.md) {
+                                        MusicArtworkView(urlString: playlist.coverUrl)
+                                        VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+                                            Text(playlist.name)
+                                                .font(SetuTypography.headline)
+                                                .foregroundStyle(SetuColor.textPrimary)
+                                                .lineLimit(1)
+                                            Text("\(playlist.songCount ?? 0) 首")
+                                                .font(SetuTypography.caption)
+                                                .foregroundStyle(SetuColor.textSecondary)
+                                        }
+                                        Spacer()
+                                        Image(systemName: "plus.circle.fill")
+                                            .foregroundStyle(SetuColor.brandPink)
+                                    }
+                                    .frame(minHeight: 56)
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .setuBackground()
+            .navigationTitle("加入其它歌单")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .task { await load() }
+    }
+
+    private func load() async {
+        state = .loading
+        do {
+            state = .loaded(try await environment.musicClient.playlists())
+        } catch {
+            state = .failed(error.localizedDescription)
+        }
+    }
+
+    private func add(to playlist: UserMusicPlaylist) async {
+        guard !songs.isEmpty else { return }
+        message = "正在加入 \(playlist.name)"
+        do {
+            for song in songs {
+                try await environment.musicClient.add(song: song, toPlaylist: playlist.id)
+            }
+            onDone()
+            dismiss()
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+}
+
 private struct PlaylistSongRow: View {
     let song: PlaylistSong
+    let isSelectionMode: Bool
+    let isSelected: Bool
+    let onToggleSelection: () -> Void
     let onPlay: () -> Void
     let onRemove: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: SetuSpacing.md) {
+            if isSelectionMode {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.title3)
+                    .foregroundStyle(isSelected ? SetuColor.brandPink : SetuColor.textTertiary)
+                    .frame(width: 44, height: 44)
+                    .accessibilityLabel(isSelected ? "已选中" : "未选中")
+            }
             MusicArtworkView(urlString: song.coverUrl)
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: SetuSpacing.xs) {
                 Text(song.songName)
                     .font(SetuTypography.headline)
                     .foregroundStyle(SetuColor.textPrimary)
@@ -405,21 +645,29 @@ private struct PlaylistSongRow: View {
                 }
             }
             Spacer()
-            Button(action: onPlay) {
-                Image(systemName: "play.circle")
-                    .font(.title3)
-                    .foregroundStyle(SetuColor.brandPink)
-                    .frame(width: 44, height: 44)
+            if !isSelectionMode {
+                Button(action: onPlay) {
+                    Image(systemName: "play.circle")
+                        .font(.title3)
+                        .foregroundStyle(SetuColor.brandPink)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.borderless)
+                Button(role: .destructive, action: onRemove) {
+                    Image(systemName: "minus.circle")
+                        .font(.title3)
+                        .foregroundStyle(SetuColor.danger)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.borderless)
             }
-            .buttonStyle(.borderless)
-            Button(role: .destructive, action: onRemove) {
-                Image(systemName: "minus.circle")
-                    .font(.title3)
-                    .foregroundStyle(SetuColor.danger)
-                    .frame(width: 44, height: 44)
-            }
-            .buttonStyle(.borderless)
         }
         .padding(.vertical, SetuSpacing.xs)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if isSelectionMode {
+                onToggleSelection()
+            }
+        }
     }
 }

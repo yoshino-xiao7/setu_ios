@@ -266,6 +266,34 @@ public struct MusicMvArtist: Decodable, Identifiable, Sendable {
 public struct MusicMvUrlResponse: Decodable, Sendable {
     public let code: Int?
     public let data: MusicMvUrlData?
+
+    public init(from decoder: Decoder) throws {
+        if let raw = try? MusicMvUrlData(from: decoder) {
+            code = nil
+            data = raw
+            return
+        }
+        if let values = try? [MusicMvUrlData](from: decoder) {
+            code = nil
+            data = values.first(where: { $0.url?.isEmpty == false }) ?? values.first
+            return
+        }
+
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        code = try container.decodeIfPresent(Int.self, forKey: .code)
+        if let value = try? container.decodeIfPresent(MusicMvUrlData.self, forKey: .data) {
+            data = value
+        } else if let values = try? container.decodeIfPresent([MusicMvUrlData].self, forKey: .data) {
+            data = values.first(where: { $0.url?.isEmpty == false }) ?? values.first
+        } else {
+            data = nil
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case code
+        case data
+    }
 }
 
 public struct MusicMvUrlData: Decodable, Identifiable, Sendable {
@@ -283,7 +311,14 @@ public struct MusicMvUrlData: Decodable, Identifiable, Sendable {
     public let fee: Int?
 
     public var httpsURLString: String? {
-        url?.replacingOccurrences(of: "http://", with: "https://")
+        guard let url, !url.isEmpty else { return nil }
+        if url.hasPrefix("//") {
+            return "https:\(url)"
+        }
+        if url.lowercased().hasPrefix("http://") {
+            return "https://\(url.dropFirst("http://".count))"
+        }
+        return url
     }
 }
 
@@ -579,6 +614,31 @@ public struct AddSongToPlaylistRequest: Encodable, Sendable {
         self.coverUrl = song.coverURLString
         self.duration = song.durationMilliseconds
     }
+
+    public init(song: PlaylistSong) {
+        self.songId = song.songId
+        self.songName = song.songName
+        self.artistName = song.artistName
+        self.albumName = song.albumName
+        self.coverUrl = song.coverUrl
+        self.duration = song.duration ?? 0
+    }
+
+    public init(
+        songId: Int,
+        songName: String,
+        artistName: String,
+        albumName: String?,
+        coverUrl: String?,
+        duration: Int
+    ) {
+        self.songId = songId
+        self.songName = songName
+        self.artistName = artistName
+        self.albumName = albumName
+        self.coverUrl = coverUrl
+        self.duration = duration
+    }
 }
 
 public struct AddMusicHistoryRequest: Encodable, Sendable {
@@ -596,6 +656,22 @@ public struct AddMusicHistoryRequest: Encodable, Sendable {
         self.albumName = song.albumName
         self.coverUrl = song.coverURLString
         self.duration = song.durationMilliseconds
+    }
+
+    public init(
+        songId: Int,
+        songName: String,
+        artistName: String,
+        albumName: String?,
+        coverUrl: String?,
+        duration: Int
+    ) {
+        self.songId = songId
+        self.songName = songName
+        self.artistName = artistName
+        self.albumName = albumName
+        self.coverUrl = coverUrl
+        self.duration = duration
     }
 }
 

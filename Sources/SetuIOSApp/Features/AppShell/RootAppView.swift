@@ -53,22 +53,56 @@ struct RootAppView: View {
     /// end-of-track auto-play and lock-screen/headphone skip work without a visible view.
     private func configureMusicPlayerResolver() {
         musicPlayer.resolveTrackURL = { track in
-            do {
-                let response = try await environment.musicClient.url(songID: track.id, level: "standard")
-                if let item = response.data?.first,
-                   let urlString = item.playableURLString,
-                   let url = URL(string: urlString) {
-                    return .success(url)
-                }
-                let reason = response.data?.first?.unavailableMessage
-                    ?? response.playabilityReason
-                    ?? response.message
-                    ?? "这首歌暂时无法播放"
-                return .unavailable(reason)
-            } catch {
-                return .unavailable(error.localizedDescription)
-            }
+            await resolvePlaybackURL(for: track)
         }
+        musicPlayer.recordPlaybackHistory = { track in
+            try? await environment.musicClient.addHistory(
+                AddMusicHistoryRequest(
+                    songId: track.id,
+                    songName: track.title,
+                    artistName: track.artist,
+                    albumName: track.album,
+                    coverUrl: track.coverURLString,
+                    duration: track.durationMilliseconds
+                )
+            )
+        }
+    }
+
+    private func resolvePlaybackURL(for track: MusicPlaybackTrack) async -> MusicURLResolution {
+        var highQualityFailure: String?
+        do {
+            let highQuality = try await environment.musicClient.url(songID: track.id, level: "exhigh")
+            if let url = playableURL(from: highQuality) {
+                return .success(url)
+            }
+            highQualityFailure = unavailableReason(from: highQuality)
+        } catch {
+            highQualityFailure = error.localizedDescription
+        }
+
+        do {
+            let standard = try await environment.musicClient.url(songID: track.id, level: "standard")
+            if let url = playableURL(from: standard) {
+                return .success(url, notice: "已切换标准音质")
+            }
+            return .unavailable(unavailableReason(from: standard) ?? highQualityFailure ?? "这首歌暂时无法播放")
+        } catch {
+            return .unavailable(highQualityFailure ?? error.localizedDescription)
+        }
+    }
+
+    private func playableURL(from response: MusicUrlResponse) -> URL? {
+        guard let item = response.data?.first,
+              let urlString = item.playableURLString else { return nil }
+        return URL(string: urlString)
+    }
+
+    private func unavailableReason(from response: MusicUrlResponse) -> String? {
+        response.data?.first?.unavailableMessage
+            ?? response.playabilityReason
+            ?? response.message
+            ?? response.msg
     }
 
     private var appTabs: some View {

@@ -1,6 +1,11 @@
 import SetuIOSCore
 import SwiftUI
 
+#if os(iOS)
+import CoreImage
+import UIKit
+#endif
+
 struct MusicMiniPlayerBar: View {
     @Bindable var environment: AppEnvironment
     @Bindable var player: MusicPlaybackController
@@ -120,6 +125,9 @@ private struct MusicNowPlayingDetailView: View {
     @State private var isDownloading = false
     @State private var lyricFontScale: LyricFontScale = .medium
     @State private var keepsScreenAwakeForLyrics = false
+    @State private var showingQueueManager = false
+    @State private var playlistTrack: MusicPlaybackTrack?
+    @State private var artworkAccentColor: Color?
 
     var body: some View {
         NavigationStack {
@@ -182,6 +190,19 @@ private struct MusicNowPlayingDetailView: View {
                     dismiss()
                 }
             }
+            .sheet(isPresented: $showingQueueManager) {
+                MusicQueueManagerSheet(player: player)
+            }
+            .sheet(item: $playlistTrack) { track in
+                AddPlaybackTrackToPlaylistSheet(environment: environment, track: track)
+            }
+            .task(id: player.currentTrack?.id) {
+                if let track = player.currentTrack {
+                    await loadArtworkAccent(for: track)
+                } else {
+                    artworkAccentColor = nil
+                }
+            }
             .onChange(of: keepsScreenAwakeForLyrics) { _, enabled in
                 setIdleTimerDisabled(enabled)
             }
@@ -193,10 +214,18 @@ private struct MusicNowPlayingDetailView: View {
 
     private var detailBackground: some View {
         ZStack {
-            SetuColor.pageGradient
+            LinearGradient(
+                colors: [
+                    (artworkAccentColor ?? SetuColor.brandSoft).opacity(0.42),
+                    SetuColor.bgBase,
+                    SetuColor.brandSoft.opacity(0.2)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
             RadialGradient(
                 colors: [
-                    SetuColor.brandSoft.opacity(0.45),
+                    (artworkAccentColor ?? SetuColor.brandPink).opacity(0.36),
                     SetuColor.bgBase.opacity(0.08)
                 ],
                 center: .top,
@@ -324,12 +353,10 @@ private struct MusicNowPlayingDetailView: View {
 
             NowPlayingRoundButton(
                 systemImage: showingQueue ? "list.bullet.rectangle.fill" : "list.bullet.rectangle",
-                label: "队列",
+                label: "管理队列",
                 tint: SetuColor.info
             ) {
-                withAnimation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.86)) {
-                    showingQueue.toggle()
-                }
+                showingQueueManager = true
             }
         }
     }
@@ -337,7 +364,7 @@ private struct MusicNowPlayingDetailView: View {
     private func secondaryActions(for track: MusicPlaybackTrack) -> some View {
         HStack(spacing: SetuSpacing.md) {
             NowPlayingActionButton(title: "收藏", systemImage: "text.badge.plus") {
-                actionMessage = "收藏到歌单请从歌曲列表入口操作"
+                playlistTrack = track
             }
 
             NowPlayingActionButton(
@@ -356,9 +383,27 @@ private struct MusicNowPlayingDetailView: View {
             .frame(maxWidth: .infinity, minHeight: 44)
             .background(SetuColor.surfaceMuted, in: Capsule())
 
-            NowPlayingActionButton(title: "睡眠定时", systemImage: "moon.zzz") {
-                actionMessage = "睡眠定时将在 P2 阶段接入"
+            Menu {
+                ForEach(MusicSleepTimerOption.allCases) { option in
+                    Button(option.title) {
+                        player.startSleepTimer(option)
+                        actionMessage = "睡眠定时：\(option.title)"
+                    }
+                }
+                if player.sleepTimerTitle != nil {
+                    Divider()
+                    Button("取消定时", role: .destructive) {
+                        player.cancelSleepTimer()
+                        actionMessage = "已取消睡眠定时"
+                    }
+                }
+            } label: {
+                Label(player.sleepTimerTitle ?? "睡眠定时", systemImage: "moon.zzz")
             }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(SetuColor.brandInk)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .background(SetuColor.surfaceMuted, in: Capsule())
         }
         .padding(.horizontal, SetuSpacing.lg)
     }
@@ -520,16 +565,16 @@ private struct MusicNowPlayingDetailView: View {
 
     private func play(_ track: MusicPlaybackTrack) async {
         queueMessage = "正在准备播放"
-        do {
-            let response = try await environment.musicClient.url(songID: track.id, level: "standard")
-            guard let item = response.data?.first, let urlString = item.playableURLString, let url = URL(string: urlString) else {
-                queueMessage = response.data?.first?.unavailableMessage ?? response.playabilityReason ?? response.message ?? "这首歌暂时无法播放"
-                return
-            }
-            player.play(url: url, track: track, queueName: player.queueName, queueTracks: player.queueTracks)
-            queueMessage = nil
-        } catch {
-            queueMessage = error.localizedDescription
+        guard let resolution = await player.resolveTrackURL?(track) else {
+            queueMessage = "播放器尚未准备好"
+            return
+        }
+        switch resolution {
+        case .success(let url, let notice):
+            player.play(url: url, track: track, queueName: player.queueName, queueTracks: player.queueTracks, notice: notice)
+            queueMessage = notice
+        case .unavailable(let reason):
+            queueMessage = reason
         }
     }
 
@@ -554,6 +599,26 @@ private struct MusicNowPlayingDetailView: View {
         } catch {
             actionMessage = error.localizedDescription
         }
+    }
+
+    private func loadArtworkAccent(for track: MusicPlaybackTrack) async {
+        artworkAccentColor = nil
+        #if os(iOS)
+        guard let urlString = secureURLString(track.coverURLString, artworkSize: .thumbnail),
+              let url = URL(string: urlString) else { return }
+        do {
+            let data = try await RemoteArtworkLoader.shared.data(from: url)
+            guard !Task.isCancelled, let image = UIImage(data: data) else { return }
+            let color = image.setuAverageColor.map(Color.init(uiColor:))
+            await MainActor.run {
+                if player.currentTrack?.id == track.id {
+                    artworkAccentColor = color
+                }
+            }
+        } catch {
+            // The fixed soft-pink background remains the fallback when artwork is unavailable.
+        }
+        #endif
     }
 
     private func formatTime(_ seconds: Double) -> String {
@@ -608,6 +673,258 @@ private struct NowPlayingActionButton: View {
     }
 }
 
+private struct MusicQueueManagerSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Bindable var player: MusicPlaybackController
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if player.queueTracks.isEmpty {
+                    SetuEmptyState(title: "队列为空", message: "从音乐页选择歌曲后会显示在这里", systemImage: "music.note.list")
+                        .listRowBackground(Color.clear)
+                } else {
+                    Section {
+                        ForEach(player.queueTracks) { track in
+                            queueRow(track)
+                                .swipeActions(edge: .trailing) {
+                                    Button(role: .destructive) {
+                                        player.removeQueuedTrack(track)
+                                    } label: {
+                                        Label("移除", systemImage: "trash")
+                                    }
+                                }
+                        }
+                        .onMove(perform: player.moveQueueTracks)
+                    } header: {
+                        Text(player.queueName ?? "当前队列")
+                    } footer: {
+                        Text("拖动可调整播放顺序，左滑可移除歌曲。")
+                    }
+                }
+            }
+            .musicQueueListStyle()
+            .navigationTitle("播放队列")
+            .musicInlineNavigationTitle()
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("关闭") {
+                        dismiss()
+                    }
+                }
+                ToolbarItemGroup(placement: .primaryAction) {
+                    if player.queueTracks.count > 1 {
+                        Button("清空待播", role: .destructive) {
+                            player.clearUpcomingTracks()
+                        }
+                    }
+                    #if os(iOS)
+                    EditButton()
+                    #endif
+                }
+            }
+        }
+    }
+
+    private func queueRow(_ track: MusicPlaybackTrack) -> some View {
+        HStack(spacing: SetuSpacing.md) {
+            MusicArtworkView(urlString: track.coverURLString, width: 44, height: 44, cornerRadius: SetuRadius.sm)
+            VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+                Text(track.title)
+                    .font(.subheadline.weight(track.id == player.currentTrack?.id ? .semibold : .regular))
+                    .foregroundStyle(SetuColor.textPrimary)
+                    .lineLimit(1)
+                Text(track.artist)
+                    .font(.caption)
+                    .foregroundStyle(SetuColor.textSecondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: SetuSpacing.sm)
+            if track.id == player.currentTrack?.id {
+                Image(systemName: player.isPlaying ? "speaker.wave.2.fill" : "pause.fill")
+                    .foregroundStyle(SetuColor.brandPink)
+                    .accessibilityLabel("正在播放")
+            } else {
+                Menu {
+                    Button {
+                        player.playNext(track)
+                    } label: {
+                        Label("下一首播放", systemImage: "text.line.first.and.arrowtriangle.forward")
+                    }
+                    Button(role: .destructive) {
+                        player.removeQueuedTrack(track)
+                    } label: {
+                        Label("移除", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.title3)
+                        .foregroundStyle(SetuColor.textSecondary)
+                        .frame(minWidth: 44, minHeight: 44)
+                }
+                .accessibilityLabel("队列操作")
+            }
+        }
+        .frame(minHeight: 52)
+    }
+}
+
+private struct AddPlaybackTrackToPlaylistSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Bindable var environment: AppEnvironment
+    let track: MusicPlaybackTrack
+    @State private var state: LoadState<[UserMusicPlaylist]> = .idle
+    @State private var message: String?
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    SetuCard {
+                        HStack(spacing: SetuSpacing.md) {
+                            MusicArtworkView(urlString: track.coverURLString)
+                            VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+                                Text(track.title)
+                                    .font(SetuTypography.headline)
+                                    .foregroundStyle(SetuColor.textPrimary)
+                                    .lineLimit(2)
+                                Text(track.artist)
+                                    .font(SetuTypography.caption)
+                                    .foregroundStyle(SetuColor.textSecondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                    }
+                    .setuListRow()
+                }
+
+                if let message {
+                    Section {
+                        SetuPill(text: message, systemImage: "info.circle", tone: .info)
+                    }
+                }
+
+                switch state {
+                case .idle, .loading:
+                    Section {
+                        SetuEmptyState(title: "正在加载歌单", systemImage: "music.note.list", isLoading: true)
+                    }
+                case .failed(let error):
+                    Section {
+                        SetuEmptyState(title: "歌单加载失败", message: error, systemImage: "exclamationmark.triangle")
+                    }
+                case .loaded(let playlists):
+                    if playlists.isEmpty {
+                        Section {
+                            SetuEmptyState(title: "暂无歌单", message: "先创建歌单再收藏当前歌曲。", systemImage: "music.note.list")
+                        }
+                    } else {
+                        Section("选择歌单") {
+                            ForEach(playlists) { playlist in
+                                Button {
+                                    Task { await add(to: playlist) }
+                                } label: {
+                                    HStack(spacing: SetuSpacing.md) {
+                                        MusicArtworkView(urlString: playlist.coverUrl)
+                                        VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+                                            Text(playlist.name)
+                                                .font(SetuTypography.headline)
+                                                .foregroundStyle(SetuColor.textPrimary)
+                                                .lineLimit(1)
+                                            Text("\(playlist.songCount ?? 0) 首")
+                                                .font(SetuTypography.caption)
+                                                .foregroundStyle(SetuColor.textSecondary)
+                                        }
+                                        Spacer()
+                                        Image(systemName: "plus.circle.fill")
+                                            .foregroundStyle(SetuColor.brandPink)
+                                    }
+                                    .frame(minHeight: 56)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .setuBackground()
+            .navigationTitle("收藏到歌单")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .task { await load() }
+    }
+
+    private func load() async {
+        state = .loading
+        do {
+            state = .loaded(try await environment.musicClient.playlists())
+        } catch {
+            state = .failed(error.localizedDescription)
+        }
+    }
+
+    private func add(to playlist: UserMusicPlaylist) async {
+        message = "正在加入 \(playlist.name)"
+        do {
+            try await environment.musicClient.add(
+                AddSongToPlaylistRequest(
+                    songId: track.id,
+                    songName: track.title,
+                    artistName: track.artist,
+                    albumName: track.album,
+                    coverUrl: track.coverURLString,
+                    duration: track.durationMilliseconds
+                ),
+                toPlaylist: playlist.id
+            )
+            dismiss()
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+}
+
+#if os(iOS)
+private extension UIImage {
+    var setuAverageColor: UIColor? {
+        guard let inputImage = CIImage(image: self) else { return nil }
+        let extent = inputImage.extent
+        let filter = CIFilter(
+            name: "CIAreaAverage",
+            parameters: [
+                kCIInputImageKey: inputImage,
+                kCIInputExtentKey: CIVector(cgRect: extent)
+            ]
+        )
+        guard let outputImage = filter?.outputImage else { return nil }
+        var bitmap = [UInt8](repeating: 0, count: 4)
+        let context = CIContext(options: [.workingColorSpace: kCFNull as Any])
+        context.render(
+            outputImage,
+            toBitmap: &bitmap,
+            rowBytes: 4,
+            bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+            format: .RGBA8,
+            colorSpace: nil
+        )
+        return UIColor(
+            red: CGFloat(bitmap[0]) / 255,
+            green: CGFloat(bitmap[1]) / 255,
+            blue: CGFloat(bitmap[2]) / 255,
+            alpha: 1
+        )
+    }
+}
+#endif
+
 private extension View {
     @ViewBuilder
     func musicInlineNavigationTitle() -> some View {
@@ -615,6 +932,15 @@ private extension View {
         navigationBarTitleDisplayMode(.inline)
         #else
         self
+        #endif
+    }
+
+    @ViewBuilder
+    func musicQueueListStyle() -> some View {
+        #if os(iOS)
+        listStyle(.insetGrouped)
+        #else
+        listStyle(.automatic)
         #endif
     }
 }

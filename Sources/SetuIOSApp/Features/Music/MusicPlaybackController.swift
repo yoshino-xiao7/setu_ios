@@ -43,9 +43,36 @@ enum MusicPlayMode: String, CaseIterable, Sendable {
     }
 }
 
+enum MusicSleepTimerOption: String, CaseIterable, Identifiable, Sendable {
+    case fifteenMinutes
+    case thirtyMinutes
+    case sixtyMinutes
+    case endOfTrack
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .fifteenMinutes: "15 分钟"
+        case .thirtyMinutes: "30 分钟"
+        case .sixtyMinutes: "60 分钟"
+        case .endOfTrack: "播完本曲"
+        }
+    }
+
+    var durationSeconds: UInt64? {
+        switch self {
+        case .fifteenMinutes: 15 * 60
+        case .thirtyMinutes: 30 * 60
+        case .sixtyMinutes: 60 * 60
+        case .endOfTrack: nil
+        }
+    }
+}
+
 /// Result of resolving a fresh playback URL for a track.
 enum MusicURLResolution: Sendable {
-    case success(URL)
+    case success(URL, notice: String? = nil)
     case unavailable(String)
 }
 
@@ -62,17 +89,23 @@ final class MusicPlaybackController {
     private(set) var playMode: MusicPlayMode = .sequence
     private(set) var isBuffering = false
     private(set) var playbackError: String?
+    private(set) var sleepTimerTitle: String?
 
     /// Resolves a fresh, playable URL for a track. Set once by the app shell so the
     /// controller can advance the queue on its own (end-of-track auto-play, lock-screen
     /// and headphone next/previous). Upstream URLs can expire, so each advance re-resolves.
     @ObservationIgnored var resolveTrackURL: (@MainActor (MusicPlaybackTrack) async -> MusicURLResolution)?
+    /// Records playback history for tracks that start without a visible view, such as
+    /// end-of-track auto-play.
+    @ObservationIgnored var recordPlaybackHistory: (@MainActor (MusicPlaybackTrack) async -> Void)?
 
     @ObservationIgnored private var player: AVPlayer?
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var itemObservers: [NSObjectProtocol] = []
     @ObservationIgnored private var sessionObservers: [NSObjectProtocol] = []
     @ObservationIgnored private var remoteCommandsConfigured = false
+    @ObservationIgnored private var sleepTimerTask: Task<Void, Never>?
+    @ObservationIgnored private var pausesAtEndOfCurrentTrack = false
     #if os(iOS)
     @ObservationIgnored private var artworkTask: Task<Void, Never>?
     @ObservationIgnored private var nowPlayingArtwork: MPMediaItemArtwork?
@@ -127,7 +160,8 @@ final class MusicPlaybackController {
         track: MusicPlaybackTrack,
         queueName: String? = nil,
         queueTracks: [MusicPlaybackTrack] = [],
-        playMode: MusicPlayMode? = nil
+        playMode: MusicPlayMode? = nil,
+        notice: String? = nil
     ) {
         configureAudioSession()
         configureRemoteCommands()
@@ -140,7 +174,7 @@ final class MusicPlaybackController {
             self.playMode = playMode
         }
         let index = nextQueue.firstIndex { $0.id == track.id }
-        load(url: url, track: track, index: index)
+        load(url: url, track: track, index: index, notice: notice)
     }
 
     func pause() {
@@ -174,6 +208,7 @@ final class MusicPlaybackController {
         playbackError = nil
         currentTimeSeconds = 0
         message = nil
+        cancelSleepTimer()
         cancelArtworkTask()
         removeTimeObserver()
         removeItemObservers()
@@ -199,6 +234,33 @@ final class MusicPlaybackController {
         setPlayMode(all[(index + 1) % all.count])
     }
 
+    func startSleepTimer(_ option: MusicSleepTimerOption) {
+        cancelSleepTimer()
+        sleepTimerTitle = option.title
+        message = "睡眠定时：\(option.title)"
+        if let durationSeconds = option.durationSeconds {
+            sleepTimerTask = Task { [weak self] in
+                do {
+                    try await Task.sleep(nanoseconds: durationSeconds * 1_000_000_000)
+                } catch {
+                    return
+                }
+                await MainActor.run {
+                    self?.pauseForSleepTimer()
+                }
+            }
+        } else {
+            pausesAtEndOfCurrentTrack = true
+        }
+    }
+
+    func cancelSleepTimer() {
+        sleepTimerTask?.cancel()
+        sleepTimerTask = nil
+        pausesAtEndOfCurrentTrack = false
+        sleepTimerTitle = nil
+    }
+
     /// User-initiated skip (in-app buttons, lock screen, headphones). Honors the play mode.
     func userSkip(by offset: Int) async {
         await advance(by: offset, isAuto: false)
@@ -212,8 +274,8 @@ final class MusicPlaybackController {
         let resolution = await resolveTrackURL(track)
         isBuffering = false
         switch resolution {
-        case .success(let url):
-            load(url: url, track: track, index: currentQueueIndex)
+        case .success(let url, let notice):
+            load(url: url, track: track, index: currentQueueIndex, notice: notice)
         case .unavailable(let reason):
             playbackError = reason
             isPlaying = false
@@ -226,6 +288,51 @@ final class MusicPlaybackController {
         let nextIndex = currentQueueIndex + offset
         guard queueTracks.indices.contains(nextIndex) else { return nil }
         return queueTracks[nextIndex]
+    }
+
+    func moveQueueTracks(from source: IndexSet, to destination: Int) {
+        guard !source.isEmpty else { return }
+        let moving = source.sorted().compactMap { queueTracks.indices.contains($0) ? queueTracks[$0] : nil }
+        for index in source.sorted(by: >) where queueTracks.indices.contains(index) {
+            queueTracks.remove(at: index)
+        }
+        let removedBeforeDestination = source.filter { $0 < destination }.count
+        let insertionIndex = min(max(destination - removedBeforeDestination, 0), queueTracks.count)
+        queueTracks.insert(contentsOf: moving, at: insertionIndex)
+        syncCurrentQueueIndex()
+        message = "已调整播放队列"
+    }
+
+    func removeQueuedTrack(_ track: MusicPlaybackTrack) {
+        if track.id == currentTrack?.id {
+            stop()
+            message = "已从队列移除当前歌曲"
+            return
+        }
+        queueTracks.removeAll { $0.id == track.id }
+        syncCurrentQueueIndex()
+        message = "已移除 \(track.title)"
+    }
+
+    func clearUpcomingTracks() {
+        guard let currentTrack else {
+            queueTracks = []
+            currentQueueIndex = nil
+            return
+        }
+        queueTracks = [currentTrack]
+        currentQueueIndex = 0
+        message = "已清空待播队列"
+    }
+
+    func playNext(_ track: MusicPlaybackTrack) {
+        guard let currentQueueIndex else { return }
+        guard track.id != currentTrack?.id else { return }
+        queueTracks.removeAll { $0.id == track.id && $0.id != currentTrack?.id }
+        let insertionIndex = min(currentQueueIndex + 1, queueTracks.count)
+        queueTracks.insert(track, at: insertionIndex)
+        syncCurrentQueueIndex()
+        message = "下一首播放：\(track.title)"
     }
 
     // MARK: - Queue advancement
@@ -248,8 +355,11 @@ final class MusicPlaybackController {
             let resolution = await resolveTrackURL(track)
             isBuffering = false
             switch resolution {
-            case .success(let url):
-                load(url: url, track: track, index: index)
+            case .success(let url, let notice):
+                load(url: url, track: track, index: index, notice: notice)
+                if isAuto {
+                    await recordPlaybackHistory?(track)
+                }
                 return
             case .unavailable(let reason):
                 message = "跳过无法播放：\(track.title)"
@@ -288,6 +398,10 @@ final class MusicPlaybackController {
     }
 
     private func playbackEndReached() async {
+        if pausesAtEndOfCurrentTrack {
+            pauseForSleepTimer()
+            return
+        }
         if playMode == .single {
             seek(to: 0)
             player?.play()
@@ -300,7 +414,7 @@ final class MusicPlaybackController {
 
     // MARK: - Player item lifecycle
 
-    private func load(url: URL, track: MusicPlaybackTrack, index: Int?) {
+    private func load(url: URL, track: MusicPlaybackTrack, index: Int?, notice: String? = nil) {
         removeTimeObserver()
         removeItemObservers()
 
@@ -313,13 +427,51 @@ final class MusicPlaybackController {
         isBuffering = true
         playbackError = nil
         currentTimeSeconds = 0
-        message = "正在播放 \(track.title)"
+        message = notice ?? "正在播放 \(track.title)"
         addTimeObserver()
         addItemObservers(for: item)
         resetNowPlayingArtwork()
         updateNowPlaying(elapsed: 0)
         loadNowPlayingArtwork(for: track)
         nextPlayer.play()
+    }
+
+    private func pauseForSleepTimer() {
+        sleepTimerTask?.cancel()
+        sleepTimerTask = nil
+        pausesAtEndOfCurrentTrack = false
+        sleepTimerTitle = nil
+        sleepTimerTask = Task { [weak self] in
+            await self?.fadeOutAndPauseForSleepTimer()
+        }
+    }
+
+    private func fadeOutAndPauseForSleepTimer() async {
+        let originalVolume = player?.volume ?? 1
+        for step in stride(from: 8, through: 1, by: -1) {
+            player?.volume = originalVolume * Float(step) / 8
+            do {
+                try await Task.sleep(nanoseconds: 120_000_000)
+            } catch {
+                player?.volume = originalVolume
+                return
+            }
+        }
+        player?.pause()
+        player?.volume = originalVolume
+        sleepTimerTask = nil
+        isPlaying = false
+        isBuffering = false
+        message = "睡眠定时已暂停播放"
+        updateNowPlaying()
+    }
+
+    private func syncCurrentQueueIndex() {
+        guard let currentTrack else {
+            currentQueueIndex = nil
+            return
+        }
+        currentQueueIndex = queueTracks.firstIndex { $0.id == currentTrack.id }
     }
 
     private func addTimeObserver() {
