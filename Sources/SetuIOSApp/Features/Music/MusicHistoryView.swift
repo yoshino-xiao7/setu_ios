@@ -102,11 +102,6 @@ struct MusicHistoryView: View {
         }
         .task { await load() }
         .refreshable { await load() }
-        .safeAreaInset(edge: .bottom) {
-            MusicMiniPlayerBar(environment: environment, player: player)
-                .padding(.horizontal)
-                .padding(.top, 6)
-        }
     }
 
     @ViewBuilder
@@ -288,7 +283,7 @@ private struct MusicHistoryRow: View {
 
     var body: some View {
         HStack(spacing: SetuSpacing.md) {
-            MusicArtworkView(urlString: record.coverUrl)
+            MusicArtworkView(urlString: record.coverUrl, onTap: onPlay)
             VStack(alignment: .leading, spacing: SetuSpacing.xs) {
                 Text(record.songName)
                     .font(SetuTypography.headline)

@@ -713,9 +713,15 @@ struct MusicPlaybackTrack: Identifiable, Sendable {
     let album: String
     let coverURLString: String?
     let durationMilliseconds: Int
+    /// Netease MV id when the track has one; enables in-app MV playback from the player.
+    let mvID: Int?
 
     var durationSeconds: Double {
         Double(durationMilliseconds) / 1000
+    }
+
+    var hasMV: Bool {
+        (mvID ?? 0) > 0
     }
 
     init(song: MusicSong) {
@@ -725,6 +731,7 @@ struct MusicPlaybackTrack: Identifiable, Sendable {
         album = song.albumName
         coverURLString = song.coverURLString
         durationMilliseconds = song.durationMilliseconds
+        mvID = song.mv
     }
 
     init(song: PlaylistSong) {
@@ -734,6 +741,7 @@ struct MusicPlaybackTrack: Identifiable, Sendable {
         album = song.albumName ?? "未知专辑"
         coverURLString = song.coverUrl
         durationMilliseconds = song.duration ?? 0
+        mvID = nil
     }
 
     init(record: MusicHistoryRecord) {
@@ -743,5 +751,6 @@ struct MusicPlaybackTrack: Identifiable, Sendable {
         album = record.albumName ?? "未知专辑"
         coverURLString = record.coverUrl
         durationMilliseconds = record.duration ?? 0
+        mvID = nil
     }
 }

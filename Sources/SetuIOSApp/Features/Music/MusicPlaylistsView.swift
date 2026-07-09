@@ -92,11 +92,6 @@ struct MusicPlaylistsView: View {
         }
         .task { await load() }
         .refreshable { await load() }
-        .safeAreaInset(edge: .bottom) {
-            MusicMiniPlayerBar(environment: environment, player: player)
-                .padding(.horizontal)
-                .padding(.top, 6)
-        }
     }
 
     private func statsSection(_ playlists: [UserMusicPlaylist]) -> some View {

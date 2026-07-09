@@ -42,18 +42,13 @@ struct MusicHomeView: View {
             AddSongToPlaylistSheet(environment: environment, song: song)
         }
         .sheet(item: $mvSong) { song in
-            MusicMvSheet(environment: environment, song: song)
+            MusicMvSheet(environment: environment, player: player, song: song)
         }
         .sheet(item: $selectedRecommendedPlaylist) { playlist in
             RecommendedPlaylistSheet(environment: environment, player: player, playlist: playlist)
         }
         .task { await loadLandingContent() }
         .refreshable { await loadLandingContent() }
-        .safeAreaInset(edge: .bottom) {
-            MusicMiniPlayerBar(environment: environment, player: player)
-                .padding(.horizontal)
-                .padding(.top, 6)
-        }
     }
 
     private var searchEntry: some View {
@@ -204,7 +199,7 @@ struct MusicHomeView: View {
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: SetuSpacing.md) {
                                     ForEach(visibleRecords) { record in
-                                        Button {
+                                        MusicRecentHistoryCard(record: record) {
                                             Task {
                                                 await play(
                                                     record.song,
@@ -212,10 +207,7 @@ struct MusicHomeView: View {
                                                     queueTracks: visibleRecords.map { MusicPlaybackTrack(record: $0) }
                                                 )
                                             }
-                                        } label: {
-                                            MusicRecentHistoryCard(record: record)
                                         }
-                                        .buttonStyle(.plain)
                                     }
                                 }
                             }
@@ -705,7 +697,7 @@ private struct RecommendedPlaylistSheet: View {
                 AddSongToPlaylistSheet(environment: environment, song: song)
             }
             .sheet(item: $mvSong) { song in
-                MusicMvSheet(environment: environment, song: song)
+                MusicMvSheet(environment: environment, player: player, song: song)
             }
             .task { await load() }
             .refreshable { await load() }
@@ -802,7 +794,7 @@ struct MusicSearchView: View {
             AddSongToPlaylistSheet(environment: environment, song: song)
         }
         .sheet(item: $mvSong) { song in
-            MusicMvSheet(environment: environment, song: song)
+            MusicMvSheet(environment: environment, player: player, song: song)
         }
         .task {
             guard !didRunInitialSearch else { return }
@@ -811,11 +803,6 @@ struct MusicSearchView: View {
                 query = initialQuery
                 await search()
             }
-        }
-        .safeAreaInset(edge: .bottom) {
-            MusicMiniPlayerBar(environment: environment, player: player)
-                .padding(.horizontal)
-                .padding(.top, 6)
         }
     }
 
@@ -1053,18 +1040,27 @@ struct MusicSearchView: View {
 
 private struct MusicRecentHistoryCard: View {
     let record: MusicHistoryRecord
+    let onPlay: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: SetuSpacing.sm) {
-            MusicArtworkView(urlString: record.coverUrl, width: 116, height: 116, cornerRadius: SetuRadius.md)
-            Text(record.songName)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(SetuColor.textPrimary)
-                .lineLimit(2)
-            Text(record.artistName)
-                .font(.caption)
-                .foregroundStyle(SetuColor.textSecondary)
-                .lineLimit(1)
+            MusicArtworkView(urlString: record.coverUrl, width: 116, height: 116, cornerRadius: SetuRadius.md, onTap: onPlay)
+            Button(action: onPlay) {
+                VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+                    Text(record.songName)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(SetuColor.textPrimary)
+                        .lineLimit(2)
+                    Text(record.artistName)
+                        .font(.caption)
+                        .foregroundStyle(SetuColor.textSecondary)
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("播放 \(record.songName)")
         }
         .frame(width: 132, alignment: .leading)
         .contentShape(Rectangle())
@@ -1263,20 +1259,28 @@ struct MusicSongRow: View {
     var body: some View {
         HStack(spacing: SetuSpacing.md) {
             MusicArtworkView(urlString: song.coverURLString)
-            VStack(alignment: .leading, spacing: SetuSpacing.xs) {
-                Text(song.name)
-                    .font(SetuTypography.headline)
-                    .foregroundStyle(SetuColor.textPrimary)
-                    .lineLimit(2)
-                Text(song.artistNames.isEmpty ? "未知歌手" : song.artistNames)
-                    .font(SetuTypography.caption)
-                    .foregroundStyle(SetuColor.textSecondary)
-                Text(song.albumName)
-                    .font(SetuTypography.caption)
-                    .foregroundStyle(SetuColor.textTertiary)
-                    .lineLimit(1)
+            Button {
+                onPlay?()
+            } label: {
+                VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+                    Text(song.name)
+                        .font(SetuTypography.headline)
+                        .foregroundStyle(SetuColor.textPrimary)
+                        .lineLimit(2)
+                    Text(song.artistNames.isEmpty ? "未知歌手" : song.artistNames)
+                        .font(SetuTypography.caption)
+                        .foregroundStyle(SetuColor.textSecondary)
+                    Text(song.albumName)
+                        .font(SetuTypography.caption)
+                        .foregroundStyle(SetuColor.textTertiary)
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
-            Spacer()
+            .buttonStyle(.plain)
+            .disabled(onPlay == nil)
+            .accessibilityLabel("播放 \(song.name)")
             VStack(spacing: SetuSpacing.xs) {
                 if let onPlay {
                     MusicIconButton(
@@ -1323,7 +1327,6 @@ struct MusicSongRow: View {
             }
         }
         .padding(.vertical, SetuSpacing.sm)
-        .contentShape(Rectangle())
     }
 }
 
@@ -1439,27 +1442,16 @@ struct AddSongToPlaylistSheet: View {
 private struct MusicMvSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var environment: AppEnvironment
+    @Bindable var player: MusicPlaybackController
     let song: MusicSong
 
     @State private var detailState: LoadState<MusicMvDetail> = .idle
-    @State private var urlState: LoadState<MusicMvUrlData?> = .idle
-    @State private var selectedResolution: Int?
 
     var body: some View {
         NavigationStack {
             List {
-                Section {
-                    SetuCard {
-                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                            SetuSectionHeader(title: "歌曲")
-                            MusicSongRow(song: song)
-                        }
-                    }
-                    .setuListRow()
-                }
-
-                detailSection
                 urlSection
+                detailSection
             }
             .listStyle(.plain)
             .setuBackground()
@@ -1511,18 +1503,6 @@ private struct MusicMvSheet: View {
                                 .font(SetuTypography.caption)
                                 .foregroundStyle(SetuColor.textSecondary)
                         }
-                        if let brs = detail.brs, !brs.isEmpty {
-                            Picker("清晰度", selection: $selectedResolution) {
-                                Text("默认").tag(Optional<Int>.none)
-                                ForEach(brs) { quality in
-                                    Text("\(quality.br)p").tag(Optional(quality.br))
-                                }
-                            }
-                            .pickerStyle(.segmented)
-                            .onChange(of: selectedResolution) {
-                                Task { await loadUrl() }
-                            }
-                        }
                     }
                 }
                 .setuListRow()
@@ -1532,51 +1512,29 @@ private struct MusicMvSheet: View {
 
     @ViewBuilder
     private var urlSection: some View {
-        switch urlState {
-        case .idle, .loading:
-            MusicStateSection(title: "播放 MV", stateTitle: "正在准备 MV", systemImage: "play.rectangle", isLoading: true)
-        case .failed(let message):
-            MusicStateSection(title: "播放 MV", stateTitle: "MV 暂时不可播放", message: message, systemImage: "exclamationmark.triangle")
-        case .loaded(let data):
-            if let data, let urlString = data.httpsURLString, let url = URL(string: urlString) {
-                Section {
-                    SetuCard {
-                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                            SetuSectionHeader(title: "播放 MV")
-                            if let resolution = data.r ?? data.br {
-                                MusicMetadataRow(title: "清晰度", value: "\(resolution)p")
-                            }
-                            if let size = data.size {
-                                MusicMetadataRow(title: "大小", value: "\(size)")
-                            }
-                            if let type = data.type {
-                                MusicMetadataRow(title: "类型", value: type)
-                            }
-                            Link(destination: url) {
-                                Label("打开 MV", systemImage: "play.rectangle")
-                                    .font(.body.weight(.semibold))
-                                    .foregroundStyle(.white)
-                                    .frame(maxWidth: .infinity, minHeight: 48)
-                                    .background(SetuColor.heroGradient, in: Capsule())
-                            }
+        if let mvID = song.mv, mvID > 0 {
+            Section {
+                SetuCard {
+                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                        SetuSectionHeader(title: "播放 MV")
+                        MvPlaybackView(environment: environment, mvID: mvID) {
+                            player.pause()
                         }
                     }
-                    .setuListRow()
                 }
-            } else {
-                MusicStateSection(title: "播放 MV", stateTitle: "暂未拿到播放地址", message: "可以尝试切换清晰度或稍后重试。", systemImage: "play.rectangle")
+                .setuListRow()
             }
+        } else {
+            MusicStateSection(title: "播放 MV", stateTitle: "暂无 MV", message: "该歌曲没有可播放的 MV", systemImage: "play.rectangle")
         }
     }
 
     private func load() async {
         guard let mvID = song.mv, mvID > 0 else {
             detailState = .failed("该歌曲没有 MV")
-            urlState = .failed("该歌曲没有 MV")
             return
         }
         await loadDetail(mvID: mvID)
-        await loadUrl()
     }
 
     private func loadDetail(mvID: Int) async {
@@ -1586,17 +1544,6 @@ private struct MusicMvSheet: View {
             detailState = .loaded(response.data)
         } catch {
             detailState = .failed(error.localizedDescription)
-        }
-    }
-
-    private func loadUrl() async {
-        guard let mvID = song.mv, mvID > 0 else { return }
-        urlState = .loading
-        do {
-            let response = try await environment.musicClient.mvUrl(id: mvID, resolution: selectedResolution)
-            urlState = .loaded(response.data)
-        } catch {
-            urlState = .failed(error.localizedDescription)
         }
     }
 

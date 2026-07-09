@@ -17,6 +17,7 @@ struct MusicArtworkView: View {
     var cornerRadius: CGFloat = 8
     var artworkSize: MusicArtworkSize = .thumbnail
     var systemImage: String = "music.note"
+    var onTap: (() -> Void)?
 
     @State private var image: PlatformArtworkImage?
     @State private var loadFailed = false
@@ -26,6 +27,8 @@ struct MusicArtworkView: View {
         Button {
             if loadFailed {
                 reloadID = UUID()
+            } else {
+                onTap?()
             }
         } label: {
             ZStack {
@@ -44,7 +47,7 @@ struct MusicArtworkView: View {
             .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(loadFailed ? "封面加载失败，点按重试" : "音乐封面")
+        .accessibilityLabel(loadFailed ? "封面加载失败，点按重试" : (onTap == nil ? "音乐封面" : "播放歌曲"))
         .task(id: reloadID) {
             await load()
         }

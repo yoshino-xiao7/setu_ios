@@ -9,13 +9,48 @@ import UIKit
 struct MusicMiniPlayerBar: View {
     @Bindable var environment: AppEnvironment
     @Bindable var player: MusicPlaybackController
+    var onShowQueue: (() -> Void)?
     @State private var showingDetail = false
+    @State private var initialDetailPage: NowPlayingPage = .cover
+    @State private var isCollapsed = false
 
     var body: some View {
         if let track = player.currentTrack {
-            HStack(spacing: SetuSpacing.md) {
-                MusicArtworkView(urlString: track.coverURLString, width: 48, height: 48, cornerRadius: SetuRadius.sm)
+            HStack {
+                if isCollapsed {
+                    collapsedHandle(for: track)
+                } else {
+                    expandedBar(for: track)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: isCollapsed ? .trailing : .center)
+            .padding(.horizontal, isCollapsed ? 0 : SetuSpacing.md)
+            .animation(.spring(response: 0.32, dampingFraction: 0.86), value: isCollapsed)
+            .sheet(isPresented: $showingDetail) {
+                MusicNowPlayingDetailView(environment: environment, player: player, initialPage: initialDetailPage)
+                    .presentationDragIndicator(.visible)
+            }
+        }
+    }
 
+    private func expandedBar(for track: MusicPlaybackTrack) -> some View {
+        HStack(spacing: SetuSpacing.sm) {
+            Button {
+                isCollapsed = true
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(SetuColor.textSecondary)
+                    .frame(width: 36, height: 44)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("收起迷你播放器")
+
+            MusicArtworkView(urlString: track.coverURLString, width: 44, height: 44, cornerRadius: SetuRadius.sm)
+
+            Button {
+                openDetail(.cover)
+            } label: {
                 VStack(alignment: .leading, spacing: SetuSpacing.xs) {
                     Text(track.title)
                         .font(.subheadline.weight(.semibold))
@@ -25,86 +60,381 @@ struct MusicMiniPlayerBar: View {
                         .font(.caption)
                         .foregroundStyle(SetuColor.textSecondary)
                         .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("打开正在播放：\(track.title)")
+
+            MiniPlayerCircularPlayButton(
+                isPlaying: player.isPlaying,
+                progress: player.playbackProgress
+            ) {
+                PlayerHaptics.light()
+                player.toggle()
+            }
+
+            Button {
+                onShowQueue?()
+            } label: {
+                VStack(spacing: 2) {
+                    Image(systemName: "list.bullet")
+                        .font(.subheadline.weight(.semibold))
+                    Text("\(player.queueTracks.count)")
+                        .font(.caption2.monospacedDigit().weight(.semibold))
+                }
+                .foregroundStyle(SetuColor.brandInk)
+                .frame(width: 48, height: 48)
+                .background(SetuColor.surfaceMuted, in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("查看当前播放列表")
+        }
+        .padding(.horizontal, SetuSpacing.sm)
+        .padding(.vertical, SetuSpacing.xs)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: SetuRadius.lg, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: SetuRadius.lg, style: .continuous)
+                .stroke(SetuColor.separator, lineWidth: 1)
+        }
+        .shadow(color: SetuColor.brandPink.opacity(0.14), radius: 12, y: 6)
+        .gesture(
+            DragGesture(minimumDistance: 24)
+                .onEnded { value in
+                    if value.translation.height < -36 {
+                        openDetail(.cover)
+                    } else if value.translation.width > 44 {
+                        isCollapsed = true
+                    }
+                }
+        )
+    }
+
+    private func collapsedHandle(for track: MusicPlaybackTrack) -> some View {
+        HStack(spacing: SetuSpacing.xs) {
+            Image(systemName: "chevron.left")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(SetuColor.brandInk)
+                .frame(width: 24, height: 44)
+
+            MusicArtworkView(
+                urlString: track.coverURLString,
+                width: 42,
+                height: 42,
+                cornerRadius: SetuRadius.sm,
+                onTap: {
+                    isCollapsed = false
+                }
+            )
+            .overlay(alignment: .bottomTrailing) {
+                Image(systemName: player.isPlaying ? "waveform" : "pause.fill")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 18, height: 18)
+                    .background(SetuColor.heroGradient, in: Circle())
+            }
+        }
+        .padding(.leading, SetuSpacing.xs)
+        .padding(.trailing, SetuSpacing.sm)
+        .padding(.vertical, SetuSpacing.xs)
+        .frame(minWidth: 84, minHeight: 56)
+        .background(.ultraThinMaterial, in: Capsule())
+        .overlay {
+            Capsule().stroke(SetuColor.separator, lineWidth: 1)
+        }
+        .shadow(color: SetuColor.brandPink.opacity(0.14), radius: 12, y: 6)
+        .contentShape(Capsule())
+        .onTapGesture {
+            isCollapsed = false
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("展开迷你播放器")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction {
+            isCollapsed = false
+        }
+    }
+
+    private func openDetail(_ page: NowPlayingPage) {
+        initialDetailPage = page
+        showingDetail = true
+    }
+}
+
+private struct MiniPlayerCircularPlayButton: View {
+    let isPlaying: Bool
+    let progress: Double
+    let action: () -> Void
+
+    private var clampedProgress: Double {
+        min(max(progress, 0), 1)
+    }
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Circle()
+                    .stroke(SetuColor.surfaceMuted, lineWidth: 4)
+                Circle()
+                    .trim(from: 0, to: clampedProgress)
+                    .stroke(
+                        SetuColor.heroGradient,
+                        style: StrokeStyle(lineWidth: 4, lineCap: .round)
+                    )
+                    .rotationEffect(.degrees(-90))
+                Circle()
+                    .fill(SetuColor.heroGradient)
+                    .padding(6)
+                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(.white)
+                    .padding(.leading, isPlaying ? 0 : 2)
+            }
+            .frame(width: 50, height: 50)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(isPlaying ? "暂停" : "播放")
+    }
+}
+
+// MARK: - Queue drawer
+
+struct MusicQueueDrawerView: View {
+    @Bindable var player: MusicPlaybackController
+    let onDismiss: () -> Void
+
+    @State private var toast: String?
+    @State private var toastTask: Task<Void, Never>?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Capsule()
+                .fill(SetuColor.textTertiary.opacity(0.36))
+                .frame(width: 40, height: 5)
+                .padding(.top, SetuSpacing.sm)
+                .padding(.bottom, SetuSpacing.md)
+
+            HStack(spacing: SetuSpacing.md) {
+                VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+                    Text("当前播放")
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(SetuColor.textPrimary)
                     Text(queueCaption)
-                        .font(.caption2)
-                        .foregroundStyle(SetuColor.textTertiary)
+                        .font(SetuTypography.caption)
+                        .foregroundStyle(SetuColor.textSecondary)
                         .lineLimit(1)
                 }
 
                 Spacer()
 
-                Button {
-                    player.toggle()
-                } label: {
-                    Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                        .foregroundStyle(.white)
-                        .frame(width: 44, height: 44)
-                        .background(SetuColor.heroGradient, in: Circle())
+                if player.queueTracks.count > 1 {
+                    Button(role: .destructive) {
+                        PlayerHaptics.medium()
+                        player.clearUpcomingTracks()
+                        showToast("已清空待播歌曲")
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("清空待播歌曲")
                 }
-                .buttonStyle(.borderless)
-                .accessibilityLabel(player.isPlaying ? "暂停" : "播放")
 
                 Button {
-                    Task { await player.userSkip(by: 1) }
+                    onDismiss()
                 } label: {
-                    Image(systemName: "forward.fill")
-                        .foregroundStyle(SetuColor.brandPink)
+                    Image(systemName: "xmark")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(SetuColor.textSecondary)
                         .frame(width: 44, height: 44)
+                        .background(SetuColor.surfaceMuted, in: Circle())
                 }
-                .buttonStyle(.borderless)
-                .disabled(!player.canPlayNext)
-                .opacity(player.canPlayNext ? 1 : 0.35)
-                .accessibilityLabel("下一首")
+                .buttonStyle(.plain)
+                .accessibilityLabel("关闭当前播放")
             }
-            .padding(.horizontal, SetuSpacing.md)
-            .padding(.vertical, SetuSpacing.sm)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: SetuRadius.lg, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: SetuRadius.lg, style: .continuous)
-                    .stroke(SetuColor.separator, lineWidth: 1)
-            }
-            .overlay(alignment: .topLeading) {
-                GeometryReader { proxy in
-                    Rectangle()
-                        .fill(SetuColor.heroGradient)
-                        .frame(width: proxy.size.width * player.playbackProgress, height: 2)
-                }
-                .frame(height: 2)
-                .clipShape(Capsule())
-            }
-            .shadow(color: SetuColor.brandPink.opacity(0.16), radius: 14, y: 8)
             .padding(.horizontal, SetuSpacing.lg)
-            .padding(.vertical, SetuSpacing.sm)
-            .contentShape(RoundedRectangle(cornerRadius: SetuRadius.lg, style: .continuous))
-            .onTapGesture {
-                showingDetail = true
+            .padding(.bottom, SetuSpacing.sm)
+
+            if let toast {
+                SetuPill(text: toast, systemImage: "info.circle", tone: .info)
+                    .padding(.horizontal, SetuSpacing.lg)
+                    .padding(.bottom, SetuSpacing.sm)
+                    .transition(.opacity)
             }
-            .gesture(
-                DragGesture(minimumDistance: 24)
-                    .onEnded { value in
-                        if value.translation.height < -36 {
-                            showingDetail = true
-                        } else if value.translation.width < -44 {
-                            Task { await player.userSkip(by: 1) }
-                        } else if value.translation.width > 44 {
-                            Task { await player.userSkip(by: -1) }
+
+            Divider().overlay(SetuColor.separator)
+
+            if player.queueTracks.isEmpty {
+                SetuEmptyState(title: "队列为空", message: "从音乐页选择歌曲后会显示在这里", systemImage: "music.note.list")
+                    .frame(maxWidth: .infinity, minHeight: 220)
+                    .padding(SetuSpacing.lg)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(player.queueTracks.enumerated()), id: \.element.id) { index, track in
+                            MusicQueueDrawerRow(
+                                track: track,
+                                isCurrent: track.id == player.currentTrack?.id,
+                                isPlaying: player.isPlaying,
+                                play: {
+                                    Task { await playQueuedTrack(track) }
+                                },
+                                playNext: {
+                                    PlayerHaptics.light()
+                                    player.playNext(track)
+                                    showToast("已设为下一首播放")
+                                },
+                                remove: {
+                                    player.removeQueuedTrack(track)
+                                }
+                            )
+                            .padding(.horizontal, SetuSpacing.lg)
+
+                            if index < player.queueTracks.count - 1 {
+                                Divider()
+                                    .overlay(SetuColor.separator)
+                                    .padding(.leading, SetuSpacing.lg + 56)
+                            }
                         }
                     }
-            )
-            .sheet(isPresented: $showingDetail) {
-                MusicNowPlayingDetailView(environment: environment, player: player)
-                    .presentationDragIndicator(.visible)
+                    .padding(.vertical, SetuSpacing.xs)
+                }
+                .frame(maxHeight: 420)
             }
+        }
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: SetuRadius.lg, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: SetuRadius.lg, style: .continuous)
+                .stroke(SetuColor.separator, lineWidth: 1)
+        }
+        .shadow(color: SetuColor.brandPink.opacity(0.18), radius: 24, y: 14)
+        .onDisappear {
+            toastTask?.cancel()
         }
     }
 
     private var queueCaption: String {
         let name = player.queueName ?? "当前队列"
         let count = player.queueTracks.count
-        if count > 1 {
-            return "\(name) · \(count) 首"
+        return count > 1 ? "\(name) · \(count) 首" : name
+    }
+
+    private func playQueuedTrack(_ track: MusicPlaybackTrack) async {
+        guard track.id != player.currentTrack?.id else { return }
+        PlayerHaptics.light()
+        guard let resolution = await player.resolveTrackURL?(track) else {
+            showToast("播放器尚未准备好")
+            return
         }
-        return name
+        switch resolution {
+        case .success(let url, let notice):
+            player.play(url: url, track: track, queueName: player.queueName, queueTracks: player.queueTracks, notice: notice)
+            if let notice {
+                showToast(notice)
+            }
+        case .unavailable(let reason):
+            showToast(reason)
+        }
+    }
+
+    private func showToast(_ text: String) {
+        toastTask?.cancel()
+        toast = text
+        toastTask = Task {
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            guard !Task.isCancelled else { return }
+            toast = nil
+        }
+    }
+}
+
+private struct MusicQueueDrawerRow: View {
+    let track: MusicPlaybackTrack
+    let isCurrent: Bool
+    let isPlaying: Bool
+    let play: () -> Void
+    let playNext: () -> Void
+    let remove: () -> Void
+
+    var body: some View {
+        HStack(spacing: SetuSpacing.md) {
+            MusicArtworkView(
+                urlString: track.coverURLString,
+                width: 44,
+                height: 44,
+                cornerRadius: SetuRadius.sm,
+                onTap: play
+            )
+
+            Button(action: play) {
+                VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+                    Text(track.title)
+                        .font(.subheadline.weight(isCurrent ? .semibold : .regular))
+                        .foregroundStyle(isCurrent ? SetuColor.brandInk : SetuColor.textPrimary)
+                        .lineLimit(1)
+                    Text(track.artist)
+                        .font(.caption)
+                        .foregroundStyle(SetuColor.textSecondary)
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(isCurrent)
+
+            if isCurrent {
+                Image(systemName: isPlaying ? "speaker.wave.2.fill" : "pause.fill")
+                    .foregroundStyle(SetuColor.brandPink)
+                    .frame(width: 44, height: 44)
+                    .accessibilityLabel("正在播放")
+            } else {
+                Menu {
+                    Button {
+                        playNext()
+                    } label: {
+                        Label("下一首播放", systemImage: "text.line.first.and.arrowtriangle.forward")
+                    }
+                    Button(role: .destructive) {
+                        remove()
+                    } label: {
+                        Label("移除", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.title3)
+                        .foregroundStyle(SetuColor.textSecondary)
+                        .frame(width: 44, height: 44)
+                }
+                .accessibilityLabel("队列操作")
+            }
+        }
+        .frame(minHeight: 56)
+    }
+}
+
+// MARK: - Now Playing (full player)
+
+private enum NowPlayingPage: String, CaseIterable, Identifiable {
+    case cover
+    case lyrics
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .cover: "音乐"
+        case .lyrics: "歌词"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .cover: "music.note"
+        case .lyrics: "text.quote"
+        }
     }
 }
 
@@ -116,161 +446,391 @@ private struct MusicNowPlayingDetailView: View {
     @Bindable var environment: AppEnvironment
     @Bindable var player: MusicPlaybackController
 
+    @State private var page: NowPlayingPage
     @State private var lyricState: LoadState<MusicLyricResponse> = .idle
-    @State private var queueMessage: String?
     @State private var scrubTime: Double = 0
     @State private var isScrubbing = false
-    @State private var showingQueue = true
-    @State private var actionMessage: String?
     @State private var isDownloading = false
-    @State private var lyricFontScale: LyricFontScale = .medium
-    @State private var keepsScreenAwakeForLyrics = false
-    @State private var showingQueueManager = false
     @State private var playlistTrack: MusicPlaybackTrack?
+    @State private var mvTrack: MusicPlaybackTrack?
     @State private var artworkAccentColor: Color?
+    @State private var toast: String?
+    @State private var toastTask: Task<Void, Never>?
+
+    init(environment: AppEnvironment, player: MusicPlaybackController, initialPage: NowPlayingPage = .cover) {
+        self.environment = environment
+        self.player = player
+        _page = State(initialValue: initialPage)
+    }
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                detailBackground
-                    .ignoresSafeArea()
-
-                if let track = player.currentTrack {
-                    ScrollView {
-                        VStack(spacing: SetuSpacing.xl) {
-                            Capsule()
-                                .fill(SetuColor.textTertiary.opacity(0.35))
-                                .frame(width: 42, height: 5)
-                                .padding(.top, SetuSpacing.sm)
-
-                            artworkHero(for: track)
-
-                            trackHeader(for: track)
-
-                            if player.isBuffering || player.playbackError != nil {
-                                SetuCard {
-                                    playbackStatusRow
-                                }
-                                .padding(.horizontal, SetuSpacing.lg)
-                            }
-
-                            playbackScrubber
-                                .padding(.horizontal, SetuSpacing.lg)
-
-                            playbackControls
-                                .padding(.horizontal, SetuSpacing.lg)
-
-                            secondaryActions(for: track)
-
-                            if let actionMessage {
-                                SetuPill(text: actionMessage, systemImage: "info.circle", tone: .info)
-                            }
-
-                            lyricSection
-                                .task(id: track.id) {
-                                    await loadLyric(songID: track.id)
-                                }
-
-                            if showingQueue {
-                                queueSection
-                            }
-                        }
-                        .padding(.bottom, SetuSpacing.xxl)
-                    }
-                    .gesture(detailSwipeGesture)
-                } else {
-                    SetuEmptyState(title: "暂无播放", message: "从音乐页选择一首歌开始播放", systemImage: "music.note")
-                        .padding()
-                }
-            }
-            .navigationTitle("正在播放")
-            .musicInlineNavigationTitle()
-            .toolbar {
-                Button("关闭") {
-                    dismiss()
-                }
-            }
-            .sheet(isPresented: $showingQueueManager) {
-                MusicQueueManagerSheet(player: player)
-            }
-            .sheet(item: $playlistTrack) { track in
-                AddPlaybackTrackToPlaylistSheet(environment: environment, track: track)
-            }
-            .task(id: player.currentTrack?.id) {
-                if let track = player.currentTrack {
-                    await loadArtworkAccent(for: track)
-                } else {
-                    artworkAccentColor = nil
-                }
-            }
-            .onChange(of: keepsScreenAwakeForLyrics) { _, enabled in
-                setIdleTimerDisabled(enabled)
-            }
-            .onDisappear {
-                setIdleTimerDisabled(false)
-            }
-        }
-    }
-
-    private var detailBackground: some View {
         ZStack {
-            LinearGradient(
-                colors: [
-                    (artworkAccentColor ?? SetuColor.brandSoft).opacity(0.42),
-                    SetuColor.bgBase,
-                    SetuColor.brandSoft.opacity(0.2)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            RadialGradient(
-                colors: [
-                    (artworkAccentColor ?? SetuColor.brandPink).opacity(0.36),
-                    SetuColor.bgBase.opacity(0.08)
-                ],
-                center: .top,
-                startRadius: 40,
-                endRadius: 520
-            )
+            detailBackground
+                .ignoresSafeArea()
+
+            if let track = player.currentTrack {
+                VStack(spacing: SetuSpacing.md) {
+                    detailHeader
+
+                    nowPlayingPageContent(for: track)
+
+                    bottomPanel(for: track)
+                }
+                .padding(.top, SetuSpacing.md)
+                .padding(.bottom, SetuSpacing.lg)
+                .task(id: track.id) {
+                    await loadLyric(songID: track.id)
+                }
+                .task(id: track.id) {
+                    await loadArtworkAccent(for: track)
+                }
+            } else {
+                SetuEmptyState(title: "暂无播放", message: "从音乐页选择一首歌开始播放", systemImage: "music.note")
+                    .padding()
+            }
+        }
+        .overlay(alignment: .top) {
+            if let toast {
+                Text(toast)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(SetuColor.textPrimary)
+                    .padding(.horizontal, SetuSpacing.lg)
+                    .padding(.vertical, SetuSpacing.sm)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .overlay {
+                        Capsule().stroke(SetuColor.separator, lineWidth: 1)
+                    }
+                    .padding(.top, SetuSpacing.xl)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.86), value: toast)
+        .sheet(item: $playlistTrack) { track in
+            AddPlaybackTrackToPlaylistSheet(environment: environment, track: track)
+        }
+        .sheet(item: $mvTrack) { track in
+            NavigationStack {
+                if let mvID = track.mvID, mvID > 0 {
+                    MvPlaybackView(environment: environment, mvID: mvID) {
+                        player.pause()
+                    }
+                    .padding(SetuSpacing.md)
+                    .setuBackground()
+                    .navigationTitle("MV")
+                    .musicInlineNavigationTitle()
+                    .toolbar {
+                        Button("关闭") {
+                            mvTrack = nil
+                        }
+                    }
+                } else {
+                    SetuEmptyState(title: "暂无 MV", message: "当前歌曲没有可播放的 MV", systemImage: "play.rectangle")
+                        .padding()
+                        .setuBackground()
+                }
+            }
+        }
+        .onDisappear {
+            toastTask?.cancel()
         }
     }
 
-    private func artworkHero(for track: MusicPlaybackTrack) -> some View {
-        GeometryReader { proxy in
-            let artSize = min(proxy.size.width * 0.78, 360)
-            MusicArtworkView(
-                urlString: track.coverURLString,
-                width: artSize,
-                height: artSize,
-                cornerRadius: SetuRadius.lg,
-                artworkSize: .lockScreen
-            )
-            .shadow(color: SetuColor.brandPink.opacity(0.24), radius: 24, y: 16)
-            .scaleEffect(player.isPlaying && !reduceMotion ? 1.02 : 0.98)
-            .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.82), value: player.isPlaying)
-            .frame(maxWidth: .infinity)
-        }
-        .frame(height: 380)
-    }
+    // MARK: Header
 
-    private func trackHeader(for track: MusicPlaybackTrack) -> some View {
-        VStack(spacing: SetuSpacing.sm) {
-            Text(track.title)
-                .font(.title2.weight(.semibold))
-                .foregroundStyle(SetuColor.textPrimary)
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-            Text(track.artist)
-                .font(.headline)
-                .foregroundStyle(SetuColor.textSecondary)
-                .lineLimit(1)
-            Text(track.album)
-                .font(SetuTypography.caption)
-                .foregroundStyle(SetuColor.textTertiary)
-                .lineLimit(1)
-            SetuPill(text: queueCaption, systemImage: "music.note.list", tone: .brand)
+    private var detailHeader: some View {
+        HStack(spacing: SetuSpacing.md) {
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "chevron.down")
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(SetuColor.textSecondary)
+                    .frame(width: 44, height: 44)
+                    .background(SetuColor.surfaceMuted.opacity(0.7), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("收起播放页")
+
+            Spacer()
+
+            VStack(spacing: 2) {
+                Text("正在播放")
+                    .font(.caption2)
+                    .foregroundStyle(SetuColor.textTertiary)
+                Text(queueCaption)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(SetuColor.textSecondary)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            if let timerTitle = player.sleepTimerTitle {
+                SetuPill(text: timerTitle, systemImage: "moon.zzz.fill", tone: .info)
+                    .accessibilityLabel("睡眠定时：\(timerTitle)")
+            } else {
+                Color.clear.frame(width: 44, height: 44)
+            }
         }
         .padding(.horizontal, SetuSpacing.lg)
+    }
+
+    // MARK: Pages
+
+    @ViewBuilder
+    private func nowPlayingPageContent(for track: MusicPlaybackTrack) -> some View {
+        ZStack {
+            switch page {
+            case .cover:
+                coverPage(for: track)
+                    .transition(.opacity)
+            case .lyrics:
+                lyricsPage(for: track)
+                    .transition(.opacity)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .contentShape(Rectangle())
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: page)
+    }
+
+    private func coverPage(for track: MusicPlaybackTrack) -> some View {
+        // Artwork adapts to whatever the page area offers, so controls stay
+        // on-screen for iPhone SE and the art still fills a Pro Max.
+        GeometryReader { proxy in
+            let side = max(min(proxy.size.width - SetuSpacing.xxl * 2, proxy.size.height * 0.62, 360), 120)
+            VStack(spacing: SetuSpacing.xl) {
+                Spacer(minLength: 0)
+
+                MusicArtworkView(
+                    urlString: track.coverURLString,
+                    width: side,
+                    height: side,
+                    cornerRadius: SetuRadius.lg,
+                    artworkSize: .lockScreen,
+                    onTap: {
+                        PlayerHaptics.light()
+                        showLyrics()
+                    }
+                )
+                .shadow(color: SetuColor.brandPink.opacity(0.24), radius: 24, y: 16)
+                .scaleEffect(player.isPlaying && !reduceMotion ? 1.0 : 0.92)
+                .animation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.78), value: player.isPlaying)
+                .accessibilityLabel("歌曲封面，点击查看歌词")
+
+                VStack(spacing: SetuSpacing.xs) {
+                    Text(track.title)
+                        .font(.title2.weight(.semibold))
+                        .foregroundStyle(SetuColor.textPrimary)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                    Text("\(track.artist) — \(track.album)")
+                        .font(.subheadline)
+                        .foregroundStyle(SetuColor.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, SetuSpacing.xl)
+
+                if track.hasMV {
+                    Button {
+                        mvTrack = track
+                    } label: {
+                        Label("观看 MV", systemImage: "play.rectangle.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(SetuColor.brandInk)
+                            .frame(minHeight: 44)
+                            .padding(.horizontal, SetuSpacing.lg)
+                            .background(SetuColor.brandSoft.opacity(0.24), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("观看 \(track.title) 的 MV")
+                }
+
+                Spacer(minLength: 0)
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+        }
+        .contentShape(Rectangle())
+        .simultaneousGesture(trackSkipGesture)
+    }
+
+    private func lyricsPage(for track: MusicPlaybackTrack) -> some View {
+        VStack(spacing: 0) {
+            switch lyricState {
+            case .idle, .loading:
+                Spacer()
+                SetuEmptyState(title: "正在加载歌词", systemImage: "text.quote", isLoading: true)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        PlayerHaptics.light()
+                        showCover()
+                    }
+                Spacer()
+            case .failed(let message):
+                Spacer()
+                SetuEmptyState(title: "歌词加载失败", message: message, systemImage: "exclamationmark.triangle")
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        PlayerHaptics.light()
+                        showCover()
+                    }
+                Spacer()
+            case .loaded(let lyric):
+                let rawLyric = lyric.lrc?.lyric ?? ""
+                let translation = lyric.tlyric?.lyric ?? ""
+                if rawLyric.isEmpty && translation.isEmpty {
+                    Spacer()
+                    SetuEmptyState(title: "暂无歌词", message: "这首歌暂时没有可用歌词", systemImage: "text.quote")
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            PlayerHaptics.light()
+                            showCover()
+                        }
+                    Spacer()
+                } else {
+                    LyricScrollView(
+                        lines: LyricParser.parse(rawLyric, translation: translation),
+                        currentTime: player.currentTimeSeconds,
+                        expands: true,
+                        onBackgroundTap: {
+                            PlayerHaptics.light()
+                            showCover()
+                        }
+                    ) { time in
+                        PlayerHaptics.light()
+                        player.seek(to: time)
+                    }
+                    .padding(.horizontal, SetuSpacing.sm)
+                }
+            }
+        }
+    }
+
+    // MARK: Pinned bottom panel
+
+    private func bottomPanel(for track: MusicPlaybackTrack) -> some View {
+        VStack(spacing: SetuSpacing.md) {
+            if player.playbackError != nil || player.isBuffering {
+                playbackStatusRow
+                    .padding(.horizontal, SetuSpacing.lg)
+            }
+
+            playbackScrubber
+                .padding(.horizontal, SetuSpacing.lg)
+
+            HStack(spacing: SetuSpacing.md) {
+                NowPlayingRoundButton(
+                    systemImage: player.playMode.systemImage,
+                    label: "播放模式：\(player.playMode.title)",
+                    tint: SetuColor.info
+                ) {
+                    PlayerHaptics.light()
+                    player.cyclePlayMode()
+                    showToast(player.playMode.title)
+                }
+
+                NowPlayingRoundButton(
+                    systemImage: "backward.fill",
+                    label: "上一首",
+                    tint: SetuColor.brandInk,
+                    disabled: !player.canPlayPrevious
+                ) {
+                    PlayerHaptics.light()
+                    Task { await player.userSkip(by: -1) }
+                }
+
+                Button {
+                    PlayerHaptics.medium()
+                    player.toggle()
+                } label: {
+                    Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.title.weight(.bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 72, height: 72)
+                        .background(SetuColor.heroGradient, in: Circle())
+                        .shadow(color: SetuColor.brandPink.opacity(0.28), radius: 18, y: 10)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(player.isPlaying ? "暂停" : "播放")
+
+                NowPlayingRoundButton(
+                    systemImage: "forward.fill",
+                    label: "下一首",
+                    tint: SetuColor.brandInk,
+                    disabled: !player.canPlayNext
+                ) {
+                    PlayerHaptics.light()
+                    Task { await player.userSkip(by: 1) }
+                }
+
+                moreMenu(for: track)
+            }
+            .padding(.horizontal, SetuSpacing.lg)
+        }
+    }
+
+    private func moreMenu(for track: MusicPlaybackTrack) -> some View {
+        Menu {
+            if track.hasMV {
+                Button {
+                    mvTrack = track
+                } label: {
+                    Label("观看 MV", systemImage: "play.rectangle")
+                }
+            }
+
+            Button {
+                playlistTrack = track
+            } label: {
+                Label("收藏到歌单", systemImage: "text.badge.plus")
+            }
+
+            Button {
+                Task { await download(track) }
+            } label: {
+                Label(isDownloading ? "正在准备下载…" : "下载", systemImage: "arrow.down.circle")
+            }
+            .disabled(isDownloading)
+
+            ShareLink(item: "\(track.title) - \(track.artist)") {
+                Label("分享", systemImage: "square.and.arrow.up")
+            }
+
+            Menu {
+                ForEach(MusicSleepTimerOption.allCases) { option in
+                    Button(option.title) {
+                        player.startSleepTimer(option)
+                        showToast("睡眠定时：\(option.title)")
+                    }
+                }
+                if player.sleepTimerTitle != nil {
+                    Divider()
+                    Button("取消定时", role: .destructive) {
+                        player.cancelSleepTimer()
+                        showToast("已取消睡眠定时")
+                    }
+                }
+            } label: {
+                Label(player.sleepTimerTitle.map { "睡眠定时：\($0)" } ?? "睡眠定时", systemImage: "moon.zzz")
+            }
+
+            Divider()
+
+            Button(role: .destructive) {
+                player.stop()
+                dismiss()
+            } label: {
+                Label("停止播放", systemImage: "stop.circle")
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(SetuColor.brandInk)
+                .frame(width: 50, height: 50)
+                .background(SetuColor.surfaceMuted, in: Circle())
+        }
+        .accessibilityLabel("更多操作")
     }
 
     private var playbackScrubber: some View {
@@ -300,232 +860,10 @@ private struct MusicNowPlayingDetailView: View {
             HStack {
                 Text(formatTime(isScrubbing ? scrubTime : player.currentTimeSeconds))
                 Spacer()
-                if player.isBuffering {
-                    Label("缓冲", systemImage: "hourglass")
-                }
-                Spacer()
                 Text(formatTime(player.durationSeconds))
             }
             .font(.caption.monospacedDigit())
             .foregroundStyle(SetuColor.textSecondary)
-        }
-    }
-
-    private var playbackControls: some View {
-        HStack(spacing: SetuSpacing.md) {
-            NowPlayingRoundButton(
-                systemImage: player.playMode.systemImage,
-                label: "播放模式：\(player.playMode.title)",
-                tint: SetuColor.info,
-                action: player.cyclePlayMode
-            )
-
-            NowPlayingRoundButton(
-                systemImage: "backward.fill",
-                label: "上一首",
-                tint: SetuColor.brandInk,
-                disabled: !player.canPlayPrevious
-            ) {
-                Task { await player.userSkip(by: -1) }
-            }
-
-            Button {
-                player.toggle()
-            } label: {
-                Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.title.weight(.bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 72, height: 72)
-                    .background(SetuColor.heroGradient, in: Circle())
-                    .shadow(color: SetuColor.brandPink.opacity(0.28), radius: 18, y: 10)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(player.isPlaying ? "暂停" : "播放")
-
-            NowPlayingRoundButton(
-                systemImage: "forward.fill",
-                label: "下一首",
-                tint: SetuColor.brandInk,
-                disabled: !player.canPlayNext
-            ) {
-                Task { await player.userSkip(by: 1) }
-            }
-
-            NowPlayingRoundButton(
-                systemImage: showingQueue ? "list.bullet.rectangle.fill" : "list.bullet.rectangle",
-                label: "管理队列",
-                tint: SetuColor.info
-            ) {
-                showingQueueManager = true
-            }
-        }
-    }
-
-    private func secondaryActions(for track: MusicPlaybackTrack) -> some View {
-        HStack(spacing: SetuSpacing.md) {
-            NowPlayingActionButton(title: "收藏", systemImage: "text.badge.plus") {
-                playlistTrack = track
-            }
-
-            NowPlayingActionButton(
-                title: isDownloading ? "准备中" : "下载",
-                systemImage: isDownloading ? "hourglass" : "arrow.down"
-            ) {
-                Task { await download(track) }
-            }
-            .disabled(isDownloading)
-
-            ShareLink(item: "\(track.title) - \(track.artist)") {
-                Label("分享", systemImage: "square.and.arrow.up")
-            }
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(SetuColor.brandInk)
-            .frame(maxWidth: .infinity, minHeight: 44)
-            .background(SetuColor.surfaceMuted, in: Capsule())
-
-            Menu {
-                ForEach(MusicSleepTimerOption.allCases) { option in
-                    Button(option.title) {
-                        player.startSleepTimer(option)
-                        actionMessage = "睡眠定时：\(option.title)"
-                    }
-                }
-                if player.sleepTimerTitle != nil {
-                    Divider()
-                    Button("取消定时", role: .destructive) {
-                        player.cancelSleepTimer()
-                        actionMessage = "已取消睡眠定时"
-                    }
-                }
-            } label: {
-                Label(player.sleepTimerTitle ?? "睡眠定时", systemImage: "moon.zzz")
-            }
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(SetuColor.brandInk)
-            .frame(maxWidth: .infinity, minHeight: 44)
-            .background(SetuColor.surfaceMuted, in: Capsule())
-        }
-        .padding(.horizontal, SetuSpacing.lg)
-    }
-
-    @ViewBuilder
-    private var queueSection: some View {
-        if !player.queueTracks.isEmpty {
-            SetuCard {
-                VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                    SetuSectionHeader(title: player.queueName ?? "当前队列", subtitle: "\(player.queueTracks.count) 首歌曲")
-                    if let queueMessage {
-                        Text(queueMessage)
-                            .font(SetuTypography.caption)
-                            .foregroundStyle(SetuColor.textSecondary)
-                    }
-
-                    ForEach(Array(player.queueTracks.enumerated()), id: \.offset) { index, track in
-                        Button {
-                            Task { await playQueuedTrack(track) }
-                        } label: {
-                            HStack(spacing: SetuSpacing.md) {
-                                MusicArtworkView(urlString: track.coverURLString, width: 44, height: 44, cornerRadius: SetuRadius.sm)
-                                VStack(alignment: .leading, spacing: SetuSpacing.xs) {
-                                    Text(track.title)
-                                        .font(.subheadline.weight(track.id == player.currentTrack?.id ? .semibold : .regular))
-                                        .foregroundStyle(SetuColor.textPrimary)
-                                        .lineLimit(1)
-                                    Text(track.artist)
-                                        .font(.caption)
-                                        .foregroundStyle(SetuColor.textSecondary)
-                                        .lineLimit(1)
-                                }
-                                Spacer()
-                                if index == player.currentQueueIndex {
-                                    Image(systemName: player.isPlaying ? "speaker.wave.2.fill" : "pause.fill")
-                                        .foregroundStyle(SetuColor.brandPink)
-                                }
-                            }
-                            .frame(minHeight: 44)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-            .padding(.horizontal, SetuSpacing.lg)
-        }
-    }
-
-    @ViewBuilder
-    private var lyricSection: some View {
-        SetuCard {
-            VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                SetuSectionHeader(title: "歌词", subtitle: "点击歌词可跳转播放进度")
-                switch lyricState {
-                case .idle, .loading:
-                    SetuEmptyState(title: "正在加载歌词", message: "歌词会随当前歌曲自动刷新", systemImage: "text.quote", isLoading: true)
-                case .failed(let message):
-                    SetuEmptyState(title: "歌词加载失败", message: message, systemImage: "exclamationmark.triangle")
-                case .loaded(let lyric):
-                    let rawLyric = lyric.lrc?.lyric ?? ""
-                    let translation = lyric.tlyric?.lyric ?? ""
-                    if rawLyric.isEmpty && translation.isEmpty {
-                        SetuEmptyState(title: "暂无歌词", message: "这首歌暂时没有可用歌词", systemImage: "text.quote")
-                    } else {
-                        HStack(spacing: SetuSpacing.sm) {
-                            Picker("歌词字号", selection: $lyricFontScale) {
-                                ForEach(LyricFontScale.allCases) { scale in
-                                    Text(scale.title).tag(scale)
-                                }
-                            }
-                            .pickerStyle(.segmented)
-                            .accessibilityLabel("歌词字号")
-
-                            Toggle(isOn: $keepsScreenAwakeForLyrics) {
-                                Image(systemName: "lightbulb")
-                            }
-                            .labelsHidden()
-                            .tint(SetuColor.brandPink)
-                            .accessibilityLabel("查看歌词时保持屏幕常亮")
-                        }
-
-                        LyricScrollView(
-                            lines: LyricParser.parse(rawLyric, translation: translation),
-                            currentTime: player.currentTimeSeconds,
-                            fontScale: lyricFontScale,
-                            onSeek: player.seek(to:)
-                        )
-                    }
-                }
-            }
-        }
-        .padding(.horizontal, SetuSpacing.lg)
-    }
-
-    private var detailSwipeGesture: some Gesture {
-        DragGesture(minimumDistance: 32)
-            .onEnded { value in
-                if value.translation.height > 72 {
-                    dismiss()
-                } else if value.translation.width < -56 {
-                    Task { await player.userSkip(by: 1) }
-                } else if value.translation.width > 56 {
-                    Task { await player.userSkip(by: -1) }
-                }
-            }
-    }
-
-    private var queueCaption: String {
-        let name = player.queueName ?? "当前队列"
-        let count = player.queueTracks.count
-        if count > 1 {
-            return "\(name) · \(count) 首"
-        }
-        return name
-    }
-
-    private func loadLyric(songID: Int) async {
-        lyricState = .loading
-        do {
-            lyricState = .loaded(try await environment.musicClient.lyric(songID: songID))
-        } catch {
-            lyricState = .failed(error.localizedDescription)
         }
     }
 
@@ -558,46 +896,121 @@ private struct MusicNowPlayingDetailView: View {
         }
     }
 
-    private func playQueuedTrack(_ track: MusicPlaybackTrack) async {
-        guard track.id != player.currentTrack?.id else { return }
-        await play(track)
+    private var trackSkipGesture: some Gesture {
+        DragGesture(minimumDistance: 24, coordinateSpace: .local)
+            .onEnded { value in
+                let horizontal = abs(value.predictedEndTranslation.width) > abs(value.translation.width)
+                    ? value.predictedEndTranslation.width
+                    : value.translation.width
+                let vertical = abs(value.predictedEndTranslation.height) > abs(value.translation.height)
+                    ? value.predictedEndTranslation.height
+                    : value.translation.height
+                guard abs(horizontal) > 48, abs(horizontal) > abs(vertical) * 1.2 else {
+                    return
+                }
+                if horizontal < 0 {
+                    guard player.canPlayNext else {
+                        showToast("已经是最后一首")
+                        return
+                    }
+                    PlayerHaptics.light()
+                    Task { await player.userSkip(by: 1) }
+                } else {
+                    guard player.canPlayPrevious else {
+                        showToast("已经是第一首")
+                        return
+                    }
+                    PlayerHaptics.light()
+                    Task { await player.userSkip(by: -1) }
+                }
+            }
     }
 
-    private func play(_ track: MusicPlaybackTrack) async {
-        queueMessage = "正在准备播放"
-        guard let resolution = await player.resolveTrackURL?(track) else {
-            queueMessage = "播放器尚未准备好"
-            return
+    // MARK: Background & helpers
+
+    private var detailBackground: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    (artworkAccentColor ?? SetuColor.brandSoft).opacity(0.42),
+                    SetuColor.bgBase,
+                    SetuColor.brandSoft.opacity(0.2)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            RadialGradient(
+                colors: [
+                    (artworkAccentColor ?? SetuColor.brandPink).opacity(0.36),
+                    SetuColor.bgBase.opacity(0.08)
+                ],
+                center: .top,
+                startRadius: 40,
+                endRadius: 520
+            )
         }
-        switch resolution {
-        case .success(let url, let notice):
-            player.play(url: url, track: track, queueName: player.queueName, queueTracks: player.queueTracks, notice: notice)
-            queueMessage = notice
-        case .unavailable(let reason):
-            queueMessage = reason
+    }
+
+    private var queueCaption: String {
+        let name = player.queueName ?? "当前队列"
+        let count = player.queueTracks.count
+        if count > 1 {
+            return "\(name) · \(count) 首"
+        }
+        return name
+    }
+
+    private func showLyrics() {
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
+            page = .lyrics
+        }
+    }
+
+    private func showCover() {
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
+            page = .cover
+        }
+    }
+
+    private func showToast(_ text: String) {
+        toastTask?.cancel()
+        toast = text
+        toastTask = Task {
+            try? await Task.sleep(nanoseconds: 2_400_000_000)
+            guard !Task.isCancelled else { return }
+            toast = nil
+        }
+    }
+
+    private func loadLyric(songID: Int) async {
+        lyricState = .loading
+        do {
+            lyricState = .loaded(try await environment.musicClient.lyric(songID: songID))
+        } catch {
+            lyricState = .failed(error.localizedDescription)
         }
     }
 
     private func download(_ track: MusicPlaybackTrack) async {
         isDownloading = true
-        actionMessage = "正在准备下载"
+        showToast("正在准备下载")
         defer { isDownloading = false }
         do {
             let response = try await environment.musicClient.url(songID: track.id, level: "standard")
             guard let item = response.data?.first, let urlString = item.playableURLString else {
-                actionMessage = response.data?.first?.unavailableMessage ?? response.playabilityReason ?? response.message ?? "这首歌暂时无法下载"
+                showToast(response.data?.first?.unavailableMessage ?? response.playabilityReason ?? response.message ?? "这首歌暂时无法下载")
                 return
             }
             let filename = "\(track.title) - \(track.artist).mp3"
             let signed = try await environment.downloadClient.sign(url: urlString, filename: filename)
             guard let url = URL(string: signed.downloadUrl) else {
-                actionMessage = "下载地址无效"
+                showToast("下载地址无效")
                 return
             }
             openURL(url)
-            actionMessage = "已打开下载地址"
+            showToast("已打开下载地址")
         } catch {
-            actionMessage = error.localizedDescription
+            showToast(error.localizedDescription)
         }
     }
 
@@ -626,12 +1039,6 @@ private struct MusicNowPlayingDetailView: View {
         let total = Int(seconds.rounded())
         return "\(total / 60):\(String(format: "%02d", total % 60))"
     }
-
-    private func setIdleTimerDisabled(_ disabled: Bool) {
-        #if os(iOS)
-        UIApplication.shared.isIdleTimerDisabled = disabled
-        #endif
-    }
 }
 
 private struct NowPlayingRoundButton: View {
@@ -656,118 +1063,23 @@ private struct NowPlayingRoundButton: View {
     }
 }
 
-private struct NowPlayingActionButton: View {
-    let title: String
-    let systemImage: String
-    let action: () -> Void
+// MARK: - Haptics
 
-    var body: some View {
-        Button(action: action) {
-            Label(title, systemImage: systemImage)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(SetuColor.brandInk)
-                .frame(maxWidth: .infinity, minHeight: 44)
-                .background(SetuColor.surfaceMuted, in: Capsule())
-        }
-        .buttonStyle(.plain)
+enum PlayerHaptics {
+    static func light() {
+        #if os(iOS)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        #endif
+    }
+
+    static func medium() {
+        #if os(iOS)
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        #endif
     }
 }
 
-private struct MusicQueueManagerSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @Bindable var player: MusicPlaybackController
-
-    var body: some View {
-        NavigationStack {
-            List {
-                if player.queueTracks.isEmpty {
-                    SetuEmptyState(title: "队列为空", message: "从音乐页选择歌曲后会显示在这里", systemImage: "music.note.list")
-                        .listRowBackground(Color.clear)
-                } else {
-                    Section {
-                        ForEach(player.queueTracks) { track in
-                            queueRow(track)
-                                .swipeActions(edge: .trailing) {
-                                    Button(role: .destructive) {
-                                        player.removeQueuedTrack(track)
-                                    } label: {
-                                        Label("移除", systemImage: "trash")
-                                    }
-                                }
-                        }
-                        .onMove(perform: player.moveQueueTracks)
-                    } header: {
-                        Text(player.queueName ?? "当前队列")
-                    } footer: {
-                        Text("拖动可调整播放顺序，左滑可移除歌曲。")
-                    }
-                }
-            }
-            .musicQueueListStyle()
-            .navigationTitle("播放队列")
-            .musicInlineNavigationTitle()
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("关闭") {
-                        dismiss()
-                    }
-                }
-                ToolbarItemGroup(placement: .primaryAction) {
-                    if player.queueTracks.count > 1 {
-                        Button("清空待播", role: .destructive) {
-                            player.clearUpcomingTracks()
-                        }
-                    }
-                    #if os(iOS)
-                    EditButton()
-                    #endif
-                }
-            }
-        }
-    }
-
-    private func queueRow(_ track: MusicPlaybackTrack) -> some View {
-        HStack(spacing: SetuSpacing.md) {
-            MusicArtworkView(urlString: track.coverURLString, width: 44, height: 44, cornerRadius: SetuRadius.sm)
-            VStack(alignment: .leading, spacing: SetuSpacing.xs) {
-                Text(track.title)
-                    .font(.subheadline.weight(track.id == player.currentTrack?.id ? .semibold : .regular))
-                    .foregroundStyle(SetuColor.textPrimary)
-                    .lineLimit(1)
-                Text(track.artist)
-                    .font(.caption)
-                    .foregroundStyle(SetuColor.textSecondary)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: SetuSpacing.sm)
-            if track.id == player.currentTrack?.id {
-                Image(systemName: player.isPlaying ? "speaker.wave.2.fill" : "pause.fill")
-                    .foregroundStyle(SetuColor.brandPink)
-                    .accessibilityLabel("正在播放")
-            } else {
-                Menu {
-                    Button {
-                        player.playNext(track)
-                    } label: {
-                        Label("下一首播放", systemImage: "text.line.first.and.arrowtriangle.forward")
-                    }
-                    Button(role: .destructive) {
-                        player.removeQueuedTrack(track)
-                    } label: {
-                        Label("移除", systemImage: "trash")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                        .font(.title3)
-                        .foregroundStyle(SetuColor.textSecondary)
-                        .frame(minWidth: 44, minHeight: 44)
-                }
-                .accessibilityLabel("队列操作")
-            }
-        }
-        .frame(minHeight: 52)
-    }
-}
+// MARK: - Add to playlist
 
 private struct AddPlaybackTrackToPlaylistSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -932,15 +1244,6 @@ private extension View {
         navigationBarTitleDisplayMode(.inline)
         #else
         self
-        #endif
-    }
-
-    @ViewBuilder
-    func musicQueueListStyle() -> some View {
-        #if os(iOS)
-        listStyle(.insetGrouped)
-        #else
-        listStyle(.automatic)
         #endif
     }
 }

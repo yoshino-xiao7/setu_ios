@@ -7,6 +7,7 @@ struct RootAppView: View {
     @State private var tabRouter = TabRouter()
     @State private var loggedOutRouter = RouterPath()
     @State private var musicPlayer = MusicPlaybackController()
+    @State private var showingMusicQueueDrawer = false
     @State private var isSessionReady = false
 
     init(environment: AppEnvironment) {
@@ -106,16 +107,58 @@ struct RootAppView: View {
     }
 
     private var appTabs: some View {
-        TabView(selection: $selectedTab) {
-            ForEach(AppTab.allCases) { tab in
-                tabContent(for: tab)
-                    .tabItem {
-                        tab.label
+        ZStack(alignment: .bottom) {
+            TabView(selection: $selectedTab) {
+                ForEach(AppTab.allCases) { tab in
+                    tabContent(for: tab)
+                        .tabItem {
+                            tab.label
+                        }
+                        .tag(tab)
+                }
+            }
+            .background(SetuColor.pageGradient.ignoresSafeArea())
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if musicPlayer.currentTrack != nil {
+                    Color.clear
+                        .frame(height: 88)
+                        .allowsHitTesting(false)
+                }
+            }
+
+            if musicPlayer.currentTrack != nil {
+                MusicMiniPlayerBar(environment: environment, player: musicPlayer) {
+                    showingMusicQueueDrawer = true
+                }
+                .padding(.bottom, 64)
+                .zIndex(1)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
+            if showingMusicQueueDrawer {
+                Color.black.opacity(0.28)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        showingMusicQueueDrawer = false
                     }
-                    .tag(tab)
+                    .zIndex(2)
+
+                MusicQueueDrawerView(player: musicPlayer) {
+                    showingMusicQueueDrawer = false
+                }
+                .padding(.horizontal, SetuSpacing.md)
+                .padding(.bottom, SetuSpacing.lg)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .zIndex(3)
             }
         }
-        .background(SetuColor.pageGradient.ignoresSafeArea())
+        .animation(.spring(response: 0.32, dampingFraction: 0.86), value: showingMusicQueueDrawer)
+        .animation(.spring(response: 0.32, dampingFraction: 0.86), value: musicPlayer.currentTrack?.id)
+        .onChange(of: musicPlayer.currentTrack?.id) { _, trackID in
+            if trackID == nil {
+                showingMusicQueueDrawer = false
+            }
+        }
     }
 
     private func tabContent(for tab: AppTab) -> some View {

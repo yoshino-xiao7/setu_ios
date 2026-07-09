@@ -213,11 +213,8 @@ struct MusicPlaylistDetailView: View {
         .task { await load() }
         .refreshable { await load() }
         .safeAreaInset(edge: .bottom) {
-            VStack(spacing: SetuSpacing.sm) {
-                if isSelectionMode {
-                    playlistBatchActionBar
-                }
-                MusicMiniPlayerBar(environment: environment, player: player)
+            if isSelectionMode {
+                playlistBatchActionBar
                     .padding(.horizontal)
                     .padding(.top, 6)
             }
@@ -630,21 +627,32 @@ private struct PlaylistSongRow: View {
                     .accessibilityLabel(isSelected ? "已选中" : "未选中")
             }
             MusicArtworkView(urlString: song.coverUrl)
-            VStack(alignment: .leading, spacing: SetuSpacing.xs) {
-                Text(song.songName)
-                    .font(SetuTypography.headline)
-                    .foregroundStyle(SetuColor.textPrimary)
-                    .lineLimit(2)
-                Text(song.artistName)
-                    .font(SetuTypography.caption)
-                    .foregroundStyle(SetuColor.textSecondary)
-                if let albumName = song.albumName, !albumName.isEmpty {
-                    Text(albumName)
-                        .font(.caption)
-                        .foregroundStyle(SetuColor.textSecondary)
+            Button {
+                if isSelectionMode {
+                    onToggleSelection()
+                } else {
+                    onPlay()
                 }
+            } label: {
+                VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+                    Text(song.songName)
+                        .font(SetuTypography.headline)
+                        .foregroundStyle(SetuColor.textPrimary)
+                        .lineLimit(2)
+                    Text(song.artistName)
+                        .font(SetuTypography.caption)
+                        .foregroundStyle(SetuColor.textSecondary)
+                    if let albumName = song.albumName, !albumName.isEmpty {
+                        Text(albumName)
+                            .font(.caption)
+                            .foregroundStyle(SetuColor.textSecondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
-            Spacer()
+            .buttonStyle(.plain)
+            .accessibilityLabel(isSelectionMode ? "选择 \(song.songName)" : "播放 \(song.songName)")
             if !isSelectionMode {
                 Button(action: onPlay) {
                     Image(systemName: "play.circle")
