@@ -3,27 +3,33 @@ import SwiftUI
 
 #if os(iOS)
 import UIKit
-#elseif os(macOS)
-import AppKit
 #endif
 
 struct RandomImageSwipeView: View {
     @Environment(RouterPath.self) private var router
     @Bindable var environment: AppEnvironment
 
-    @State private var pointsState: LoadState<PointsBalance> = .idle
-    @State private var imageState: LoadState<SetuImageItem> = .idle
-    @State private var currentImage: SetuImageItem?
+    @State private var imageState: LoadState<ImageFeedCard> = .idle
+    @State private var currentCard: ImageFeedCard?
+    @State private var feedQueue: [ImageFeedCard] = []
+    @State private var unlockedItems: [String: SetuImageItem] = [:]
+    @State private var unlockingTokens: Set<String> = []
+    @State private var isPrefetching = false
     @State private var r18 = 0
     @State private var keyword = ""
     @State private var tagText = ""
-    @State private var size = "regular"
+    @State private var aspectRatio = ""
     @State private var excludeAI = true
     @State private var message: String?
     @State private var showingParameters = false
     @State private var dragOffset = CGSize.zero
+    @State private var balance: Int?
+    @State private var costPerImage = 20
+    @State private var settleUnlockTask: Task<Void, Never>?
 
-    private let costPerCall = 20
+    private let preloadLimit = 10
+    private let refillThreshold = 3
+    private let settleDelayNanoseconds: UInt64 = 650_000_000
 
     var body: some View {
         ZStack {
@@ -80,7 +86,7 @@ struct RandomImageSwipeView: View {
                 r18: $r18,
                 keyword: $keyword,
                 tagText: $tagText,
-                size: $size,
+                aspectRatio: $aspectRatio,
                 excludeAI: $excludeAI
             ) {
                 showingParameters = false
@@ -88,28 +94,39 @@ struct RandomImageSwipeView: View {
             }
         }
         .task {
-            await loadPoints()
-            if currentImage == nil {
-                await loadNextImage(reason: "上滑、下滑或左右滑继续刷图")
+            await loadBalance()
+            await prefetchIfNeeded(force: true)
+            if currentCard == nil {
+                await loadNextImage(reason: "预加载完成，停留片刻后解锁")
             }
         }
         .refreshable {
             await reloadFromParameters()
         }
+        .onDisappear {
+            settleUnlockTask?.cancel()
+        }
     }
 
     private var statusStrip: some View {
         HStack(spacing: SetuSpacing.sm) {
-            Label(pointsText, systemImage: "bolt.circle")
+            Label(balanceText, systemImage: "bolt.circle")
             Divider()
                 .frame(height: 18)
-            Label("单次 \(costPerCall)", systemImage: "tag")
+            Label("解锁 \(costPerImage)", systemImage: "tag")
+            Divider()
+                .frame(height: 18)
+            Label("\(feedQueue.count) 张已预加载", systemImage: "tray.full")
             Spacer()
-            if isLoadingImage {
+            if isPrefetching {
                 ProgressView()
                     .tint(SetuColor.brandPink)
+            } else if isCurrentUnlocking {
+                Label("正在解锁", systemImage: "lock.open")
+            } else if isCurrentUnlocked {
+                Label("已解锁", systemImage: "checkmark.circle")
             } else {
-                Label("滑动换图", systemImage: "hand.draw")
+                Label("停留扣分", systemImage: "hand.tap")
             }
         }
         .font(.footnote)
@@ -121,6 +138,7 @@ struct RandomImageSwipeView: View {
             Capsule()
                 .stroke(SetuColor.separator, lineWidth: 1)
         }
+        .accessibilityLabel("积分 \(balanceText)，当前队列已预加载 \(feedQueue.count) 张，图片稳定停留后才会解锁扣分")
     }
 
     private func messageStrip(_ text: String) -> some View {
@@ -149,29 +167,28 @@ struct RandomImageSwipeView: View {
                     .fill(SetuColor.surfaceMuted)
 
                 switch imageState {
-                case .idle where currentImage == nil:
+                case .idle where currentCard == nil:
                     loadingPlaceholder
-                case .loading where currentImage == nil:
+                case .loading where currentCard == nil:
                     loadingPlaceholder
-                case .failed(let text) where currentImage == nil:
+                case .failed(let text) where currentCard == nil:
                     SetuEmptyState(title: "图片加载失败", message: text, systemImage: "photo.on.rectangle")
                 default:
-                    if let currentImage {
-                        RandomImageCard(item: currentImage, stageSize: proxy.size)
+                    if let currentCard {
+                        RandomImageCard(
+                            card: currentCard,
+                            unlockedItem: unlockedItems[currentCard.token],
+                            stageSize: proxy.size
+                        )
                     } else {
                         SetuEmptyState(title: "暂无图片", systemImage: "photo.on.rectangle")
                     }
                 }
 
-                if isLoadingImage && currentImage != nil {
-                    VStack {
-                        ProgressView()
-                            .tint(SetuColor.brandPink)
-                        Text("正在切换")
-                            .font(.caption)
-                    }
-                    .padding(12)
-                    .background(.thinMaterial, in: Capsule())
+                if isLoadingImage && currentCard != nil {
+                    floatingStatus(systemImage: "arrow.triangle.2.circlepath", title: "正在切换")
+                } else if isCurrentUnlocking {
+                    floatingStatus(systemImage: "lock.open", title: "正在解锁")
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: SetuRadius.lg, style: .continuous))
@@ -180,8 +197,8 @@ struct RandomImageSwipeView: View {
                     .stroke(SetuColor.separator, lineWidth: 1)
             }
             .overlay(alignment: .bottom) {
-                if let currentImage {
-                    imageMetadataOverlay(currentImage)
+                if let currentCard {
+                    imageMetadataOverlay(currentCard)
                 }
             }
             .offset(dragOffset)
@@ -211,22 +228,34 @@ struct RandomImageSwipeView: View {
         VStack(spacing: 12) {
             ProgressView()
                 .tint(SetuColor.brandPink)
-            Text("正在获取图片")
+            Text(isPrefetching ? "正在预加载图片" : "正在准备图片")
                 .font(.footnote)
                 .foregroundStyle(SetuColor.textSecondary)
         }
     }
 
+    private func floatingStatus(systemImage: String, title: String) -> some View {
+        VStack(spacing: 6) {
+            ProgressView()
+                .tint(SetuColor.brandPink)
+            Label(title, systemImage: systemImage)
+                .font(.caption)
+        }
+        .padding(12)
+        .background(.thinMaterial, in: Capsule())
+    }
+
     private var actionBar: some View {
         HStack(spacing: SetuSpacing.lg) {
             Button {
-                openOriginal()
+                Task { await openOriginal() }
             } label: {
                 Image(systemName: "arrow.up.forward.square")
                     .frame(width: 48, height: 48)
                     .background(SetuColor.surface.opacity(0.62), in: Circle())
             }
-            .disabled(currentImage?.originalURLString == nil)
+            .disabled(currentCard == nil)
+            .setuButtonFeedback(cornerRadius: 24)
             .accessibilityLabel("打开原图")
 
             Button {
@@ -236,6 +265,7 @@ struct RandomImageSwipeView: View {
                     .frame(width: 48, height: 48)
                     .background(SetuColor.surface.opacity(0.62), in: Circle())
             }
+            .setuButtonFeedback(cornerRadius: 24)
             .accessibilityLabel("刷图参数")
 
             Button {
@@ -245,11 +275,12 @@ struct RandomImageSwipeView: View {
                     .frame(width: 48, height: 48)
                     .background(SetuColor.surface.opacity(0.62), in: Circle())
             }
+            .disabled(isLoadingImage)
+            .setuButtonFeedback(cornerRadius: 24)
             .accessibilityLabel("下一张")
         }
         .font(.title3.weight(.semibold))
         .foregroundStyle(SetuColor.brandPink)
-        .buttonStyle(.plain)
         .frame(maxWidth: .infinity)
         .padding(.vertical, SetuSpacing.sm)
         .background(.ultraThinMaterial, in: Capsule())
@@ -259,54 +290,42 @@ struct RandomImageSwipeView: View {
         }
     }
 
-    private func imageMetadataOverlay(_ item: SetuImageItem) -> some View {
+    private func imageMetadataOverlay(_ card: ImageFeedCard) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(item.title)
+                    Text(title(for: card))
                         .font(.headline)
                         .lineLimit(2)
-                    Text(item.author)
+                    Text(author(for: card))
                         .font(.footnote)
                         .foregroundStyle(.white.opacity(0.86))
                 }
                 Spacer()
-                if item.r18 == 1 {
+                if r18Value(for: card) {
                     SetuPill(text: "R18", tone: .danger)
                 }
+                SetuPill(text: unlockedItems[card.token] == nil ? "预览" : "已解锁", tone: unlockedItems[card.token] == nil ? .muted : .success)
             }
 
             HStack(spacing: 10) {
-                Label("PID \(item.pid)-\(item.page)", systemImage: "number")
-                Label("\(item.width)x\(item.height)", systemImage: "aspectratio")
-                if let firstTag = item.tags?.first {
+                Label("PID \(card.preview.pid)-\(page(for: card))", systemImage: "number")
+                Label("\(width(for: card))x\(height(for: card))", systemImage: "aspectratio")
+                if let firstTag = tags(for: card).first {
                     Label(firstTag, systemImage: "tag")
                 }
             }
             .font(.caption)
             .foregroundStyle(.white.opacity(0.86))
+            .lineLimit(1)
         }
         .foregroundStyle(.white)
         .padding(SetuSpacing.md)
         .background(.ultraThinMaterial)
     }
 
-    private var pointsText: String {
-        switch pointsState {
-        case .loaded(let balance):
-            return "\(balance.points) 积分"
-        case .failed:
-            return "积分未知"
-        default:
-            return "积分加载中"
-        }
-    }
-
-    private var canCall: Bool {
-        guard case .loaded(let balance) = pointsState else {
-            return false
-        }
-        return balance.points >= costPerCall
+    private var balanceText: String {
+        balance.map { "\($0) 积分" } ?? "积分加载中"
     }
 
     private var isLoadingImage: Bool {
@@ -316,6 +335,16 @@ struct RandomImageSwipeView: View {
         return false
     }
 
+    private var isCurrentUnlocked: Bool {
+        guard let token = currentCard?.token else { return false }
+        return unlockedItems[token] != nil
+    }
+
+    private var isCurrentUnlocking: Bool {
+        guard let token = currentCard?.token else { return false }
+        return unlockingTokens.contains(token)
+    }
+
     private var parsedTags: [String] {
         tagText
             .split(separator: ",")
@@ -323,80 +352,200 @@ struct RandomImageSwipeView: View {
             .filter { !$0.isEmpty }
     }
 
-    private func loadPoints() async {
-        pointsState = .loading
+    private var normalizedKeyword: String? {
+        let trimmed = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private var normalizedAspectRatio: String? {
+        aspectRatio.isEmpty ? nil : aspectRatio
+    }
+
+    private func loadBalance() async {
         do {
-            pointsState = .loaded(try await environment.pointsClient.balance())
+            balance = try await environment.pointsClient.balance().points
         } catch {
-            pointsState = .failed(error.localizedDescription)
+            balance = nil
         }
     }
 
     private func reloadFromParameters() async {
-        currentImage = nil
-        await loadPoints()
+        settleUnlockTask?.cancel()
+        currentCard = nil
+        feedQueue = []
+        unlockedItems = [:]
+        unlockingTokens = []
+        imageState = .loading
+        message = nil
+        await loadBalance()
+        await prefetchIfNeeded(force: true)
         await loadNextImage(reason: "已应用参数")
     }
 
     private func loadNextImage(reason: String) async {
-        guard !isLoadingImage else {
-            return
-        }
-        if !canCall {
-            await loadPoints()
-        }
-        guard canCall else {
-            imageState = currentImage == nil ? .failed("积分不足，至少需要 \(costPerCall) 积分") : imageState
-            message = "积分不足，至少需要 \(costPerCall) 积分"
+        guard !isLoadingImage else { return }
+        settleUnlockTask?.cancel()
+
+        if feedQueue.isEmpty, isPrefetching {
+            message = "正在预加载下一批图片"
             return
         }
 
-        imageState = .loading
-        message = nil
-        do {
-            let request = PointsCallRequest(
-                r18: r18,
-                num: 1,
-                keyword: keyword,
-                tags: parsedTags,
-                size: size,
-                excludeAI: excludeAI
-            )
-            let items = try await environment.pointsClient.callSetu(request: request)
-            guard let item = items.first else {
-                imageState = currentImage.map { .loaded($0) } ?? .failed("当前筛选条件没有匹配图片")
-                message = "当前筛选条件没有匹配图片"
-                await loadPoints()
-                return
-            }
-            currentImage = item
-            imageState = .loaded(item)
-            message = reason
-            await loadPoints()
-        } catch {
-            imageState = currentImage.map { .loaded($0) } ?? .failed(error.localizedDescription)
-            message = error.localizedDescription
-            await loadPoints()
+        if feedQueue.isEmpty {
+            imageState = currentCard.map { .loaded($0) } ?? .loading
+            await prefetchIfNeeded(force: true)
+        }
+
+        guard !feedQueue.isEmpty else {
+            imageState = currentCard.map { .loaded($0) } ?? .failed("当前筛选条件没有匹配图片")
+            message = "当前筛选条件没有匹配图片"
+            return
+        }
+
+        let next = feedQueue.removeFirst()
+        currentCard = next
+        imageState = .loaded(next)
+        message = reason
+        scheduleSettledUnlock(for: next)
+
+        if feedQueue.count <= refillThreshold {
+            Task { await prefetchIfNeeded() }
         }
     }
 
-    private func openOriginal() {
-        guard let urlString = currentImage?.originalURLString ?? currentImage?.previewURLString,
+    private func prefetchIfNeeded(force: Bool = false) async {
+        guard !isPrefetching else { return }
+        guard force || feedQueue.count <= refillThreshold else { return }
+
+        isPrefetching = true
+        defer { isPrefetching = false }
+
+        do {
+            let response = try await environment.imageFeedClient.feed(
+                ImageFeedRequest(
+                    r18: r18,
+                    limit: preloadLimit,
+                    keyword: normalizedKeyword,
+                    tags: parsedTags,
+                    excludeAI: excludeAI,
+                    aspectRatio: normalizedAspectRatio,
+                    source: nil
+                )
+            )
+            costPerImage = response.costPerImage
+            balance = response.balance
+            let cards = response.items.map { ImageFeedCard(feedID: response.feedId, preview: $0) }
+            feedQueue.append(contentsOf: cards)
+            if cards.isEmpty, currentCard == nil {
+                imageState = .failed("当前筛选条件没有匹配图片")
+                message = "当前筛选条件没有匹配图片"
+            }
+        } catch {
+            if currentCard == nil {
+                imageState = .failed(error.localizedDescription)
+            }
+            message = error.localizedDescription
+        }
+    }
+
+    private func scheduleSettledUnlock(for card: ImageFeedCard) {
+        settleUnlockTask?.cancel()
+        settleUnlockTask = Task {
+            try? await Task.sleep(nanoseconds: settleDelayNanoseconds)
+            guard !Task.isCancelled else { return }
+            _ = await unlock(card: card, reason: "dwell", showSuccess: false)
+        }
+    }
+
+    @discardableResult
+    private func unlock(card: ImageFeedCard, reason: String, showSuccess: Bool) async -> SetuImageItem? {
+        if let item = unlockedItems[card.token] {
+            return item
+        }
+        guard !unlockingTokens.contains(card.token) else {
+            return nil
+        }
+
+        unlockingTokens.insert(card.token)
+        defer {
+            unlockingTokens.remove(card.token)
+        }
+
+        do {
+            let response = try await environment.imageFeedClient.consume(
+                feedID: card.feedID,
+                token: card.token,
+                reason: reason
+            )
+            unlockedItems[card.token] = response.item
+            balance = response.balance
+            if currentCard?.token == card.token {
+                imageState = .loaded(card)
+            }
+            if showSuccess {
+                message = response.charged ? "已解锁，消耗 \(response.cost) 积分" : "已解锁，未重复扣分"
+            }
+            return response.item
+        } catch {
+            if currentCard?.token == card.token {
+                message = error.localizedDescription
+            }
+            return nil
+        }
+    }
+
+    private func openOriginal() async {
+        guard let currentCard else {
+            message = "当前没有可打开的图片"
+            return
+        }
+        let item = await unlock(card: currentCard, reason: "open_original", showSuccess: true)
+        guard let urlString = item?.originalURLString ?? item?.previewURLString ?? currentCard.preview.previewURLString,
               let url = URL(string: urlString)
         else {
             message = "图片链接无效"
             return
         }
         #if os(iOS)
-        UIApplication.shared.open(url)
+        await UIApplication.shared.open(url)
+        #else
+        message = "当前平台暂不支持打开原图"
         #endif
     }
 
     private func swipeReason(for translation: CGSize) -> String {
         if abs(translation.width) > abs(translation.height) {
-            return translation.width > 0 ? "已向右换图，继续滑动可以再刷" : "已向左换图，继续滑动可以再刷"
+            return translation.width > 0 ? "已向右换图，快滑不会扣分" : "已向左换图，快滑不会扣分"
         }
-        return translation.height > 0 ? "已向下换图，继续滑动可以再刷" : "已向上换图，继续滑动可以再刷"
+        return translation.height > 0 ? "已向下换图，快滑不会扣分" : "已向上换图，快滑不会扣分"
+    }
+
+    private func title(for card: ImageFeedCard) -> String {
+        unlockedItems[card.token]?.title ?? card.preview.title
+    }
+
+    private func author(for card: ImageFeedCard) -> String {
+        unlockedItems[card.token]?.author ?? card.preview.author
+    }
+
+    private func page(for card: ImageFeedCard) -> Int {
+        unlockedItems[card.token]?.page ?? card.preview.page
+    }
+
+    private func width(for card: ImageFeedCard) -> Int {
+        unlockedItems[card.token]?.width ?? card.preview.width
+    }
+
+    private func height(for card: ImageFeedCard) -> Int {
+        unlockedItems[card.token]?.height ?? card.preview.height
+    }
+
+    private func tags(for card: ImageFeedCard) -> [String] {
+        unlockedItems[card.token]?.tags ?? card.preview.tags ?? []
+    }
+
+    private func r18Value(for card: ImageFeedCard) -> Bool {
+        (unlockedItems[card.token]?.r18 == 1) || card.preview.r18
     }
 
     private func playSwipeFeedback() {
@@ -406,14 +555,23 @@ struct RandomImageSwipeView: View {
     }
 }
 
+private struct ImageFeedCard: Identifiable, Sendable {
+    let feedID: String
+    let preview: ImageFeedItem
+
+    var id: String { preview.token }
+    var token: String { preview.token }
+}
+
 private struct RandomImageCard: View {
-    let item: SetuImageItem
+    let card: ImageFeedCard
+    let unlockedItem: SetuImageItem?
     let stageSize: CGSize
 
     var body: some View {
         ZStack {
             SetuColor.surfaceMuted
-            if let url = item.previewURLString.flatMap(URL.init(string:)) {
+            if let url = displayURLString.flatMap(URL.init(string:)) {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .empty:
@@ -435,13 +593,17 @@ private struct RandomImageCard: View {
             }
         }
     }
+
+    private var displayURLString: String? {
+        unlockedItem?.previewURLString ?? card.preview.previewURLString
+    }
 }
 
 private struct RandomImageParameterSheet: View {
     @Binding var r18: Int
     @Binding var keyword: String
     @Binding var tagText: String
-    @Binding var size: String
+    @Binding var aspectRatio: String
     @Binding var excludeAI: Bool
     let onApply: () -> Void
 
@@ -451,16 +613,17 @@ private struct RandomImageParameterSheet: View {
                 Section {
                     SetuCard {
                         VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                            SetuSectionHeader(title: "筛选", subtitle: "设置下一次刷图使用的范围和标签")
+                            SetuSectionHeader(title: "筛选", subtitle: "预加载不扣分，停留到当前图片后才解锁计费")
                             Picker("R18", selection: $r18) {
                                 Text("非 R18").tag(0)
                                 Text("R18").tag(1)
                                 Text("混合").tag(2)
                             }
-                            Picker("图片尺寸", selection: $size) {
-                                Text("regular（推荐）").tag("regular")
-                                Text("original（原图）").tag("original")
-                                Text("small（小图）").tag("small")
+                            Picker("画幅偏好", selection: $aspectRatio) {
+                                Text("全部").tag("")
+                                Text("竖图").tag("0.1-0.85")
+                                Text("方图").tag("0.86-1.15")
+                                Text("横图").tag("1.16-3.0")
                             }
                             TextField("关键词", text: $keyword)
                                 #if os(iOS)
@@ -482,7 +645,7 @@ private struct RandomImageParameterSheet: View {
                 Section {
                     SetuCard {
                         Label(
-                            "每次滑动会获取 1 张图片并消耗积分。收藏、删除申请和批量获取可以在“高级参数与批量获取”里处理。",
+                            "列表会提前缓存一批预览图。快速滑过的图片不会扣分；停在某张图片后，会自动解锁并只扣一次积分。",
                             systemImage: "hand.draw"
                         )
                         .font(SetuTypography.caption)

@@ -43,6 +43,7 @@
 		3677B9E24AB9D2B0E2ACFA77 /* MobileModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B93D002CC9AC8D91AE810413 /* MobileModels.swift */; };
 		3A45E42466F9F297BD33DE84 /* CollectionListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C5F5AFB174255A8656010EE /* CollectionListView.swift */; };
 		3D50376C6502C6F4002E7058 /* AiHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7562E6545A9C3CFDDC3E01A6 /* AiHistoryView.swift */; };
+		3DBF3F96ECAA7446DEDBCC6A /* ImageFeedClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95D0902F5419B07BE72C4054 /* ImageFeedClientTests.swift */; };
 		40A01F59C55EA319E3D470A0 /* MusicPlaylistDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BE9E4DDC8AE1829202E1009 /* MusicPlaylistDetailView.swift */; };
 		44CEB24F612AF9D7953A7B57 /* AdminImageInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C599E30B49EEEABA0F352C3A /* AdminImageInfoView.swift */; };
 		46017994CF8F0412079F46E6 /* MusicHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9D3419CDE37B276AEA2AEA2 /* MusicHomeView.swift */; };
@@ -67,12 +68,14 @@
 		6840A65927388A66AD7B9119 /* AppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1ECB7927713D69FCD42EA670 /* AppEnvironment.swift */; };
 		69196972D0EE50D9695105A0 /* CollectionClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1958DD3FA3FB7EE174C1000A /* CollectionClientTests.swift */; };
 		6B5D0083B10D64D4B09718BF /* SetuIOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA9BD954C658365380A65DDC /* SetuIOSApp.swift */; };
+		6E4D9D84BEC036EA6374A6E5 /* ImageFeedModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDF8065685CFC878C827FD4B /* ImageFeedModels.swift */; };
 		6E4EF42DA5295268374F8378 /* LyricScrollView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE36E5F88D3D34F85166AB47 /* LyricScrollView.swift */; };
 		7264A31F1345C8A9CB32EA38 /* PointsCallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C9935B26CB39A7E5A026D96 /* PointsCallView.swift */; };
 		73397D12ABE9DB09F3860130 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1297BD583FBAA8D0DFC0E546 /* Models.swift */; };
 		750A54160CF4293580B5214C /* ApiKeyListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF20EAE938A450CBFCD46498 /* ApiKeyListView.swift */; };
 		779E1C676A01686AE36F5985 /* MusicPlaylistsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 310C7E5EBEFDF066EB928A02 /* MusicPlaylistsView.swift */; };
 		77A76640B6B95B0A4BA82488 /* AdminModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AAD4E4D945833C26205F923 /* AdminModels.swift */; };
+		788577EC3E1BF932585387FB /* ImageFeedClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D765FDE0C516B6934F117B4 /* ImageFeedClient.swift */; };
 		78D8257D0F0D7CB9D49C581B /* SetuIOSLiveActivityWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F8EB5E430004624DF32AE6E7 /* SetuIOSLiveActivityWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		78F5050863AA5F6A270D99A4 /* SecuritySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5E929FD5136E6E36876D7CE /* SecuritySettingsView.swift */; };
 		7BEAABB0A5F0C747C1095B93 /* SetuIOSCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = E83FF3E83093A6F76A280DD8 /* SetuIOSCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -307,7 +310,9 @@
 		90B5C9BD778EFE9385092A12 /* MusicModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicModels.swift; sourceTree = "<group>"; };
 		9425624EFC0AB7F865D92FA9 /* AiGenerationClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AiGenerationClient.swift; sourceTree = "<group>"; };
 		950D9ABB3B7F184610A38E27 /* SetuNavigationRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuNavigationRow.swift; sourceTree = "<group>"; };
+		95D0902F5419B07BE72C4054 /* ImageFeedClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageFeedClientTests.swift; sourceTree = "<group>"; };
 		9B54E7B0273F0A02B89981E1 /* AdminClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminClientTests.swift; sourceTree = "<group>"; };
+		9D765FDE0C516B6934F117B4 /* ImageFeedClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageFeedClient.swift; sourceTree = "<group>"; };
 		9ECF9EB7B7BC37A568A019CF /* MobileAppClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileAppClient.swift; sourceTree = "<group>"; };
 		9EE2B37F69E3C40990952658 /* RootAppView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootAppView.swift; sourceTree = "<group>"; };
 		9F1353DE9EE8D70BA228EA5F /* PublicBlogClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicBlogClientTests.swift; sourceTree = "<group>"; };
@@ -341,6 +346,7 @@
 		D62E77C6D951D355D788C5E8 /* AdminAiWorkersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminAiWorkersView.swift; sourceTree = "<group>"; };
 		D65CD600EB96DA067D349D7E /* AdminPixivCrawlView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminPixivCrawlView.swift; sourceTree = "<group>"; };
 		DAB10EA9D9EEDB135EA6EFB3 /* SetuIOSApp.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = SetuIOSApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		DDF8065685CFC878C827FD4B /* ImageFeedModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageFeedModels.swift; sourceTree = "<group>"; };
 		DF45F38798A31E3F5F3FFDD2 /* SetuIOSAppTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SetuIOSAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E33CB6CD8E1C15CC7ABDEE45 /* LoadState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadState.swift; sourceTree = "<group>"; };
 		E5A94A9CF926A3383B2A4B27 /* SetuEmptyState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuEmptyState.swift; sourceTree = "<group>"; };
@@ -447,6 +453,7 @@
 				EBDB5F531855A694FA571934 /* FavoriteModels.swift */,
 				7DE20ECFB5792E425E08D978 /* GalleryUploadModels.swift */,
 				7B8D2B61956968291B599B43 /* ImageDeleteRequestModels.swift */,
+				DDF8065685CFC878C827FD4B /* ImageFeedModels.swift */,
 				B93D002CC9AC8D91AE810413 /* MobileModels.swift */,
 				90B5C9BD778EFE9385092A12 /* MusicModels.swift */,
 				A47C2F8F64DD837731A45595 /* NotificationModels.swift */,
@@ -649,6 +656,7 @@
 				556DF98218F10099940D0FBC /* FavoriteClient.swift */,
 				6B2ACB205B305831547D150F /* GalleryUploadClient.swift */,
 				ECB26C4984271D129895DC0A /* ImageDeleteRequestClient.swift */,
+				9D765FDE0C516B6934F117B4 /* ImageFeedClient.swift */,
 				9ECF9EB7B7BC37A568A019CF /* MobileAppClient.swift */,
 				0CDA6CD818D0A2EFF3BD1A5E /* MusicClient.swift */,
 				2436DEE3C98FCD787E7B367C /* NotificationClient.swift */,
@@ -701,6 +709,7 @@
 				FC249EC7818524E6348F12D7 /* DashboardClientTests.swift */,
 				545F27D69810BEB14D1827D3 /* FavoriteClientTests.swift */,
 				B1D22CE331F0ADD65C4E3113 /* GalleryUploadClientTests.swift */,
+				95D0902F5419B07BE72C4054 /* ImageFeedClientTests.swift */,
 				63F0EA684A32F3BCD26B8F83 /* LyricParserTests.swift */,
 				EF1C1518FF7D3BD0FE0172B9 /* MusicClientTests.swift */,
 				1F98B21407EA33F6D495227E /* NotificationClientTests.swift */,
@@ -898,6 +907,7 @@
 				A39B6F4EF78C690219832CA5 /* DashboardClientTests.swift in Sources */,
 				D84F9474E8AEFCCD96C3B9BA /* FavoriteClientTests.swift in Sources */,
 				89B5B62C3E047C53B7482570 /* GalleryUploadClientTests.swift in Sources */,
+				3DBF3F96ECAA7446DEDBCC6A /* ImageFeedClientTests.swift in Sources */,
 				12A531A03F12A79A55312F2E /* LyricParserTests.swift in Sources */,
 				BD0512146583851CC08E3FFE /* MusicClientTests.swift in Sources */,
 				B0CEEE506F7C72BCDC6F1195 /* NotificationClientTests.swift in Sources */,
@@ -1027,6 +1037,8 @@
 				E47FD9EE4A460AABE7D97F3B /* GalleryUploadModels.swift in Sources */,
 				32CFE55F7A9C7B9CB2BB145C /* ImageDeleteRequestClient.swift in Sources */,
 				B3810632FDC7AFEF38CE35E1 /* ImageDeleteRequestModels.swift in Sources */,
+				788577EC3E1BF932585387FB /* ImageFeedClient.swift in Sources */,
+				6E4D9D84BEC036EA6374A6E5 /* ImageFeedModels.swift in Sources */,
 				12B91F3BB3EFE3E619FED27A /* KeychainStore.swift in Sources */,
 				5A43A52DD0F2C0A47709A50F /* LoadState.swift in Sources */,
 				4DEBA835FE429435E15B7480 /* MobileAppClient.swift in Sources */,

@@ -11,6 +11,7 @@ public final class AppEnvironment {
     public let dashboardClient: DashboardClient
     public let apiKeyClient: ApiKeyClient
     public let pointsClient: PointsClient
+    public let imageFeedClient: ImageFeedClient
     public let notificationClient: NotificationClient
     public let statusClient: StatusClient
     public let userProfileClient: UserProfileClient
@@ -34,6 +35,7 @@ public final class AppEnvironment {
         dashboardClient: DashboardClient,
         apiKeyClient: ApiKeyClient,
         pointsClient: PointsClient,
+        imageFeedClient: ImageFeedClient,
         notificationClient: NotificationClient,
         statusClient: StatusClient,
         userProfileClient: UserProfileClient,
@@ -56,6 +58,7 @@ public final class AppEnvironment {
         self.dashboardClient = dashboardClient
         self.apiKeyClient = apiKeyClient
         self.pointsClient = pointsClient
+        self.imageFeedClient = imageFeedClient
         self.notificationClient = notificationClient
         self.statusClient = statusClient
         self.userProfileClient = userProfileClient
@@ -89,6 +92,7 @@ public final class AppEnvironment {
         let dashboardClient = DashboardClient(apiClient: client)
         let apiKeyClient = ApiKeyClient(apiClient: client)
         let pointsClient = PointsClient(apiClient: client)
+        let imageFeedClient = ImageFeedClient(apiClient: client)
         let notificationClient = NotificationClient(apiClient: client)
         let statusClient = StatusClient(apiClient: client)
         let userProfileClient = UserProfileClient(apiClient: client)
@@ -117,6 +121,7 @@ public final class AppEnvironment {
             dashboardClient: dashboardClient,
             apiKeyClient: apiKeyClient,
             pointsClient: pointsClient,
+            imageFeedClient: imageFeedClient,
             notificationClient: notificationClient,
             statusClient: statusClient,
             userProfileClient: userProfileClient,

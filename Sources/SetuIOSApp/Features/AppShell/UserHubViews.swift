@@ -57,7 +57,7 @@ struct ImageHubView: View {
     var body: some View {
         List {
             Section {
-                SetuHeroCard(title: "随机图片", subtitle: "进入后上下滑、左右滑即可不断刷图。", systemImage: "photo.on.rectangle.angled") {
+                SetuHeroCard(title: "随机图片", subtitle: "预加载一批图片，快速滑过不扣分，停留后自动解锁。", systemImage: "photo.on.rectangle.angled") {
                     router.navigate(to: .imageSwipe)
                 }
             }
@@ -70,8 +70,8 @@ struct ImageHubView: View {
                         ImageUsageOverviewRow(pointsState: pointsState, costPerCall: costPerCall) {
                             Task { await loadPoints() }
                         }
-                        SetuPill(text: "非 R18 / regular / 排除 AI", systemImage: "slider.horizontal.3", tone: .brand)
-                        Text("点击上方“随机图片”进入后可通过手势快速切换下一张。")
+                        SetuPill(text: "预加载 / 停留扣分 / 快滑不扣", systemImage: "bolt.badge.clock", tone: .brand)
+                        Text("图片会先加载预览，只有当前图片停留后才会解锁并消费积分。")
                             .font(SetuTypography.caption)
                             .foregroundStyle(SetuColor.textSecondary)
                     }
@@ -83,7 +83,7 @@ struct ImageHubView: View {
                 SetuCard {
                     VStack(spacing: SetuSpacing.lg) {
                         SetuSectionHeader(title: "图片工具")
-                        HubNavigationRow(title: "积分调用", subtitle: "管理积分余额、参数和刷图批量获取", systemImage: "bolt.circle") {
+                        HubNavigationRow(title: "高级参数与批量获取", subtitle: "需要批量拉取或传统尺寸参数时使用", systemImage: "bolt.circle") {
                             router.navigate(to: .points)
                         }
                         HubNavigationRow(title: "积分流水", subtitle: "查看积分获得和消耗记录", systemImage: "list.bullet.rectangle") {
