@@ -18,18 +18,9 @@ struct MusicHomeView: View {
     @State private var selectedSong: MusicSong?
     @State private var mvSong: MusicSong?
     @State private var selectedRecommendedPlaylist: MusicRecommendedPlaylist?
-    @State private var playbackMessage: String?
 
     var body: some View {
         List {
-            Section {
-                searchEntry
-                .setuListRow()
-            }
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
-
-            nowPlayingSection
             recentHistoryContent
             myPlaylistContent
             hotSearchContent
@@ -37,7 +28,27 @@ struct MusicHomeView: View {
         }
         .listStyle(.plain)
         .setuBackground()
-        .navigationTitle("音乐")
+        .navigationTitle("")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
+        .toolbar {
+            #if os(iOS)
+            ToolbarItem(placement: .topBarLeading) {
+                toolbarLogo
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                searchToolbarButton
+            }
+            #else
+            ToolbarItem(placement: .automatic) {
+                toolbarLogo
+            }
+            ToolbarItem(placement: .primaryAction) {
+                searchToolbarButton
+            }
+            #endif
+        }
         .sheet(item: $selectedSong) { song in
             AddSongToPlaylistSheet(environment: environment, song: song)
         }
@@ -51,86 +62,28 @@ struct MusicHomeView: View {
         .refreshable { await loadLandingContent() }
     }
 
-    private var searchEntry: some View {
+    private var toolbarLogo: some View {
+        Image("MusicHomeLogo")
+            .resizable()
+            .scaledToFill()
+            .frame(width: 116, height: 36)
+            .clipShape(RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous))
+            .accessibilityLabel("扣扣音乐")
+            .accessibilityAddTraits(.isImage)
+    }
+
+    private var searchToolbarButton: some View {
         Button {
             router.navigate(to: .musicSearch(nil))
         } label: {
-            HStack(spacing: SetuSpacing.md) {
-                Image(systemName: "magnifyingglass")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(SetuColor.brandPink)
-                    .frame(width: 44, height: 44)
-                    .background(SetuColor.brandSoft.opacity(0.2), in: Circle())
-                VStack(alignment: .leading, spacing: SetuSpacing.xs) {
-                    Text("搜索音乐")
-                        .font(SetuTypography.headline)
-                        .foregroundStyle(SetuColor.textPrimary)
-                    Text("歌曲、歌手、专辑")
-                        .font(SetuTypography.caption)
-                        .foregroundStyle(SetuColor.textSecondary)
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(SetuColor.textTertiary)
-            }
-            .padding(SetuSpacing.md)
-            .frame(minHeight: 72)
-            .background(SetuColor.surface, in: RoundedRectangle(cornerRadius: SetuRadius.md, style: .continuous))
+            Image(systemName: "magnifyingglass")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(SetuColor.textPrimary)
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
         }
-        .buttonStyle(.plain)
+        .setuButtonFeedback(cornerRadius: 22)
         .accessibilityLabel("搜索音乐")
-    }
-
-    @ViewBuilder
-    private var nowPlayingSection: some View {
-        if let track = player.currentTrack {
-            Section {
-                SetuCard {
-                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                        SetuSectionHeader(title: "正在播放")
-                        HStack(spacing: SetuSpacing.md) {
-                            MusicArtworkView(urlString: track.coverURLString)
-                            VStack(alignment: .leading, spacing: SetuSpacing.xs) {
-                                Text(track.title)
-                                    .font(SetuTypography.headline)
-                                    .foregroundStyle(SetuColor.textPrimary)
-                                    .lineLimit(2)
-                                Text(track.artist)
-                                    .font(SetuTypography.caption)
-                                    .foregroundStyle(SetuColor.textSecondary)
-                                if let message = playbackMessage ?? player.message {
-                                    SetuPill(text: message, systemImage: "waveform", tone: .info)
-                                }
-                            }
-                            Spacer()
-                            MusicIconButton(
-                                systemImage: player.isPlaying ? "pause.fill" : "play.fill",
-                                accessibilityLabel: player.isPlaying ? "暂停播放" : "继续播放",
-                                tint: SetuColor.brandPink
-                            ) {
-                                player.toggle()
-                            }
-                            MusicIconButton(
-                                systemImage: "stop.fill",
-                                accessibilityLabel: "停止播放",
-                                tint: SetuColor.danger
-                            ) {
-                                player.stop()
-                            }
-                        }
-                    }
-                }
-                .setuListRow()
-            }
-        } else if let playbackMessage {
-            Section {
-                SetuCard {
-                    SetuPill(text: playbackMessage, systemImage: "music.note", tone: .info)
-                }
-                .setuListRow()
-            }
-        }
     }
 
     @ViewBuilder
@@ -169,7 +122,7 @@ struct MusicHomeView: View {
                                             .padding(.horizontal, SetuSpacing.sm)
                                             .background(SetuColor.surfaceMuted, in: Capsule())
                                     }
-                                    .buttonStyle(.plain)
+                                    .setuButtonFeedback(cornerRadius: 22)
                                 }
                             }
                         }
@@ -197,7 +150,7 @@ struct MusicHomeView: View {
                         VStack(alignment: .leading, spacing: SetuSpacing.md) {
                             SetuSectionHeader(title: "最近播放", subtitle: "\(visibleRecords.count) 首")
                             ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: SetuSpacing.md) {
+                                HStack(alignment: .top, spacing: SetuSpacing.md) {
                                     ForEach(visibleRecords) { record in
                                         MusicRecentHistoryCard(record: record) {
                                             Task {
@@ -219,7 +172,7 @@ struct MusicHomeView: View {
                                     .foregroundStyle(SetuColor.brandInk)
                                     .frame(maxWidth: .infinity, minHeight: 44)
                             }
-                            .buttonStyle(.plain)
+                            .setuButtonFeedback()
                         }
                     }
                     .setuListRow()
@@ -244,14 +197,14 @@ struct MusicHomeView: View {
                     SetuCard {
                         VStack(alignment: .leading, spacing: SetuSpacing.md) {
                             SetuSectionHeader(title: "我的歌单", subtitle: "\(playlists.count) 个")
-                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 132), spacing: SetuSpacing.md)], spacing: SetuSpacing.md) {
+                            VStack(spacing: SetuSpacing.sm) {
                                 ForEach(visiblePlaylists) { playlist in
                                     Button {
                                         router.navigate(to: .playlistDetail(playlist.id))
                                     } label: {
-                                        MusicPlaylistGridTile(playlist: playlist)
+                                        MusicPlaylistCompactRow(playlist: playlist)
                                     }
-                                    .buttonStyle(.plain)
+                                    .setuButtonFeedback()
                                 }
                             }
                             Button {
@@ -262,7 +215,7 @@ struct MusicHomeView: View {
                                     .foregroundStyle(SetuColor.brandInk)
                                     .frame(maxWidth: .infinity, minHeight: 44)
                             }
-                            .buttonStyle(.plain)
+                            .setuButtonFeedback()
                         }
                     }
                     .setuListRow()
@@ -363,7 +316,7 @@ struct MusicHomeView: View {
                                     } label: {
                                         RecommendedPlaylistRow(playlist: playlist)
                                     }
-                                    .buttonStyle(.plain)
+                                    .setuButtonFeedback()
 
                                     if index < visiblePlaylists.count - 1 {
                                         Divider().overlay(SetuColor.separator)
@@ -442,39 +395,39 @@ struct MusicHomeView: View {
     }
 
     private func play(_ song: MusicSong, queueName: String? = nil, queueTracks: [MusicPlaybackTrack] = []) async {
-        playbackMessage = "正在准备播放"
+        player.showMessage("正在准备播放")
         let track = MusicPlaybackTrack(song: song)
         guard let resolution = await player.resolveTrackURL?(track) else {
-            playbackMessage = "播放器尚未准备好"
+            player.showMessage("播放器尚未准备好")
             return
         }
         switch resolution {
         case .success(let url, let notice):
             player.play(url: url, track: track, queueName: queueName, queueTracks: queueTracks, notice: notice)
             try? await environment.musicClient.addHistory(song: song)
-            playbackMessage = notice ?? "已开始播放"
+            player.showMessage(notice ?? "已开始播放")
         case .unavailable(let reason):
-            playbackMessage = reason
+            player.showMessage(reason)
         }
     }
 
     private func download(_ song: MusicSong) async {
-        playbackMessage = "正在准备下载"
+        player.showMessage("正在准备下载")
         do {
             let response = try await environment.musicClient.url(songID: song.id, level: "exhigh")
             guard let item = response.data?.first, let urlString = item.playableURLString else {
-                playbackMessage = response.data?.first?.unavailableMessage ?? response.playabilityReason ?? response.message ?? "暂无可下载地址"
+                player.showMessage(response.data?.first?.unavailableMessage ?? response.playabilityReason ?? response.message ?? "暂无可下载地址")
                 return
             }
             let signed = try await environment.downloadClient.sign(url: urlString, filename: downloadFilename(for: song))
             guard let url = URL(string: signed.downloadUrl) else {
-                playbackMessage = "下载地址无效"
+                player.showMessage("下载地址无效")
                 return
             }
             openExternalURL(url)
-            playbackMessage = "已打开下载地址"
+            player.showMessage("已打开下载地址")
         } catch {
-            playbackMessage = error.localizedDescription
+            player.showMessage(error.localizedDescription)
         }
     }
 
@@ -555,7 +508,7 @@ private struct MusicIconButton: View {
                 .frame(width: 44, height: 44)
                 .background(tint.opacity(0.12), in: Circle())
         }
-        .buttonStyle(.plain)
+        .setuButtonFeedback(cornerRadius: 22)
         .accessibilityLabel(accessibilityLabel)
     }
 }
@@ -825,7 +778,7 @@ struct MusicSearchView: View {
                                             .foregroundStyle(SetuColor.textPrimary)
                                             .lineLimit(1)
                                     }
-                                    .buttonStyle(.plain)
+                                    .setuButtonFeedback()
 
                                     Spacer()
 
@@ -857,7 +810,7 @@ struct MusicSearchView: View {
                                 .foregroundStyle(SetuColor.danger)
                                 .frame(minHeight: 44)
                         }
-                        .buttonStyle(.plain)
+                        .setuButtonFeedback()
                     }
                 }
                 .setuListRow()
@@ -935,7 +888,7 @@ struct MusicSearchView: View {
                                         .foregroundStyle(SetuColor.brandInk)
                                         .frame(maxWidth: .infinity, minHeight: 44)
                                 }
-                                .buttonStyle(.plain)
+                                .setuButtonFeedback()
                             } else {
                                 SetuPill(text: "已加载全部 \(result.total) 首歌曲", systemImage: "checkmark.circle", tone: .success)
                                     .frame(maxWidth: .infinity, alignment: .center)
@@ -1050,16 +1003,18 @@ private struct MusicRecentHistoryCard: View {
                     Text(record.songName)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(SetuColor.textPrimary)
-                        .lineLimit(2)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                     Text(record.artistName)
                         .font(.caption)
                         .foregroundStyle(SetuColor.textSecondary)
                         .lineLimit(1)
+                        .truncationMode(.tail)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .setuButtonFeedback()
             .accessibilityLabel("播放 \(record.songName)")
         }
         .frame(width: 132, alignment: .leading)
@@ -1067,28 +1022,38 @@ private struct MusicRecentHistoryCard: View {
     }
 }
 
-private struct MusicPlaylistGridTile: View {
+private struct MusicPlaylistCompactRow: View {
     let playlist: UserMusicPlaylist
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SetuSpacing.sm) {
-            MusicArtworkView(urlString: playlist.coverUrl, width: 96, height: 96, cornerRadius: SetuRadius.md)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Text(playlist.name)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(SetuColor.textPrimary)
-                .lineLimit(2)
-            HStack(spacing: SetuSpacing.xs) {
-                Label("\(playlist.songCount ?? 0)", systemImage: "music.note")
-                if let playCount = playlist.playCount {
-                    Label("\(playCount)", systemImage: "play.circle")
+        HStack(spacing: SetuSpacing.sm) {
+            MusicArtworkView(urlString: playlist.coverUrl, width: 64, height: 64, cornerRadius: SetuRadius.sm)
+
+            VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+                Text(playlist.name)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(SetuColor.textPrimary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                HStack(spacing: SetuSpacing.sm) {
+                    Label("\(playlist.songCount ?? 0) 首", systemImage: "music.note")
+                    if let playCount = playlist.playCount {
+                        Label("\(playCount)", systemImage: "play.circle")
+                    }
                 }
+                .font(.caption)
+                .foregroundStyle(SetuColor.textSecondary)
+                .lineLimit(1)
             }
-            .font(.caption2)
-            .foregroundStyle(SetuColor.textSecondary)
-            .lineLimit(1)
+
+            Spacer(minLength: SetuSpacing.sm)
+
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(SetuColor.textTertiary)
         }
-        .frame(maxWidth: .infinity, minHeight: 168, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
         .padding(SetuSpacing.sm)
         .background(SetuColor.surfaceMuted, in: RoundedRectangle(cornerRadius: SetuRadius.md, style: .continuous))
         .contentShape(Rectangle())
@@ -1228,7 +1193,7 @@ private struct MusicSearchAggregateList: View {
                         .frame(minHeight: 56)
                         .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .setuButtonFeedback()
 
                     if index < items.count - 1 {
                         Divider().overlay(SetuColor.separator)
@@ -1259,74 +1224,103 @@ struct MusicSongRow: View {
     var body: some View {
         HStack(spacing: SetuSpacing.md) {
             MusicArtworkView(urlString: song.coverURLString)
-            Button {
-                onPlay?()
-            } label: {
-                VStack(alignment: .leading, spacing: SetuSpacing.xs) {
-                    Text(song.name)
-                        .font(SetuTypography.headline)
-                        .foregroundStyle(SetuColor.textPrimary)
-                        .lineLimit(2)
-                    Text(song.artistNames.isEmpty ? "未知歌手" : song.artistNames)
-                        .font(SetuTypography.caption)
-                        .foregroundStyle(SetuColor.textSecondary)
-                    Text(song.albumName)
-                        .font(SetuTypography.caption)
-                        .foregroundStyle(SetuColor.textTertiary)
-                        .lineLimit(1)
+
+            if let onPlay {
+                Button(action: onPlay) {
+                    songText
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
+                .setuButtonFeedback()
+                .accessibilityLabel("播放 \(song.name)")
+            } else {
+                songText
             }
-            .buttonStyle(.plain)
-            .disabled(onPlay == nil)
-            .accessibilityLabel("播放 \(song.name)")
-            VStack(spacing: SetuSpacing.xs) {
-                if let onPlay {
-                    MusicIconButton(
-                        systemImage: "play.fill",
-                        accessibilityLabel: "播放 \(song.name)",
-                        tint: SetuColor.brandPink
-                    ) {
-                        onPlay()
-                    }
-                }
-                if song.mv ?? 0 > 0 {
-                    if let onPlayMv {
-                        MusicIconButton(
-                            systemImage: "play.rectangle.fill",
-                            accessibilityLabel: "播放 MV",
-                            tint: SetuColor.info
-                        ) {
-                            onPlayMv()
-                        }
-                    } else {
-                        Image(systemName: "play.rectangle")
-                            .foregroundStyle(SetuColor.brandPink)
-                            .frame(width: 44, height: 44)
-                    }
-                }
-                if let onAddToPlaylist {
-                    MusicIconButton(
-                        systemImage: "text.badge.plus",
-                        accessibilityLabel: "加入歌单",
-                        tint: SetuColor.brandInk
-                    ) {
-                        onAddToPlaylist()
-                    }
-                }
-                if let onDownload {
-                    MusicIconButton(
-                        systemImage: "arrow.down",
-                        accessibilityLabel: "下载 \(song.name)",
-                        tint: SetuColor.success
-                    ) {
-                        onDownload()
-                    }
-                }
+
+            if hasActions {
+                actionsGrid
             }
         }
         .padding(.vertical, SetuSpacing.sm)
+    }
+
+    private var songText: some View {
+        VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+            Text(song.name)
+                .font(SetuTypography.headline)
+                .foregroundStyle(SetuColor.textPrimary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Text(song.artistNames.isEmpty ? "未知歌手" : song.artistNames)
+                .font(SetuTypography.caption)
+                .foregroundStyle(SetuColor.textSecondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Text(song.albumName)
+                .font(SetuTypography.caption)
+                .foregroundStyle(SetuColor.textTertiary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+
+    private var actionsGrid: some View {
+        LazyVGrid(columns: actionColumns, alignment: .trailing, spacing: SetuSpacing.xs) {
+            if let onPlay {
+                MusicIconButton(
+                    systemImage: "play.fill",
+                    accessibilityLabel: "播放 \(song.name)",
+                    tint: SetuColor.brandPink
+                ) {
+                    onPlay()
+                }
+            }
+            if song.mv ?? 0 > 0 {
+                if let onPlayMv {
+                    MusicIconButton(
+                        systemImage: "play.rectangle.fill",
+                        accessibilityLabel: "播放 MV",
+                        tint: SetuColor.info
+                    ) {
+                        onPlayMv()
+                    }
+                } else {
+                    Image(systemName: "play.rectangle")
+                        .foregroundStyle(SetuColor.brandPink)
+                        .frame(width: 44, height: 44)
+                }
+            }
+            if let onAddToPlaylist {
+                MusicIconButton(
+                    systemImage: "text.badge.plus",
+                    accessibilityLabel: "加入歌单",
+                    tint: SetuColor.brandInk
+                ) {
+                    onAddToPlaylist()
+                }
+            }
+            if let onDownload {
+                MusicIconButton(
+                    systemImage: "arrow.down",
+                    accessibilityLabel: "下载 \(song.name)",
+                    tint: SetuColor.success
+                ) {
+                    onDownload()
+                }
+            }
+        }
+        .frame(width: 92, alignment: .trailing)
+    }
+
+    private var actionColumns: [GridItem] {
+        [
+            GridItem(.fixed(44), spacing: SetuSpacing.xs),
+            GridItem(.fixed(44), spacing: 0)
+        ]
+    }
+
+    private var hasActions: Bool {
+        onPlay != nil || (song.mv ?? 0) > 0 || onAddToPlaylist != nil || onDownload != nil
     }
 }
 
@@ -1393,7 +1387,7 @@ struct AddSongToPlaylistSheet: View {
                                                 .frame(minHeight: 44)
                                                 .contentShape(Rectangle())
                                             }
-                                            .buttonStyle(.plain)
+                                            .setuButtonFeedback()
 
                                             if index < playlists.count - 1 {
                                                 Divider().overlay(SetuColor.separator)

@@ -39,7 +39,7 @@ struct SetuHeroCard: View {
             .background(SetuColor.heroGradient, in: RoundedRectangle(cornerRadius: SetuRadius.lg, style: .continuous))
             .shadow(color: SetuColor.brandPink.opacity(0.28), radius: 18, y: 10)
         }
-        .buttonStyle(.plain)
+        .setuButtonFeedback(cornerRadius: SetuRadius.lg)
         .accessibilityElement(children: .combine)
     }
 }

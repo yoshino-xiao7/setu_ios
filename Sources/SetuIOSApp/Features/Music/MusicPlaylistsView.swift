@@ -50,7 +50,7 @@ struct MusicPlaylistsView: View {
                                     MusicPlaylistRow(playlist: playlist)
                                 }
                             }
-                            .buttonStyle(.plain)
+                            .setuButtonFeedback()
                             .swipeActions {
                                 Button(role: .destructive) {
                                     playlistPendingDeletion = playlist

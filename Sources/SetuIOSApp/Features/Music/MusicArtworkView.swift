@@ -24,30 +24,18 @@ struct MusicArtworkView: View {
     @State private var reloadID = UUID()
 
     var body: some View {
-        Button {
-            if loadFailed {
-                reloadID = UUID()
-            } else {
-                onTap?()
-            }
-        } label: {
-            ZStack {
-                if let image {
-                    platformImage(image)
-                        .resizable()
-                        .scaledToFill()
-                        .transition(.opacity)
-                } else {
-                    placeholder
+        Group {
+            if onTap != nil || loadFailed {
+                Button(action: handleTap) {
+                    artworkContent
                 }
+                .setuButtonFeedback(cornerRadius: cornerRadius)
+                .accessibilityLabel(loadFailed ? "封面加载失败，点按重试" : "播放歌曲")
+            } else {
+                artworkContent
+                    .accessibilityLabel("音乐封面")
             }
-            .frame(maxWidth: width == nil ? .infinity : nil)
-            .frame(width: width, height: height)
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-            .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(loadFailed ? "封面加载失败，点按重试" : (onTap == nil ? "音乐封面" : "播放歌曲"))
         .task(id: reloadID) {
             await load()
         }
@@ -55,6 +43,31 @@ struct MusicArtworkView: View {
             image = nil
             loadFailed = false
             reloadID = UUID()
+        }
+    }
+
+    private var artworkContent: some View {
+        ZStack {
+            if let image {
+                platformImage(image)
+                    .resizable()
+                    .scaledToFill()
+                    .transition(.opacity)
+            } else {
+                placeholder
+            }
+        }
+        .frame(maxWidth: width == nil ? .infinity : nil)
+        .frame(width: width, height: height)
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    }
+
+    private func handleTap() {
+        if loadFailed {
+            reloadID = UUID()
+        } else {
+            onTap?()
         }
     }
 

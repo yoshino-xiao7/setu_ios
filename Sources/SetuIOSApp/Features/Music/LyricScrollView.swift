@@ -266,7 +266,7 @@ struct LyricScrollView: View {
                         .frame(width: 40, height: 40)
                         .background(SetuColor.heroGradient, in: Circle())
                 }
-                .buttonStyle(.plain)
+                .setuButtonFeedback(cornerRadius: 20)
                 .accessibilityLabel("从当前选中歌词播放")
             }
             .padding(.horizontal, SetuSpacing.md)

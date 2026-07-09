@@ -2,6 +2,7 @@ import SetuIOSCore
 import SwiftUI
 
 struct RootAppView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @Bindable var environment: AppEnvironment
     @State private var selectedTab: AppTab = .home
     @State private var tabRouter = TabRouter()
@@ -46,8 +47,41 @@ struct RootAppView: View {
         }
         .task {
             configureMusicPlayerResolver()
+            switchMusicPlaybackUser(from: nil, to: environment.authSession.currentUser?.id)
+        }
+        .onChange(of: environment.authSession.currentUser?.id) { oldUserID, newUserID in
+            switchMusicPlaybackUser(from: oldUserID, to: newUserID)
+        }
+        .onChange(of: selectedTab) { oldValue, _ in
+            if oldValue == .music {
+                musicPlayer.savePlaybackSnapshot()
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active {
+                musicPlayer.savePlaybackSnapshot()
+            }
         }
         .tint(SetuColor.brandPink)
+    }
+
+    private func switchMusicPlaybackUser(from oldUserID: Int?, to newUserID: Int?) {
+        guard oldUserID != newUserID else {
+            musicPlayer.setSnapshotUserID(newUserID)
+            if let newUserID {
+                musicPlayer.restorePlaybackSnapshotIfNeeded(for: newUserID)
+            }
+            return
+        }
+
+        if let oldUserID {
+            musicPlayer.savePlaybackSnapshot(userID: oldUserID)
+        }
+        musicPlayer.resetForUserChange()
+        musicPlayer.setSnapshotUserID(newUserID)
+        if let newUserID {
+            musicPlayer.restorePlaybackSnapshotIfNeeded(for: newUserID)
+        }
     }
 
     /// Lets the playback controller fetch a fresh URL for the next track on its own, so

@@ -45,7 +45,7 @@ struct SetuNavigationRow: View {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .setuButtonFeedback()
         .frame(minHeight: 52)
         .accessibilityElement(children: .combine)
     }

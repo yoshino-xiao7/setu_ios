@@ -564,7 +564,7 @@ private struct BulkAddPlaylistSongsSheet: View {
                                     .frame(minHeight: 56)
                                     .contentShape(Rectangle())
                                 }
-                                .buttonStyle(.plain)
+                                .setuButtonFeedback()
                             }
                         }
                     }
@@ -651,7 +651,7 @@ private struct PlaylistSongRow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .setuButtonFeedback()
             .accessibilityLabel(isSelectionMode ? "选择 \(song.songName)" : "播放 \(song.songName)")
             if !isSelectionMode {
                 Button(action: onPlay) {

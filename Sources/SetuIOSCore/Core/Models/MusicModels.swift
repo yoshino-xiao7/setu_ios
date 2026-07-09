@@ -100,20 +100,101 @@ public struct MusicSong: Decodable, Identifiable, Sendable {
         self.mv = mv
     }
 
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let nestedSong = try container.decodeIfPresent(MusicSong.self, forKey: .song)
+
+        if let id = try container.decodeIfPresent(Int.self, forKey: .id) ?? nestedSong?.id {
+            self.id = id
+        } else {
+            self.id = try container.decode(Int.self, forKey: .id)
+        }
+
+        if let name = Self.firstNonBlank(try container.decodeIfPresent(String.self, forKey: .name), nestedSong?.name) {
+            self.name = name
+        } else {
+            self.name = try container.decode(String.self, forKey: .name)
+        }
+
+        let decodedArtists = try container.decodeIfPresent([MusicArtist].self, forKey: .artists)
+        let decodedAr = try container.decodeIfPresent([MusicArtist].self, forKey: .ar)
+        self.artists = Self.preferredArtists(decodedArtists, nestedSong?.artists)
+        self.ar = Self.preferredArtists(decodedAr, nestedSong?.ar)
+        self.album = Self.preferredAlbum(try container.decodeIfPresent(MusicAlbum.self, forKey: .album), nestedSong?.album)
+        self.al = Self.preferredAlbum(try container.decodeIfPresent(MusicAlbum.self, forKey: .al), nestedSong?.al)
+        self.duration = Self.preferredPositive(try container.decodeIfPresent(Int.self, forKey: .duration), nestedSong?.duration)
+        self.dt = Self.preferredPositive(try container.decodeIfPresent(Int.self, forKey: .dt), nestedSong?.dt)
+        self.picUrl = Self.firstNonBlank(try container.decodeIfPresent(String.self, forKey: .picUrl), nestedSong?.picUrl)
+        self.mv = Self.preferredPositive(try container.decodeIfPresent(Int.self, forKey: .mv), nestedSong?.mv)
+    }
+
     public var artistNames: String {
-        (artists ?? ar ?? []).map(\.name).joined(separator: " / ")
+        Self.firstNonEmpty(artists, ar)?
+            .map(\.name)
+            .compactMap(Self.normalizedNonBlank)
+            .joined(separator: " / ") ?? ""
     }
 
     public var albumName: String {
-        album?.name ?? al?.name ?? "未知专辑"
+        Self.firstNonBlank(album?.name, al?.name) ?? "未知专辑"
     }
 
     public var coverURLString: String? {
-        secureURLString(picUrl ?? album?.picUrl ?? al?.picUrl, artworkSize: .lockScreen)
+        secureURLString(Self.firstNonBlank(picUrl, album?.picUrl, al?.picUrl), artworkSize: .lockScreen)
     }
 
     public var durationMilliseconds: Int {
-        duration ?? dt ?? 0
+        Self.firstPositive(duration, dt) ?? duration ?? dt ?? 0
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case artists
+        case ar
+        case album
+        case al
+        case duration
+        case dt
+        case picUrl
+        case mv
+        case song
+    }
+
+    private static func preferredArtists(_ primary: [MusicArtist]?, _ fallback: [MusicArtist]?) -> [MusicArtist]? {
+        firstNonEmpty(primary, fallback) ?? primary ?? fallback
+    }
+
+    private static func preferredAlbum(_ primary: MusicAlbum?, _ fallback: MusicAlbum?) -> MusicAlbum? {
+        if firstNonBlank(primary?.name) != nil {
+            return primary
+        }
+        if firstNonBlank(fallback?.name) != nil {
+            return fallback
+        }
+        return primary ?? fallback
+    }
+
+    private static func preferredPositive(_ primary: Int?, _ fallback: Int?) -> Int? {
+        firstPositive(primary, fallback) ?? primary ?? fallback
+    }
+
+    private static func firstNonEmpty<T>(_ values: [T]?...) -> [T]? {
+        values.compactMap { $0 }.first { !$0.isEmpty }
+    }
+
+    private static func firstNonBlank(_ values: String?...) -> String? {
+        values.compactMap(normalizedNonBlank).first
+    }
+
+    private static func normalizedNonBlank(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    private static func firstPositive(_ values: Int?...) -> Int? {
+        values.compactMap { $0 }.first { $0 > 0 }
     }
 }
 

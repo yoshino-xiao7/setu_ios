@@ -48,6 +48,51 @@ final class MusicClientTests: XCTestCase {
         XCTAssertTrue(urls.contains("https://api.example.com/user/music/playlist/track/all?id=123&limit=50"))
     }
 
+    func testPersonalizedNewSongDecodesNestedSongPayload() async throws {
+        let session = URLSession(
+            configuration: .musicClientMock { request in
+                XCTAssertEqual(request.url?.absoluteString, "https://api.example.com/user/music/personalized/newsong")
+                return #"""
+                {
+                  "result": [
+                    {
+                      "id": 1001,
+                      "name": "甲乙丙丁",
+                      "picUrl": "http://p3.music.126.net/recommend-cover.jpg",
+                      "song": {
+                        "id": 1001,
+                        "name": "甲乙丙丁",
+                        "artists": [
+                          { "id": 1, "name": "许志安" },
+                          { "id": 2, "name": "张学友" }
+                        ],
+                        "album": {
+                          "id": 88,
+                          "name": "拉阔音乐压轴篇98",
+                          "picUrl": "http://p4.music.126.net/album-cover.jpg"
+                        },
+                        "duration": 251000,
+                        "mv": 0
+                      }
+                    }
+                  ]
+                }
+                """#
+            }
+        )
+        let client = MusicClient(apiClient: makeAPIClient(session: session))
+
+        let response = try await client.personalizedNewSongs()
+        let song = try XCTUnwrap(response.result.first)
+
+        XCTAssertEqual(song.id, 1001)
+        XCTAssertEqual(song.name, "甲乙丙丁")
+        XCTAssertEqual(song.artistNames, "许志安 / 张学友")
+        XCTAssertEqual(song.albumName, "拉阔音乐压轴篇98")
+        XCTAssertEqual(song.durationMilliseconds, 251000)
+        XCTAssertEqual(song.coverURLString, "https://p3.music.126.net/recommend-cover.jpg?param=400y400")
+    }
+
     func testSecureURLStringUpgradesHTTPAndAddsArtworkSizeForNeteaseCovers() {
         let url = secureURLString(
             "http://p3.music.126.net/abc/109951.jpg",

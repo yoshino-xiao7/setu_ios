@@ -271,7 +271,7 @@ private struct MusicHistoryIconButton: View {
                 .frame(width: 44, height: 44)
                 .background(tint.opacity(0.12), in: Circle())
         }
-        .buttonStyle(.plain)
+        .setuButtonFeedback(cornerRadius: 22)
         .accessibilityLabel(accessibilityLabel)
     }
 }

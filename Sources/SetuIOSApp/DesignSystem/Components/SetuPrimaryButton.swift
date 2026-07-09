@@ -19,6 +19,6 @@ struct SetuPrimaryButton<Label: View>: View {
                 .background(SetuColor.heroGradient, in: Capsule())
                 .shadow(color: SetuColor.brandPink.opacity(0.24), radius: 14, y: 8)
         }
-        .buttonStyle(.plain)
+        .setuButtonFeedback(cornerRadius: 24)
     }
 }

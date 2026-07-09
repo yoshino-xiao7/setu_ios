@@ -43,10 +43,16 @@ struct MusicMiniPlayerBar: View {
                     .foregroundStyle(SetuColor.textSecondary)
                     .frame(width: 36, height: 44)
             }
-            .buttonStyle(.plain)
+            .setuButtonFeedback(cornerRadius: 22)
             .accessibilityLabel("收起迷你播放器")
 
-            MusicArtworkView(urlString: track.coverURLString, width: 44, height: 44, cornerRadius: SetuRadius.sm)
+            MusicArtworkView(
+                urlString: track.coverURLString,
+                width: 44,
+                height: 44,
+                cornerRadius: SetuRadius.sm,
+                onTap: { openDetail(.cover) }
+            )
 
             Button {
                 openDetail(.cover)
@@ -64,7 +70,7 @@ struct MusicMiniPlayerBar: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .setuButtonFeedback()
             .accessibilityLabel("打开正在播放：\(track.title)")
 
             MiniPlayerCircularPlayButton(
@@ -88,7 +94,7 @@ struct MusicMiniPlayerBar: View {
                 .frame(width: 48, height: 48)
                 .background(SetuColor.surfaceMuted, in: Circle())
             }
-            .buttonStyle(.plain)
+            .setuButtonFeedback(cornerRadius: 24)
             .accessibilityLabel("查看当前播放列表")
         }
         .padding(.horizontal, SetuSpacing.sm)
@@ -112,48 +118,43 @@ struct MusicMiniPlayerBar: View {
     }
 
     private func collapsedHandle(for track: MusicPlaybackTrack) -> some View {
-        HStack(spacing: SetuSpacing.xs) {
-            Image(systemName: "chevron.left")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(SetuColor.brandInk)
-                .frame(width: 24, height: 44)
-
-            MusicArtworkView(
-                urlString: track.coverURLString,
-                width: 42,
-                height: 42,
-                cornerRadius: SetuRadius.sm,
-                onTap: {
-                    isCollapsed = false
-                }
-            )
-            .overlay(alignment: .bottomTrailing) {
-                Image(systemName: player.isPlaying ? "waveform" : "pause.fill")
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 18, height: 18)
-                    .background(SetuColor.heroGradient, in: Circle())
-            }
-        }
-        .padding(.leading, SetuSpacing.xs)
-        .padding(.trailing, SetuSpacing.sm)
-        .padding(.vertical, SetuSpacing.xs)
-        .frame(minWidth: 84, minHeight: 56)
-        .background(.ultraThinMaterial, in: Capsule())
-        .overlay {
-            Capsule().stroke(SetuColor.separator, lineWidth: 1)
-        }
-        .shadow(color: SetuColor.brandPink.opacity(0.14), radius: 12, y: 6)
-        .contentShape(Capsule())
-        .onTapGesture {
+        Button {
             isCollapsed = false
+        } label: {
+            HStack(spacing: SetuSpacing.xs) {
+                Image(systemName: "chevron.left")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(SetuColor.brandInk)
+                    .frame(width: 24, height: 44)
+
+                MusicArtworkView(
+                    urlString: track.coverURLString,
+                    width: 42,
+                    height: 42,
+                    cornerRadius: SetuRadius.sm
+                )
+                .overlay(alignment: .bottomTrailing) {
+                    Image(systemName: player.isPlaying ? "waveform" : "pause.fill")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 18, height: 18)
+                        .background(SetuColor.heroGradient, in: Circle())
+                }
+            }
+            .padding(.leading, SetuSpacing.xs)
+            .padding(.trailing, SetuSpacing.sm)
+            .padding(.vertical, SetuSpacing.xs)
+            .frame(minWidth: 84, minHeight: 56)
+            .background(.ultraThinMaterial, in: Capsule())
+            .overlay {
+                Capsule().stroke(SetuColor.separator, lineWidth: 1)
+            }
+            .shadow(color: SetuColor.brandPink.opacity(0.14), radius: 12, y: 6)
+            .contentShape(Capsule())
         }
+        .setuButtonFeedback(cornerRadius: 28)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("展开迷你播放器")
-        .accessibilityAddTraits(.isButton)
-        .accessibilityAction {
-            isCollapsed = false
-        }
     }
 
     private func openDetail(_ page: NowPlayingPage) {
@@ -193,7 +194,7 @@ private struct MiniPlayerCircularPlayButton: View {
             }
             .frame(width: 50, height: 50)
         }
-        .buttonStyle(.plain)
+        .setuButtonFeedback(cornerRadius: 25)
         .accessibilityLabel(isPlaying ? "暂停" : "播放")
     }
 }
@@ -238,7 +239,7 @@ struct MusicQueueDrawerView: View {
                             .font(.subheadline.weight(.semibold))
                             .frame(width: 44, height: 44)
                     }
-                    .buttonStyle(.plain)
+                    .setuButtonFeedback(cornerRadius: 22)
                     .accessibilityLabel("清空待播歌曲")
                 }
 
@@ -251,7 +252,7 @@ struct MusicQueueDrawerView: View {
                         .frame(width: 44, height: 44)
                         .background(SetuColor.surfaceMuted, in: Circle())
                 }
-                .buttonStyle(.plain)
+                .setuButtonFeedback(cornerRadius: 22)
                 .accessibilityLabel("关闭当前播放")
             }
             .padding(.horizontal, SetuSpacing.lg)
@@ -382,7 +383,7 @@ private struct MusicQueueDrawerRow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .setuButtonFeedback()
             .disabled(isCurrent)
 
             if isCurrent {
@@ -548,7 +549,7 @@ private struct MusicNowPlayingDetailView: View {
                     .frame(width: 44, height: 44)
                     .background(SetuColor.surfaceMuted.opacity(0.7), in: Circle())
             }
-            .buttonStyle(.plain)
+            .setuButtonFeedback(cornerRadius: 22)
             .accessibilityLabel("收起播放页")
 
             Spacer()
@@ -643,7 +644,7 @@ private struct MusicNowPlayingDetailView: View {
                             .padding(.horizontal, SetuSpacing.lg)
                             .background(SetuColor.brandSoft.opacity(0.24), in: Capsule())
                     }
-                    .buttonStyle(.plain)
+                    .setuButtonFeedback(cornerRadius: 22)
                     .accessibilityLabel("观看 \(track.title) 的 MV")
                 }
 
@@ -751,7 +752,7 @@ private struct MusicNowPlayingDetailView: View {
                         .background(SetuColor.heroGradient, in: Circle())
                         .shadow(color: SetuColor.brandPink.opacity(0.28), radius: 18, y: 10)
                 }
-                .buttonStyle(.plain)
+                .setuButtonFeedback(cornerRadius: 36)
                 .accessibilityLabel(player.isPlaying ? "暂停" : "播放")
 
                 NowPlayingRoundButton(
@@ -1056,7 +1057,7 @@ private struct NowPlayingRoundButton: View {
                 .frame(width: 50, height: 50)
                 .background(SetuColor.surfaceMuted, in: Circle())
         }
-        .buttonStyle(.plain)
+        .setuButtonFeedback(cornerRadius: 25)
         .disabled(disabled)
         .opacity(disabled ? 0.45 : 1)
         .accessibilityLabel(label)
@@ -1153,7 +1154,7 @@ private struct AddPlaybackTrackToPlaylistSheet: View {
                                     }
                                     .frame(minHeight: 56)
                                 }
-                                .buttonStyle(.plain)
+                                .setuButtonFeedback()
                             }
                         }
                     }
