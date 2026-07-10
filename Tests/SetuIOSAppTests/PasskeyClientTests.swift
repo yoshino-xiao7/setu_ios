@@ -44,6 +44,38 @@ final class PasskeyClientTests: XCTestCase {
         XCTAssertEqual(url, "https://api.example.com/user/passkeys")
     }
 
+    func testRegistrationCredentialEncodesEmptyClientExtensionResultsForYubico() throws {
+        let credential = PasskeyRegistrationCredential(
+            id: "credential-id",
+            rawId: "credential-id",
+            response: PasskeyAttestationResponse(
+                clientDataJSON: "client-data",
+                attestationObject: "attestation"
+            )
+        )
+
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(credential)) as? [String: Any])
+
+        XCTAssertNotNil(json["clientExtensionResults"] as? [String: Any])
+    }
+
+    func testAssertionCredentialEncodesEmptyClientExtensionResultsForYubico() throws {
+        let credential = PasskeyAssertionCredential(
+            id: "credential-id",
+            rawId: "credential-id",
+            response: PasskeyAssertionResponse(
+                authenticatorData: "authenticator-data",
+                clientDataJSON: "client-data",
+                signature: "signature",
+                userHandle: "user-handle"
+            )
+        )
+
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(credential)) as? [String: Any])
+
+        XCTAssertNotNil(json["clientExtensionResults"] as? [String: Any])
+    }
+
     private func makeAPIClient(session: URLSession) -> APIClient {
         let keychain = PasskeyClientTestKeychain()
         try? keychain.setString("secret", for: "signSecret")

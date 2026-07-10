@@ -135,12 +135,20 @@ public struct PasskeyRegistrationCredential: Encodable, Sendable {
     public let id: String
     public let rawId: String
     public let type: String
+    public let clientExtensionResults: [String: Bool]
     public let response: PasskeyAttestationResponse
 
-    public init(id: String, rawId: String, type: String = "public-key", response: PasskeyAttestationResponse) {
+    public init(
+        id: String,
+        rawId: String,
+        type: String = "public-key",
+        clientExtensionResults: [String: Bool] = [:],
+        response: PasskeyAttestationResponse
+    ) {
         self.id = id
         self.rawId = rawId
         self.type = type
+        self.clientExtensionResults = clientExtensionResults
         self.response = response
     }
 }
@@ -161,12 +169,20 @@ public struct PasskeyAssertionCredential: Encodable, Sendable {
     public let id: String
     public let rawId: String
     public let type: String
+    public let clientExtensionResults: [String: Bool]
     public let response: PasskeyAssertionResponse
 
-    public init(id: String, rawId: String, type: String = "public-key", response: PasskeyAssertionResponse) {
+    public init(
+        id: String,
+        rawId: String,
+        type: String = "public-key",
+        clientExtensionResults: [String: Bool] = [:],
+        response: PasskeyAssertionResponse
+    ) {
         self.id = id
         self.rawId = rawId
         self.type = type
+        self.clientExtensionResults = clientExtensionResults
         self.response = response
     }
 }
