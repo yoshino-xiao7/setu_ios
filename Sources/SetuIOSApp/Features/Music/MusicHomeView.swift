@@ -65,9 +65,8 @@ struct MusicHomeView: View {
     private var toolbarLogo: some View {
         Image("MusicHomeLogo")
             .resizable()
-            .scaledToFill()
-            .frame(width: 116, height: 36)
-            .clipShape(RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous))
+            .scaledToFit()
+            .frame(width: SetuToolbarLogoMetrics.width, height: SetuToolbarLogoMetrics.height)
             .accessibilityLabel("扣扣音乐")
             .accessibilityAddTraits(.isImage)
     }

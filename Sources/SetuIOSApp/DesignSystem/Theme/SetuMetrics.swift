@@ -14,3 +14,8 @@ enum SetuRadius {
     static let md: CGFloat = 18
     static let lg: CGFloat = 24
 }
+
+enum SetuToolbarLogoMetrics {
+    static let width: CGFloat = 120
+    static let height: CGFloat = 40
+}

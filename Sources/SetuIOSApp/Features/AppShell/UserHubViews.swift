@@ -102,9 +102,32 @@ struct ImageHubView: View {
         }
         .listStyle(.plain)
         .setuBackground()
-        .navigationTitle("图片")
+        .navigationTitle("")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
+        .toolbar {
+            #if os(iOS)
+            ToolbarItem(placement: .topBarLeading) {
+                imageToolbarLogo
+            }
+            #else
+            ToolbarItem(placement: .automatic) {
+                imageToolbarLogo
+            }
+            #endif
+        }
         .task { await loadPoints() }
         .refreshable { await loadPoints() }
+    }
+
+    private var imageToolbarLogo: some View {
+        Image("ImageHomeLogo")
+            .resizable()
+            .scaledToFit()
+            .frame(width: SetuToolbarLogoMetrics.width, height: SetuToolbarLogoMetrics.height)
+            .accessibilityLabel("扣扣图片")
+            .accessibilityAddTraits(.isImage)
     }
 
     private func loadPoints() async {
