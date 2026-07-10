@@ -183,7 +183,7 @@ public struct APIClient: Sendable {
                 retryingSignatureError: false
             )
         }
-        if httpResponse.statusCode == 401 || signatureError {
+        if signed && (httpResponse.statusCode == 401 || signatureError) {
             await sessionInvalidationNotifier?.notifyUnauthorized()
         }
         guard (200..<300).contains(httpResponse.statusCode) else {
@@ -239,7 +239,7 @@ public struct APIClient: Sendable {
            await refreshSignature(force: true) {
             return try await request(path, method: method, body: body, signed: signed, headers: headers, retryingSignatureError: false)
         }
-        if httpResponse.statusCode == 401 || signatureError {
+        if signed && (httpResponse.statusCode == 401 || signatureError) {
             await sessionInvalidationNotifier?.notifyUnauthorized()
         }
         guard (200..<300).contains(httpResponse.statusCode) else {

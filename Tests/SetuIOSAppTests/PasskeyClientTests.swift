@@ -12,9 +12,7 @@ final class PasskeyClientTests: XCTestCase {
         let capturedRequest = PasskeyClientRequestProbe()
         let session = URLSession(
             configuration: .passkeyClientMock { request in
-                Task {
-                    await capturedRequest.capture(request)
-                }
+                capturedRequest.capture(request)
                 return """
                 {
                   "code": 200,
@@ -40,7 +38,7 @@ final class PasskeyClientTests: XCTestCase {
         XCTAssertEqual(passkeys.count, 1)
         XCTAssertEqual(passkeys.first?.displayName, "iPhone")
         XCTAssertEqual(passkeys.first?.transports ?? [], ["internal"])
-        let url = await capturedRequest.lastURL
+        let url = capturedRequest.lastURL
         XCTAssertEqual(url, "https://api.example.com/user/passkeys")
     }
 
@@ -76,6 +74,25 @@ final class PasskeyClientTests: XCTestCase {
         XCTAssertNotNil(json["clientExtensionResults"] as? [String: Any])
     }
 
+    func testAuthenticationOptionsRequestIsPublicAndDoesNotUseStaleSessionSignature() async throws {
+        let capturedRequest = PasskeyClientRequestProbe()
+        let session = URLSession(
+            configuration: .passkeyClientMock { request in
+                capturedRequest.capture(request)
+                return #"{"challengeId":"challenge-id","publicKey":{"challenge":"challenge","rpId":"cloud.yukiryou.icu"}}"#
+            }
+        )
+        let client = PasskeyClient(apiClient: makeAPIClient(session: session))
+
+        _ = try await client.beginAuthentication()
+
+        let request = capturedRequest.lastRequest
+        XCTAssertEqual(request?.url?.absoluteString, "https://api.example.com/auth/passkeys/authentication/options")
+        XCTAssertNil(request?.value(forHTTPHeaderField: "X-Signature"))
+        XCTAssertNil(request?.value(forHTTPHeaderField: "X-Timestamp"))
+        XCTAssertNil(request?.value(forHTTPHeaderField: "X-Nonce"))
+    }
+
     private func makeAPIClient(session: URLSession) -> APIClient {
         let keychain = PasskeyClientTestKeychain()
         try? keychain.setString("secret", for: "signSecret")
@@ -90,11 +107,22 @@ final class PasskeyClientTests: XCTestCase {
     }
 }
 
-private actor PasskeyClientRequestProbe {
-    private(set) var lastURL: String?
+private final class PasskeyClientRequestProbe: @unchecked Sendable {
+    private let lock = NSLock()
+    private var request: URLRequest?
+
+    var lastRequest: URLRequest? {
+        lock.withLock { request }
+    }
+
+    var lastURL: String? {
+        lastRequest?.url?.absoluteString
+    }
 
     func capture(_ request: URLRequest) {
-        lastURL = request.url?.absoluteString
+        lock.withLock {
+            self.request = request
+        }
     }
 }
 

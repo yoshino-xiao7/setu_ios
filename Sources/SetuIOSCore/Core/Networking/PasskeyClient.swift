@@ -27,7 +27,7 @@ public struct PasskeyClient: Sendable {
     }
 
     public func beginAuthentication() async throws -> PasskeyOptionsResponse {
-        try await apiClient.post("/auth/passkeys/authentication/options")
+        try await apiClient.post("/auth/passkeys/authentication/options", signed: false)
     }
 
     public func finishAuthentication(challengeID: String, credential: PasskeyAssertionCredential) async throws -> LoginResponse {

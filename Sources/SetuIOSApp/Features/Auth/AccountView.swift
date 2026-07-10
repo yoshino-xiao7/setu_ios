@@ -609,7 +609,11 @@ struct AccountView: View {
     private func loginWithPasskey() async {
         passkeyLoading = true
         lastSessionConfirmation = nil
+        authMessage = nil
         passkeyMessage = nil
+        sessionMessage = nil
+        environment.authSession.lastError = nil
+        defer { passkeyLoading = false }
         do {
             let options = try await environment.passkeyClient.beginAuthentication()
             let credential = try await passkeyService.assertCredential(options: options.publicKey.publicKey)
@@ -625,7 +629,6 @@ struct AccountView: View {
             lastSessionConfirmation = false
             sessionMessage = "通行密钥登录失败，请重试"
         }
-        passkeyLoading = false
     }
 
     private func loginWithApple() async {

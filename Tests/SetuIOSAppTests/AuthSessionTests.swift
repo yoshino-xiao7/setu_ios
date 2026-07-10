@@ -564,6 +564,31 @@ final class APIClientUnauthorizedTests: XCTestCase {
         }
     }
 
+    func testPublicAuthenticationFailureDoesNotInvalidateExistingSession() async throws {
+        let keychain = InMemoryKeychain()
+        try keychain.setString("secret", for: "signSecret")
+        let notifier = SessionInvalidationNotifier()
+        let invalidated = InvalidationProbe()
+        notifier.setHandler {
+            await invalidated.markInvalidated()
+        }
+        let session = URLSession(configuration: .mock(statusCode: 401, body: #"{"message":"通行密钥认证失败"}"#))
+        let client = APIClient(
+            config: AppConfig(apiBaseURL: URL(string: "https://api.example.com")!, siteBaseURL: URL(string: "https://example.com")!),
+            signer: AuthSigner(keychain: keychain),
+            session: session,
+            sessionInvalidationNotifier: notifier
+        )
+
+        do {
+            let _: EmptyResponse = try await client.post("/auth/passkeys/authentication/finish", signed: false)
+            XCTFail("Expected HTTP 401")
+        } catch APIError.httpStatus(401, _, _, _) {
+            let wasInvalidated = await invalidated.wasInvalidated
+            XCTAssertFalse(wasInvalidated)
+        }
+    }
+
     func testHTTPStatusErrorIncludesBackendMessageAndRequestID() async throws {
         let keychain = InMemoryKeychain()
         let session = URLSession(configuration: .mock(statusCode: 401, body: #"{"message":"Unauthorized","traceId":"trace-123"}"#))
