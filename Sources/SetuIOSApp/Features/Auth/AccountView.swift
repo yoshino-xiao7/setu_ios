@@ -23,12 +23,14 @@ struct AccountView: View {
     @State private var resetToken = ""
     @State private var resetPassword = ""
     @State private var passkeyService = PasskeyAuthorizationService()
+    @State private var appleAuthorizationService = AppleAuthorizationService()
     @State private var passkeyMessage: String?
     @State private var authMessage: String?
     @State private var sessionMessage: String?
     @State private var sessionDiagnostics: MobileSessionDiagnostics?
     @State private var lastSessionConfirmation: Bool?
     @State private var passkeyLoading = false
+    @State private var appleLoading = false
     @State private var authActionLoading = false
     @State private var sessionActionLoading = false
     @State private var preserveAuthMessageOnNextPageChange = false
@@ -151,7 +153,7 @@ struct AccountView: View {
                 Button(role: .destructive) {
                     Task {
                         adminModeEnabled = false
-                        await environment.authSession.logout()
+                        await environment.logout()
                         sessionMessage = "已退出登录"
                         updateSessionDiagnostics()
                     }
@@ -542,9 +544,10 @@ struct AccountView: View {
             }
 
             HStack(spacing: 18) {
-                AuthSocialButton(title: "Apple", systemImage: "apple.logo") {
-                    authMessage = "Apple 账号登录需要后端完成 Apple 身份令牌校验接口后启用。"
+                AuthSocialButton(title: "Apple", systemImage: "apple.logo", isLoading: appleLoading) {
+                    Task { await loginWithApple() }
                 }
+                .disabled(appleLoading)
                 AuthSocialButton(title: "通行密钥", systemImage: "touchid", isLoading: passkeyLoading) {
                     Task { await loginWithPasskey() }
                 }
@@ -623,6 +626,30 @@ struct AccountView: View {
             sessionMessage = "通行密钥登录失败，请重试"
         }
         passkeyLoading = false
+    }
+
+    private func loginWithApple() async {
+        appleLoading = true
+        authMessage = nil
+        lastSessionConfirmation = nil
+        defer { appleLoading = false }
+        do {
+            let credential = try await appleAuthorizationService.authorize()
+            let response = try await environment.appleAuthClient.login(
+                identityToken: credential.identityToken,
+                nonce: credential.nonce
+            )
+            try await environment.authSession.acceptLoginResponse(response)
+            updateSessionDiagnostics()
+            lastSessionConfirmation = true
+            authMessage = "Apple 登录成功"
+            sessionMessage = "登录成功"
+        } catch {
+            authMessage = AppleAuthorizationService.userMessage(for: error)
+            updateSessionDiagnostics()
+            lastSessionConfirmation = false
+            sessionMessage = "Apple 登录失败，请重试"
+        }
     }
 
     private func registerAccount() async {

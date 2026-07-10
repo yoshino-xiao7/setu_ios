@@ -8,6 +8,10 @@ struct SecuritySettingsView: View {
     @State private var confirmPassword = ""
     @State private var message: String?
     @State private var isSaving = false
+    @State private var appleAuthorizationService = AppleAuthorizationService()
+    @State private var appleBinding: AppleBindingStatus?
+    @State private var appleBindingLoading = false
+    @State private var showAppleUnbindConfirmation = false
 
     var body: some View {
         List {
@@ -40,6 +44,39 @@ struct SecuritySettingsView: View {
                 }
             }
 
+            Section {
+                SetuCard {
+                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                        SetuSectionHeader(
+                            title: "Apple 登录",
+                            subtitle: appleBinding?.linked == true
+                                ? "已绑定(appleEmailDescription)"
+                                : "绑定后可以使用 Apple 安全登录"
+                        )
+                        if appleBindingLoading {
+                            ProgressView("正在更新 Apple 绑定")
+                        } else if appleBinding?.linked == true {
+                            Button(role: .destructive) {
+                                showAppleUnbindConfirmation = true
+                            } label: {
+                                Label("解除 Apple 绑定", systemImage: "link.badge.minus")
+                                    .frame(maxWidth: .infinity, minHeight: 44)
+                            }
+                            .buttonStyle(.bordered)
+                        } else {
+                            Button {
+                                Task { await bindApple() }
+                            } label: {
+                                Label("绑定 Apple 账号", systemImage: "apple.logo")
+                                    .frame(maxWidth: .infinity, minHeight: 44)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(.primary)
+                        }
+                    }
+                }
+            }
+
             if let message {
                 Section {
                     SetuPill(
@@ -53,11 +90,25 @@ struct SecuritySettingsView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .setuBackground()
-        .navigationTitle("修改密码")
+        .navigationTitle("账号安全")
+        .task { await loadAppleBinding() }
+        .confirmationDialog("解除 Apple 绑定？", isPresented: $showAppleUnbindConfirmation) {
+            Button("解除绑定", role: .destructive) {
+                Task { await unbindApple() }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("解除后将不能再用该 Apple 账号登录；密码和通行密钥登录不受影响。")
+        }
     }
 
     private var canSave: Bool {
         !oldPassword.isEmpty && newPassword.count >= 8 && newPassword == confirmPassword
+    }
+
+    private var appleEmailDescription: String {
+        guard let email = appleBinding?.email, !email.isEmpty else { return "" }
+        return "（\(email)）"
     }
 
     private var messageTone: SetuPillTone {
@@ -87,9 +138,41 @@ struct SecuritySettingsView: View {
             newPassword = ""
             confirmPassword = ""
             message = "密码已修改，请重新登录"
-            await environment.authSession.logout()
+            await environment.logout()
         } catch {
             message = "修改失败：\(error.localizedDescription)"
+        }
+    }
+
+    private func loadAppleBinding() async {
+        appleBindingLoading = true
+        defer { appleBindingLoading = false }
+        appleBinding = try? await environment.appleAuthClient.binding()
+    }
+
+    private func bindApple() async {
+        appleBindingLoading = true
+        defer { appleBindingLoading = false }
+        do {
+            let credential = try await appleAuthorizationService.authorize()
+            appleBinding = try await environment.appleAuthClient.bind(
+                identityToken: credential.identityToken,
+                nonce: credential.nonce
+            )
+            message = "Apple 账号已绑定"
+        } catch {
+            message = AppleAuthorizationService.userMessage(for: error)
+        }
+    }
+
+    private func unbindApple() async {
+        appleBindingLoading = true
+        defer { appleBindingLoading = false }
+        do {
+            appleBinding = try await environment.appleAuthClient.unbind()
+            message = "Apple 绑定已解除"
+        } catch {
+            message = "解除失败：\(error.localizedDescription)"
         }
     }
 }

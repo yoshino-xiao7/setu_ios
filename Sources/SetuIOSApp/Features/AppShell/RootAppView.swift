@@ -4,6 +4,7 @@ import SwiftUI
 struct RootAppView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Bindable var environment: AppEnvironment
+    @Bindable var pushNotifications: SystemPushCoordinator
     @State private var selectedTab: AppTab = .home
     @State private var tabRouter = TabRouter()
     @State private var loggedOutRouter = RouterPath()
@@ -11,8 +12,9 @@ struct RootAppView: View {
     @State private var showingMusicQueueDrawer = false
     @State private var isSessionReady = false
 
-    init(environment: AppEnvironment) {
+    init(environment: AppEnvironment, pushNotifications: SystemPushCoordinator) {
         self.environment = environment
+        self.pushNotifications = pushNotifications
         SetuAppAppearance.configure()
     }
 
@@ -44,6 +46,10 @@ struct RootAppView: View {
         }
         .task(id: environment.authSession.currentUser?.id) {
             await ensureSessionState()
+            if environment.authSession.isSignedIn {
+                await pushNotifications.enableForSignedInUser()
+                openPendingPushIfPossible()
+            }
         }
         .task {
             configureMusicPlayerResolver()
@@ -51,6 +57,13 @@ struct RootAppView: View {
         }
         .onChange(of: environment.authSession.currentUser?.id) { oldUserID, newUserID in
             switchMusicPlaybackUser(from: oldUserID, to: newUserID)
+            if newUserID != nil {
+                Task { await pushNotifications.enableForSignedInUser() }
+                openPendingPushIfPossible()
+            }
+        }
+        .onChange(of: pushNotifications.pendingDestination) {
+            openPendingPushIfPossible()
         }
         .onChange(of: selectedTab) { oldValue, _ in
             if oldValue == .music {
@@ -348,5 +361,26 @@ struct RootAppView: View {
         }
         _ = await environment.authSession.confirmAuthenticatedSession()
         isSessionReady = true
+    }
+
+    private func openPendingPushIfPossible() {
+        guard environment.authSession.isSignedIn,
+              let destination = pushNotifications.consumePendingDestination() else { return }
+        let targetType = (destination.targetType ?? "").uppercased()
+        let route: AppRoute
+        if let id = destination.targetID,
+           targetType == "AI_GENERATION" || destination.type == "AI_GENERATION_COMPLETED" {
+            route = .aiGenerationDetail(id)
+        } else if let id = destination.targetID,
+                  targetType.contains("GALLERY") || destination.type?.hasPrefix("GALLERY_SUBMISSION_") == true {
+            route = .galleryUploadDetail(id)
+        } else if let id = destination.targetID,
+                  targetType.contains("DELETE") || destination.type?.hasPrefix("IMAGE_DELETE_REQUEST_") == true {
+            route = .imageDeleteRequestDetail(id)
+        } else {
+            route = .notifications
+        }
+        selectedTab = .home
+        tabRouter.router(for: .home).navigate(to: route)
     }
 }

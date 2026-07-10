@@ -16,6 +16,7 @@ public final class AppEnvironment {
     public let statusClient: StatusClient
     public let userProfileClient: UserProfileClient
     public let passkeyClient: PasskeyClient
+    public let appleAuthClient: AppleAuthClient
     public let collectionClient: CollectionClient
     public let aiGenerationClient: AiGenerationClient
     public let favoriteClient: FavoriteClient
@@ -40,6 +41,7 @@ public final class AppEnvironment {
         statusClient: StatusClient,
         userProfileClient: UserProfileClient,
         passkeyClient: PasskeyClient,
+        appleAuthClient: AppleAuthClient,
         collectionClient: CollectionClient,
         aiGenerationClient: AiGenerationClient,
         favoriteClient: FavoriteClient,
@@ -63,6 +65,7 @@ public final class AppEnvironment {
         self.statusClient = statusClient
         self.userProfileClient = userProfileClient
         self.passkeyClient = passkeyClient
+        self.appleAuthClient = appleAuthClient
         self.collectionClient = collectionClient
         self.aiGenerationClient = aiGenerationClient
         self.favoriteClient = favoriteClient
@@ -97,6 +100,7 @@ public final class AppEnvironment {
         let statusClient = StatusClient(apiClient: client)
         let userProfileClient = UserProfileClient(apiClient: client)
         let passkeyClient = PasskeyClient(apiClient: client)
+        let appleAuthClient = AppleAuthClient(apiClient: client)
         let collectionClient = CollectionClient(apiClient: client)
         let aiGenerationClient = AiGenerationClient(apiClient: client)
         let favoriteClient = FavoriteClient(apiClient: client)
@@ -126,6 +130,7 @@ public final class AppEnvironment {
             statusClient: statusClient,
             userProfileClient: userProfileClient,
             passkeyClient: passkeyClient,
+            appleAuthClient: appleAuthClient,
             collectionClient: collectionClient,
             aiGenerationClient: aiGenerationClient,
             favoriteClient: favoriteClient,
@@ -136,5 +141,12 @@ public final class AppEnvironment {
             adminClient: adminClient,
             authSession: session
         )
+    }
+
+    public func logout() async {
+        if let deviceID = try? keychain.string(for: "pushDeviceId"), !deviceID.isEmpty {
+            try? await mobileAppClient.disableDevice(deviceId: deviceID)
+        }
+        await authSession.logout()
     }
 }

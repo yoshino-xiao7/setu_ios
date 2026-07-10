@@ -1,5 +1,19 @@
 # 后端移动端契约
 
+## 原生认证扩展
+
+- `POST /auth/apple/login` 接收 `{ identityToken, nonce }`，无需 HMAC，成功后返回标准 `LoginResponse` 与 `SID` Cookie。
+- `GET /user/apple`、`POST /user/apple/bind`、`DELETE /user/apple` 使用现有会话与 HMAC 签名。
+- 设备生成原始 nonce，只把 SHA-256 值交给 Apple；原始值仅向后端提交一次用于校验令牌 claim。
+- 通行密钥继续使用 `cloud.yukiryou.icu` WebAuthn RP ID，断言成功后进入相同的 `SID` + `signSecret` 会话。
+
+## 系统通知生命周期
+
+- 登录后 iOS 请求通知权限，并通过 `POST /mobile/devices/apns` 注册 APNs token。
+- Debug 构建注册为 `SANDBOX`，Release 构建注册为 `PRODUCTION`。
+- 退出登录先调用 `DELETE /mobile/devices/{deviceId}` 禁用设备，再清除会话。
+- APNs `data` 在字段可用时包含 `notificationId`、`type`、`targetType`、`targetId`。
+
 ## 认证
 
 移动端沿用现有浏览器会话模型：
