@@ -117,6 +117,27 @@ final class MusicClientTests: XCTestCase {
         XCTAssertEqual(url, "https://m701.music.126.net/song.mp3")
     }
 
+    func testUnavailableMusicMessagesMapUpstreamDiagnosticsToProductLanguage() throws {
+        let copyrightResponse = try JSONDecoder().decode(
+            MusicUrlResponse.self,
+            from: Data(#"{"data":[{"id":1,"url":null,"playability":"UNAVAILABLE","playabilityReason":"NO_COPYRIGHT worker=music-3"}]}"#.utf8)
+        )
+        let unknownResponse = try JSONDecoder().decode(
+            MusicUrlResponse.self,
+            from: Data(#"{"data":[],"message":"upstream timeout at node music-7"}"#.utf8)
+        )
+        let memberResponse = try JSONDecoder().decode(
+            MusicUrlResponse.self,
+            from: Data(#"{"data":[{"id":2,"url":null,"playability":"VIP_ONLY"}]}"#.utf8)
+        )
+
+        XCTAssertEqual(copyrightResponse.unavailableMessage, "这首歌受版权限制，暂时无法播放")
+        XCTAssertEqual(unknownResponse.unavailableMessage, "音乐服务暂时无法提供这首歌，请稍后再试")
+        XCTAssertEqual(memberResponse.unavailableMessage, "这首歌需要音乐平台会员，暂时无法播放完整版")
+        XCTAssertFalse(copyrightResponse.unavailableMessage.contains("worker"))
+        XCTAssertFalse(unknownResponse.unavailableMessage.contains("upstream"))
+    }
+
     func testMusicSongCoverURLStringUsesSecureArtworkURL() throws {
         let data = Data(#"{"id":1,"name":"歌","artists":[],"album":{"id":2,"name":"专辑","picUrl":"http://p3.music.126.net/album.jpg"}}"#.utf8)
         let song = try JSONDecoder().decode(MusicSong.self, from: data)

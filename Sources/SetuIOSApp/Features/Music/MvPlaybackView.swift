@@ -72,6 +72,8 @@ struct MvPlaybackView: View {
                 }
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(SetuColor.brandInk)
+                .frame(minHeight: 44)
+                .buttonStyle(.bordered)
             }
         case .loaded:
             if let avPlayer {
@@ -96,7 +98,16 @@ struct MvPlaybackView: View {
                     }
                     #endif
             } else {
-                placeholder(message: "暂未拿到播放地址，请尝试切换清晰度。", isLoading: false)
+                VStack(spacing: SetuSpacing.md) {
+                    placeholder(message: "暂未拿到播放地址，可切换清晰度或重新获取。", isLoading: false)
+                    Button("重新获取播放地址") {
+                        Task { await loadURL() }
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(SetuColor.brandInk)
+                    .frame(minHeight: 44)
+                    .buttonStyle(.bordered)
+                }
             }
         }
     }
@@ -156,7 +167,7 @@ struct MvPlaybackView: View {
             urlState = .loaded(response.data)
             configurePlayer(with: response.data)
         } catch {
-            urlState = .failed(error.localizedDescription)
+            urlState = .failed(UserFacingErrorMapper.map(error).message)
         }
     }
 

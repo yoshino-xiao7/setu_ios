@@ -2,11 +2,18 @@ import SwiftUI
 
 struct SetuImageTile<Badge: View>: View {
     let urlString: String?
+    let accessibilityLabel: String
     var aspectRatio: CGFloat = 1
     @ViewBuilder var badge: () -> Badge
 
-    init(urlString: String?, aspectRatio: CGFloat = 1, @ViewBuilder badge: @escaping () -> Badge = { EmptyView() }) {
+    init(
+        urlString: String?,
+        accessibilityLabel: String,
+        aspectRatio: CGFloat = 1,
+        @ViewBuilder badge: @escaping () -> Badge = { EmptyView() }
+    ) {
         self.urlString = urlString
+        self.accessibilityLabel = accessibilityLabel
         self.aspectRatio = aspectRatio
         self.badge = badge
     }
@@ -14,18 +21,16 @@ struct SetuImageTile<Badge: View>: View {
     var body: some View {
         ZStack(alignment: .topTrailing) {
             GeometryReader { proxy in
-                ImageThumbnailView(
+                SetuRemoteImage(
                     urlString: urlString,
+                    accessibilityLabel: accessibilityLabel,
                     width: proxy.size.width,
-                    height: proxy.size.height
+                    height: proxy.size.height,
+                    cornerRadius: SetuRadius.md,
+                    allowsTapToRetry: false
                 )
             }
             .aspectRatio(aspectRatio, contentMode: .fit)
-            .clipShape(RoundedRectangle(cornerRadius: SetuRadius.md, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: SetuRadius.md, style: .continuous)
-                    .stroke(SetuColor.separator, lineWidth: 1)
-            }
 
             badge()
                 .padding(SetuSpacing.sm)

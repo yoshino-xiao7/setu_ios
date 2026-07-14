@@ -3,7 +3,9 @@ import SwiftUI
 
 struct AiDrawView: View {
     @Environment(RouterPath.self) private var router
+    @Environment(SystemPushCoordinator.self) private var pushNotifications
     @Bindable var environment: AppEnvironment
+    @AppStorage("setu_has_explained_generation_notifications") private var hasExplainedGenerationNotifications = false
     @State private var statusState: LoadState<AiServiceStatusResponse> = .idle
     @State private var capabilityState: LoadState<AiCapabilityResponse> = .idle
     @State private var promptCn = ""
@@ -27,21 +29,28 @@ struct AiDrawView: View {
     @State private var selectedSecondCharacter = ""
     @State private var isTranslating = false
     @State private var isSubmitting = false
-    @State private var promptPreparationStatus: String?
-    @State private var message: String?
+    @State private var feedback: SetuFeedback?
+    @State private var userFacingError: UserFacingError?
     @State private var draftLoaded = false
     @State private var isApplyingDraft = false
     @State private var loadedDraftUpdatedAt: Date?
     @State private var isNavigatingToAssetBrowser = false
     @State private var enabledStylePresetNames: [String] = []
+    @State private var showingGenerationNotificationPrompt = false
+    @State private var pendingGenerationID: Int?
+    @State private var showingAdvancedSettings = false
+    @State private var showingClearDraftConfirmation = false
+
+    private let estimatedPointsCost = 20
 
     var body: some View {
         List {
-            statusSection
-            promptSection
-            generationSection
-            assetSection
-            actionSection
+            serviceNoticeSection
+            quickPromptSection
+            quickCanvasSection
+            quickAssetSection
+            advancedSettingsSection
+            feedbackSection
         }
         .listStyle(.plain)
         .setuBackground()
@@ -50,7 +59,7 @@ struct AiDrawView: View {
             applyDraftIfNeeded()
             refreshEnabledStylePresets()
         }
-        .onDisappear { handleDisappear() }
+        .onDisappear { saveDraft() }
         .onChange(of: promptCn) { saveDraft() }
         .onChange(of: positivePrompt) { saveDraft() }
         .onChange(of: width) { saveDraft() }
@@ -85,38 +94,99 @@ struct AiDrawView: View {
                     Image(systemName: "xmark.bin")
                 }
                 .accessibilityLabel("我的删除记录")
+
+                Menu {
+                    Button("清空当前草稿", role: .destructive) {
+                        showingClearDraftConfirmation = true
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .accessibilityLabel("更多创作操作")
             }
         }
         .task { await loadMetadata() }
         .refreshable { await loadMetadata() }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            generationCTA
+        }
+        .alert("生成完成时通知我？", isPresented: $showingGenerationNotificationPrompt) {
+            Button("开启通知") {
+                Task {
+                    _ = await pushNotifications.requestAuthorizationForGenerationUpdates()
+                    openPendingGeneration()
+                }
+            }
+            Button("暂不", role: .cancel) {
+                openPendingGeneration()
+            }
+        } message: {
+            Text("即使离开 App，也不会错过这次作品的完成提醒。系统权限只会在你确认后请求。")
+        }
+        .confirmationDialog("清空当前创作草稿？", isPresented: $showingClearDraftConfirmation, titleVisibility: .visible) {
+            Button("清空草稿", role: .destructive) {
+                clearDraft()
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("画面描述、风格、角色和高级设置都会恢复为推荐值。")
+        }
     }
 
     @ViewBuilder
-    private var statusSection: some View {
+    private var serviceNoticeSection: some View {
+        switch statusState {
+        case .failed(let text):
+            Section {
+                SetuCard {
+                    SetuEmptyState(title: "暂时无法开始创作", message: text, systemImage: "exclamationmark.triangle")
+                    Button("重试") { Task { await loadMetadata() } }
+                        .buttonStyle(.bordered)
+                }
+            }
+            .setuListRow()
+        case .loaded(let status) where !status.available:
+            Section {
+                SetuCard {
+                    SetuEmptyState(
+                        title: "AI 绘画暂不可用",
+                        message: status.userFacingUnavailableMessage,
+                        systemImage: "sparkles"
+                    )
+                    Button("重试") { Task { await loadMetadata() } }
+                        .buttonStyle(.bordered)
+                }
+            }
+            .setuListRow()
+        case .loaded(let status) where (status.estimatedWaitSeconds ?? 0) > 60 || (status.queuedCount ?? 0) > 0:
+            Section {
+                SetuPill(
+                    text: estimatedWaitText(status.estimatedWaitSeconds),
+                    systemImage: "clock",
+                    tone: .warning
+                )
+            }
+            .setuListRow()
+        default:
+            EmptyView()
+        }
+    }
+
+    private var quickPromptSection: some View {
         Section {
             SetuCard {
                 VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                    SetuSectionHeader(title: "生成队列")
-                    switch statusState {
-                    case .idle, .loading:
-                        SetuEmptyState(title: "正在加载队列", message: "同步 AI 服务与生成节点状态", systemImage: "sparkles", isLoading: true)
-                    case .failed(let message):
-                        SetuEmptyState(title: "队列状态加载失败", message: message, systemImage: "exclamationmark.triangle")
-                    case .loaded(let status):
-                        HStack(spacing: SetuSpacing.sm) {
-                            SetuPill(text: status.statusTitle, systemImage: "sparkles", tone: status.statusTitle == "可用" ? .success : .warning)
-                            if let queued = status.queuedCount {
-                                SetuPill(text: "\(queued) 排队", systemImage: "clock", tone: .info)
-                            }
-                        }
-                        if let message = status.message, !message.isEmpty {
-                            Text(message)
-                                .font(SetuTypography.caption)
-                                .foregroundStyle(SetuColor.textSecondary)
-                        }
-                        Label("\(status.activeWorkerCount ?? 0)/\(status.workerCount ?? 0) 可用节点", systemImage: "sparkles")
-                            .font(.caption)
-                            .foregroundStyle(SetuColor.textSecondary)
+                    SetuSectionHeader(title: "想画什么？", subtitle: "用自然语言描述场景、人物、氛围和光线")
+                    TextField("例如：银发少女站在雨夜街角，霓虹灯倒映在路面，电影感光影", text: $promptCn, axis: .vertical)
+                        .lineLimit(6...12)
+                        .textFieldStyle(.roundedBorder)
+                        .accessibilityLabel("画面描述")
+                        .accessibilityIdentifier("ai.draw.prompt")
+                    Text("\(promptCn.count) 字 · 可直接开始，细节会自动补全")
+                        .font(.caption)
+                        .foregroundStyle(SetuColor.textTertiary)
+                    if isTranslating {
+                        SetuPill(text: "正在理解你的画面", systemImage: "wand.and.sparkles", tone: .brand)
                     }
                 }
             }
@@ -124,62 +194,35 @@ struct AiDrawView: View {
         .setuListRow()
     }
 
-    private var promptSection: some View {
+    private var quickCanvasSection: some View {
         Section {
             SetuCard {
-                VStack(alignment: .leading, spacing: SetuSpacing.lg) {
-                    SetuSectionHeader(title: "提示词")
-                    VStack(alignment: .leading, spacing: SetuSpacing.sm) {
-                        Text("自然语言描述")
-                            .font(SetuTypography.headline)
-                            .foregroundStyle(SetuColor.textPrimary)
-                        TextField("例如：银发少女，雨夜街角，霓虹灯，电影感光影", text: $promptCn, axis: .vertical)
-                            .lineLimit(5...10)
-                            .textFieldStyle(.roundedBorder)
-                        Text("\(promptCn.count) 字")
-                            .font(.caption)
-                            .foregroundStyle(SetuColor.textTertiary)
-                    }
+                VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                    SetuSectionHeader(title: "画幅", subtitle: "选择最适合作品展示的比例")
+                    canvasPresetGrid
+                }
+            }
+        }
+        .setuListRow()
+    }
 
-                    Button {
-                        Task { await preparePrompt() }
-                    } label: {
-                        HStack {
-                            if isTranslating {
-                                ProgressView()
-                                    .tint(.white)
-                            } else {
-                                Image(systemName: "wand.and.sparkles")
-                            }
-                            Text(isTranslating ? "正在生成提示词" : "生成提示词")
-                                .font(.headline)
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 46)
+    private var quickAssetSection: some View {
+        Section {
+            SetuCard {
+                VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                    SetuSectionHeader(title: "风格与角色", subtitle: "可选，不选择也能直接生成")
+                    SetuNavigationRow(title: "选择风格与角色", subtitle: "浏览风格、角色和画面预设", systemImage: "photo.stack") {
+                        isNavigatingToAssetBrowser = true
+                        saveDraft()
+                        router.navigate(to: .aiAssets)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(SetuColor.brandPink)
-                    .controlSize(.large)
-                    .disabled(!canPreparePrompt)
-
-                    if let promptPreparationStatus {
-                        SetuPill(text: promptPreparationStatus, systemImage: isTranslating ? "clock" : "checkmark.circle", tone: .brand)
-                    } else if !serviceReady, !hasPresetPromptSeed {
-                        SetuPill(text: serviceUnavailableText, systemImage: "exclamationmark.triangle", tone: .warning)
-                    }
-
-                    VStack(alignment: .leading, spacing: SetuSpacing.sm) {
-                        Text("生成后的提示词")
+                    if !enabledStylePresetNames.isEmpty {
+                        Text(enabledStylePresetNames.joined(separator: "、"))
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(SetuColor.textPrimary)
-                        TextField("正向提示词会在生成后写入，也可以手动编辑", text: $positivePrompt, axis: .vertical)
-                            .lineLimit(4...8)
-                            .textFieldStyle(.roundedBorder)
-                        TextField("反向提示词", text: $negativePrompt, axis: .vertical)
-                            .lineLimit(4...8)
-                            .textFieldStyle(.roundedBorder)
-                        TextField("风格说明", text: $styleNotes, axis: .vertical)
-                            .lineLimit(2...4)
-                            .textFieldStyle(.roundedBorder)
+                    }
+                    if hasAssetDraft {
+                        SetuPill(text: "已应用所选风格或角色", systemImage: "checkmark.circle", tone: .success)
                     }
                 }
             }
@@ -187,48 +230,152 @@ struct AiDrawView: View {
         .setuListRow()
     }
 
-    private var generationSection: some View {
+    private var advancedSettingsSection: some View {
         Section {
             SetuCard {
-                VStack(alignment: .leading, spacing: SetuSpacing.lg) {
-                    SetuSectionHeader(title: "生成参数")
-                    canvasPresetGrid
-                    Stepper("宽度 \(width)", value: $width, in: 512...1536, step: 64)
-                    Stepper("高度 \(height)", value: $height, in: 512...1536, step: 64)
-                    Stepper("步数 \(steps)", value: $steps, in: 12...60)
-                    HStack {
-                        Text("CFG")
-                        Slider(value: $cfg, in: 3...12, step: 0.5)
-                            .tint(SetuColor.brandPink)
-                        Text(cfg.formatted(.number.precision(.fractionLength(1))))
-                            .monospacedDigit()
-                    }
-                    Toggle("NSFW 模式", isOn: $nsfwMode)
-                        .tint(SetuColor.brandPink)
-                    if nsfwMode {
-                        Picker("NSFW 可见性强度", selection: $nsfwVisibilityLevel) {
-                            Text("轻度").tag("LIGHT")
-                            Text("标准").tag("STANDARD")
-                            Text("强力").tag("STRONG")
+                DisclosureGroup("高级设置", isExpanded: $showingAdvancedSettings) {
+                    VStack(alignment: .leading, spacing: SetuSpacing.lg) {
+                        Divider()
+                        Stepper("画面宽度 \(width)", value: $width, in: 512...1536, step: 64)
+                        Stepper("画面高度 \(height)", value: $height, in: 512...1536, step: 64)
+                        Stepper("精细程度 \(steps)", value: $steps, in: 12...60)
+                        HStack {
+                            Text("提示遵循强度")
+                            Slider(value: $cfg, in: 3...12, step: 0.5)
+                                .tint(SetuColor.brandPink)
+                            Text(cfg.formatted(.number.precision(.fractionLength(1))))
+                                .monospacedDigit()
                         }
-                        Text("可见性强度会传给生成提示词接口，影响遮挡、服装和局部细节相关提示词。")
-                            .font(.footnote)
-                            .foregroundStyle(SetuColor.textSecondary)
+                        Toggle("成人内容模式", isOn: $nsfwMode)
+                            .tint(SetuColor.brandPink)
+                        if nsfwMode {
+                            Picker("内容呈现程度", selection: $nsfwVisibilityLevel) {
+                                Text("含蓄").tag("LIGHT")
+                                Text("标准").tag("STANDARD")
+                                Text("直接").tag("STRONG")
+                            }
+                            Text("仅影响生成画面的遮挡、服装和细节表现。")
+                                .font(.footnote)
+                                .foregroundStyle(SetuColor.textSecondary)
+                        }
+
+                        advancedModelSettings
+
+                        TextField("画面细节提示（选填）", text: $positivePrompt, axis: .vertical)
+                            .lineLimit(3...6)
+                            .textFieldStyle(.roundedBorder)
+                        TextField("需要避开的内容（选填）", text: $negativePrompt, axis: .vertical)
+                            .lineLimit(3...6)
+                            .textFieldStyle(.roundedBorder)
+
+                        Button("恢复推荐设置") {
+                            restoreRecommendedSettings()
+                        }
+                        .buttonStyle(.bordered)
                     }
-                    Picker("生成模式", selection: $generationMode) {
-                        Text("单角色").tag("SINGLE")
-                        Text("双角色").tag("DUAL")
-                    }
+                    .padding(.top, SetuSpacing.sm)
                 }
+                .font(.body.weight(.semibold))
             }
         }
         .setuListRow()
+    }
+
+    @ViewBuilder
+    private var advancedModelSettings: some View {
+        if case .loaded(let capabilities) = capabilityState {
+            Picker("人物构图", selection: $generationMode) {
+                Text("单人物").tag("SINGLE")
+                Text("双人物").tag("DUAL")
+            }
+            Picker("基础画风", selection: $selectedCheckpoint) {
+                Text("推荐").tag("")
+                ForEach(capabilities.checkpoints) { item in
+                    Text(item.displayName ?? item.name).tag(item.name)
+                }
+            }
+            Picker("主要风格", selection: $selectedLora) {
+                Text("不使用").tag("")
+                ForEach(capabilities.loras) { item in
+                    Text(item.displayName ?? item.name).tag(item.name)
+                }
+            }
+            Picker("主要角色", selection: $selectedCharacter) {
+                Text("不使用").tag("")
+                ForEach(capabilities.characters) { item in
+                    Text(item.displayName ?? item.name).tag(item.name)
+                }
+            }
+            if !selectedLora.isEmpty {
+                HStack {
+                    Text("主要风格强度")
+                    Slider(value: $loraStrength, in: 0.1...1.5, step: 0.1)
+                        .tint(SetuColor.brandPink)
+                }
+            }
+            if generationMode == "DUAL" {
+                Picker("第二风格", selection: $selectedSecondLora) {
+                    Text("不使用").tag("")
+                    ForEach(capabilities.loras) { item in
+                        Text(item.displayName ?? item.name).tag(item.name)
+                    }
+                }
+                Picker("第二角色", selection: $selectedSecondCharacter) {
+                    Text("不使用").tag("")
+                    ForEach(capabilities.characters) { item in
+                        Text(item.displayName ?? item.name).tag(item.name)
+                    }
+                }
+                if !selectedSecondLora.isEmpty {
+                    HStack {
+                        Text("第二风格强度")
+                        Slider(value: $secondLoraStrength, in: 0.1...1.5, step: 0.1)
+                            .tint(SetuColor.brandPink)
+                    }
+                }
+            }
+        } else if case .failed = capabilityState {
+            Text("高级画风暂时无法加载，仍可使用推荐设置生成。")
+                .font(.footnote)
+                .foregroundStyle(SetuColor.textSecondary)
+        }
+    }
+
+    @ViewBuilder
+    private var feedbackSection: some View {
+        if let userFacingError {
+            Section {
+                SetuFeedbackBanner(error: userFacingError, onAction: handleErrorAction)
+            }
+            .setuListRow()
+        } else if let feedback {
+            Section {
+                SetuFeedbackBanner(feedback: feedback)
+            }
+            .setuListRow()
+        }
+    }
+
+    private var generationCTA: some View {
+        SetuBottomCTA {
+            SetuPrimaryButton {
+                Task { await submit() }
+            } label: {
+                if isSubmitting || isTranslating {
+                    HStack(spacing: SetuSpacing.sm) {
+                        ProgressView().tint(.white)
+                        Text(isTranslating ? "正在理解画面" : "正在创建作品")
+                    }
+                } else {
+                    Label("开始生成 · 预计 \(estimatedPointsCost) 积分", systemImage: "sparkles")
+                }
+            }
+            .disabled(!hasDrawablePrompt || isSubmitting || isTranslating || !serviceReady)
+        }
     }
 
     private var canvasPresetGrid: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("画布比例")
-                .font(.subheadline.weight(.semibold))
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 8)], spacing: 8) {
                 ForEach(AiCanvasPreset.allCases) { preset in
                     Button {
@@ -237,128 +384,20 @@ struct AiDrawView: View {
                         saveDraft()
                     } label: {
                         VStack(alignment: .leading, spacing: 3) {
+                            Image(systemName: preset.systemImage)
+                                .font(.title3)
                             Text(preset.title)
                                 .font(.footnote.weight(.semibold))
-                            Text("\(preset.width)x\(preset.height)")
-                                .font(.caption2)
-                                .foregroundStyle(SetuColor.textSecondary)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .buttonStyle(.bordered)
                     .tint(width == preset.width && height == preset.height ? SetuColor.brandPink : SetuColor.textSecondary)
+                    .accessibilityAddTraits(width == preset.width && height == preset.height ? .isSelected : [])
                 }
             }
         }
         .padding(.vertical, 4)
-    }
-
-    @ViewBuilder
-    private var assetSection: some View {
-        Section {
-            SetuCard {
-                VStack(alignment: .leading, spacing: SetuSpacing.lg) {
-                    SetuSectionHeader(title: "模型资产")
-                    SetuNavigationRow(title: "浏览 AI 资产选择", subtitle: "选择 LoRA、角色和风格预设", systemImage: "photo.stack") {
-                        isNavigatingToAssetBrowser = true
-                        saveDraft()
-                        router.navigate(to: .aiAssets)
-                    }
-                    if draftLoaded, hasAssetDraft {
-                        SetuPill(text: "已载入资产草稿", systemImage: "checkmark.circle", tone: .success)
-                    }
-                    if !enabledStylePresetNames.isEmpty {
-                        VStack(alignment: .leading, spacing: SetuSpacing.sm) {
-                            Text("风格预设")
-                                .font(.subheadline.weight(.semibold))
-                            Text(enabledStylePresetNames.joined(separator: "、"))
-                                .font(.headline)
-                                .foregroundStyle(SetuColor.textPrimary)
-                            Text("已选择 \(enabledStylePresetNames.count) 个")
-                                .font(.footnote)
-                                .foregroundStyle(SetuColor.textSecondary)
-                        }
-                    }
-                    switch capabilityState {
-                    case .idle, .loading:
-                        SetuEmptyState(title: "正在加载模型", message: "同步模型、LoRA 与角色资产", systemImage: "photo.stack", isLoading: true)
-                    case .failed(let message):
-                        SetuEmptyState(title: "模型加载失败", message: message, systemImage: "exclamationmark.triangle")
-                    case .loaded(let capabilities):
-                        Picker("模型", selection: $selectedCheckpoint) {
-                            Text("默认").tag("")
-                            ForEach(capabilities.checkpoints) { item in
-                                Text(item.displayName ?? item.name).tag(item.name)
-                            }
-                        }
-                        Picker("LoRA", selection: $selectedLora) {
-                            Text("不使用").tag("")
-                            ForEach(capabilities.loras) { item in
-                                Text(item.displayName ?? item.name).tag(item.name)
-                            }
-                        }
-                        Picker("角色预设", selection: $selectedCharacter) {
-                            Text("不使用").tag("")
-                            ForEach(capabilities.characters) { item in
-                                Text(item.displayName ?? item.name).tag(item.name)
-                            }
-                        }
-                        if !selectedLora.isEmpty {
-                            HStack {
-                                Text("LoRA 强度")
-                                Slider(value: $loraStrength, in: 0.1...1.5, step: 0.1)
-                                    .tint(SetuColor.brandPink)
-                                Text(loraStrength.formatted(.number.precision(.fractionLength(1))))
-                                    .monospacedDigit()
-                            }
-                        }
-                        if generationMode == "DUAL" {
-                            Picker("副角色 LoRA", selection: $selectedSecondLora) {
-                                Text("不使用").tag("")
-                                ForEach(capabilities.loras) { item in
-                                    Text(item.displayName ?? item.name).tag(item.name)
-                                }
-                            }
-                            Picker("副角色预设", selection: $selectedSecondCharacter) {
-                                Text("不使用").tag("")
-                                ForEach(capabilities.characters) { item in
-                                    Text(item.displayName ?? item.name).tag(item.name)
-                                }
-                            }
-                            if !selectedSecondLora.isEmpty {
-                                HStack {
-                                    Text("副 LoRA 强度")
-                                    Slider(value: $secondLoraStrength, in: 0.1...1.5, step: 0.1)
-                                        .tint(SetuColor.brandPink)
-                                    Text(secondLoraStrength.formatted(.number.precision(.fractionLength(1))))
-                                        .monospacedDigit()
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        .setuListRow()
-    }
-
-    @ViewBuilder
-    private var actionSection: some View {
-        Section {
-            SetuPrimaryButton {
-                Task { await submit() }
-            } label: {
-                Label(isSubmitting ? "提交中" : "创建生成任务", systemImage: "sparkles")
-            }
-            .disabled(!hasDrawablePrompt || isSubmitting || isTranslating)
-
-            if let message {
-                Text(message)
-                    .font(.footnote)
-                    .foregroundStyle(SetuColor.textSecondary)
-            }
-        }
-        .setuListRow()
     }
 
     private func loadMetadata() async {
@@ -369,12 +408,12 @@ struct AiDrawView: View {
         do {
             statusState = .loaded(try await status)
         } catch {
-            statusState = .failed(error.localizedDescription)
+            statusState = .failed(UserFacingErrorMapper.map(error).message)
         }
         do {
             capabilityState = .loaded(try await capabilities)
         } catch {
-            capabilityState = .failed(error.localizedDescription)
+            capabilityState = .failed(UserFacingErrorMapper.map(error).message)
         }
     }
 
@@ -383,31 +422,28 @@ struct AiDrawView: View {
         let prompt = promptCn.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !prompt.isEmpty else {
             if applyPresetPromptToGeneratedFields() {
-                promptPreparationStatus = "已使用已选预设写入提示词"
-                message = nil
+                feedback = nil
                 saveDraft()
                 return true
             }
-            promptPreparationStatus = "先写一点你想画什么，或选择风格预设/角色/LoRA"
+            feedback = .warning("先描述想画的画面，或选择一个风格与角色。")
             return false
         }
         guard serviceReady else {
             if applyPresetPromptToGeneratedFields() {
-                promptPreparationStatus = "AI 服务暂不可用，已使用已选预设写入提示词"
-                message = nil
+                feedback = nil
                 saveDraft()
                 return true
             }
-            promptPreparationStatus = serviceUnavailableText
+            feedback = .warning(serviceUnavailableText)
             return false
         }
         if generationMode == "DUAL", selectedSecondCharacter.isEmpty, selectedSecondLora.isEmpty {
-            promptPreparationStatus = "双角色模式需要选择角色 B 或第二个 LoRA"
+            feedback = .warning("双人物创作需要选择第二角色或第二风格。")
             return false
         }
 
         isTranslating = true
-        promptPreparationStatus = "正在请求提示词生成"
         defer {
             isTranslating = false
         }
@@ -425,7 +461,6 @@ struct AiDrawView: View {
                 guard let id = response.id else {
                     throw AiDrawPromptPreparationError.missingTranslationId
                 }
-                promptPreparationStatus = "本地 Ollama 正在生成提示词"
                 response = try await waitForPromptTranslation(id: id)
             }
             if let positive = response.positive, !positive.isEmpty {
@@ -439,13 +474,11 @@ struct AiDrawView: View {
             if let styleNotes = response.styleNotes, !styleNotes.isEmpty {
                 self.styleNotes = styleNotes
             }
-            promptPreparationStatus = "提示词已生成，并已写入正向/反向提示词"
-            message = nil
+            feedback = nil
             saveDraft()
             return true
         } catch {
-            promptPreparationStatus = nil
-            message = "生成提示词失败：\(error.localizedDescription)"
+            feedback = .error("暂时无法理解画面，请稍后重试，或在高级设置中补充画面细节。")
             return false
         }
     }
@@ -460,7 +493,6 @@ struct AiDrawView: View {
             case "FAILED":
                 throw AiDrawPromptPreparationError.translationFailed(response.errorMessage)
             default:
-                promptPreparationStatus = "提示词生成中，正在等待结果"
                 try await Task.sleep(nanoseconds: 1_500_000_000)
             }
         }
@@ -468,13 +500,14 @@ struct AiDrawView: View {
     }
 
     private func submit() async {
+        userFacingError = nil
         let prompt = promptCn.trimmingCharacters(in: .whitespacesAndNewlines)
         guard hasDrawablePrompt else {
-            message = "先填写自然语言描述、手动填写正向提示词，或选择风格预设/角色/LoRA"
+            feedback = .warning("先描述想画的画面，或选择一个风格与角色。")
             return
         }
         guard serviceReady else {
-            message = serviceUnavailableText
+            feedback = .warning(serviceUnavailableText)
             return
         }
         var promptPositive = positivePrompt.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -489,7 +522,7 @@ struct AiDrawView: View {
         }
         let promptNegative = resolvedNegativePrompt
         isSubmitting = true
-        message = nil
+        feedback = nil
         defer { isSubmitting = false }
         do {
             let job = try await environment.aiGenerationClient.create(
@@ -514,19 +547,88 @@ struct AiDrawView: View {
                     nsfwVisibilityLevel: nsfwMode ? nsfwVisibilityLevel : "STANDARD"
                 )
             )
-            message = "任务已创建，正在跟踪状态：#\(job.id)"
-            saveDraft()
+            feedback = .success("作品已提交，正在开始生成。")
+            AiDrawDraftStore.clear()
+            AiAssetBrowserCacheStore.clearSelectedStyles()
             await AiGenerationLiveActivityCenter.start(job: job, mobileClient: environment.mobileAppClient)
-            router.navigate(to: .aiGenerationDetail(job.id))
+            if !hasExplainedGenerationNotifications,
+               pushNotifications.authorizationStatus == .notDetermined {
+                hasExplainedGenerationNotifications = true
+                pendingGenerationID = job.id
+                showingGenerationNotificationPrompt = true
+            } else {
+                router.navigate(to: .aiGenerationDetail(job.id))
+            }
         } catch {
-            message = error.localizedDescription
+            feedback = nil
+            userFacingError = UserFacingErrorMapper.map(error)
         }
     }
 
-    private var canPreparePrompt: Bool {
-        (hasPresetPromptSeed || (!promptCn.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && serviceReady))
-            && !isTranslating
-            && !isSubmitting
+    private func handleErrorAction(_ action: UserFacingErrorAction) {
+        switch action {
+        case .retry:
+            Task { await submit() }
+        case .refresh:
+            Task { await loadMetadata() }
+        case .signIn:
+            environment.authSession.invalidateLocalSession()
+        case .goBack:
+            userFacingError = nil
+            if !router.path.isEmpty {
+                router.path.removeLast()
+            }
+        case .reviewInput:
+            userFacingError = nil
+            showingAdvancedSettings = true
+        case .wait:
+            userFacingError = nil
+        case .viewPoints:
+            userFacingError = nil
+            router.navigate(to: .pointsLogs)
+        }
+    }
+
+    private func openPendingGeneration() {
+        guard let pendingGenerationID else { return }
+        self.pendingGenerationID = nil
+        router.navigate(to: .aiGenerationDetail(pendingGenerationID))
+    }
+
+    private func estimatedWaitText(_ seconds: Int?) -> String {
+        guard let seconds, seconds > 0 else { return "当前创作较多，可能需要稍等" }
+        let minutes = max(1, (seconds + 59) / 60)
+        return "当前繁忙，预计等待约 \(minutes) 分钟"
+    }
+
+    private func restoreRecommendedSettings() {
+        width = 768
+        height = 1024
+        steps = 28
+        cfg = 7
+        nsfwMode = false
+        nsfwVisibilityLevel = "STANDARD"
+        generationMode = "SINGLE"
+        selectedCheckpoint = ""
+        selectedLora = ""
+        loraStrength = 0.8
+        selectedCharacter = ""
+        selectedSecondLora = ""
+        secondLoraStrength = 0.65
+        selectedSecondCharacter = ""
+        positivePrompt = ""
+        negativePrompt = AiDrawDefaults.defaultNegativePrompt
+        styleNotes = ""
+        saveDraft()
+    }
+
+    private func clearDraft() {
+        AiDrawDraftStore.clear()
+        AiAssetBrowserCacheStore.clearSelectedStyles()
+        promptCn = ""
+        styleTags = ""
+        enabledStylePresetNames = []
+        restoreRecommendedSettings()
     }
 
     private var hasDrawablePrompt: Bool {
@@ -557,7 +659,7 @@ struct AiDrawView: View {
 
     private var serviceUnavailableText: String {
         if case .loaded(let status) = statusState {
-            return status.message ?? status.statusTitle
+            return status.userFacingUnavailableMessage
         }
         if case .failed(let message) = statusState {
             return message
@@ -593,7 +695,7 @@ struct AiDrawView: View {
     }
 
     private func applyDraftIfNeeded() {
-        guard let draft = AiDrawDraftStore.loadPendingExternalDraft() else {
+        guard let draft = AiDrawDraftStore.loadIfPresent() else {
             AiAssetBrowserCacheStore.clearSelectedStyles()
             enabledStylePresetNames = []
             draftLoaded = true
@@ -628,16 +730,13 @@ struct AiDrawView: View {
         isApplyingDraft = false
     }
 
-    private func handleDisappear() {
-        if isNavigatingToAssetBrowser {
-            isNavigatingToAssetBrowser = false
-        } else {
-            AiDrawDraftStore.clear()
-            AiAssetBrowserCacheStore.clearSelectedStyles()
-        }
-    }
-
     private func refreshEnabledStylePresets() {
+        #if DEBUG
+        if AiDrawDraftStore.isUsingPreviewStorage {
+            enabledStylePresetNames = []
+            return
+        }
+        #endif
         enabledStylePresetNames = AiAssetBrowserCacheStore.enabledStyleDisplayNames()
     }
 
@@ -705,6 +804,15 @@ private enum AiCanvasPreset: String, CaseIterable, Identifiable {
         case .tall: 1216
         }
     }
+
+    var systemImage: String {
+        switch self {
+        case .portrait: "rectangle.portrait"
+        case .square: "square"
+        case .landscape: "rectangle"
+        case .tall: "rectangle.portrait.fill"
+        }
+    }
 }
 
 enum AiDrawDefaults {
@@ -719,11 +827,22 @@ private enum AiDrawPromptPreparationError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingTranslationId:
-            return "后端未返回提示词生成任务 ID"
+            return "暂时无法开始理解画面"
         case .translationFailed(let message):
-            return message ?? "本地 Ollama 生成提示词失败"
+            return message ?? "画面理解失败"
         case .translationTimedOut:
-            return "本地 Ollama 生成提示词超时"
+            return "画面理解等待时间过长"
         }
     }
 }
+
+#if DEBUG
+#Preview("AI 绘画 · 390 · 深色大字") {
+    SetuFeaturePreviewHost { environment, _ in
+        AiDrawView(environment: environment)
+    }
+    .frame(width: 390, height: 844)
+    .preferredColorScheme(.dark)
+    .environment(\.dynamicTypeSize, .xxLarge)
+}
+#endif

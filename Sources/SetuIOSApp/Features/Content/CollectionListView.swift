@@ -47,14 +47,26 @@ struct CollectionListView: View {
             case .failed(let message):
                 Section {
                     SetuCard {
-                        SetuEmptyState(title: "收藏夹加载失败", message: message, systemImage: "heart.slash")
+                        SetuEmptyState(
+                            title: "收藏夹加载失败",
+                            message: message,
+                            systemImage: "heart.slash",
+                            actionTitle: "重试",
+                            action: { Task { await load() } }
+                        )
                     }
                 }
             case .loaded(let collections):
                 if collections.isEmpty {
                     Section {
                         SetuCard {
-                            SetuEmptyState(title: "暂无收藏夹", message: "创建收藏夹后会显示在这里。", systemImage: "heart")
+                            SetuEmptyState(
+                                title: "暂无收藏夹",
+                                message: "创建一个收藏夹，把喜欢的图片按主题整理起来。",
+                                systemImage: "heart",
+                                actionTitle: "创建收藏夹",
+                                action: { editor = .create }
+                            )
                         }
                     }
                 } else {
@@ -88,6 +100,7 @@ struct CollectionListView: View {
             } label: {
                 Image(systemName: "plus")
             }
+            .accessibilityLabel("创建收藏夹")
         }
         .sheet(item: $editor) { context in
             CollectionEditorSheet(environment: environment, context: context) {
@@ -103,7 +116,7 @@ struct CollectionListView: View {
         do {
             state = .loaded(try await environment.collectionClient.listMine())
         } catch {
-            state = .failed(error.localizedDescription)
+            state = .failed(UserFacingErrorMapper.map(error).message)
         }
     }
 }

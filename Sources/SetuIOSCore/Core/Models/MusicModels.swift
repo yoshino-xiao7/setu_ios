@@ -261,6 +261,16 @@ public struct MusicUrlResponse: Decodable, Sendable {
     public let playabilityReason: String?
     public let message: String?
     public let msg: String?
+
+    public var unavailableMessage: String {
+        if let item = data?.first {
+            return item.unavailableMessage
+        }
+        return MusicAvailabilityMessage.resolve(
+            playability: playability,
+            candidates: [playabilityReason, message, msg]
+        )
+    }
 }
 
 public struct MusicUrlItem: Decodable, Identifiable, Sendable {
@@ -284,16 +294,55 @@ public struct MusicUrlItem: Decodable, Identifiable, Sendable {
     }
 
     public var unavailableMessage: String {
-        switch playability {
+        MusicAvailabilityMessage.resolve(
+            playability: playability,
+            candidates: [playabilityReason, message, msg]
+        )
+    }
+}
+
+private enum MusicAvailabilityMessage {
+    static func resolve(playability: String?, candidates: [String?]) -> String {
+        let normalizedPlayability = playability?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+
+        switch normalizedPlayability {
         case "TRIAL":
             return "当前音乐源仅支持试听，无法播放完整版"
         case "LOGIN_INVALID":
             return "音乐服务账号已失效，请稍后再试"
-        case "UNAVAILABLE":
-            return playabilityReason ?? message ?? msg ?? "该歌曲暂不可播放"
+        case "VIP", "VIP_ONLY", "FEE_REQUIRED":
+            return "这首歌需要音乐平台会员，暂时无法播放完整版"
+        case "REGION_RESTRICTED":
+            return "这首歌在当前地区暂不可用"
         default:
-            return playabilityReason ?? message ?? msg ?? "该歌曲暂不可播放"
+            break
         }
+
+        let diagnostic = candidates
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+            .first { !$0.isEmpty }
+
+        if let diagnostic {
+            if diagnostic.contains("copyright") || diagnostic.contains("版权") {
+                return "这首歌受版权限制，暂时无法播放"
+            }
+            if diagnostic.contains("vip") || diagnostic.contains("member") || diagnostic.contains("会员") || diagnostic.contains("付费") {
+                return "这首歌需要音乐平台会员，暂时无法播放完整版"
+            }
+            if diagnostic.contains("region") || diagnostic.contains("country") || diagnostic.contains("地区") || diagnostic.contains("地域") {
+                return "这首歌在当前地区暂不可用"
+            }
+            if diagnostic.contains("trial") || diagnostic.contains("试听") {
+                return "当前音乐源仅支持试听，无法播放完整版"
+            }
+            if diagnostic.contains("login") || diagnostic.contains("cookie") || diagnostic.contains("账号失效") {
+                return "音乐服务账号已失效，请稍后再试"
+            }
+        }
+
+        return "音乐服务暂时无法提供这首歌，请稍后再试"
     }
 }
 

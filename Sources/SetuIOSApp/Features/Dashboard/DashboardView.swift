@@ -3,99 +3,46 @@ import SwiftUI
 
 struct DashboardView: View {
     @Bindable var environment: AppEnvironment
-    @Environment(RouterPath.self) private var router
-    @State private var state: LoadState<HomeDashboardSnapshot> = .idle
-    @State private var usageLogPage = 1
-    private let usageLogPageSize = 10
+    @Bindable var player: MusicPlaybackController
+    @Environment(AppNavigationCoordinator.self) private var navigation
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    @State private var favoritesState: LoadState<[FavoriteItem]> = .idle
+    @State private var generationState: LoadState<AiGenerationJob?> = .idle
+    @State private var recommendationState: LoadState<AiPublicWork?> = .idle
+    @State private var notificationState: LoadState<Int> = .idle
+    @State private var pointsState: LoadState<Int> = .idle
+    @State private var favoritesLoadID = UUID()
+    @State private var generationLoadID = UUID()
+    @State private var recommendationLoadID = UUID()
+    @State private var notificationLoadID = UUID()
+    @State private var pointsLoadID = UUID()
+    @State private var previewItem: UserImagePreviewItem?
 
     var body: some View {
         List {
-            Section {
-                SetuCard(padding: SetuSpacing.xl) {
-                    HStack(alignment: .top, spacing: SetuSpacing.lg) {
-                        VStack(alignment: .leading, spacing: SetuSpacing.sm) {
-                            Text(greetingTitle)
-                                .font(SetuTypography.display)
-                                .foregroundStyle(SetuColor.textPrimary)
-                                .lineLimit(2)
-                                .minimumScaleFactor(0.82)
-                            Text("创作、刷图、听歌和发现公开内容都从这里开始。")
-                                .foregroundStyle(SetuColor.textSecondary)
-                                .font(SetuTypography.caption)
-                        }
-
-                        Spacer(minLength: SetuSpacing.sm)
-
-                        HomeAccountAvatar(user: environment.authSession.currentUser)
-                    }
-
-                    if let user = environment.authSession.currentUser {
-                        SetuPill(text: user.role == .admin ? "管理员" : "已登录", systemImage: "person.crop.circle.fill", tone: .brand)
-                            .padding(.top, SetuSpacing.md)
-                    }
-                }
-            }
-            .setuListRow()
-
-            primaryActionsSection
-            accountStatusSection
-
-            Section {
-                SetuCard {
-                    VStack(spacing: SetuSpacing.lg) {
-                        SetuSectionHeader(title: "继续使用")
-                        SetuNavigationRow(title: "图片参数与批量获取", subtitle: "管理刷图参数、批量调用和积分消耗", systemImage: "slider.horizontal.3") {
-                            router.navigate(to: .points)
-                        }
-                        SetuNavigationRow(title: "积分流水", subtitle: "查看积分获得与消耗记录", systemImage: "list.bullet.rectangle") {
-                            router.navigate(to: .pointsLogs)
-                        }
-                        SetuNavigationRow(title: "通知中心", subtitle: "查看系统通知和待处理消息", systemImage: "bell") {
-                            router.navigate(to: .notifications)
-                        }
-                    }
-                }
-            }
-            .setuListRow()
-
-            Section {
-                SetuCard {
-                    VStack(spacing: SetuSpacing.lg) {
-                        SetuSectionHeader(title: "我的内容")
-                        SetuNavigationRow(title: "AI 绘画历史", subtitle: "查看任务状态、结果图和复用参数", systemImage: "clock") {
-                            router.navigate(to: .aiHistory)
-                        }
-                        SetuNavigationRow(title: "图库投稿", subtitle: "上传图片并跟踪投稿批次", systemImage: "square.and.arrow.up") {
-                            router.navigate(to: .galleryUploads)
-                        }
-                        SetuNavigationRow(title: "我的收藏夹", subtitle: "整理自己的图片集合", systemImage: "heart.rectangle") {
-                            router.navigate(to: .collections)
-                        }
-                        SetuNavigationRow(title: "我的收藏", subtitle: "查看默认收藏图片", systemImage: "heart.fill") {
-                            router.navigate(to: .favorites)
-                        }
-                        SetuNavigationRow(title: "我的歌单", subtitle: "管理音乐歌单和收藏曲目", systemImage: "music.note.list") {
-                            router.navigate(to: .playlists)
-                        }
-                    }
-                }
-            }
-            .setuListRow()
-
-            usageLogsSection
+            greetingSection
+            continueSection
+            favoritesSection
+            recommendationSection
+            remindersSection
         }
         .listStyle(.plain)
         .setuBackground()
+        .accessibilityIdentifier("dashboard.page")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    router.navigate(to: .account)
+                    navigation.navigate(to: .home, route: .account)
                 } label: {
                     HomeAccountAvatar(user: environment.authSession.currentUser)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("我的")
             }
+        }
+        .sheet(item: $previewItem) { item in
+            UserImagePreviewSheet(item: item)
         }
         .task {
             await load()
@@ -105,23 +52,20 @@ struct DashboardView: View {
         }
     }
 
-    @ViewBuilder
-    private var primaryActionsSection: some View {
+    private var greetingSection: some View {
         Section {
-            VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                SetuSectionHeader(title: "主要功能")
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: SetuSpacing.md) {
-                    HomeActionTile(title: "AI 绘画", subtitle: "创建新作品", systemImage: "sparkles") {
-                        router.navigate(to: .aiDraw)
+            SetuCard(padding: SetuSpacing.xl) {
+                if dynamicTypeSize.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                        greetingCopy
+                        HomeAccountAvatar(user: environment.authSession.currentUser)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
                     }
-                    HomeActionTile(title: "随机图片", subtitle: "刷图式浏览", systemImage: "photo.on.rectangle") {
-                        router.navigate(to: .imageSwipe)
-                    }
-                    HomeActionTile(title: "音乐", subtitle: "搜索和播放", systemImage: "music.note") {
-                        router.navigate(to: .musicHome)
-                    }
-                    HomeActionTile(title: "广场", subtitle: "发现公开内容", systemImage: "rectangle.stack") {
-                        router.navigate(to: .squareHub)
+                } else {
+                    HStack(alignment: .top, spacing: SetuSpacing.lg) {
+                        greetingCopy
+                        Spacer(minLength: SetuSpacing.sm)
+                        HomeAccountAvatar(user: environment.authSession.currentUser)
                     }
                 }
             }
@@ -129,68 +73,63 @@ struct DashboardView: View {
         .setuListRow()
     }
 
-    @ViewBuilder
-    private var accountStatusSection: some View {
+    private var continueSection: some View {
         Section {
-            switch state {
-            case .idle, .loading:
-                SetuCard {
-                    SetuEmptyState(title: "正在加载今日状态", systemImage: "chart.bar", isLoading: true)
-                }
-            case .failed(let message):
-                SetuCard {
-                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                        Label("加载失败", systemImage: "exclamationmark.triangle")
-                            .font(SetuTypography.headline)
-                            .foregroundStyle(SetuColor.danger)
-                        Text(message)
-                            .font(SetuTypography.caption)
-                            .foregroundStyle(SetuColor.textSecondary)
-                        Button("重试") {
-                            Task { await load() }
-                        }
-                    }
-                }
-            case .loaded(let snapshot):
-                SetuCard {
-                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                        SetuSectionHeader(title: "今日状态")
-                        HStack(spacing: SetuSpacing.md) {
-                            SetuStatTile(title: "积分余额", value: snapshot.points.map { String($0.points) } ?? "-", systemImage: "bolt.circle")
-                            SetuStatTile(title: "未读通知", value: snapshot.unreadNotifications.map { String($0) } ?? "-", systemImage: "bell")
-                            SetuStatTile(title: "今日刷图", value: snapshot.usage.map { String($0.todayCalls) } ?? "-", systemImage: "photo.on.rectangle")
-                        }
-                    }
-                }
-            }
-        }
-        .setuListRow()
-    }
+            SetuCard {
+                VStack(alignment: .leading, spacing: SetuSpacing.lg) {
+                    SetuSectionHeader(title: "继续使用")
 
-    @ViewBuilder
-    private var usageLogsSection: some View {
-        Section {
-            switch state {
-            case .idle, .loading:
-                SetuCard {
-                    SetuEmptyState(title: "正在加载刷图记录", systemImage: "clock.arrow.circlepath", isLoading: true)
-                }
-            case .failed:
-                EmptyView()
-            case .loaded(let snapshot):
-                SetuCard {
-                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                        SetuSectionHeader(title: "最近刷图记录")
-                        if let logs = snapshot.usageLogs?.list, !logs.isEmpty {
-                            ForEach(logs.prefix(5)) { log in
-                                UsageLogRow(log: log)
+                    if let track = player.currentTrack {
+                        SetuNavigationRow(
+                            title: track.title,
+                            subtitle: "继续播放 · \(track.artist)",
+                            systemImage: "play.circle.fill"
+                        ) {
+                            navigation.navigate(to: .music)
+                        }
+                    }
+
+                    switch generationState {
+                    case .idle, .loading:
+                        DashboardFieldLoading(title: "正在同步生成进度")
+                    case .failed(let message):
+                        DashboardFieldFailure(
+                            title: "生成进度暂不可用",
+                            message: message,
+                            retryIdentifier: "dashboard.retry.generation"
+                        ) {
+                            Task { await loadGeneration() }
+                        }
+                    case .loaded(let job):
+                        if let job {
+                            SetuNavigationRow(
+                                title: job.promptCn.nonEmpty ?? "正在生成作品",
+                                subtitle: "\(job.statusTitle) · 查看最新进度",
+                                systemImage: "sparkles"
+                            ) {
+                                navigation.navigate(to: .ai, route: .aiGenerationDetail(job.id))
                             }
-                            if let total = snapshot.usageLogs?.total {
-                                usageLogControls(total: total)
-                            }
-                        } else {
-                            SetuEmptyState(title: "暂无刷图记录", systemImage: "clock.arrow.circlepath")
                         }
+                    }
+
+                    if hasMeaningfulDraft {
+                        SetuNavigationRow(
+                            title: draft.promptCn.nonEmpty ?? "未完成的 AI 绘画草稿",
+                            subtitle: "继续编辑上次保存的参数",
+                            systemImage: "square.and.pencil"
+                        ) {
+                            navigation.navigate(to: .ai, route: .aiDraw)
+                        }
+                    }
+
+                    if hasConfirmedNoActiveContent {
+                        SetuEmptyState(
+                            title: "暂无进行中的内容",
+                            message: "描述一个画面，开始今天的第一幅作品。",
+                            systemImage: "clock.arrow.circlepath",
+                            actionTitle: "开始创作",
+                            action: { navigation.navigate(to: .ai, route: .aiDraw) }
+                        )
                     }
                 }
             }
@@ -198,128 +137,425 @@ struct DashboardView: View {
         .setuListRow()
     }
 
-    private func usageLogControls(total: Int) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Button("上一页") {
-                    Task {
-                        usageLogPage = max(1, usageLogPage - 1)
-                        await load()
+    private var favoritesSection: some View {
+        Section {
+            SetuCard {
+                VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                    SetuSectionHeader(
+                        title: "最近收藏",
+                        actionTitle: "查看全部"
+                    ) {
+                        navigation.navigate(to: .images, route: .favorites)
+                    }
+
+                    switch favoritesState {
+                    case .idle, .loading:
+                        DashboardFieldLoading(title: "正在加载最近收藏")
+                    case .failed(let message):
+                        DashboardFieldFailure(
+                            title: "最近收藏加载失败",
+                            message: message,
+                            retryIdentifier: "dashboard.retry.favorites"
+                        ) {
+                            Task { await loadFavorites() }
+                        }
+                    case .loaded(let favorites) where favorites.isEmpty:
+                        SetuEmptyState(
+                            title: "还没有收藏图片",
+                            message: "去图片页发现喜欢的作品吧。",
+                            systemImage: "heart",
+                            actionTitle: "发现图片",
+                            action: { navigation.navigate(to: .images) }
+                        )
+                    case .loaded(let favorites):
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: SetuSpacing.md) {
+                                ForEach(favorites) { favorite in
+                                    Button {
+                                        previewItem = UserImagePreviewItem(favorite: favorite)
+                                    } label: {
+                                        FavoritePreviewTile(item: favorite)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityLabel("查看收藏：\(favorite.image?.title.nonEmpty ?? "未命名作品")")
+                                    .accessibilityIdentifier("dashboard.favorite.\(favorite.id)")
+                                }
+                            }
+                        }
                     }
                 }
-                .disabled(usageLogPage <= 1)
-                .buttonStyle(.bordered)
+            }
+            .accessibilityIdentifier("dashboard.section.favorites")
+        }
+        .setuListRow()
+    }
 
-                Spacer()
-                Text("第 \(usageLogPage) / \(max(1, Int(ceil(Double(total) / Double(usageLogPageSize))))) 页")
-                    .font(.footnote)
-                    .foregroundStyle(SetuColor.textSecondary)
-                Spacer()
+    @ViewBuilder
+    private var recommendationSection: some View {
+        Section {
+            SetuCard {
+                VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                    SetuSectionHeader(title: "今日推荐")
+                    switch recommendationState {
+                    case .idle, .loading:
+                        DashboardFieldLoading(title: "正在挑选今日推荐")
+                    case .failed(let message):
+                        DashboardFieldFailure(
+                            title: "今日推荐加载失败",
+                            message: message,
+                            retryIdentifier: "dashboard.retry.recommendation"
+                        ) {
+                            Task { await loadRecommendation() }
+                        }
+                    case .loaded(nil):
+                        SetuEmptyState(
+                            title: "今天暂时没有推荐",
+                            message: "稍后回来看看新的广场作品。",
+                            systemImage: "sparkles"
+                        )
+                    case .loaded(let recommendation?):
+                        Button {
+                            navigation.navigate(
+                                to: .square,
+                                route: .publicAiWork(PublicAiWorkSnapshot(work: recommendation))
+                            )
+                        } label: {
+                            VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                                SetuRemoteImage(
+                                    urlString: recommendation.imageUrl,
+                                    accessibilityLabel: "今日推荐 AI 作品",
+                                    width: nil,
+                                    height: nil,
+                                    cornerRadius: SetuRadius.md,
+                                    contentMode: .fill,
+                                    allowsTapToRetry: false
+                                )
+                                .frame(maxWidth: .infinity)
+                                .aspectRatio(16 / 10, contentMode: .fit)
 
-                Button("下一页") {
-                    Task {
-                        usageLogPage += 1
-                        await load()
+                                VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+                                    Text(recommendation.promptCn.nonEmpty ?? "广场精选作品")
+                                        .font(SetuTypography.headline)
+                                        .foregroundStyle(SetuColor.textPrimary)
+                                        .lineLimit(2)
+                                    Text("来自 AI 广场 · 点按查看作品")
+                                        .font(SetuTypography.caption)
+                                        .foregroundStyle(SetuColor.textSecondary)
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("查看今日推荐作品")
                     }
                 }
-                .disabled(usageLogPage * usageLogPageSize >= total)
-                .buttonStyle(.bordered)
             }
         }
+        .setuListRow()
+    }
+
+    private var remindersSection: some View {
+        Section {
+            SetuCard {
+                VStack(alignment: .leading, spacing: SetuSpacing.lg) {
+                    SetuSectionHeader(title: "提醒")
+                    notificationReminderContent
+                    pointsReminderContent
+
+                    if remindersAreConfirmedClear {
+                        Label("暂时没有需要处理的事项", systemImage: "checkmark.circle.fill")
+                            .font(SetuTypography.body)
+                            .foregroundStyle(SetuColor.success)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            .accessibilityIdentifier("dashboard.section.reminders")
+        }
+        .setuListRow()
+    }
+
+    @ViewBuilder
+    private var notificationReminderContent: some View {
+        switch notificationState {
+        case .idle, .loading:
+            DashboardFieldLoading(title: "正在检查未读通知")
+        case .failed(let message):
+            DashboardFieldFailure(
+                title: "通知状态加载失败",
+                message: message,
+                retryIdentifier: "dashboard.retry.notifications"
+            ) {
+                Task { await loadNotifications() }
+            }
+        case .loaded(let unread):
+            if unread > 0 {
+                SetuNavigationRow(
+                    title: "有 \(unread) 条未读通知",
+                    subtitle: "查看生成结果和处理进度",
+                    systemImage: "bell.badge"
+                ) {
+                    navigation.navigate(to: .home, route: .notifications)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var pointsReminderContent: some View {
+        switch pointsState {
+        case .idle, .loading:
+            DashboardFieldLoading(title: "正在检查积分余额")
+        case .failed(let message):
+            DashboardFieldFailure(
+                title: "积分余额加载失败",
+                message: message,
+                retryIdentifier: "dashboard.retry.points"
+            ) {
+                Task { await loadPoints() }
+            }
+        case .loaded(let points):
+            if points < 20 {
+                SetuNavigationRow(
+                    title: "积分余额较低",
+                    subtitle: "当前剩余 \(points) 积分",
+                    systemImage: "bolt.trianglebadge.exclamationmark"
+                ) {
+                    navigation.navigate(to: .images, route: .points)
+                }
+            }
+        }
+    }
+
+    private var draft: AiDrawDraft { AiDrawDraftStore.load() }
+
+    private var greetingCopy: some View {
+        VStack(alignment: .leading, spacing: SetuSpacing.sm) {
+            Text(greetingTitle)
+                .font(SetuTypography.display)
+                .foregroundStyle(SetuColor.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(greetingSubtitle)
+                .font(SetuTypography.caption)
+                .foregroundStyle(SetuColor.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var hasMeaningfulDraft: Bool {
+        let value = draft
+        return !value.promptCn.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !value.promptPositive.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !value.styleTags.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !value.loraName.isEmpty
+            || !value.characterId.isEmpty
     }
 
     private var greetingTitle: String {
         let hour = Calendar.current.component(.hour, from: Date())
+        let salutation: String
         switch hour {
-        case 5..<11:
-            return "早上好，雪涼云"
-        case 11..<14:
-            return "中午好，雪涼云"
-        case 14..<18:
-            return "下午好，雪涼云"
-        default:
-            return "晚上好，雪涼云"
+        case 5..<11: salutation = "早上好"
+        case 11..<14: salutation = "中午好"
+        case 14..<18: salutation = "下午好"
+        default: salutation = "晚上好"
         }
+        return "\(salutation)，\(displayName)"
+    }
+
+    private var greetingSubtitle: String {
+        if player.currentTrack != nil || hasMeaningfulDraft {
+            return "欢迎回来，从上次停下的地方继续吧。"
+        }
+        switch generationState {
+        case .idle, .loading:
+            return "欢迎回来，正在同步上次的创作进度。"
+        case .failed:
+            return "欢迎回来，部分首页内容暂时未能同步。"
+        case .loaded(let job):
+            return job == nil
+                ? "今天想创作点什么，还是先看看新作品？"
+                : "欢迎回来，从上次停下的地方继续吧。"
+        }
+    }
+
+    private var displayName: String {
+        let nickname = environment.authSession.currentUser?.nickname?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !nickname.isEmpty { return nickname }
+        return environment.authSession.currentUser?.email.split(separator: "@").first.map(String.init) ?? "朋友"
+    }
+
+    private var hasConfirmedNoActiveContent: Bool {
+        guard player.currentTrack == nil, !hasMeaningfulDraft else { return false }
+        if case .loaded(nil) = generationState { return true }
+        return false
+    }
+
+    private var remindersAreConfirmedClear: Bool {
+        guard case .loaded(let unread) = notificationState,
+              case .loaded(let points) = pointsState else {
+            return false
+        }
+        return unread == 0 && points >= 20
     }
 
     private func load() async {
-        state = .loading
-        let snapshot = await environment.dashboardClient.fetchHomeSnapshot(usageLogPage: usageLogPage, usageLogLimit: usageLogPageSize)
-        state = .loaded(snapshot)
+        async let favorites: Void = loadFavorites()
+        async let generation: Void = loadGeneration()
+        async let recommendation: Void = loadRecommendation()
+        async let notifications: Void = loadNotifications()
+        async let points: Void = loadPoints()
+        _ = await (favorites, generation, recommendation, notifications, points)
     }
-}
 
-private struct UsageLogRow: View {
-    let log: UsageLogItem
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text("随机图片")
-                    .font(.headline)
-                    .lineLimit(1)
-                Spacer()
-                SetuPill(text: statusText, systemImage: statusSystemImage, tone: statusTone)
-            }
-            HStack(spacing: 12) {
-                Label(log.timestamp, systemImage: "clock")
-                Label(statusText, systemImage: statusSystemImage)
-            }
-            .font(.caption)
-            .foregroundStyle(SetuColor.textSecondary)
-            .lineLimit(1)
+    private func loadFavorites() async {
+        let loadID = UUID()
+        favoritesLoadID = loadID
+        favoritesState = .loading
+        do {
+            let page = try await environment.favoriteClient.list(page: 1, size: 4)
+            guard loadID == favoritesLoadID else { return }
+            favoritesState = .loaded(page.items)
+        } catch {
+            guard loadID == favoritesLoadID else { return }
+            favoritesState = .failed(UserFacingErrorMapper.map(error).message)
         }
-        .padding(.vertical, 4)
     }
 
-    private var statusColor: Color {
-        (200..<400).contains(log.status) ? SetuColor.success : SetuColor.danger
+    private func loadGeneration() async {
+        let loadID = UUID()
+        generationLoadID = loadID
+        generationState = .loading
+        do {
+            let page = try await environment.aiGenerationClient.listMine(page: 1, pageSize: 5)
+            guard loadID == generationLoadID else { return }
+            let active = page.list.first { !["COMPLETED", "FAILED"].contains($0.status) }
+            generationState = .loaded(active)
+        } catch {
+            guard loadID == generationLoadID else { return }
+            generationState = .failed(UserFacingErrorMapper.map(error).message)
+        }
     }
 
-    private var statusTone: SetuPillTone {
-        (200..<400).contains(log.status) ? .success : .danger
+    private func loadRecommendation() async {
+        let loadID = UUID()
+        recommendationLoadID = loadID
+        recommendationState = .loading
+        do {
+            let page = try await environment.aiGenerationClient.square(page: 1, pageSize: 1)
+            guard loadID == recommendationLoadID else { return }
+            recommendationState = .loaded(page.list.first)
+        } catch {
+            guard loadID == recommendationLoadID else { return }
+            recommendationState = .failed(UserFacingErrorMapper.map(error).message)
+        }
     }
 
-    private var statusText: String {
-        (200..<400).contains(log.status) ? "成功" : "失败"
+    private func loadNotifications() async {
+        let loadID = UUID()
+        notificationLoadID = loadID
+        notificationState = .loading
+        do {
+            let count = try await environment.dashboardClient.fetchUnreadNotificationCount()
+            guard loadID == notificationLoadID else { return }
+            notificationState = .loaded(count)
+        } catch {
+            guard loadID == notificationLoadID else { return }
+            notificationState = .failed(UserFacingErrorMapper.map(error).message)
+        }
     }
 
-    private var statusSystemImage: String {
-        (200..<400).contains(log.status) ? "checkmark.circle" : "exclamationmark.triangle"
+    private func loadPoints() async {
+        let loadID = UUID()
+        pointsLoadID = loadID
+        pointsState = .loading
+        do {
+            let balance = try await environment.dashboardClient.fetchPointsBalance()
+            guard loadID == pointsLoadID else { return }
+            pointsState = .loaded(balance.points)
+        } catch {
+            guard loadID == pointsLoadID else { return }
+            pointsState = .failed(UserFacingErrorMapper.map(error).message)
+        }
     }
 }
 
-private struct HomeActionTile: View {
+private struct DashboardFieldLoading: View {
     let title: String
-    let subtitle: String
-    let systemImage: String
-    let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                Image(systemName: systemImage)
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 42, height: 42)
-                    .background(.white.opacity(0.18), in: RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous))
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                    Text(subtitle)
-                        .font(.footnote)
-                        .foregroundStyle(.white.opacity(0.86))
-                        .lineLimit(2)
-                }
-            }
-            .frame(maxWidth: .infinity, minHeight: 132, alignment: .topLeading)
-            .padding(SetuSpacing.lg)
-            .background(SetuColor.heroGradient, in: RoundedRectangle(cornerRadius: SetuRadius.lg, style: .continuous))
-            .shadow(color: SetuColor.brandPink.opacity(0.16), radius: 12, y: 6)
+        HStack(spacing: SetuSpacing.md) {
+            ProgressView()
+                .tint(SetuColor.brandPink)
+                .accessibilityHidden(true)
+            Text(title)
+                .font(SetuTypography.body)
+                .foregroundStyle(SetuColor.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
         }
-        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(title)
+    }
+}
+
+private struct DashboardFieldFailure: View {
+    let title: String
+    let message: String
+    let retryIdentifier: String
+    let retry: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SetuSpacing.sm) {
+            Label(title, systemImage: "exclamationmark.triangle.fill")
+                .font(SetuTypography.headline)
+                .foregroundStyle(SetuColor.danger)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text(message)
+                .font(SetuTypography.body)
+                .foregroundStyle(SetuColor.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Button("重试", action: retry)
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .tint(SetuColor.danger)
+                .frame(minHeight: 44)
+                .accessibilityIdentifier(retryIdentifier)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(SetuSpacing.md)
+        .background(
+            SetuColor.danger.opacity(0.08),
+            in: RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous)
+        )
+    }
+}
+
+private struct FavoritePreviewTile: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    let item: FavoriteItem
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SetuSpacing.sm) {
+            SetuRemoteImage(
+                urlString: item.image?.urlSmall ?? item.image?.urlRegular,
+                accessibilityLabel: "收藏图片：\(item.image?.title.nonEmpty ?? "未命名作品")",
+                width: 136,
+                height: 136,
+                cornerRadius: SetuRadius.md,
+                allowsTapToRetry: false
+            )
+            Text(item.image?.title.nonEmpty ?? "未命名作品")
+                .font(SetuTypography.caption)
+                .foregroundStyle(SetuColor.textPrimary)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(width: dynamicTypeSize.isAccessibilitySize ? 184 : 136, alignment: .leading)
     }
 }
 
@@ -332,9 +568,7 @@ private struct HomeAccountAvatar: View {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
+                        image.resizable().scaledToFill()
                     default:
                         fallback
                     }
@@ -345,16 +579,14 @@ private struct HomeAccountAvatar: View {
         }
         .frame(width: 32, height: 32)
         .clipShape(Circle())
-        .overlay {
-            Circle()
-                .stroke(borderColor, lineWidth: 0.5)
-        }
+        .overlay { Circle().stroke(borderColor, lineWidth: 0.5) }
         .frame(minWidth: 44, minHeight: 44)
+        .accessibilityHidden(true)
     }
 
     private var fallback: some View {
         Circle()
-            .fill(backgroundColor)
+            .fill(SetuColor.surfaceMuted)
             .overlay {
                 Image(systemName: user?.role == .admin ? "person.crop.circle.badge.checkmark" : "person.crop.circle")
                     .font(.title3)
@@ -365,20 +597,25 @@ private struct HomeAccountAvatar: View {
     private var borderColor: Color {
         #if os(iOS)
         Color(uiColor: .separator)
-        #elseif os(macOS)
-        Color(nsColor: .separatorColor)
         #else
         Color.secondary.opacity(0.25)
         #endif
     }
+}
 
-    private var backgroundColor: Color {
-        #if os(iOS)
-        SetuColor.surfaceMuted
-        #elseif os(macOS)
-        Color(nsColor: .controlBackgroundColor)
-        #else
-        Color.secondary.opacity(0.12)
-        #endif
+private extension String {
+    var nonEmpty: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }
+
+#if DEBUG
+#Preview("首页 · 390 · 浅色") {
+    SetuFeaturePreviewHost(playerState: .listening) { environment, player in
+        DashboardView(environment: environment, player: player)
+    }
+    .frame(width: 390, height: 844)
+    .preferredColorScheme(.light)
+}
+#endif

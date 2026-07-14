@@ -11,7 +11,7 @@ struct SetuSectionHeader: View {
             VStack(alignment: .leading, spacing: SetuSpacing.xs) {
                 Text(title)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(SetuColor.textSecondary)
+                    .foregroundStyle(SetuColor.textPrimary)
                 if let subtitle {
                     Text(subtitle)
                         .font(SetuTypography.caption)
@@ -23,6 +23,8 @@ struct SetuSectionHeader: View {
                 Button(actionTitle, action: action)
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(SetuColor.brandInk)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
         }
         .textCase(nil)

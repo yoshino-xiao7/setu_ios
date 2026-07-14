@@ -140,20 +140,14 @@ extension AiGenerationJob {
     }
 
     var aiLiveActivityDetail: String {
-        if let message = userErrorMessage ?? errorMessage, !message.isEmpty {
+        if let message = userErrorMessage, !message.isEmpty {
             return message
-        }
-        if let detail = workerDetail, !detail.isEmpty {
-            return detail
-        }
-        if let stage = workerStage, !stage.isEmpty {
-            return stage
         }
         switch status {
         case "QUEUED":
-            return "任务已进入队列"
+            return "作品正在等待开始"
         case "CLAIMED":
-            return "节点已接单"
+            return "正在准备生成"
         case "RUNNING":
             return "正在生成图片"
         case "UPLOADING":

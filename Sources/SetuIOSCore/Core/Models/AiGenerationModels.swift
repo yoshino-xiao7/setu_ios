@@ -75,13 +75,68 @@ public struct AiGenerationJob: Decodable, Identifiable, Sendable {
     public var statusTitle: String {
         switch status {
         case "QUEUED": "排队中"
-        case "CLAIMED": "已接单"
+        case "CLAIMED": "准备生成"
         case "RUNNING": "生成中"
         case "UPLOADING": "上传中"
         case "COMPLETED": "已完成"
         case "FAILED": "失败"
-        default: status
+        default: "处理中"
         }
+    }
+}
+
+public struct AiPublicWork: Decodable, Identifiable, Sendable, Hashable {
+    public let id: Int
+    public let userId: Int?
+    public let promptCn: String
+    public let width: Int
+    public let height: Int
+    public let publicCategory: String?
+    public let imageUrl: String?
+    public let imageWidth: Int?
+    public let imageHeight: Int?
+    public let likeCount: Int
+    public let favoriteCount: Int
+    public let likedByMe: Bool
+    public let favoritedByMe: Bool
+    public let createdAt: String?
+    public let completedAt: String?
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(Int.self, forKey: .id)
+        userId = try container.decodeIfPresent(Int.self, forKey: .userId)
+        promptCn = try container.decode(String.self, forKey: .promptCn)
+        width = try container.decode(Int.self, forKey: .width)
+        height = try container.decode(Int.self, forKey: .height)
+        publicCategory = try container.decodeIfPresent(String.self, forKey: .publicCategory)
+        imageUrl = try container.decodeIfPresent(String.self, forKey: .imageUrl)
+        imageWidth = try container.decodeIfPresent(Int.self, forKey: .imageWidth)
+        imageHeight = try container.decodeIfPresent(Int.self, forKey: .imageHeight)
+        likeCount = try container.decodeIfPresent(Int.self, forKey: .likeCount) ?? 0
+        favoriteCount = try container.decodeIfPresent(Int.self, forKey: .favoriteCount) ?? 0
+        likedByMe = try container.decodeIfPresent(Bool.self, forKey: .likedByMe) ?? false
+        favoritedByMe = try container.decodeIfPresent(Bool.self, forKey: .favoritedByMe) ?? false
+        createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
+        completedAt = try container.decodeIfPresent(String.self, forKey: .completedAt)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case userId
+        case promptCn
+        case width
+        case height
+        case publicCategory
+        case imageUrl
+        case imageWidth
+        case imageHeight
+        case likeCount
+        case favoriteCount
+        case likedByMe
+        case favoritedByMe
+        case createdAt
+        case completedAt
     }
 }
 
@@ -268,6 +323,16 @@ public struct AiServiceStatusResponse: Decodable, Sendable {
         }
         return "离线"
     }
+
+    public var userFacingUnavailableMessage: String {
+        if !online {
+            return "创作服务暂时离线，请稍后再试"
+        }
+        if !openNow {
+            return "当前不在开放时间，请稍后再来"
+        }
+        return "当前暂无可用创作资源，请稍后重试"
+    }
 }
 
 public struct AiControlStatus: Decodable, Sendable {
@@ -365,7 +430,7 @@ public struct AiGenerationReview: Decodable, Identifiable, Sendable {
         case "WAITING": "待审核"
         case "APPROVED": "已通过"
         case "REJECTED": "已拒绝"
-        default: status
+        default: "审核中"
         }
     }
 
@@ -373,7 +438,7 @@ public struct AiGenerationReview: Decodable, Identifiable, Sendable {
         switch category {
         case "GENERAL": "全年龄"
         case "R18": "R18"
-        default: category
+        default: "其他"
         }
     }
 }
@@ -411,7 +476,7 @@ public struct AiGenerationDeleteRequest: Decodable, Identifiable, Sendable {
         case "WAITING": "待审核"
         case "APPROVED": "已通过"
         case "REJECTED": "已拒绝"
-        default: status
+        default: "处理中"
         }
     }
 }

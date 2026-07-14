@@ -3,92 +3,86 @@ import SwiftUI
 
 struct CollectionDetailView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var environment: AppEnvironment
     let collectionID: Int
 
     @State private var infoState: LoadState<CollectionInfo> = .idle
-    @State private var itemsState: LoadState<CollectionItemPage> = .idle
-    @State private var actionMessage: String?
+    @State private var items: [CollectionItem] = []
+    @State private var total = 0
+    @State private var nextPage = 1
+    @State private var isInitialLoading = true
+    @State private var isLoadingMore = false
+    @State private var initialError: String?
+    @State private var loadMoreError: String?
+    @State private var feedback: SetuFeedback?
     @State private var editor: CollectionEditorContext?
     @State private var moveContext: CollectionItemMoveContext?
-    @State private var previewItem: CollectionImagePreviewItem?
+    @State private var previewItem: UserImagePreviewItem?
     @State private var showingDeleteConfirmation = false
-    @State private var page = 1
     private let pageSize = 24
 
     var body: some View {
-        List {
-            if let actionMessage {
-                Section {
-                    SetuPill(text: actionMessage, systemImage: "info.circle", tone: .info)
+        ScrollView {
+            VStack(alignment: .leading, spacing: SetuSpacing.lg) {
+                if let feedback {
+                    SetuFeedbackBanner(feedback: feedback)
                 }
-            }
 
-            switch infoState {
-            case .idle, .loading:
-                Section {
+                if let initialError, !items.isEmpty {
+                    SetuLoadMoreFooter(state: .failed(initialError)) {
+                        Task { await loadFirstPage() }
+                    }
+                }
+
+                switch infoState {
+                case .idle, .loading:
                     SetuCard {
                         SetuEmptyState(title: "正在加载收藏夹", systemImage: "rectangle.stack", isLoading: true)
                     }
-                }
-            case .failed(let message):
-                Section {
+                case .failed(let message):
                     SetuCard {
                         SetuEmptyState(title: "收藏夹加载失败", message: message, systemImage: "rectangle.stack.badge.minus")
                     }
+                case .loaded(let info):
+                    infoSection(info)
+                    actionSection(info)
                 }
-            case .loaded(let info):
-                infoSection(info)
-                actionSection(info)
-            }
 
-            switch itemsState {
-            case .idle, .loading:
-                Section {
+                if isInitialLoading {
                     SetuCard {
                         SetuEmptyState(title: "正在加载图片", systemImage: "photo.on.rectangle", isLoading: true)
                     }
-                }
-            case .failed(let message):
-                Section {
-                    SetuCard {
-                        SetuEmptyState(title: "图片加载失败", message: message, systemImage: "photo.on.rectangle.angled")
-                    }
-                }
-            case .loaded(let page):
-                if page.items.isEmpty {
-                    Section {
-                        SetuCard {
-                            SetuEmptyState(title: "暂无图片", message: "收藏夹加入图片后会显示在这里。", systemImage: "photo")
-                        }
-                    }
+                } else if items.isEmpty {
+                    itemEmptyState
                 } else {
-                    Section {
-                        SetuCard {
-                            SetuSectionHeader(title: "收藏图片", subtitle: "共 \(page.total) 张")
-                        }
-                    }
-                    Section {
-                        ForEach(page.items) { item in
-                            SetuCard {
-                                CollectionItemRow(item: item) {
-                                    previewItem = CollectionImagePreviewItem(item: item)
-                                } onSetCover: {
-                                    Task { await setCover(item) }
-                                } onMove: {
-                                    moveContext = CollectionItemMoveContext(currentCollectionID: collectionID, item: item)
-                                } onRemove: {
-                                    Task { await remove(item) }
+                    SetuSectionHeader(title: "收藏图片", subtitle: "共 \(total) 张")
+                    LazyVGrid(columns: gridColumns, spacing: SetuSpacing.md) {
+                        ForEach(items) { item in
+                            CollectionItemTile(item: item) {
+                                previewItem = UserImagePreviewItem(collectionItem: item)
+                            } onSetCover: {
+                                Task { await setCover(item) }
+                            } onMove: {
+                                moveContext = CollectionItemMoveContext(currentCollectionID: collectionID, item: item)
+                            } onRemove: {
+                                Task { await remove(item) }
+                            }
+                            .onAppear {
+                                if item.id == items.last?.id {
+                                    Task { await loadMore() }
                                 }
                             }
                         }
                     }
-                    pagerSection(page)
+                    SetuLoadMoreFooter(state: loadMoreFooterState) {
+                        Task { await loadMore() }
+                    }
                 }
             }
+            .padding(.horizontal, SetuSpacing.lg)
+            .padding(.vertical, SetuSpacing.md)
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
         .setuBackground()
         .navigationTitle(title)
         .toolbar {
@@ -98,6 +92,7 @@ struct CollectionDetailView: View {
                 } label: {
                     Image(systemName: "square.and.pencil")
                 }
+                .accessibilityLabel("编辑收藏夹")
 
                 if !info.isDefault {
                     Button(role: .destructive) {
@@ -105,22 +100,24 @@ struct CollectionDetailView: View {
                     } label: {
                         Image(systemName: "trash")
                     }
+                    .accessibilityLabel("删除收藏夹")
                 }
             }
         }
         .sheet(item: $editor) { context in
             CollectionEditorSheet(environment: environment, context: context) {
-                Task { await load() }
+                feedback = .success("收藏夹信息已保存")
+                Task { await loadFirstPage() }
             }
         }
         .sheet(item: $moveContext) { context in
             CollectionItemMoveSheet(environment: environment, context: context) { mode in
-                actionMessage = mode.completionMessage
-                Task { await load() }
+                feedback = .success(mode.completionMessage)
+                Task { await loadFirstPage() }
             }
         }
         .sheet(item: $previewItem) { item in
-            CollectionImagePreviewSheet(item: item)
+            UserImagePreviewSheet(item: item)
         }
         .confirmationDialog("删除这个收藏夹？", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) {
             Button("删除收藏夹", role: .destructive) {
@@ -130,40 +127,43 @@ struct CollectionDetailView: View {
         } message: {
             Text("删除后收藏夹中的条目关系会被移除，此操作不可撤销。")
         }
-        .task { await load() }
-        .refreshable { await load() }
+        .task { await loadFirstPage() }
+        .refreshable { await loadFirstPage() }
     }
 
-    private func pagerSection(_ result: CollectionItemPage) -> some View {
-        Section {
+    @ViewBuilder
+    private var itemEmptyState: some View {
+        if let initialError {
             SetuCard {
-                HStack {
-                    Button("上一页") {
-                        Task {
-                            page = max(1, page - 1)
-                            await load()
-                        }
+                VStack(spacing: SetuSpacing.md) {
+                    SetuEmptyState(title: "图片加载失败", message: initialError, systemImage: "photo.on.rectangle.angled")
+                    Button("重试") {
+                        Task { await loadFirstPage() }
                     }
-                    .disabled(page <= 1)
-
-                    Spacer()
-                    Text("第 \(result.page) 页")
-                        .font(SetuTypography.caption)
-                        .foregroundStyle(SetuColor.textSecondary)
-                    Spacer()
-
-                    Button("下一页") {
-                        Task {
-                            page += 1
-                            await load()
-                        }
-                    }
-                    .disabled(result.page * result.size >= result.total)
+                    .buttonStyle(.borderedProminent)
                 }
-                .buttonStyle(.bordered)
-                .tint(SetuColor.brandPink)
+            }
+        } else {
+            SetuCard {
+                SetuEmptyState(title: "暂无图片", message: "收藏夹加入图片后会显示在这里。", systemImage: "photo")
             }
         }
+    }
+
+    private var gridColumns: [GridItem] {
+        if dynamicTypeSize.isAccessibilitySize {
+            return [GridItem(.flexible())]
+        }
+        return [GridItem(.adaptive(minimum: 156), spacing: SetuSpacing.md)]
+    }
+
+    private var hasMore: Bool { items.count < total }
+
+    private var loadMoreFooterState: SetuLoadMoreFooterState {
+        if isLoadingMore { return .loading }
+        if let loadMoreError { return .failed(loadMoreError) }
+        if !hasMore { return .complete("已加载全部 \(total) 张图片") }
+        return .idle
     }
 
     private var title: String {
@@ -176,20 +176,23 @@ struct CollectionDetailView: View {
 
     @ViewBuilder
     private func infoSection(_ info: CollectionInfo) -> some View {
-        Section {
-            SetuCard {
-                VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                    HStack(alignment: .top, spacing: SetuSpacing.md) {
-                        ImageThumbnailView(urlString: info.coverUrl ?? info.previewImages?.first?.bestURLString)
-                        VStack(alignment: .leading, spacing: SetuSpacing.sm) {
-                            Text(info.name)
-                                .font(SetuTypography.title)
-                                .foregroundStyle(SetuColor.textPrimary)
-                            if let description = info.description, !description.isEmpty {
-                                Text(description)
-                                    .font(SetuTypography.caption)
-                                    .foregroundStyle(SetuColor.textSecondary)
-                            }
+        SetuCard {
+            VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                HStack(alignment: .top, spacing: SetuSpacing.md) {
+                    SetuRemoteImage(
+                        urlString: info.coverUrl ?? info.previewImages?.first?.bestURLString,
+                        accessibilityLabel: "收藏夹「\(info.name)」封面"
+                    )
+                    VStack(alignment: .leading, spacing: SetuSpacing.sm) {
+                        Text(info.name)
+                            .font(SetuTypography.title)
+                            .foregroundStyle(SetuColor.textPrimary)
+                        if let description = info.description, !description.isEmpty {
+                            Text(description)
+                                .font(SetuTypography.caption)
+                                .foregroundStyle(SetuColor.textSecondary)
+                        }
+                        ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: SetuSpacing.sm) {
                                 SetuPill(text: info.visibility.title, systemImage: info.visibility == .publicVisible ? "eye" : "lock", tone: .brand)
                                 SetuPill(text: "\(info.itemCount ?? 0) 张", systemImage: "photo", tone: .info)
@@ -199,14 +202,14 @@ struct CollectionDetailView: View {
                             }
                         }
                     }
+                }
 
-                    if let tags = info.tags, !tags.isEmpty {
-                        TagFlow(tags: tags)
-                    }
+                if let tags = info.tags, !tags.isEmpty {
+                    TagFlow(tags: tags)
+                }
 
-                    if let note = info.curatorNote, !note.isEmpty {
-                        CollectionInfoRow(title: "推荐语", value: note)
-                    }
+                if let note = info.curatorNote, !note.isEmpty {
+                    CollectionInfoRow(title: "推荐语", value: note)
                 }
             }
         }
@@ -214,51 +217,55 @@ struct CollectionDetailView: View {
 
     @ViewBuilder
     private func actionSection(_ info: CollectionInfo) -> some View {
-        Section {
-            SetuCard {
-                VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                    SetuSectionHeader(title: "分享与数据")
+        SetuCard {
+            VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                SetuSectionHeader(title: "分享与数据")
+                Button {
+                    Task { await toggleShare(info) }
+                } label: {
+                    Label(info.isShared == true ? "取消分享到广场" : "分享到收藏夹广场", systemImage: info.isShared == true ? "square.and.arrow.down" : "square.and.arrow.up")
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.bordered)
+                .tint(SetuColor.brandPink)
+
+                if canShareLink(info) {
+                    let url = publicShareURL(for: info)
                     Button {
-                        Task { await toggleShare(info) }
+                        copyShareLink(url)
                     } label: {
-                        Label(info.isShared == true ? "取消分享到广场" : "分享到收藏夹广场", systemImage: info.isShared == true ? "square.and.arrow.down" : "square.and.arrow.up")
+                        Label("复制分享链接", systemImage: "doc.on.doc")
                             .frame(maxWidth: .infinity, minHeight: 44)
                     }
                     .buttonStyle(.bordered)
                     .tint(SetuColor.brandPink)
 
-                    if canShareLink(info) {
-                        let url = publicShareURL(for: info)
-                        Button {
-                            copyShareLink(url)
-                        } label: {
-                            Label("复制分享链接", systemImage: "doc.on.doc")
-                                .frame(maxWidth: .infinity, minHeight: 44)
-                        }
-                        .buttonStyle(.bordered)
-                        .tint(SetuColor.brandPink)
-
-                        Link(destination: url) {
-                            Label("打开公开预览", systemImage: "arrow.up.forward.square")
-                                .frame(maxWidth: .infinity, minHeight: 44)
-                        }
-                        .buttonStyle(.bordered)
-                        .tint(SetuColor.brandPink)
-                    } else if !info.isDefault {
-                        Text("公开链接需要先将收藏夹设为公开。")
-                            .font(SetuTypography.caption)
-                            .foregroundStyle(SetuColor.textSecondary)
+                    Link(destination: url) {
+                        Label("打开公开预览", systemImage: "arrow.up.forward.square")
+                            .frame(maxWidth: .infinity, minHeight: 44)
                     }
+                    .buttonStyle(.bordered)
+                    .tint(SetuColor.brandPink)
+                } else if !info.isDefault {
+                    Text("公开链接需要先将收藏夹设为公开。")
+                        .font(SetuTypography.caption)
+                        .foregroundStyle(SetuColor.textSecondary)
+                }
 
-                    Divider()
-                    HStack {
-                        SetuStatTile(title: "浏览", value: "\(info.shareViewCount ?? 0)", systemImage: "eye", color: SetuColor.info)
-                        SetuStatTile(title: "点赞", value: "\(info.likeCount ?? info.shareLikeCount ?? 0)", systemImage: "heart", color: SetuColor.brandPink)
-                        SetuStatTile(title: "收藏", value: "\(info.favoriteCount ?? info.shareFavCount ?? 0)", systemImage: "bookmark", color: SetuColor.success)
-                    }
+                Divider()
+                statsLayout {
+                    SetuStatTile(title: "浏览", value: "\(info.shareViewCount ?? 0)", systemImage: "eye", color: SetuColor.info)
+                    SetuStatTile(title: "点赞", value: "\(info.likeCount ?? info.shareLikeCount ?? 0)", systemImage: "heart", color: SetuColor.brandPink)
+                    SetuStatTile(title: "收藏", value: "\(info.favoriteCount ?? info.shareFavCount ?? 0)", systemImage: "bookmark", color: SetuColor.success)
                 }
             }
         }
+    }
+
+    private var statsLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: SetuSpacing.sm))
+            : AnyLayout(HStackLayout(spacing: SetuSpacing.sm))
     }
 
     private func canShareLink(_ info: CollectionInfo) -> Bool {
@@ -273,79 +280,107 @@ struct CollectionDetailView: View {
 
     private func copyShareLink(_ url: URL) {
         PlatformClipboard.copy(url.absoluteString)
-        actionMessage = "分享链接已复制"
+        feedback = .success("分享链接已复制")
     }
 
-    private func load() async {
-        actionMessage = nil
-        infoState = .loading
-        itemsState = .loading
+    private func loadFirstPage() async {
+        isInitialLoading = items.isEmpty
+        initialError = nil
+        loadMoreError = nil
+        if case .loaded = infoState {
+            // Keep the current header visible while refreshing.
+        } else {
+            infoState = .loading
+        }
         do {
-            async let info = environment.collectionClient.info(collectionID: collectionID)
-            async let items = environment.collectionClient.items(collectionID: collectionID, page: page, size: pageSize)
-            infoState = .loaded(try await info)
-            itemsState = .loaded(try await items)
+            async let infoRequest = environment.collectionClient.info(collectionID: collectionID)
+            async let itemsRequest = environment.collectionClient.items(collectionID: collectionID, page: 1, size: pageSize)
+            let (info, result) = try await (infoRequest, itemsRequest)
+            infoState = .loaded(info)
+            items = result.items
+            total = result.total
+            nextPage = 2
         } catch {
-            let message = error.localizedDescription
             if case .loading = infoState {
-                infoState = .failed(message)
+                infoState = .failed("暂时无法加载收藏夹信息，请稍后重试。")
             }
-            if case .loading = itemsState {
-                itemsState = .failed(message)
-            }
+            initialError = "暂时无法加载图片，请检查网络后重试。"
+        }
+        isInitialLoading = false
+    }
+
+    private func loadMore() async {
+        guard hasMore, !isLoadingMore, !isInitialLoading else { return }
+        let requestedPage = nextPage
+        isLoadingMore = true
+        loadMoreError = nil
+        defer { isLoadingMore = false }
+        do {
+            let result = try await environment.collectionClient.items(
+                collectionID: collectionID,
+                page: requestedPage,
+                size: pageSize
+            )
+            guard requestedPage == nextPage else { return }
+            let existingIDs = Set(items.map(\.id))
+            items.append(contentsOf: result.items.filter { !existingIDs.contains($0.id) })
+            total = result.total
+            nextPage += 1
+        } catch {
+            loadMoreError = "更多图片加载失败"
         }
     }
 
     private func toggleShare(_ info: CollectionInfo) async {
-        actionMessage = nil
+        feedback = nil
         do {
             if info.isShared == true {
                 try await environment.collectionClient.unshare(collectionID: collectionID)
-                actionMessage = "已取消分享到广场"
+                feedback = .success("已取消分享到广场")
             } else {
                 try await environment.collectionClient.share(collectionID: collectionID)
-                actionMessage = "已分享到收藏夹广场"
+                feedback = .success("已分享到收藏夹广场")
             }
-            await load()
+            await loadFirstPage()
         } catch {
-            actionMessage = error.localizedDescription
+            feedback = .error(UserFacingErrorMapper.map(error).message)
         }
     }
 
     private func setCover(_ item: CollectionItem) async {
-        actionMessage = nil
+        feedback = nil
         do {
             try await environment.collectionClient.setCover(collectionID: collectionID, pid: item.pid, p: item.p)
-            actionMessage = "封面已更新"
-            await load()
+            feedback = .success("封面已更新")
+            await loadFirstPage()
         } catch {
-            actionMessage = error.localizedDescription
+            feedback = .error(UserFacingErrorMapper.map(error).message)
         }
     }
 
     private func remove(_ item: CollectionItem) async {
-        actionMessage = nil
+        feedback = nil
         do {
             try await environment.collectionClient.removeItem(collectionID: collectionID, pid: item.pid, p: item.p)
-            actionMessage = "已从收藏夹移除"
-            await load()
+            feedback = .success("已从收藏夹移除")
+            await loadFirstPage()
         } catch {
-            actionMessage = error.localizedDescription
+            feedback = .error(UserFacingErrorMapper.map(error).message)
         }
     }
 
     private func deleteCollection() async {
-        actionMessage = nil
+        feedback = nil
         do {
             try await environment.collectionClient.delete(collectionID: collectionID)
             dismiss()
         } catch {
-            actionMessage = error.localizedDescription
+            feedback = .error(UserFacingErrorMapper.map(error).message)
         }
     }
 }
 
-private struct CollectionItemRow: View {
+private struct CollectionItemTile: View {
     let item: CollectionItem
     let onPreview: () -> Void
     let onSetCover: () -> Void
@@ -353,56 +388,57 @@ private struct CollectionItemRow: View {
     let onRemove: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
-            ImageThumbnailView(urlString: item.image?.urlSmall ?? item.image?.urlRegular ?? item.image?.urlOriginal)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(item.image?.title ?? "PID \(item.pid)")
-                    .font(SetuTypography.headline)
-                    .foregroundStyle(SetuColor.textPrimary)
-                    .lineLimit(2)
-                Text(item.image?.author ?? "未知作者")
-                    .font(SetuTypography.caption)
-                    .foregroundStyle(SetuColor.textSecondary)
-                HStack(spacing: 10) {
-                    Label("\(item.pid)-\(item.p)", systemImage: "number")
-                    if let addedAt = item.addedAt {
-                        Label(addedAt, systemImage: "calendar")
-                    }
+        SetuCard(padding: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                Button(action: onPreview) {
+                    ContentGridImageView(
+                        urlString: item.image?.urlSmall ?? item.image?.urlRegular ?? item.image?.urlOriginal,
+                        accessibilityLabel: item.image?.title ?? "未命名作品"
+                    )
                 }
-                .font(.caption)
-                .foregroundStyle(SetuColor.textSecondary)
-            }
-            Spacer()
-            Button {
-                onPreview()
-            } label: {
-                Image(systemName: "eye")
-                    .font(.title3)
-                    .foregroundStyle(SetuColor.brandPink)
-                    .frame(width: 44, height: 44)
-            }
-            .buttonStyle(.borderless)
-            .accessibilityLabel("查看图片")
+                .buttonStyle(.plain)
 
-            Menu {
-                Button(action: onSetCover) {
-                    Label("设为封面", systemImage: "photo.badge.checkmark")
+                HStack(alignment: .top, spacing: SetuSpacing.sm) {
+                    VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+                        Text(item.image?.title ?? "未命名作品")
+                            .font(SetuTypography.headline)
+                            .foregroundStyle(SetuColor.textPrimary)
+                            .lineLimit(2)
+                        Text(item.image?.author ?? "未知作者")
+                            .font(SetuTypography.caption)
+                            .foregroundStyle(SetuColor.textSecondary)
+                            .lineLimit(1)
+                        if let addedAt = item.addedAt {
+                            Label(SetuDateFormatter.string(from: addedAt), systemImage: "calendar")
+                                .font(.caption2)
+                                .foregroundStyle(SetuColor.textTertiary)
+                                .lineLimit(1)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Menu {
+                        Button(action: onSetCover) {
+                            Label("设为封面", systemImage: "photo.badge.checkmark")
+                        }
+                        Button(action: onMove) {
+                            Label("移动/复制", systemImage: "arrow.left.arrow.right")
+                        }
+                        Button(role: .destructive, action: onRemove) {
+                            Label("移除", systemImage: "trash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .font(.title3)
+                            .foregroundStyle(SetuColor.textSecondary)
+                            .frame(width: 44, height: 44)
+                    }
+                    .accessibilityLabel("更多图片操作")
                 }
-                Button(action: onMove) {
-                    Label("移动/复制", systemImage: "arrow.left.arrow.right")
-                }
-                Button(role: .destructive, action: onRemove) {
-                    Label("移除", systemImage: "trash")
-                }
-            } label: {
-                Image(systemName: "ellipsis.circle")
-                    .font(.title3)
-                    .foregroundStyle(SetuColor.textSecondary)
-                    .frame(width: 44, height: 44)
+                .padding(SetuSpacing.md)
             }
-            .buttonStyle(.borderless)
         }
-        .padding(.vertical, SetuSpacing.xs)
+        .accessibilityElement(children: .contain)
     }
 }
 
@@ -461,118 +497,6 @@ private enum CollectionItemMoveMode: String, CaseIterable, Identifiable {
     }
 }
 
-struct CollectionImagePreviewItem: Identifiable {
-    let item: CollectionItem
-
-    var id: Int { item.id }
-
-    var image: FavoriteImage? { item.image }
-
-    var title: String {
-        image?.title ?? "PID \(item.pid)"
-    }
-
-    var author: String {
-        image?.author ?? "未知作者"
-    }
-
-    var bestURLString: String? {
-        image?.urlOriginal ?? image?.urlRegular ?? image?.urlSmall
-    }
-
-    var displayURLString: String? {
-        image?.urlRegular ?? image?.urlSmall ?? image?.urlOriginal
-    }
-}
-
-struct CollectionImagePreviewSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    let item: CollectionImagePreviewItem
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    imageStage
-                    metadata
-                }
-                .padding()
-            }
-            .setuBackground()
-            .navigationTitle("图片预览")
-            .toolbar {
-                Button("关闭") {
-                    dismiss()
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var imageStage: some View {
-        if let urlString = item.bestURLString, let url = URL(string: urlString) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .scaledToFit()
-                        .clipShape(RoundedRectangle(cornerRadius: SetuRadius.md, style: .continuous))
-                case .failure:
-                    SetuCard {
-                        SetuEmptyState(title: "图片加载失败", message: "可以返回列表稍后再试。", systemImage: "photo")
-                    }
-                        .frame(maxWidth: .infinity, minHeight: 320)
-                default:
-                    SetuCard {
-                        SetuEmptyState(title: "正在加载图片", systemImage: "photo", isLoading: true)
-                    }
-                        .frame(maxWidth: .infinity, minHeight: 320)
-                }
-            }
-        } else {
-            SetuCard {
-                SetuEmptyState(title: "暂无图片链接", systemImage: "photo")
-            }
-                .frame(maxWidth: .infinity, minHeight: 320)
-        }
-    }
-
-    private var metadata: some View {
-        SetuCard {
-            VStack(alignment: .leading, spacing: SetuSpacing.sm) {
-                Text(item.title)
-                    .font(SetuTypography.headline)
-                    .foregroundStyle(SetuColor.textPrimary)
-                    .textSelection(.enabled)
-                Text(item.author)
-                    .font(.subheadline)
-                    .foregroundStyle(SetuColor.textSecondary)
-                HStack(spacing: SetuSpacing.sm) {
-                    SetuPill(text: "\(item.item.pid)-\(item.item.p)", systemImage: "number", tone: .info)
-                    if let image = item.image {
-                        SetuPill(text: "\(image.width)x\(image.height)", systemImage: "aspectratio", tone: .muted)
-                        if image.r18 == 1 {
-                            SetuPill(text: "R18", systemImage: "exclamationmark.triangle", tone: .danger)
-                        }
-                    }
-                }
-
-                if let tags = item.image?.tags, !tags.isEmpty {
-                    TagFlow(tags: tags)
-                }
-
-                if let urlString = item.displayURLString {
-                    Text(urlString)
-                        .font(.caption2.monospaced())
-                        .foregroundStyle(SetuColor.textSecondary)
-                        .textSelection(.enabled)
-                }
-            }
-        }
-    }
-}
-
 private struct CollectionItemMoveSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var environment: AppEnvironment
@@ -582,7 +506,7 @@ private struct CollectionItemMoveSheet: View {
     @State private var collectionsState: LoadState<[CollectionInfo]> = .idle
     @State private var selectedCollectionID: Int?
     @State private var mode: CollectionItemMoveMode = .move
-    @State private var message: String?
+    @State private var feedback: SetuFeedback?
 
     var body: some View {
         NavigationStack {
@@ -591,8 +515,7 @@ private struct CollectionItemMoveSheet: View {
                     SetuCard {
                         VStack(alignment: .leading, spacing: SetuSpacing.md) {
                             SetuSectionHeader(title: "图片")
-                            CollectionInfoRow(title: "标题", value: context.item.image?.title ?? "PID \(context.item.pid)")
-                            CollectionInfoRow(title: "PID", value: "\(context.item.pid)-\(context.item.p)")
+                            CollectionInfoRow(title: "标题", value: context.item.image?.title ?? "未命名作品")
                         }
                     }
                 }
@@ -642,9 +565,9 @@ private struct CollectionItemMoveSheet: View {
                     }
                 }
 
-                if let message {
+                if let feedback {
                     Section {
-                        SetuPill(text: message, systemImage: "exclamationmark.triangle", tone: .danger)
+                        SetuFeedbackBanner(feedback: feedback)
                     }
                 }
             }
@@ -691,13 +614,13 @@ private struct CollectionItemMoveSheet: View {
                 selectedCollectionID = candidates.first?.id
             }
         } catch {
-            collectionsState = .failed(error.localizedDescription)
+            collectionsState = .failed(UserFacingErrorMapper.map(error).message)
         }
     }
 
     private func submit() async {
         guard let selectedCollectionID else { return }
-        message = nil
+        feedback = nil
         do {
             try await environment.collectionClient.addItem(
                 collectionID: selectedCollectionID,
@@ -714,7 +637,7 @@ private struct CollectionItemMoveSheet: View {
             onSaved(mode)
             dismiss()
         } catch {
-            message = error.localizedDescription
+            feedback = .error(UserFacingErrorMapper.map(error).message)
         }
     }
 }

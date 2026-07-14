@@ -64,7 +64,7 @@ final class PasskeyAuthorizationService: NSObject {
         if (error as NSError).domain == ASAuthorizationError.errorDomain,
            let code = ASAuthorizationError.Code(rawValue: (error as NSError).code),
            code == .notHandled || code == .unknown || code == .failed {
-            return "当前环境通常不支持通行密钥，建议使用真机测试。"
+            return "当前设备暂时无法使用通行密钥，请改用 Apple 或密码登录。"
         }
         #endif
 
@@ -75,32 +75,41 @@ final class PasskeyAuthorizationService: NSObject {
             case .unknown:
                 return "通行密钥验证异常，请稍后重试。"
             case .failed:
-                return "通行密钥验证失败，请确认系统密码/Face ID/Touch ID 可用，并且已在设备开通通行密钥。"
+                return "通行密钥验证失败，请确认设备解锁验证可用后重试。"
             case .invalidResponse:
                 return "通行密钥返回了无效响应。"
             case .notHandled:
-                return "当前设备/环境未能处理通行密钥请求，请确认使用真机并开启对应账号。"
+                return "当前设备暂时无法使用通行密钥，请改用 Apple 或密码登录。"
             case .matchedExcludedCredential:
                 return "该通行密钥已存在或不可重复使用，请先删除后重试。"
             case .notInteractive:
-                return "当前环境不允许交互式通行密钥验证，请切回前台后重试。"
+                return "暂时无法打开通行密钥验证，请回到应用后重试。"
             case .deviceNotConfiguredForPasskeyCreation:
                 return "当前设备还未配置通行密钥，请先在系统设置中开启密码、Face ID 或 Touch ID。"
             case .credentialImport, .credentialExport:
                 return "当前系统不支持这项通行密钥凭据操作。"
             case .preferSignInWithApple:
-                return "系统建议使用 Apple 登录，但本站当前需要使用通行密钥或密码登录。"
+                return "请改用 Apple 登录，或使用密码登录。"
             @unknown default:
-                return authError.localizedDescription
+                return "通行密钥暂时无法使用，请稍后重试。"
+            }
+        }
+
+        if let passkeyError = error as? PasskeyAuthorizationError {
+            switch passkeyError {
+            case .invalidBase64URL:
+                return "通行密钥验证信息已失效，请重新尝试。"
+            default:
+                return "暂时无法使用通行密钥，请稍后重试，或改用其他登录方式。"
             }
         }
 
         let nsError = error as NSError
         if nsError.domain == ASAuthorizationError.errorDomain {
-            return nsError.localizedDescription
+            return "通行密钥暂时无法使用，请稍后重试。"
         }
 
-        return error.localizedDescription
+        return "通行密钥操作未完成，请稍后重试。"
     }
 }
 
@@ -173,9 +182,9 @@ enum PasskeyAuthorizationError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingRelyingPartyID:
-            "通行密钥域名配置缺失，请稍后再试。"
+            "暂时无法开始通行密钥操作。"
         case .missingUser:
-            "通行密钥用户信息缺失。"
+            "暂时无法确认通行密钥账号。"
         case .invalidBase64URL:
             "通行密钥验证信息无效。"
         case .unsupportedCredential:

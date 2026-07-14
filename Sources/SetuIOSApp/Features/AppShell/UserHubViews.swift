@@ -8,7 +8,7 @@ struct AiHubView: View {
     var body: some View {
         List {
             Section {
-                SetuHeroCard(title: "AI 绘画", subtitle: "输入提示词、选择尺寸和模型，直接创建新的绘画任务。", systemImage: "paintbrush.pointed") {
+                SetuHeroCard(title: "AI 绘画", subtitle: "描述想画的画面，选择画幅与风格，开始创作。", systemImage: "paintbrush.pointed") {
                     router.navigate(to: .aiDraw)
                 }
             }
@@ -18,7 +18,7 @@ struct AiHubView: View {
                 SetuCard {
                     VStack(spacing: SetuSpacing.lg) {
                         SetuSectionHeader(title: "我的创作")
-                        HubNavigationRow(title: "AI 绘画历史", subtitle: "查看任务状态、结果图和复用参数", systemImage: "clock.arrow.circlepath") {
+                        HubNavigationRow(title: "我的 AI 作品", subtitle: "查看创作进度、作品与再次创作", systemImage: "clock.arrow.circlepath") {
                             router.navigate(to: .aiHistory)
                         }
                         HubNavigationRow(title: "我的删除记录", subtitle: "查看已提交的 AI 作品删除申请", systemImage: "xmark.bin") {
@@ -43,7 +43,25 @@ struct AiHubView: View {
         }
         .listStyle(.plain)
         .setuBackground()
-        .navigationTitle("AI 绘画")
+        .navigationTitle("")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
+        .toolbar {
+            #if os(iOS)
+            ToolbarItem(placement: .topBarLeading) {
+                aiToolbarLogo
+            }
+            #else
+            ToolbarItem(placement: .automatic) {
+                aiToolbarLogo
+            }
+            #endif
+        }
+    }
+
+    private var aiToolbarLogo: some View {
+        SetuToolbarLogo(assetName: "AiDrawLogo", accessibilityLabel: "扣扣绘画")
     }
 }
 
@@ -57,7 +75,7 @@ struct ImageHubView: View {
     var body: some View {
         List {
             Section {
-                SetuHeroCard(title: "随机图片", subtitle: "预加载一批图片，快速滑过不扣分，停留后自动解锁。", systemImage: "photo.on.rectangle.angled") {
+                SetuHeroCard(title: "随机图片", subtitle: "免费浏览预览，喜欢时再确认解锁高清图。", systemImage: "photo.on.rectangle.angled") {
                     router.navigate(to: .imageSwipe)
                 }
             }
@@ -70,8 +88,8 @@ struct ImageHubView: View {
                         ImageUsageOverviewRow(pointsState: pointsState, costPerCall: costPerCall) {
                             Task { await loadPoints() }
                         }
-                        SetuPill(text: "预加载 / 停留扣分 / 快滑不扣", systemImage: "bolt.badge.clock", tone: .brand)
-                        Text("图片会先加载预览，只有当前图片停留后才会解锁并消费积分。")
+                        SetuPill(text: "预览免费 · 高清图 20 积分", systemImage: "hand.tap", tone: .brand)
+                        Text("滑动和停留都不会扣分，只有你确认查看高清图时才会消费积分。")
                             .font(SetuTypography.caption)
                             .foregroundStyle(SetuColor.textSecondary)
                     }
@@ -86,10 +104,10 @@ struct ImageHubView: View {
                         HubNavigationRow(title: "高级参数与批量获取", subtitle: "需要批量拉取或传统尺寸参数时使用", systemImage: "bolt.circle") {
                             router.navigate(to: .points)
                         }
-                        HubNavigationRow(title: "积分流水", subtitle: "查看积分获得和消耗记录", systemImage: "list.bullet.rectangle") {
+                        HubNavigationRow(title: "积分明细", subtitle: "查看积分获得和消耗记录", systemImage: "list.bullet.rectangle") {
                             router.navigate(to: .pointsLogs)
                         }
-                        HubNavigationRow(title: "图库投稿", subtitle: "上传图片并查看投稿批次", systemImage: "square.and.arrow.up") {
+                        HubNavigationRow(title: "图库投稿", subtitle: "上传图片并查看审核进度", systemImage: "square.and.arrow.up") {
                             router.navigate(to: .galleryUploads)
                         }
                         HubNavigationRow(title: "我的删除申请", subtitle: "查看图片删除申请状态", systemImage: "trash") {
@@ -122,12 +140,7 @@ struct ImageHubView: View {
     }
 
     private var imageToolbarLogo: some View {
-        Image("ImageHomeLogo")
-            .resizable()
-            .scaledToFit()
-            .frame(width: SetuToolbarLogoMetrics.width, height: SetuToolbarLogoMetrics.height)
-            .accessibilityLabel("扣扣图片")
-            .accessibilityAddTraits(.isImage)
+        SetuToolbarLogo(assetName: "ImageHomeLogo", accessibilityLabel: "扣扣图片")
     }
 
     private func loadPoints() async {
@@ -135,7 +148,7 @@ struct ImageHubView: View {
         do {
             pointsState = .loaded(try await environment.pointsClient.balance())
         } catch {
-            pointsState = .failed(error.localizedDescription)
+            pointsState = .failed(UserFacingErrorMapper.map(error).message)
         }
     }
 }
@@ -144,7 +157,7 @@ struct SquareHubView: View {
     @Environment(RouterPath.self) private var router
     @Bindable var environment: AppEnvironment
     @State private var collectionPreviewState: LoadState<[CollectionInfo]> = .idle
-    @State private var aiPreviewState: LoadState<[AiGenerationJob]> = .idle
+    @State private var aiPreviewState: LoadState<[AiPublicWork]> = .idle
 
     var body: some View {
         List {
@@ -179,7 +192,7 @@ struct SquareHubView: View {
                 content: { jobs in
                     ForEach(jobs) { job in
                         SquareAiPreviewCard(job: job) {
-                            router.navigate(to: .aiGenerationDetail(job.id))
+                            router.navigate(to: .publicAiWork(PublicAiWorkSnapshot(work: job)))
                         }
                     }
                 }
@@ -217,9 +230,27 @@ struct SquareHubView: View {
         }
         .listStyle(.plain)
         .setuBackground()
-        .navigationTitle("广场")
+        .navigationTitle("")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
+        .toolbar {
+            #if os(iOS)
+            ToolbarItem(placement: .topBarLeading) {
+                squareToolbarLogo
+            }
+            #else
+            ToolbarItem(placement: .automatic) {
+                squareToolbarLogo
+            }
+            #endif
+        }
         .task { await loadPreviews() }
         .refreshable { await loadPreviews() }
+    }
+
+    private var squareToolbarLogo: some View {
+        SetuToolbarLogo(assetName: "SquareLogo", accessibilityLabel: "扣扣广场")
     }
 
     private func loadPreviews() async {
@@ -234,7 +265,7 @@ struct SquareHubView: View {
             let page = try await environment.collectionClient.square(page: 1, size: 6, sort: "hot")
             collectionPreviewState = .loaded(page.list)
         } catch {
-            collectionPreviewState = .failed(error.localizedDescription)
+            collectionPreviewState = .failed(UserFacingErrorMapper.map(error).message)
         }
     }
 
@@ -244,7 +275,7 @@ struct SquareHubView: View {
             let page = try await environment.aiGenerationClient.square(category: "GENERAL", page: 1, pageSize: 6)
             aiPreviewState = .loaded(page.list)
         } catch {
-            aiPreviewState = .failed(error.localizedDescription)
+            aiPreviewState = .failed(UserFacingErrorMapper.map(error).message)
         }
     }
 }
@@ -261,41 +292,36 @@ private struct HubNavigationRow: View {
 }
 
 private struct SquareLandingHeader: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     let openCollections: () -> Void
     let openAiSquare: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: SetuSpacing.lg) {
-            HStack(spacing: SetuSpacing.lg) {
-                Image(systemName: "rectangle.stack.fill")
-                    .font(.title2)
-                    .foregroundStyle(.white)
-                    .frame(width: 52, height: 52)
-                    .background(.white.opacity(0.18), in: RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous))
-
-                VStack(alignment: .leading, spacing: SetuSpacing.xs) {
-                    Text("广场")
-                        .font(SetuTypography.title)
-                    Text("浏览公开收藏夹和 AI 绘画作品，直接进入你感兴趣的内容。")
-                        .font(SetuTypography.caption)
-                        .opacity(0.9)
+            Group {
+                if dynamicTypeSize.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                        squareIcon
+                        squareCopy
+                    }
+                } else {
+                    HStack(spacing: SetuSpacing.lg) {
+                        squareIcon
+                        squareCopy
+                    }
                 }
             }
 
-            HStack(spacing: SetuSpacing.md) {
-                Button(action: openCollections) {
-                    Label("收藏夹", systemImage: "rectangle.stack")
-                        .frame(maxWidth: .infinity)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: SetuSpacing.md) {
+                    collectionsButton
+                    aiSquareButton
                 }
-                .buttonStyle(.bordered)
-                .tint(.white)
-
-                Button(action: openAiSquare) {
-                    Label("AI 绘画", systemImage: "sparkles")
-                        .frame(maxWidth: .infinity)
+                VStack(spacing: SetuSpacing.sm) {
+                    collectionsButton
+                    aiSquareButton
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.white)
             }
             .controlSize(.large)
         }
@@ -303,6 +329,45 @@ private struct SquareLandingHeader: View {
         .padding(SetuSpacing.xl)
         .background(SetuColor.heroGradient, in: RoundedRectangle(cornerRadius: SetuRadius.lg, style: .continuous))
         .shadow(color: SetuColor.brandPink.opacity(0.28), radius: 18, y: 10)
+    }
+
+    private var squareIcon: some View {
+        Image(systemName: "rectangle.stack.fill")
+            .font(.title2)
+            .foregroundStyle(.white)
+            .frame(width: 52, height: 52)
+            .background(.white.opacity(0.18), in: RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous))
+            .accessibilityHidden(true)
+    }
+
+    private var squareCopy: some View {
+        VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+            Text("广场")
+                .font(SetuTypography.title)
+            Text("浏览公开收藏夹和 AI 绘画作品，直接进入你感兴趣的内容。")
+                .font(SetuTypography.caption)
+                .opacity(0.9)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var collectionsButton: some View {
+        Button(action: openCollections) {
+            Label("收藏夹", systemImage: "rectangle.stack")
+                .frame(maxWidth: .infinity, minHeight: 44)
+        }
+        .buttonStyle(.bordered)
+        .tint(.white)
+    }
+
+    private var aiSquareButton: some View {
+        Button(action: openAiSquare) {
+            Label("AI 绘画", systemImage: "sparkles")
+                .foregroundStyle(SetuColor.brandOnLight)
+                .frame(maxWidth: .infinity, minHeight: 44)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(.white)
     }
 }
 
@@ -332,13 +397,17 @@ private struct ImageUsageOverviewRow: View {
                         .font(.footnote)
                         .foregroundStyle(SetuColor.textSecondary)
                     Spacer()
-                    SetuPill(text: "单次 \(costPerCall)", tone: .brand)
+                    SetuPill(text: "高清图 \(costPerCall)", tone: .brand)
                 }
 
                 ProgressView(value: min(Double(balance.points) / Double(max(costPerCall * 10, 1)), 1))
                     .tint(SetuColor.brandPink)
 
-                Text(balance.points >= costPerCall ? "积分充足，可以直接滑动获取新图片。" : "积分不足，至少需要 \(costPerCall) 积分。")
+                Text(
+                    balance.points >= costPerCall
+                        ? "预览免费，查看高清图时才会扣除 \(costPerCall) 积分。"
+                        : "仍可免费浏览预览；查看高清图需要 \(costPerCall) 积分。"
+                )
                     .font(.footnote)
                     .foregroundStyle(SetuColor.textSecondary)
             }
@@ -392,7 +461,11 @@ private struct SquareCollectionPreviewCard: View {
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 8) {
-                SetuImageTile(urlString: collection.coverUrl ?? collection.previewImages?.first?.bestURLString, aspectRatio: 132 / 92)
+                SetuImageTile(
+                    urlString: collection.coverUrl ?? collection.previewImages?.first?.bestURLString,
+                    accessibilityLabel: "收藏夹「\(collection.name)」封面",
+                    aspectRatio: 132 / 92
+                )
                     .frame(width: 132)
 
                 Text(collection.name)
@@ -412,13 +485,13 @@ private struct SquareCollectionPreviewCard: View {
 }
 
 private struct SquareAiPreviewCard: View {
-    let job: AiGenerationJob
+    let job: AiPublicWork
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 8) {
-                SetuImageTile(urlString: job.imageUrl)
+                SetuImageTile(urlString: job.imageUrl, accessibilityLabel: "AI 作品：\(job.promptCn)")
                     .frame(width: 132)
 
                 Text(job.promptCn)

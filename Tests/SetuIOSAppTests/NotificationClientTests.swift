@@ -1,5 +1,6 @@
 import Foundation
 import XCTest
+@testable import SetuIOSApp
 @testable import SetuIOSCore
 
 final class NotificationClientTests: XCTestCase {
@@ -60,6 +61,186 @@ final class NotificationClientTests: XCTestCase {
         XCTAssertTrue(urls.contains("https://api.example.com/notifications?page=1&pageSize=20&unreadOnly=false"))
         XCTAssertTrue(urls.contains("https://api.example.com/notifications/11/read"))
         XCTAssertTrue(urls.contains("https://api.example.com/notifications/read-all"))
+    }
+
+    func testMarkAllStaleRowsRequireRetry() {
+        let decision = NotificationReadConsistency.resolveCount(
+            .init(
+                serverCount: 2,
+                firstPageUnreadIDs: [41, 42],
+                pendingMarkAll: true,
+                markAllCutoffID: 42,
+                confirmedReadIDs: [41, 42],
+                pendingCountCeiling: 0
+            )
+        )
+
+        XCTAssertEqual(decision, .retry)
+    }
+
+    func testMarkAllAcceptsMoreThanOnePageOfNewNotifications() {
+        let decision = NotificationReadConsistency.resolveCount(
+            .init(
+                serverCount: 21,
+                firstPageUnreadIDs: Set(101...120),
+                pendingMarkAll: true,
+                markAllCutoffID: 100,
+                confirmedReadIDs: [],
+                pendingCountCeiling: 0
+            )
+        )
+
+        XCTAssertEqual(
+            decision,
+            .accept(clearMarkAllPending: true, clearCountCeiling: true)
+        )
+    }
+
+    func testMarkAllEmptyPageWithStaleCountRequiresRetry() {
+        let decision = NotificationReadConsistency.resolveCount(
+            .init(
+                serverCount: 2,
+                firstPageUnreadIDs: [],
+                pendingMarkAll: true,
+                markAllCutoffID: 42,
+                confirmedReadIDs: [],
+                pendingCountCeiling: 0
+            )
+        )
+
+        XCTAssertEqual(decision, .retry)
+    }
+
+    func testMarkAllWithoutCutoffKeepsNewNotificationUnread() {
+        XCTAssertFalse(
+            NotificationReadConsistency.isEffectivelyRead(
+                notificationID: 100,
+                serverRead: false,
+                confirmedReadIDs: [],
+                markAllCutoffID: nil
+            )
+        )
+
+        let decision = NotificationReadConsistency.resolveCount(
+            .init(
+                serverCount: 2,
+                firstPageUnreadIDs: [100, 101],
+                pendingMarkAll: true,
+                markAllCutoffID: nil,
+                confirmedReadIDs: [],
+                pendingCountCeiling: 0
+            )
+        )
+        XCTAssertEqual(
+            decision,
+            .accept(clearMarkAllPending: true, clearCountCeiling: true)
+        )
+    }
+
+    func testSingleReadStaleRowRequiresRetry() {
+        let decision = NotificationReadConsistency.resolveCount(
+            .init(
+                serverCount: 2,
+                firstPageUnreadIDs: [41],
+                pendingMarkAll: false,
+                markAllCutoffID: nil,
+                confirmedReadIDs: [41],
+                pendingCountCeiling: 1
+            )
+        )
+
+        XCTAssertEqual(decision, .retry)
+    }
+
+    func testSingleReadAcceptsHigherCountWhenPageContainsOnlyNewRows() {
+        let decision = NotificationReadConsistency.resolveCount(
+            .init(
+                serverCount: 2,
+                firstPageUnreadIDs: [99],
+                pendingMarkAll: false,
+                markAllCutoffID: nil,
+                confirmedReadIDs: [41],
+                pendingCountCeiling: 1
+            )
+        )
+
+        XCTAssertEqual(
+            decision,
+            .accept(clearMarkAllPending: false, clearCountCeiling: true)
+        )
+    }
+
+    func testSingleReadAcceptsCountAtExpectedCeilingWhileKeepingRowProjectedRead() {
+        let decision = NotificationReadConsistency.resolveCount(
+            .init(
+                serverCount: 1,
+                firstPageUnreadIDs: [41],
+                pendingMarkAll: false,
+                markAllCutoffID: nil,
+                confirmedReadIDs: [41],
+                pendingCountCeiling: 1
+            )
+        )
+
+        XCTAssertEqual(
+            decision,
+            .accept(clearMarkAllPending: false, clearCountCeiling: true)
+        )
+        XCTAssertTrue(
+            NotificationReadConsistency.isEffectivelyRead(
+                notificationID: 41,
+                serverRead: false,
+                confirmedReadIDs: [41],
+                markAllCutoffID: nil
+            )
+        )
+    }
+
+    func testSecondPageReadReconcilesWithoutAppearingOnFirstPage() {
+        let decision = NotificationReadConsistency.resolveCount(
+            .init(
+                serverCount: 4,
+                firstPageUnreadIDs: [100, 101, 102, 103],
+                pendingMarkAll: false,
+                markAllCutoffID: nil,
+                confirmedReadIDs: [41],
+                pendingCountCeiling: 4
+            )
+        )
+
+        XCTAssertEqual(
+            decision,
+            .accept(clearMarkAllPending: false, clearCountCeiling: true)
+        )
+    }
+
+    func testMarkAllRetryEventuallyRecoversWhenServerCatchesUp() {
+        let staleDecision = NotificationReadConsistency.resolveCount(
+            .init(
+                serverCount: 2,
+                firstPageUnreadIDs: [41, 42],
+                pendingMarkAll: true,
+                markAllCutoffID: 42,
+                confirmedReadIDs: [41, 42],
+                pendingCountCeiling: 0
+            )
+        )
+        let recoveredDecision = NotificationReadConsistency.resolveCount(
+            .init(
+                serverCount: 0,
+                firstPageUnreadIDs: [],
+                pendingMarkAll: true,
+                markAllCutoffID: 42,
+                confirmedReadIDs: [41, 42],
+                pendingCountCeiling: 0
+            )
+        )
+
+        XCTAssertEqual(staleDecision, .retry)
+        XCTAssertEqual(
+            recoveredDecision,
+            .accept(clearMarkAllPending: true, clearCountCeiling: true)
+        )
     }
 
     private func makeAPIClient(session: URLSession) -> APIClient {

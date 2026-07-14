@@ -1,14 +1,23 @@
 import SetuIOSCore
 import SwiftUI
+import AuthenticationServices
 #if canImport(UIKit)
 import UIKit
 #elseif canImport(AppKit)
 import AppKit
 #endif
 
+private enum AuthFocusField: Hashable {
+    case loginEmail, loginPassword, loginCaptcha
+    case registerEmail, registerPassword, registerConfirmation, registerCaptcha
+    case recoveryEmail, recoveryCaptcha
+    case resetToken, resetPassword
+}
+
 struct AccountView: View {
     @Environment(RouterPath.self) private var router
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Bindable var environment: AppEnvironment
     @AppStorage("setu_admin_mode_enabled") private var adminModeEnabled = false
     @State private var email = ""
@@ -24,9 +33,9 @@ struct AccountView: View {
     @State private var resetPassword = ""
     @State private var passkeyService = PasskeyAuthorizationService()
     @State private var appleAuthorizationService = AppleAuthorizationService()
-    @State private var passkeyMessage: String?
-    @State private var authMessage: String?
-    @State private var sessionMessage: String?
+    @State private var passkeyActionFeedback: SetuFeedback?
+    @State private var authFeedback: SetuFeedback?
+    @State private var sessionFeedback: SetuFeedback?
     @State private var sessionDiagnostics: MobileSessionDiagnostics?
     @State private var lastSessionConfirmation: Bool?
     @State private var passkeyLoading = false
@@ -35,6 +44,7 @@ struct AccountView: View {
     @State private var sessionActionLoading = false
     @State private var preserveAuthMessageOnNextPageChange = false
     @State private var authPage: AuthPage
+    @FocusState private var focusedField: AuthFocusField?
 
     init(environment: AppEnvironment, initialAuthPage: AuthPage = .landing) {
         self.environment = environment
@@ -56,12 +66,13 @@ struct AccountView: View {
             updateSessionDiagnostics()
         }
         .onChange(of: authPage) {
+            focusedField = nil
             if preserveAuthMessageOnNextPageChange {
                 preserveAuthMessageOnNextPageChange = false
             } else {
-                authMessage = nil
+                authFeedback = nil
             }
-            passkeyMessage = nil
+            passkeyActionFeedback = nil
             if let captchaKind = authPage.captchaKind {
                 Task { await refreshCaptchaIfNeeded(captchaKind) }
             }
@@ -76,6 +87,12 @@ struct AccountView: View {
                     }
                 }
             }
+            #if os(iOS)
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("完成") { focusedField = nil }
+            }
+            #endif
         }
     }
 
@@ -115,13 +132,16 @@ struct AccountView: View {
                 SetuCard {
                     VStack(spacing: SetuSpacing.lg) {
                         SetuSectionHeader(title: "帮助与信息")
-                        SetuNavigationRow(title: "开发文档", subtitle: "查看 API 与移动端说明", systemImage: "doc.text") {
+                        SetuNavigationRow(title: "使用帮助", subtitle: "查看图片、音乐与创作说明", systemImage: "questionmark.circle") {
                             router.navigate(to: .docs)
                         }
                         SetuNavigationRow(title: "隐私政策", subtitle: "了解数据与账号安全", systemImage: "hand.raised") {
                             router.navigate(to: .privacy)
                         }
-                        SetuNavigationRow(title: "关于本站", subtitle: "雪涼云项目与版本信息", systemImage: "info.circle") {
+                        SetuNavigationRow(title: "服务条款", subtitle: "了解使用规则与内容说明", systemImage: "doc.text.magnifyingglass") {
+                            router.navigate(to: .terms)
+                        }
+                        SetuNavigationRow(title: "关于雪涼云", subtitle: "产品介绍与版本信息", systemImage: "info.circle") {
                             router.navigate(to: .about)
                         }
                     }
@@ -154,7 +174,7 @@ struct AccountView: View {
                     Task {
                         adminModeEnabled = false
                         await environment.logout()
-                        sessionMessage = "已退出登录"
+                        sessionFeedback = .success("已退出登录")
                         updateSessionDiagnostics()
                     }
                 } label: {
@@ -167,7 +187,7 @@ struct AccountView: View {
 
             if let error = environment.authSession.lastError {
                 Section {
-                    SetuPill(text: error, systemImage: "exclamationmark.triangle", tone: .danger)
+                    SetuFeedbackBanner(feedback: .error(error))
                 }
                 .setuListRow()
             }
@@ -198,7 +218,7 @@ struct AccountView: View {
                         Button(role: .destructive) {
                             environment.authSession.resetLocalSession()
                             updateSessionDiagnostics()
-                            sessionMessage = "本地会话已清理"
+                            sessionFeedback = .success("本地会话已清理")
                         } label: {
                             Label("清理本地会话", systemImage: "trash")
                         }
@@ -207,8 +227,11 @@ struct AccountView: View {
                             Task { await confirmCurrentSession() }
                         } label: {
                             if sessionActionLoading {
-                                ProgressView()
-                                    .tint(SetuColor.brandPink)
+                                HStack(spacing: SetuSpacing.sm) {
+                                    ProgressView()
+                                        .tint(SetuColor.brandPink)
+                                    Text("正在确认会话")
+                                }
                             } else {
                                 Label("确认当前会话", systemImage: "network")
                             }
@@ -228,10 +251,8 @@ struct AccountView: View {
                             LabeledContent("上次会话确认", value: sessionConfirmationText)
                         }
 
-                        if let sessionMessage {
-                            Text(sessionMessage)
-                                .font(.footnote)
-                                .foregroundStyle(SetuColor.textSecondary)
+                        if let sessionFeedback {
+                            SetuFeedbackBanner(feedback: sessionFeedback)
                         }
                     }
                 }
@@ -243,48 +264,44 @@ struct AccountView: View {
     }
 
     private var unauthenticatedAuthScreen: some View {
-        GeometryReader { proxy in
-            ZStack {
-                AuthBackgroundImage()
-                    .frame(width: proxy.size.width, height: proxy.size.height)
-                    .clipped()
+        ZStack {
+            AuthWelcomeBackdrop()
+                .ignoresSafeArea()
 
-                if authPage == .landing {
-                    VStack {
-                        Spacer()
-                        Button {
-                            showAuthPage(.login)
-                        } label: {
-                            AuthGradientButtonLabel(title: "立即登录")
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.horizontal, 28)
-                        .padding(.bottom, 34)
-                    }
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
-                } else {
-                    let panelWidth = min(520, max(0, proxy.size.width - 48))
-
-                    ZStack {
+            ScrollView {
+                Group {
+                    if authPage == .landing {
+                        AuthWelcomeView(
+                            isAppleLoading: appleLoading,
+                            sessionFeedback: environment.authSession.lastError.map(SetuFeedback.error),
+                            onAppleRequest: prepareAppleRequest,
+                            onAppleCompletion: completeAppleLogin,
+                            onEmailLogin: { showAuthPage(.login) },
+                            onRegister: { showAuthPage(.register) },
+                            onPasskey: { Task { await loginWithPasskey() } },
+                            onPreview: { router.navigate(to: .docs) },
+                            onPrivacy: { router.navigate(to: .privacy) },
+                            onTerms: { router.navigate(to: .terms) }
+                        )
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    } else {
                         AuthGlassPanel {
                             unauthenticatedContent
                         }
-                        .frame(width: panelWidth)
+                        .frame(maxWidth: 520)
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
                     }
-                    .frame(width: proxy.size.width, height: proxy.size.height)
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, SetuSpacing.lg)
             }
-            .frame(width: proxy.size.width, height: proxy.size.height)
+            .scrollDismissesKeyboard(.interactively)
+            .padding(.horizontal, SetuSpacing.xl)
+            .padding(.vertical, SetuSpacing.sm)
         }
-        .ignoresSafeArea()
-        #if os(iOS)
-        .ignoresSafeArea(.keyboard, edges: .bottom)
-        #endif
         .navigationTitle("")
         #if os(iOS)
         .toolbarBackground(.hidden, for: .navigationBar)
-        .toolbarColorScheme(.dark, for: .navigationBar)
         #endif
     }
 
@@ -309,7 +326,7 @@ struct AccountView: View {
             insertion: .move(edge: .trailing).combined(with: .opacity),
             removal: .move(edge: .leading).combined(with: .opacity)
         ))
-        .animation(.snappy(duration: 0.28), value: authPage)
+        .animation(reduceMotion ? nil : .snappy(duration: 0.28), value: authPage)
     }
 
     private var unauthenticatedHero: some View {
@@ -339,27 +356,36 @@ struct AccountView: View {
     private var loginContent: some View {
         VStack(spacing: 18) {
             AuthPanelHeader(title: "欢迎回来", subtitle: "登录后即可体验全部功能")
-            AuthTextInputRow(systemImage: "person", placeholder: "请输入邮箱", text: $email)
+            AuthTextInputRow(systemImage: "person", placeholder: "请输入邮箱", text: $email, focus: $focusedField, field: .loginEmail, accessibilityIdentifier: "auth.login.email")
                 .textContentType(.username)
                 .modifier(EmailInputModifier())
-            AuthSecureInputRow(systemImage: "lock", placeholder: "请输入密码", text: $password)
+                .onSubmit { focusedField = .loginPassword }
+            AuthSecureInputRow(systemImage: "lock", placeholder: "请输入密码", text: $password, focus: $focusedField, field: .loginPassword, accessibilityIdentifier: "auth.login.password")
                 .textContentType(.password)
+                .onSubmit { focusedField = .loginCaptcha }
             CaptchaInputRow(
                 code: $loginCaptcha.code,
                 imageSource: loginCaptcha.imageSource,
                 isLoading: loginCaptcha.isLoading,
-                errorMessage: loginCaptcha.errorMessage
+                errorMessage: loginCaptcha.errorMessage,
+                focus: $focusedField,
+                field: .loginCaptcha,
+                accessibilityIdentifier: "auth.login.captcha"
             ) {
                 Task { await refreshCaptcha(.login) }
             }
 
             HStack {
-                Button("注册新账号") {
+                Button {
                     showAuthPage(.register)
+                } label: {
+                    AuthLinkButtonLabel("注册新账号")
                 }
                 Spacer()
-                Button("忘记密码？") {
+                Button {
                     showAuthPage(.recovery)
+                } label: {
+                    AuthLinkButtonLabel("忘记密码？")
                 }
             }
             .font(.footnote.weight(.semibold))
@@ -368,11 +394,15 @@ struct AccountView: View {
             Button {
                 Task { await loginWithPassword() }
             } label: {
-                AuthGradientButtonLabel(title: "登录")
+                if authActionLoading {
+                    AuthGradientProgressLabel(title: "正在登录")
+                } else {
+                    AuthGradientButtonLabel(title: "登录")
+                }
             }
             .buttonStyle(.plain)
-            .disabled(email.isEmpty || password.isEmpty || loginCaptcha.code.isEmpty || loginCaptcha.uuid.isEmpty)
-            .opacity(email.isEmpty || password.isEmpty || loginCaptcha.code.isEmpty || loginCaptcha.uuid.isEmpty ? 0.55 : 1)
+            .disabled(authActionLoading || email.isEmpty || password.isEmpty || loginCaptcha.code.isEmpty || loginCaptcha.uuid.isEmpty)
+            .opacity(authActionLoading || email.isEmpty || password.isEmpty || loginCaptcha.code.isEmpty || loginCaptcha.uuid.isEmpty ? 0.55 : 1)
 
             authMessageView
             socialLoginContent
@@ -383,18 +413,24 @@ struct AccountView: View {
     private var registerContent: some View {
         VStack(spacing: 18) {
             AuthPanelHeader(title: "创建账号", subtitle: "邮箱注册后即可同步你的内容")
-            AuthTextInputRow(systemImage: "envelope", placeholder: "请输入邮箱", text: $registerEmail)
+            AuthTextInputRow(systemImage: "envelope", placeholder: "请输入邮箱", text: $registerEmail, focus: $focusedField, field: .registerEmail, accessibilityIdentifier: "auth.register.email")
                 .textContentType(.emailAddress)
                 .modifier(EmailInputModifier())
-            AuthSecureInputRow(systemImage: "lock", placeholder: "请输入密码", text: $registerPassword)
+                .onSubmit { focusedField = .registerPassword }
+            AuthSecureInputRow(systemImage: "lock", placeholder: "请输入密码", text: $registerPassword, focus: $focusedField, field: .registerPassword, accessibilityIdentifier: "auth.register.password")
                 .textContentType(.newPassword)
-            AuthSecureInputRow(systemImage: "checkmark.shield", placeholder: "请重复密码", text: $registerPasswordConfirmation)
+                .onSubmit { focusedField = .registerConfirmation }
+            AuthSecureInputRow(systemImage: "checkmark.shield", placeholder: "请重复密码", text: $registerPasswordConfirmation, focus: $focusedField, field: .registerConfirmation, accessibilityIdentifier: "auth.register.confirmation")
                 .textContentType(.newPassword)
+                .onSubmit { focusedField = .registerCaptcha }
             CaptchaInputRow(
                 code: $registerCaptcha.code,
                 imageSource: registerCaptcha.imageSource,
                 isLoading: registerCaptcha.isLoading,
-                errorMessage: registerCaptcha.errorMessage
+                errorMessage: registerCaptcha.errorMessage,
+                focus: $focusedField,
+                field: .registerCaptcha,
+                accessibilityIdentifier: "auth.register.captcha"
             ) {
                 Task { await refreshCaptcha(.register) }
             }
@@ -403,7 +439,7 @@ struct AccountView: View {
                 Task { await registerAccount() }
             } label: {
                 if authActionLoading {
-                    AuthGradientProgressLabel()
+                    AuthGradientProgressLabel(title: "正在注册")
                 } else {
                     AuthGradientButtonLabel(title: "注册")
                 }
@@ -416,8 +452,10 @@ struct AccountView: View {
                 .font(.footnote)
                 .foregroundStyle(SetuColor.textSecondary)
             authMessageView
-            Button("已有账号？返回登录") {
+            Button {
                 showAuthPage(.login)
+            } label: {
+                AuthLinkButtonLabel("已有账号？返回登录")
             }
             .font(.footnote.weight(.semibold))
             .foregroundStyle(SetuColor.brandInk)
@@ -428,14 +466,18 @@ struct AccountView: View {
     private var recoveryContent: some View {
         VStack(spacing: 18) {
             AuthPanelHeader(title: "找回密码", subtitle: "验证邮箱后发送重置邮件")
-            AuthTextInputRow(systemImage: "envelope", placeholder: "请输入邮箱", text: $recoveryEmail)
+            AuthTextInputRow(systemImage: "envelope", placeholder: "请输入邮箱", text: $recoveryEmail, focus: $focusedField, field: .recoveryEmail, accessibilityIdentifier: "auth.recovery.email")
                 .textContentType(.emailAddress)
                 .modifier(EmailInputModifier())
+                .onSubmit { focusedField = .recoveryCaptcha }
             CaptchaInputRow(
                 code: $recoveryCaptcha.code,
                 imageSource: recoveryCaptcha.imageSource,
                 isLoading: recoveryCaptcha.isLoading,
-                errorMessage: recoveryCaptcha.errorMessage
+                errorMessage: recoveryCaptcha.errorMessage,
+                focus: $focusedField,
+                field: .recoveryCaptcha,
+                accessibilityIdentifier: "auth.recovery.captcha"
             ) {
                 Task { await refreshCaptcha(.recovery) }
             }
@@ -444,7 +486,7 @@ struct AccountView: View {
                 Task { await sendPasswordRecoveryEmail() }
             } label: {
                 if authActionLoading {
-                    AuthGradientProgressLabel()
+                    AuthGradientProgressLabel(title: "正在发送重置邮件")
                 } else {
                     AuthGradientButtonLabel(title: "发送重置邮件")
                 }
@@ -454,8 +496,10 @@ struct AccountView: View {
             .opacity(authActionLoading || recoveryEmail.isEmpty || recoveryCaptcha.code.isEmpty || recoveryCaptcha.uuid.isEmpty ? 0.55 : 1)
 
             authMessageView
-            Button("想起密码了？返回登录") {
+            Button {
                 showAuthPage(.login)
+            } label: {
+                AuthLinkButtonLabel("想起密码了？返回登录")
             }
             .font(.footnote.weight(.semibold))
             .foregroundStyle(SetuColor.brandInk)
@@ -466,19 +510,20 @@ struct AccountView: View {
     private var passwordResetContent: some View {
         VStack(spacing: 18) {
             AuthPanelHeader(title: "重置密码", subtitle: "输入邮件里的重置码和新密码")
-            AuthTextInputRow(systemImage: "number", placeholder: "邮件重置码", text: $resetToken)
+            AuthTextInputRow(systemImage: "number", placeholder: "邮件重置码", text: $resetToken, focus: $focusedField, field: .resetToken, accessibilityIdentifier: "auth.reset.token")
                 .textContentType(.oneTimeCode)
                 #if os(iOS)
                 .textInputAutocapitalization(.never)
                 #endif
-            AuthSecureInputRow(systemImage: "key", placeholder: "新密码", text: $resetPassword)
+                .onSubmit { focusedField = .resetPassword }
+            AuthSecureInputRow(systemImage: "key", placeholder: "新密码", text: $resetPassword, focus: $focusedField, field: .resetPassword, accessibilityIdentifier: "auth.reset.password")
                 .textContentType(.newPassword)
 
             Button {
                 Task { await submitPasswordReset() }
             } label: {
                 if authActionLoading {
-                    AuthGradientProgressLabel()
+                    AuthGradientProgressLabel(title: "正在重置密码")
                 } else {
                     AuthGradientButtonLabel(title: "重置密码")
                 }
@@ -493,12 +538,16 @@ struct AccountView: View {
             authMessageView
 
             HStack {
-                Button("重新发送重置邮件") {
+                Button {
                     showAuthPage(.recovery)
+                } label: {
+                    AuthLinkButtonLabel("重新发送重置邮件")
                 }
                 Spacer()
-                Button("返回登录") {
+                Button {
                     showAuthPage(.login)
+                } label: {
+                    AuthLinkButtonLabel("返回登录")
                 }
             }
             .font(.footnote.weight(.semibold))
@@ -509,23 +558,14 @@ struct AccountView: View {
 
     @ViewBuilder
     private var authMessageView: some View {
-        if let authMessage {
-            Text(authMessage)
-                .font(.footnote)
-                .foregroundStyle(SetuColor.textSecondary)
-                .multilineTextAlignment(.center)
+        if let authFeedback {
+            SetuFeedbackBanner(feedback: authFeedback)
         }
-        if let passkeyMessage {
-            Text(passkeyMessage)
-                .font(.footnote)
-                .foregroundStyle(SetuColor.textSecondary)
-                .multilineTextAlignment(.center)
+        if let passkeyActionFeedback {
+            SetuFeedbackBanner(feedback: passkeyActionFeedback)
         }
         if let error = environment.authSession.lastError {
-            Text(error)
-                .font(.footnote)
-                .foregroundStyle(SetuColor.danger)
-                .multilineTextAlignment(.center)
+            SetuFeedbackBanner(feedback: .error(error))
         }
     }
 
@@ -543,10 +583,12 @@ struct AccountView: View {
                     .frame(height: 1)
             }
 
-            HStack(spacing: 18) {
-                AuthSocialButton(title: "Apple", systemImage: "apple.logo", isLoading: appleLoading) {
-                    Task { await loginWithApple() }
-                }
+            VStack(spacing: SetuSpacing.md) {
+                SetuAppleSignInButton(
+                    isLoading: appleLoading,
+                    onRequest: prepareAppleRequest,
+                    onCompletion: completeAppleLogin
+                )
                 .disabled(appleLoading)
                 AuthSocialButton(title: "通行密钥", systemImage: "touchid", isLoading: passkeyLoading) {
                     Task { await loginWithPasskey() }
@@ -557,7 +599,9 @@ struct AccountView: View {
     }
 
     private func loginWithPassword() async {
+        authActionLoading = true
         lastSessionConfirmation = nil
+        defer { authActionLoading = false }
         await environment.authSession.login(
             email: email,
             password: password,
@@ -567,19 +611,24 @@ struct AccountView: View {
         updateSessionDiagnostics()
         if environment.authSession.currentUser == nil {
             lastSessionConfirmation = false
-            authMessage = "登录失败，请重试"
+            authFeedback = .error("登录失败，请重试")
             loginCaptcha.code = ""
             await refreshCaptcha(.login)
         } else {
             lastSessionConfirmation = true
-            sessionMessage = "登录成功"
+            sessionFeedback = .success("登录成功")
         }
     }
 
     private func showAuthPage(_ page: AuthPage) {
-        withAnimation(.snappy(duration: 0.28)) {
+        let update = {
             prepareAuthState(for: page)
             authPage = page
+        }
+        if reduceMotion {
+            update()
+        } else {
+            withAnimation(.snappy(duration: 0.28), update)
         }
     }
 
@@ -609,9 +658,9 @@ struct AccountView: View {
     private func loginWithPasskey() async {
         passkeyLoading = true
         lastSessionConfirmation = nil
-        authMessage = nil
-        passkeyMessage = nil
-        sessionMessage = nil
+        authFeedback = nil
+        passkeyActionFeedback = nil
+        sessionFeedback = nil
         environment.authSession.lastError = nil
         defer { passkeyLoading = false }
         do {
@@ -621,23 +670,37 @@ struct AccountView: View {
             try await environment.authSession.acceptLoginResponse(response)
             updateSessionDiagnostics()
             lastSessionConfirmation = true
-            passkeyMessage = "通行密钥登录成功"
-            sessionMessage = "登录成功"
+            passkeyActionFeedback = .success("通行密钥登录成功")
+            sessionFeedback = .success("登录成功")
         } catch {
-            passkeyMessage = PasskeyAuthorizationService.userMessage(for: error)
+            let message = PasskeyAuthorizationService.userMessage(for: error)
+            if let authorizationError = error as? ASAuthorizationError,
+               authorizationError.code == .canceled {
+                passkeyActionFeedback = .info(message)
+            } else {
+                passkeyActionFeedback = .error(message)
+            }
             updateSessionDiagnostics()
             lastSessionConfirmation = false
-            sessionMessage = "通行密钥登录失败，请重试"
+            sessionFeedback = .error("通行密钥登录失败，请重试")
         }
     }
 
-    private func loginWithApple() async {
+    private func prepareAppleRequest(_ request: ASAuthorizationAppleIDRequest) {
         appleLoading = true
-        authMessage = nil
+        authFeedback = nil
         lastSessionConfirmation = nil
+        appleAuthorizationService.configure(request)
+    }
+
+    private func completeAppleLogin(_ result: Result<ASAuthorization, Error>) {
+        Task { await loginWithApple(result) }
+    }
+
+    private func loginWithApple(_ result: Result<ASAuthorization, Error>) async {
         defer { appleLoading = false }
         do {
-            let credential = try await appleAuthorizationService.authorize()
+            let credential = try appleAuthorizationService.credential(from: result)
             let response = try await environment.appleAuthClient.login(
                 identityToken: credential.identityToken,
                 nonce: credential.nonce
@@ -645,28 +708,34 @@ struct AccountView: View {
             try await environment.authSession.acceptLoginResponse(response)
             updateSessionDiagnostics()
             lastSessionConfirmation = true
-            authMessage = "Apple 登录成功"
-            sessionMessage = "登录成功"
+            authFeedback = .success("Apple 登录成功")
+            sessionFeedback = .success("登录成功")
         } catch {
-            authMessage = AppleAuthorizationService.userMessage(for: error)
+            let message = AppleAuthorizationService.userMessage(for: error)
+            if let authorizationError = error as? ASAuthorizationError,
+               authorizationError.code == .canceled {
+                authFeedback = .info(message)
+            } else {
+                authFeedback = .error(message)
+            }
             updateSessionDiagnostics()
             lastSessionConfirmation = false
-            sessionMessage = "Apple 登录失败，请重试"
+            sessionFeedback = .error("Apple 登录失败，请重试")
         }
     }
 
     private func registerAccount() async {
         guard registerPassword == registerPasswordConfirmation else {
-            authMessage = "两次输入的密码不一致"
+            authFeedback = .warning("两次输入的密码不一致")
             return
         }
         guard registerPassword.count >= 8, registerPassword.count <= 72 else {
-            authMessage = "密码长度需为 8 到 72 个字符"
+            authFeedback = .warning("密码长度需为 8 到 72 个字符")
             return
         }
 
         authActionLoading = true
-        authMessage = nil
+        authFeedback = nil
         let success = await environment.authSession.register(
             email: registerEmail,
             password: registerPassword,
@@ -674,7 +743,7 @@ struct AccountView: View {
             captchaUuid: registerCaptcha.uuid
         )
         if success {
-            authMessage = "注册成功，可以使用新账号登录"
+            authFeedback = .success("注册成功，可以使用新账号登录")
             registerPassword = ""
             registerPasswordConfirmation = ""
             preserveAuthMessageOnNextPageChange = true
@@ -689,14 +758,14 @@ struct AccountView: View {
 
     private func sendPasswordRecoveryEmail() async {
         authActionLoading = true
-        authMessage = nil
+        authFeedback = nil
         let success = await environment.authSession.forgotPassword(
             email: recoveryEmail,
             captchaCode: recoveryCaptcha.code,
             captchaUuid: recoveryCaptcha.uuid
         )
         if success {
-            authMessage = "重置邮件已发送，请打开邮件获取重置码"
+            authFeedback = .success("重置邮件已发送，请打开邮件获取重置码")
             preserveAuthMessageOnNextPageChange = true
             showAuthPage(.passwordReset)
         }
@@ -709,10 +778,10 @@ struct AccountView: View {
 
     private func submitPasswordReset() async {
         authActionLoading = true
-        authMessage = nil
+        authFeedback = nil
         let success = await environment.authSession.resetPassword(token: resetToken, newPassword: resetPassword)
         if success {
-            authMessage = "密码已重置，可以使用新密码登录"
+            authFeedback = .success("密码已重置，可以使用新密码登录")
             resetToken = ""
             resetPassword = ""
             showAuthPage(.login)
@@ -728,7 +797,7 @@ struct AccountView: View {
         let diagnostics = environment.authSession.mobileSessionDiagnostics()
         sessionDiagnostics = diagnostics
         PlatformClipboard.copy(diagnosticsSummary(diagnostics))
-        sessionMessage = "诊断摘要已复制"
+        sessionFeedback = .success("诊断摘要已复制")
     }
 
     private func diagnosticsSummary(_ diagnostics: MobileSessionDiagnostics) -> String {
@@ -751,7 +820,9 @@ struct AccountView: View {
         let confirmed = await environment.authSession.confirmAuthenticatedSession()
         lastSessionConfirmation = confirmed
         updateSessionDiagnostics()
-        sessionMessage = confirmed ? "当前登录状态有效" : "当前登录状态无效，请重新登录"
+        sessionFeedback = confirmed
+            ? .success("当前登录状态有效")
+            : .error("当前登录状态无效，请重新登录")
         sessionActionLoading = false
     }
 
@@ -840,45 +911,61 @@ struct AccountView: View {
 }
 
 private struct AccountProfileCard: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     let user: CurrentUser
     let onEditProfile: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 14) {
-                AccountAvatarView(urlString: user.avatarUrl, name: displayName)
-                VStack(alignment: .leading, spacing: 5) {
-                    HStack(spacing: 8) {
-                        Text(displayName)
-                            .font(.title3.weight(.semibold))
-                            .lineLimit(1)
-                        Text(roleTitle)
-                            .font(.caption.weight(.semibold))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(roleColor.opacity(0.14), in: Capsule())
-                            .foregroundStyle(roleColor)
+            Group {
+                if dynamicTypeSize.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                        AccountAvatarView(urlString: user.avatarUrl, name: displayName)
+                        profileText
                     }
-                    Text(user.email)
-                        .font(.footnote)
-                        .foregroundStyle(SetuColor.textSecondary)
-                        .lineLimit(1)
-                    if user.lastLoginIp?.isEmpty == false {
-                        Text("最近登录已记录")
-                            .font(.caption)
-                            .foregroundStyle(SetuColor.textTertiary)
-                            .lineLimit(1)
+                } else {
+                    HStack(spacing: 14) {
+                        AccountAvatarView(urlString: user.avatarUrl, name: displayName)
+                        profileText
                     }
                 }
             }
 
             Button(action: onEditProfile) {
                 Label("完善个人资料", systemImage: "person.crop.circle.badge.checkmark")
-                    .frame(maxWidth: .infinity)
+                    .frame(maxWidth: .infinity, minHeight: 44)
             }
             .buttonStyle(.bordered)
         }
         .padding(.vertical, 6)
+    }
+
+    private var profileText: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 8) {
+                Text(displayName)
+                    .font(.title3.weight(.semibold))
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+                if user.role == .admin {
+                    Text("管理员")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(SetuColor.warning.opacity(0.14), in: Capsule())
+                        .foregroundStyle(SetuColor.warningForeground)
+                }
+            }
+            Text(user.email)
+                .font(.footnote)
+                .foregroundStyle(SetuColor.textSecondary)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+            if user.lastLoginIp?.isEmpty == false {
+                Text("最近登录已记录")
+                    .font(.caption)
+                    .foregroundStyle(SetuColor.textTertiary)
+            }
+        }
     }
 
     private var displayName: String {
@@ -886,13 +973,6 @@ private struct AccountProfileCard: View {
         return trimmed.isEmpty ? user.email : trimmed
     }
 
-    private var roleTitle: String {
-        user.role == .admin ? "管理员" : "普通用户"
-    }
-
-    private var roleColor: Color {
-        user.role == .admin ? SetuColor.warning : SetuColor.brandInk
-    }
 }
 
 private struct AccountAvatarView: View {
@@ -916,6 +996,7 @@ private struct AccountAvatarView: View {
         }
         .frame(width: 62, height: 62)
         .clipShape(Circle())
+        .accessibilityHidden(true)
     }
 
     private var placeholder: some View {
@@ -964,15 +1045,17 @@ private struct AuthButtonLabel: View {
     }
 }
 
-private struct AuthButtonProgressLabel: View {
+private struct AuthLinkButtonLabel: View {
+    let title: LocalizedStringKey
+
+    init(_ title: LocalizedStringKey) {
+        self.title = title
+    }
+
     var body: some View {
-        HStack {
-            Spacer(minLength: 0)
-            ProgressView()
-                .tint(SetuColor.brandPink)
-            Spacer(minLength: 0)
-        }
-        .frame(maxWidth: .infinity, minHeight: 24)
+        Text(title)
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
     }
 }
 
@@ -1010,33 +1093,22 @@ enum AuthPage {
     }
 }
 
-private struct AuthBackgroundImage: View {
+private struct AuthWelcomeBackdrop: View {
     var body: some View {
-        Image("AuthBackground")
-            .resizable()
-            .scaledToFill()
+        SetuColor.pageGradient
             .overlay {
-                LinearGradient(
-                    colors: [
-                        SetuColor.surface.opacity(0.02),
-                        SetuColor.surface.opacity(0.12),
-                        SetuColor.brandPink.opacity(0.18)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
+                Circle()
+                    .fill(SetuColor.brandSoft.opacity(0.22))
+                    .frame(width: 300, height: 300)
+                    .blur(radius: 28)
+                    .offset(x: 150, y: -260)
             }
-            .overlay(alignment: .bottom) {
-                LinearGradient(
-                    colors: [
-                        .clear,
-                        SetuColor.bgBase.opacity(0.58),
-                        SetuColor.bgBase.opacity(0.82)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: 260)
+            .overlay {
+                Circle()
+                    .fill(SetuColor.gradientBottom.opacity(0.12))
+                    .frame(width: 260, height: 260)
+                    .blur(radius: 36)
+                    .offset(x: -150, y: 290)
             }
             .accessibilityHidden(true)
     }
@@ -1095,6 +1167,9 @@ private struct AuthTextInputRow: View {
     let systemImage: String
     let placeholder: LocalizedStringKey
     @Binding var text: String
+    let focus: FocusState<AuthFocusField?>.Binding
+    let field: AuthFocusField
+    let accessibilityIdentifier: String
 
     var body: some View {
         HStack(spacing: 12) {
@@ -1104,6 +1179,8 @@ private struct AuthTextInputRow: View {
                 .frame(width: 26)
             TextField(placeholder, text: $text)
                 .font(.body)
+                .focused(focus, equals: field)
+                .accessibilityIdentifier(accessibilityIdentifier)
         }
         .authInputStyle()
     }
@@ -1113,6 +1190,9 @@ private struct AuthSecureInputRow: View {
     let systemImage: String
     let placeholder: LocalizedStringKey
     @Binding var text: String
+    let focus: FocusState<AuthFocusField?>.Binding
+    let field: AuthFocusField
+    let accessibilityIdentifier: String
 
     var body: some View {
         HStack(spacing: 12) {
@@ -1122,6 +1202,8 @@ private struct AuthSecureInputRow: View {
                 .frame(width: 26)
             SecureField(placeholder, text: $text)
                 .font(.body)
+                .focused(focus, equals: field)
+                .accessibilityIdentifier(accessibilityIdentifier)
         }
         .authInputStyle()
     }
@@ -1138,8 +1220,7 @@ private struct AuthGradientButtonLabel: View {
             .background(
                 LinearGradient(
                     colors: [
-                        SetuColor.info,
-                        SetuColor.brandPink,
+                        SetuColor.gradientTop,
                         SetuColor.gradientBottom
                     ],
                     startPoint: .leading,
@@ -1152,10 +1233,15 @@ private struct AuthGradientButtonLabel: View {
 }
 
 private struct AuthGradientProgressLabel: View {
+    let title: String
+
     var body: some View {
-        HStack {
+        HStack(spacing: SetuSpacing.sm) {
             ProgressView()
                 .tint(.white)
+            Text(title)
+                .font(.headline)
+                .foregroundStyle(.white)
         }
         .frame(maxWidth: .infinity, minHeight: 56)
         .background(
@@ -1258,32 +1344,77 @@ private struct AuthCaptchaState {
 }
 
 private struct CaptchaInputRow: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     @Binding var code: String
     let imageSource: String?
     let isLoading: Bool
     let errorMessage: String?
+    let focus: FocusState<AuthFocusField?>.Binding
+    let field: AuthFocusField
+    let accessibilityIdentifier: String
     let refresh: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "number")
-                .font(.title3)
-                .foregroundStyle(SetuColor.brandInk.opacity(0.72))
-                .frame(width: 26)
-            TextField("验证码", text: $code)
-                .font(.body)
-                #if os(iOS)
-                .textInputAutocapitalization(.characters)
-                #endif
-            Spacer(minLength: 0)
-            Button(action: refresh) {
-                CaptchaImage(source: imageSource, isLoading: isLoading, errorMessage: errorMessage)
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: SetuSpacing.sm) {
+                    HStack(spacing: SetuSpacing.sm) {
+                        fieldIcon
+                        codeField
+                    }
+                    HStack(spacing: SetuSpacing.sm) {
+                        Text("图片验证码")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(SetuColor.textSecondary)
+                        Spacer(minLength: 0)
+                        refreshButton
+                    }
+                }
+            } else {
+                HStack(spacing: SetuSpacing.md) {
+                    fieldIcon
+                    codeField
+                    Spacer(minLength: 0)
+                    refreshButton
+                }
             }
-            .buttonStyle(.plain)
-            .disabled(isLoading)
-            .accessibilityLabel("刷新验证码")
         }
         .authInputStyle()
+    }
+
+    private var fieldIcon: some View {
+        Image(systemName: "number")
+            .font(.title3)
+            .foregroundStyle(SetuColor.brandInk.opacity(0.72))
+            .frame(width: 26)
+            .accessibilityHidden(true)
+    }
+
+    private var codeField: some View {
+        TextField("验证码", text: $code)
+            .font(.body)
+            .focused(focus, equals: field)
+            .accessibilityIdentifier(accessibilityIdentifier)
+            #if os(iOS)
+            .textInputAutocapitalization(.characters)
+            #endif
+    }
+
+    private var refreshButton: some View {
+        Button(action: refresh) {
+            CaptchaImage(source: imageSource, isLoading: isLoading, errorMessage: errorMessage)
+        }
+        .buttonStyle(.plain)
+        .disabled(isLoading)
+        .accessibilityLabel(captchaAccessibilityLabel)
+        .accessibilityHint("图片验证码无法由旁白朗读；可改用 Apple 登录或通行密钥。")
+    }
+
+    private var captchaAccessibilityLabel: String {
+        if isLoading { return "正在加载图片验证码" }
+        if errorMessage != nil || imageSource == nil { return "图片验证码加载失败，轻点重试" }
+        return "图片验证码，轻点更换"
     }
 }
 

@@ -103,7 +103,9 @@ final class MusicPlaybackController {
     private(set) var queueTracks: [MusicPlaybackTrack] = []
     private(set) var currentQueueIndex: Int?
     private(set) var isPlaying = false
-    private(set) var message: String?
+    private(set) var feedback: SetuFeedback? {
+        didSet { scheduleFeedbackDismissal() }
+    }
     private(set) var currentTimeSeconds: Double = 0
     private(set) var playMode: MusicPlayMode = .sequence
     private(set) var isBuffering = false
@@ -124,6 +126,7 @@ final class MusicPlaybackController {
     @ObservationIgnored private var sessionObservers: [NSObjectProtocol] = []
     @ObservationIgnored private var remoteCommandsConfigured = false
     @ObservationIgnored private var sleepTimerTask: Task<Void, Never>?
+    @ObservationIgnored private var feedbackDismissTask: Task<Void, Never>?
     @ObservationIgnored private var resumeTask: Task<Void, Never>?
     @ObservationIgnored private var snapshotUserID: Int?
     @ObservationIgnored private var lastSnapshotWriteDate: Date?
@@ -212,7 +215,7 @@ final class MusicPlaybackController {
         isPlaying = false
         isBuffering = false
         playbackError = nil
-        message = "已恢复上次播放"
+        feedback = .success("已恢复上次播放")
         resetNowPlayingArtwork()
         updateNowPlaying(elapsed: currentTimeSeconds)
         loadNowPlayingArtwork(for: snapshot.track)
@@ -222,8 +225,35 @@ final class MusicPlaybackController {
         persistPlaybackSnapshot(userID: userID ?? snapshotUserID)
     }
 
-    func showMessage(_ text: String) {
-        message = text
+    func showFeedback(_ value: SetuFeedback) {
+        feedback = value
+    }
+
+    private func scheduleFeedbackDismissal() {
+        feedbackDismissTask?.cancel()
+        guard let feedback else {
+            feedbackDismissTask = nil
+            return
+        }
+
+        let delay: UInt64?
+        switch feedback {
+        case .success, .info:
+            delay = 3_000_000_000
+        case .warning:
+            delay = 5_000_000_000
+        case .error:
+            delay = nil
+        }
+        guard let delay else { return }
+        feedbackDismissTask = Task { [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: delay)
+            } catch {
+                return
+            }
+            self?.feedback = nil
+        }
     }
 
     func play(
@@ -251,7 +281,7 @@ final class MusicPlaybackController {
     func pause() {
         player?.pause()
         isPlaying = false
-        message = currentTrack.map { "已暂停 \($0.title)" }
+        feedback = currentTrack.map { .info("已暂停 \($0.title)") }
         updateNowPlaying()
         persistPlaybackSnapshot()
     }
@@ -263,7 +293,7 @@ final class MusicPlaybackController {
         }
         player?.play()
         isPlaying = true
-        message = currentTrack.map { "正在播放 \($0.title)" }
+        feedback = currentTrack.map { .success("正在播放 \($0.title)") }
         updateNowPlaying()
         persistPlaybackSnapshot()
     }
@@ -295,7 +325,7 @@ final class MusicPlaybackController {
         isBuffering = false
         playbackError = nil
         currentTimeSeconds = 0
-        message = nil
+        feedback = nil
         cancelSleepTimer()
         cancelArtworkTask()
         clearNowPlaying()
@@ -315,7 +345,7 @@ final class MusicPlaybackController {
 
     func setPlayMode(_ mode: MusicPlayMode) {
         playMode = mode
-        message = mode.title
+        feedback = .info(mode.title)
         persistPlaybackSnapshot()
     }
 
@@ -328,7 +358,7 @@ final class MusicPlaybackController {
     func startSleepTimer(_ option: MusicSleepTimerOption) {
         cancelSleepTimer()
         sleepTimerTitle = option.title
-        message = "睡眠定时：\(option.title)"
+        feedback = .success("睡眠定时：\(option.title)")
         if let durationSeconds = option.durationSeconds {
             sleepTimerTask = Task { [weak self] in
                 do {
@@ -392,19 +422,19 @@ final class MusicPlaybackController {
         let insertionIndex = min(max(destination - removedBeforeDestination, 0), queueTracks.count)
         queueTracks.insert(contentsOf: moving, at: insertionIndex)
         syncCurrentQueueIndex()
-        message = "已调整播放队列"
+        feedback = .success("已调整播放队列")
         persistPlaybackSnapshot()
     }
 
     func removeQueuedTrack(_ track: MusicPlaybackTrack) {
         if track.id == currentTrack?.id {
             stop()
-            message = "已从队列移除当前歌曲"
+            feedback = .success("已从队列移除当前歌曲")
             return
         }
         queueTracks.removeAll { $0.id == track.id }
         syncCurrentQueueIndex()
-        message = "已移除 \(track.title)"
+        feedback = .success("已移除 \(track.title)")
         persistPlaybackSnapshot()
     }
 
@@ -417,7 +447,7 @@ final class MusicPlaybackController {
         }
         queueTracks = [currentTrack]
         currentQueueIndex = 0
-        message = "已清空待播队列"
+        feedback = .success("已清空待播队列")
         persistPlaybackSnapshot()
     }
 
@@ -428,7 +458,7 @@ final class MusicPlaybackController {
         let insertionIndex = min(currentQueueIndex + 1, queueTracks.count)
         queueTracks.insert(track, at: insertionIndex)
         syncCurrentQueueIndex()
-        message = "下一首播放：\(track.title)"
+        feedback = .success("下一首播放：\(track.title)")
         persistPlaybackSnapshot()
     }
 
@@ -438,7 +468,7 @@ final class MusicPlaybackController {
         guard resumeTask == nil else { return }
         guard currentTrack != nil else { return }
         guard resolveTrackURL != nil else {
-            message = "播放器尚未准备好"
+            feedback = .error("播放器尚未准备好")
             return
         }
         resumeTask = Task { [weak self] in
@@ -457,7 +487,7 @@ final class MusicPlaybackController {
         let resumeTime = currentTimeSeconds
         isBuffering = true
         playbackError = nil
-        message = "正在恢复播放 \(track.title)"
+        feedback = .info("正在恢复播放 \(track.title)")
         let resolution = await resolveTrackURL(track)
         isBuffering = false
 
@@ -471,7 +501,7 @@ final class MusicPlaybackController {
         case .unavailable(let reason):
             playbackError = reason
             isPlaying = false
-            message = reason
+            feedback = .error(reason)
             updateNowPlaying()
             persistPlaybackSnapshot()
         }
@@ -502,7 +532,7 @@ final class MusicPlaybackController {
                 }
                 return
             case .unavailable(let reason):
-                message = "跳过无法播放：\(track.title)"
+                feedback = .warning("已跳过无法播放的歌曲：\(track.title)")
                 playbackError = reason
                 currentQueueIndex = index
             }
@@ -570,7 +600,7 @@ final class MusicPlaybackController {
         isBuffering = true
         playbackError = nil
         currentTimeSeconds = 0
-        message = notice ?? "正在播放 \(track.title)"
+        feedback = notice.map(SetuFeedback.warning) ?? .success("正在播放 \(track.title)")
         addTimeObserver()
         addItemObservers(for: item)
         resetNowPlayingArtwork()
@@ -606,7 +636,7 @@ final class MusicPlaybackController {
         sleepTimerTask = nil
         isPlaying = false
         isBuffering = false
-        message = "睡眠定时已暂停播放"
+        feedback = .info("睡眠定时已暂停播放")
         updateNowPlaying()
         persistPlaybackSnapshot()
     }
@@ -685,7 +715,8 @@ final class MusicPlaybackController {
         let failed = center.addObserver(forName: .AVPlayerItemFailedToPlayToEndTime, object: item, queue: .main) { [weak self] note in
             Task { @MainActor in
                 guard let self else { return }
-                let reason = (note.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error)?.localizedDescription
+                let reason = (note.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error)
+                    .map { UserFacingErrorMapper.map($0).message }
                 self.playbackError = reason ?? "播放失败，请重试"
                 self.isBuffering = false
                 self.isPlaying = false
@@ -715,7 +746,7 @@ final class MusicPlaybackController {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.allowAirPlay])
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {
-            message = "音频会话配置失败：\(error.localizedDescription)"
+            feedback = .error("音频播放准备失败：\(UserFacingErrorMapper.map(error).message)")
         }
         #endif
     }
@@ -826,7 +857,7 @@ final class MusicPlaybackController {
         artworkTask?.cancel()
         artworkTask = Task { [weak self] in
             do {
-                let data = try await RemoteArtworkLoader.shared.data(from: url)
+                let data = try await SetuRemoteImageLoader.shared.data(from: url)
                 guard !Task.isCancelled, let image = UIImage(data: data) else { return }
                 let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
                 await MainActor.run {
@@ -936,3 +967,30 @@ struct MusicPlaybackTrack: Identifiable, Sendable, Codable {
         mvID = nil
     }
 }
+
+#if DEBUG
+extension MusicPlaybackController {
+    /// Seeds presentation state for SwiftUI previews without creating an
+    /// `AVPlayer`, configuring the audio session, or touching persisted queues.
+    func configurePreview(
+        songs: [MusicSong],
+        currentIndex: Int = 0,
+        queueName: String = "预览播放列表"
+    ) {
+        let tracks = songs.map(MusicPlaybackTrack.init(song:))
+        guard tracks.indices.contains(currentIndex) else { return }
+
+        currentTrack = tracks[currentIndex]
+        self.queueName = queueName
+        queueTracks = tracks
+        self.currentQueueIndex = currentIndex
+        currentTimeSeconds = min(83, tracks[currentIndex].durationSeconds)
+        playMode = .sequence
+        isPlaying = false
+        isBuffering = false
+        playbackError = nil
+        sleepTimerTitle = nil
+        feedback = nil
+    }
+}
+#endif

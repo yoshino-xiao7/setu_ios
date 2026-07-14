@@ -16,9 +16,6 @@ public struct ImageDeleteRequestItem: Decodable, Identifiable, Sendable {
     public let thumbnailUrl: String?
 
     public var statusTitle: String {
-        if !statusText.isEmpty {
-            return statusText
-        }
         switch status {
         case 0:
             return "待审核"
@@ -27,7 +24,7 @@ public struct ImageDeleteRequestItem: Decodable, Identifiable, Sendable {
         case 2:
             return "已拒绝"
         default:
-            return "未知"
+            return "处理中"
         }
     }
 }
@@ -60,9 +57,6 @@ public struct ImageDeleteRequestDetail: Decodable, Identifiable, Sendable {
     public let reviewedAt: String?
 
     public var statusTitle: String {
-        if !statusText.isEmpty {
-            return statusText
-        }
         switch status {
         case 0:
             return "待审核"
@@ -71,7 +65,7 @@ public struct ImageDeleteRequestDetail: Decodable, Identifiable, Sendable {
         case 2:
             return "已拒绝"
         default:
-            return "未知"
+            return "处理中"
         }
     }
 }

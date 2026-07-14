@@ -191,6 +191,28 @@ final class AuthSessionTests: XCTestCase {
         XCTAssertEqual(try keychain.string(for: "signSecret"), "secret")
     }
 
+    func testLoginErrorDoesNotExposeHTTPOrDiagnosticIdentifiers() async {
+        let session = makeSession(
+            keychain: InMemoryKeychain(),
+            urlSession: URLSession(
+                configuration: .mock { _ in
+                    MockHTTPResponse(
+                        statusCode: 401,
+                        body: #"{"message":"signature invalid","traceId":"trace-secret"}"#,
+                        headers: ["X-Request-Id": "request-secret"]
+                    )
+                }
+            )
+        )
+
+        await session.login(email: "user@example.com", password: "wrong", captchaCode: "ABCD", captchaUuid: "uuid")
+
+        XCTAssertEqual(session.lastError, "邮箱、密码或验证码不正确，请重新输入")
+        XCTAssertFalse(session.lastError?.contains("HTTP") == true)
+        XCTAssertFalse(session.lastError?.contains("request-secret") == true)
+        XCTAssertFalse(session.lastError?.contains("trace-secret") == true)
+    }
+
     func testApplyUserProfileUpdatesAndPersistsCurrentUser() throws {
         let keychain = InMemoryKeychain()
         let session = makeSession(keychain: keychain)

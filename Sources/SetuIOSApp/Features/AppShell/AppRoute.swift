@@ -9,6 +9,7 @@ enum AppRoute: Hashable {
     case docs
     case about
     case privacy
+    case terms
     case passkeys
     case points
     case pointsLogs
@@ -26,6 +27,7 @@ enum AppRoute: Hashable {
     case aiHistory
     case aiDeleteRequests
     case aiGenerationDetail(Int)
+    case publicAiWork(PublicAiWorkSnapshot)
     case aiSquare
     case musicHome
     case musicSearch(String?)
@@ -59,6 +61,64 @@ enum AppRoute: Hashable {
     case adminAiWorkers
     case adminAiReviews
     case adminAiDeleteRequests
+}
+
+struct PublicAiWorkSnapshot: Hashable {
+    let id: Int
+    let ownerUserID: Int?
+    let imageURLString: String?
+    let prompt: String
+    let width: Int
+    let height: Int
+    let category: String?
+    let createdAt: String?
+    let likeCount: Int
+    let favoriteCount: Int
+    let likedByMe: Bool
+    let favoritedByMe: Bool
+
+    init(work: AiPublicWork) {
+        id = work.id
+        ownerUserID = work.userId
+        imageURLString = work.imageUrl
+        prompt = work.promptCn
+        width = work.width
+        height = work.height
+        category = work.publicCategory
+        createdAt = work.createdAt
+        likeCount = work.likeCount
+        favoriteCount = work.favoriteCount
+        likedByMe = work.likedByMe
+        favoritedByMe = work.favoritedByMe
+    }
+
+    init(
+        id: Int,
+        ownerUserID: Int?,
+        imageURLString: String?,
+        prompt: String,
+        width: Int,
+        height: Int,
+        category: String?,
+        createdAt: String?,
+        likeCount: Int = 0,
+        favoriteCount: Int = 0,
+        likedByMe: Bool = false,
+        favoritedByMe: Bool = false
+    ) {
+        self.id = id
+        self.ownerUserID = ownerUserID
+        self.imageURLString = imageURLString
+        self.prompt = prompt
+        self.width = width
+        self.height = height
+        self.category = category
+        self.createdAt = createdAt
+        self.likeCount = likeCount
+        self.favoriteCount = favoriteCount
+        self.likedByMe = likedByMe
+        self.favoritedByMe = favoritedByMe
+    }
 }
 
 enum AppTab: String, CaseIterable, Identifiable {
@@ -140,5 +200,33 @@ final class TabRouter {
             get: { router.path },
             set: { router.path = $0 }
         )
+    }
+}
+
+/// Owns both the selected tab and each tab's navigation stack so cross-tab
+/// navigation cannot accidentally append a destination to the source stack.
+@MainActor
+@Observable
+final class AppNavigationCoordinator {
+    var selectedTab: AppTab = .home
+    private let tabRouter = TabRouter()
+
+    func router(for tab: AppTab) -> RouterPath {
+        tabRouter.router(for: tab)
+    }
+
+    func binding(for tab: AppTab) -> Binding<[AppRoute]> {
+        tabRouter.binding(for: tab)
+    }
+
+    func navigate(to tab: AppTab, route: AppRoute? = nil, reset: Bool = false) {
+        let targetRouter = router(for: tab)
+        if reset {
+            targetRouter.reset()
+        }
+        selectedTab = tab
+        if let route {
+            targetRouter.navigate(to: route)
+        }
     }
 }

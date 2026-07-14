@@ -4,101 +4,126 @@ import SwiftUI
 struct ImageDeleteRequestsView: View {
     @Environment(RouterPath.self) private var router
     @Bindable var environment: AppEnvironment
-    @State private var state: LoadState<PageResult<ImageDeleteRequestItem>> = .idle
-    @State private var page = 1
+    @State private var requests: [ImageDeleteRequestItem] = []
+    @State private var total = 0
+    @State private var nextPage = 1
+    @State private var isInitialLoading = true
+    @State private var isLoadingMore = false
+    @State private var loadError: String?
+    @State private var loadRevision = 0
     private let pageSize = 10
 
     var body: some View {
         List {
-            switch state {
-            case .idle, .loading:
+            if isInitialLoading {
                 ImageDeleteStateSection(title: "删除申请", stateTitle: "正在加载删除申请", systemImage: "trash", isLoading: true)
-            case .failed(let message):
-                ImageDeleteStateSection(title: "删除申请", stateTitle: "删除申请加载失败", message: message, systemImage: "trash.slash")
-            case .loaded(let page):
-                if page.list.isEmpty {
-                    ImageDeleteStateSection(title: "删除申请", stateTitle: "暂无删除申请", message: "你提交过的图片删除申请会显示在这里。", systemImage: "trash")
+            } else if requests.isEmpty {
+                if let loadError {
+                    ImageDeleteStateSection(
+                        title: "删除申请",
+                        stateTitle: "删除申请加载失败",
+                        message: loadError,
+                        systemImage: "trash.slash",
+                        actionTitle: "重试",
+                        action: { Task { await loadFirstPage() } }
+                    )
                 } else {
-                    Section {
-                        SetuCard {
-                            VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                                SetuSectionHeader(title: "删除申请", subtitle: "共 \(page.total) 条")
-                                VStack(spacing: 0) {
-                                    ForEach(Array(page.list.enumerated()), id: \.element.id) { index, request in
-                                        Button {
-                                            router.navigate(to: .imageDeleteRequestDetail(request.id))
-                                        } label: {
-                                            ImageDeleteRequestRow(request: request)
+                    ImageDeleteStateSection(title: "删除申请", stateTitle: "暂无删除申请", message: "你提交过的图片删除申请会显示在这里。", systemImage: "trash")
+                }
+            } else {
+                Section {
+                    SetuCard {
+                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                            SetuSectionHeader(title: "删除申请", subtitle: "共 \(total) 条")
+                            VStack(spacing: 0) {
+                                ForEach(Array(requests.enumerated()), id: \.element.id) { index, request in
+                                    Button {
+                                        router.navigate(to: .imageDeleteRequestDetail(request.id))
+                                    } label: {
+                                        ImageDeleteRequestRow(request: request)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .onAppear {
+                                        if request.id == requests.last?.id {
+                                            Task { await loadMore() }
                                         }
-                                        .buttonStyle(.plain)
+                                    }
 
-                                        if index < page.list.count - 1 {
-                                            Divider().overlay(SetuColor.separator)
-                                        }
+                                    if index < requests.count - 1 {
+                                        Divider().overlay(SetuColor.separator)
                                     }
                                 }
                             }
                         }
-                        .setuListRow()
                     }
-                    pagerSection(page)
+                    .setuListRow()
+
+                    SetuLoadMoreFooter(state: loadMoreFooterState) {
+                        Task { await loadMore() }
+                    }
+                    .setuListRow()
                 }
             }
         }
         .listStyle(.plain)
         .setuBackground()
         .navigationTitle("我的删除申请")
-        .task { await load() }
-        .refreshable { await load() }
+        .task { await loadFirstPage() }
+        .refreshable { await loadFirstPage() }
     }
 
-    private func pagerSection(_ result: PageResult<ImageDeleteRequestItem>) -> some View {
-        Section {
-            SetuCard {
-                HStack(spacing: SetuSpacing.md) {
-                    Button {
-                        Task {
-                            page = max(1, page - 1)
-                            await load()
-                        }
-                    } label: {
-                        Label("上一页", systemImage: "chevron.left")
-                    }
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(page <= 1 ? SetuColor.textTertiary : SetuColor.brandInk)
-                    .frame(minHeight: 44)
-                    .disabled(page <= 1)
-
-                    Spacer()
-                    Text("第 \(result.page) 页")
-                        .font(SetuTypography.caption)
-                        .foregroundStyle(SetuColor.textSecondary)
-                    Spacer()
-
-                    Button {
-                        Task {
-                            page += 1
-                            await load()
-                        }
-                    } label: {
-                        Label("下一页", systemImage: "chevron.right")
-                    }
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(result.page * result.pageSize >= result.total ? SetuColor.textTertiary : SetuColor.brandInk)
-                    .frame(minHeight: 44)
-                    .disabled(result.page * result.pageSize >= result.total)
-                }
-            }
-            .setuListRow()
-        }
+    private var hasMore: Bool {
+        requests.count < total
     }
 
-    private func load() async {
-        state = .loading
+    private var loadMoreFooterState: SetuLoadMoreFooterState {
+        if isLoadingMore { return .loading }
+        if let loadError { return .failed(loadError) }
+        if !hasMore { return .complete("已加载全部 \(total) 条删除申请") }
+        return .idle
+    }
+
+    private func loadFirstPage() async {
+        loadRevision += 1
+        let revision = loadRevision
+        isInitialLoading = requests.isEmpty
+        isLoadingMore = false
+        loadError = nil
         do {
-            state = .loaded(try await environment.imageDeleteRequestClient.listMine(page: page, pageSize: pageSize))
+            let result = try await environment.imageDeleteRequestClient.listMine(page: 1, pageSize: pageSize)
+            guard revision == loadRevision else { return }
+            requests = result.list
+            total = result.total
+            nextPage = 2
         } catch {
-            state = .failed(error.localizedDescription)
+            guard revision == loadRevision else { return }
+            loadError = UserFacingErrorMapper.map(error).message
+        }
+        guard revision == loadRevision else { return }
+        isInitialLoading = false
+    }
+
+    private func loadMore() async {
+        guard hasMore, !isLoadingMore, !isInitialLoading else { return }
+        let revision = loadRevision
+        let requestedPage = nextPage
+        isLoadingMore = true
+        loadError = nil
+        defer {
+            if revision == loadRevision {
+                isLoadingMore = false
+            }
+        }
+        do {
+            let result = try await environment.imageDeleteRequestClient.listMine(page: requestedPage, pageSize: pageSize)
+            guard revision == loadRevision, requestedPage == nextPage else { return }
+            let existingIDs = Set(requests.map(\.id))
+            requests.append(contentsOf: result.list.filter { !existingIDs.contains($0.id) })
+            total = result.total
+            nextPage += 1
+        } catch {
+            guard revision == loadRevision else { return }
+            loadError = UserFacingErrorMapper.map(error).message
         }
     }
 }
@@ -109,13 +134,22 @@ struct ImageDeleteStateSection: View {
     var message: String?
     var systemImage: String
     var isLoading = false
+    var actionTitle: String?
+    var action: (() -> Void)?
 
     var body: some View {
         Section {
             SetuCard {
                 VStack(alignment: .leading, spacing: SetuSpacing.md) {
                     SetuSectionHeader(title: title)
-                    SetuEmptyState(title: stateTitle, message: message, systemImage: systemImage, isLoading: isLoading)
+                    SetuEmptyState(
+                        title: stateTitle,
+                        message: message,
+                        systemImage: systemImage,
+                        isLoading: isLoading,
+                        actionTitle: actionTitle,
+                        action: action
+                    )
                 }
             }
             .setuListRow()
@@ -124,45 +158,74 @@ struct ImageDeleteStateSection: View {
 }
 
 struct ImageDeleteRequestRow: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let request: ImageDeleteRequestItem
 
     var body: some View {
-        HStack(alignment: .top, spacing: SetuSpacing.md) {
-            ImageThumbnailView(urlString: request.thumbnailUrl)
-            VStack(alignment: .leading, spacing: SetuSpacing.xs) {
-                HStack(alignment: .top) {
-                    Text(request.imageTitle ?? "PID \(request.pid)")
-                        .font(SetuTypography.headline)
-                        .foregroundStyle(SetuColor.textPrimary)
-                        .lineLimit(2)
-                    Spacer()
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: SetuSpacing.sm) {
+                    HStack(alignment: .top, spacing: SetuSpacing.md) {
+                        thumbnail
+                        titleText
+                    }
                     RequestStatusBadge(title: request.statusTitle, status: request.status)
+                    requestDetails
                 }
-
-                if let author = request.imageAuthor, !author.isEmpty {
-                    Text(author)
-                        .font(SetuTypography.caption)
-                        .foregroundStyle(SetuColor.textSecondary)
+            } else {
+                HStack(alignment: .top, spacing: SetuSpacing.md) {
+                    thumbnail
+                    VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+                        HStack(alignment: .top) {
+                            titleText
+                            Spacer()
+                            RequestStatusBadge(title: request.statusTitle, status: request.status)
+                        }
+                        requestDetails
+                    }
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(SetuColor.textTertiary)
+                        .accessibilityHidden(true)
                 }
-
-                Text(request.reason)
-                    .font(SetuTypography.caption)
-                    .foregroundStyle(SetuColor.textSecondary)
-                    .lineLimit(2)
-
-                HStack(spacing: SetuSpacing.md) {
-                    Label("\(request.pid)-\(request.p)", systemImage: "number")
-                    Label(request.createdAt, systemImage: "calendar")
-                }
-                .font(SetuTypography.caption)
-                .foregroundStyle(SetuColor.textTertiary)
             }
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(SetuColor.textTertiary)
         }
         .padding(.vertical, SetuSpacing.sm)
         .contentShape(Rectangle())
+    }
+
+    private var thumbnail: some View {
+        SetuRemoteImage(
+            urlString: request.thumbnailUrl,
+            accessibilityLabel: "待处理图片：\(request.imageTitle ?? "未命名作品")",
+            allowsTapToRetry: false
+        )
+    }
+
+    private var titleText: some View {
+        Text(request.imageTitle ?? "未命名作品")
+            .font(SetuTypography.headline)
+            .foregroundStyle(SetuColor.textPrimary)
+            .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 2)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var requestDetails: some View {
+        VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+            if let author = request.imageAuthor, !author.isEmpty {
+                Text(author)
+                    .font(SetuTypography.caption)
+                    .foregroundStyle(SetuColor.textSecondary)
+            }
+            Text(request.reason)
+                .font(SetuTypography.caption)
+                .foregroundStyle(SetuColor.textSecondary)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? 4 : 2)
+            Label(SetuDateFormatter.string(from: request.createdAt), systemImage: "calendar")
+                .font(SetuTypography.caption)
+                .foregroundStyle(SetuColor.textTertiary)
+        }
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
 

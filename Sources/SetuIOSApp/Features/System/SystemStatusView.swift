@@ -24,7 +24,17 @@ struct SystemStatusView: View {
             case .failed(let message):
                 Section {
                     SetuCard {
-                        SetuEmptyState(title: "系统状态加载失败", message: message, systemImage: "exclamationmark.triangle")
+                        VStack(spacing: SetuSpacing.md) {
+                            SetuEmptyState(title: "系统状态加载失败", message: message, systemImage: "exclamationmark.triangle")
+                            Button {
+                                Task { await load() }
+                            } label: {
+                                Label("重试", systemImage: "arrow.clockwise")
+                                    .frame(maxWidth: .infinity, minHeight: 44)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(SetuColor.brandInk)
+                        }
                     }
                 }
             case .loaded(let snapshot):
@@ -33,17 +43,17 @@ struct SystemStatusView: View {
                     SetuCard {
                         VStack(alignment: .leading, spacing: SetuSpacing.md) {
                             HStack(alignment: .top) {
-                                SetuSectionHeader(title: "API 状态", subtitle: "近 5 分钟服务概览")
+                                SetuSectionHeader(title: "服务状态", subtitle: "近 5 分钟运行概览")
                                 Spacer()
                                 SetuPill(
-                                    text: overview.status.status,
+                                    text: statusTitle(overview.status.status),
                                     systemImage: "waveform.path.ecg",
                                     tone: statusTone(overview.status.status)
                                 )
                             }
                             LazyVGrid(columns: statColumns, spacing: SetuSpacing.sm) {
                                 SetuStatTile(
-                                    title: "今日调用",
+                                    title: "今日使用",
                                     value: String(overview.status.callsToday),
                                     systemImage: "arrow.left.arrow.right",
                                     color: SetuColor.brandPink
@@ -55,7 +65,7 @@ struct SystemStatusView: View {
                                     color: SetuColor.success
                                 )
                                 SetuStatTile(
-                                    title: "平均响应延迟",
+                                    title: "平均响应时间",
                                     value: latencyText(overview.status.avgLatencyMs),
                                     systemImage: "timer",
                                     color: SetuColor.info
@@ -81,16 +91,18 @@ struct SystemStatusView: View {
                         SetuCard {
                             VStack(alignment: .leading, spacing: SetuSpacing.md) {
                                 HStack {
-                                    SetuSectionHeader(title: "健康检查", subtitle: "后端返回的最近一次检查结果")
+                                    SetuSectionHeader(title: "运行检查", subtitle: "服务最近一次检查结果")
                                     Spacer()
                                     SetuPill(
-                                        text: health.status,
+                                        text: statusTitle(health.status, healthy: health.healthy),
                                         systemImage: "heart.text.square",
-                                        tone: statusTone(health.status)
+                                        tone: statusTone(health.status, healthy: health.healthy)
                                     )
                                 }
-                                StatusInfoRow(title: "代码", value: health.code)
-                                StatusInfoRow(title: "检查时间", value: health.checkedAt)
+                                StatusInfoRow(
+                                    title: "检查时间",
+                                    value: SetuDateFormatter.string(from: health.checkedAt, style: .full)
+                                )
                             }
                         }
                     }
@@ -120,7 +132,7 @@ struct SystemStatusView: View {
             state = .loaded(try await SystemStatusSnapshot(overview: overview, imageCount: imageCount))
             lastUpdatedAt = Date()
         } catch {
-            state = .failed(error.localizedDescription)
+            state = .failed(UserFacingErrorMapper.map(error).message)
         }
     }
 
@@ -138,23 +150,75 @@ struct SystemStatusView: View {
 
     private func latencyText(_ value: Double?) -> String {
         guard let value, value.isFinite, value > 0 else {
-            return "无近期调用"
+            return "暂无近期数据"
         }
         return "\(Int(value.rounded())) ms"
     }
 
-    private func statusTone(_ value: String) -> SetuPillTone {
+    private func statusTitle(_ value: String, healthy: Bool? = nil) -> String {
+        if healthy == true {
+            return "运行正常"
+        }
+
         let normalized = value.lowercased()
-        if normalized.contains("up") || normalized.contains("ok") || normalized.contains("healthy") || value.contains("正常") {
+        if isWarningStatus(normalized, original: value) {
+            return "部分服务波动"
+        }
+        if healthy == false || isUnavailableStatus(normalized, original: value) {
+            return "暂不可用"
+        }
+        if isHealthyStatus(normalized, original: value) {
+            return "运行正常"
+        }
+        return "状态待确认"
+    }
+
+    private func statusTone(_ value: String, healthy: Bool? = nil) -> SetuPillTone {
+        if healthy == true {
             return .success
         }
-        if normalized.contains("warn") || value.contains("警告") {
+
+        let normalized = value.lowercased()
+        if isWarningStatus(normalized, original: value) {
             return .warning
         }
-        if normalized.contains("down") || normalized.contains("error") || value.contains("异常") {
+        if healthy == false || isUnavailableStatus(normalized, original: value) {
             return .danger
         }
+        if isHealthyStatus(normalized, original: value) {
+            return .success
+        }
         return .info
+    }
+
+    private func isHealthyStatus(_ normalized: String, original: String) -> Bool {
+        normalized == "up"
+            || normalized == "ok"
+            || normalized == "healthy"
+            || normalized == "available"
+            || original.contains("正常")
+    }
+
+    private func isWarningStatus(_ normalized: String, original: String) -> Bool {
+        normalized.contains("warn")
+            || normalized.contains("degrad")
+            || normalized.contains("partial")
+            || original.contains("警告")
+            || original.contains("波动")
+    }
+
+    private func isUnavailableStatus(_ normalized: String, original: String) -> Bool {
+        normalized.contains("unhealthy")
+            || normalized.contains("down")
+            || normalized.contains("error")
+            || normalized.contains("fail")
+            || normalized.contains("offline")
+            || normalized.contains("unavailable")
+            || original.contains("异常")
+            || original.contains("不可用")
+            || original.contains("离线")
+            || original.contains("故障")
+            || original.contains("失败")
     }
 }
 

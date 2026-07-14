@@ -98,27 +98,54 @@ struct AiDrawDraft: Codable {
 
 enum AiDrawDraftStore {
     private static let key = "icu.yukiryou.setu.aiDrawDraft"
+    #if DEBUG
+    private static var previewStorageEnabled = false
+    private static var previewDraft: AiDrawDraft?
+
+    static var isUsingPreviewStorage: Bool {
+        previewStorageEnabled
+    }
+
+    /// Keeps page previews deterministic without reading or mutating the app's
+    /// real draft in `UserDefaults`.
+    static func activatePreviewStorage(with draft: AiDrawDraft) {
+        previewStorageEnabled = true
+        previewDraft = draft
+    }
+    #endif
 
     static func load() -> AiDrawDraft {
-        guard let data = UserDefaults.standard.data(forKey: key),
-              let draft = try? JSONDecoder().decode(AiDrawDraft.self, from: data) else {
-            return AiDrawDraft()
+        loadIfPresent() ?? AiDrawDraft()
+    }
+
+    static func loadIfPresent() -> AiDrawDraft? {
+        #if DEBUG
+        if previewStorageEnabled {
+            return previewDraft
         }
-        return draft
+        #endif
+        guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
+        return try? JSONDecoder().decode(AiDrawDraft.self, from: data)
     }
 
     static func save(_ draft: AiDrawDraft) {
+        #if DEBUG
+        if previewStorageEnabled {
+            previewDraft = draft
+            return
+        }
+        #endif
         guard let data = try? JSONEncoder().encode(draft) else { return }
         UserDefaults.standard.set(data, forKey: key)
     }
 
-    static func loadPendingExternalDraft() -> AiDrawDraft? {
-        let draft = load()
-        guard draft.source == "asset" || draft.source == "history" else { return nil }
-        return draft
-    }
-
     static func clear() {
+        #if DEBUG
+        if previewStorageEnabled {
+            previewDraft = nil
+            return
+        }
+        #endif
         UserDefaults.standard.removeObject(forKey: key)
     }
 

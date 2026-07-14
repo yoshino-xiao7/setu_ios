@@ -5,26 +5,31 @@ enum StaticInfoKind {
     case docs
     case about
     case privacy
+    case terms
 
     var title: String {
         switch self {
         case .docs:
-            "开发文档"
+            "使用帮助"
         case .about:
-            "关于本站"
+            "关于雪涼云"
         case .privacy:
             "隐私政策"
+        case .terms:
+            "服务条款"
         }
     }
 
     var systemImage: String {
         switch self {
         case .docs:
-            "doc.text"
+            "questionmark.circle"
         case .about:
             "info.circle"
         case .privacy:
             "hand.raised"
+        case .terms:
+            "doc.text.magnifyingglass"
         }
     }
 
@@ -35,19 +40,21 @@ enum StaticInfoKind {
         case .about:
             "雪涼云的定位、角色和 App 入口。"
         case .privacy:
-            "隐私政策、版权声明和服务条款。"
+            "了解个人数据的使用方式与安全措施。"
+        case .terms:
+            "了解服务范围、内容版权与使用规则。"
         }
     }
 }
 
 struct StaticInfoView: View {
-    @Environment(\.openURL) private var openURL
     @Bindable var environment: AppEnvironment
     let kind: StaticInfoKind
     @State private var dailyState: LoadState<SetuImageItem> = .idle
-    @State private var dailyMessage: String?
-    @State private var dailyFavorited = false
+    @State private var dailyFeedback: SetuFeedback?
+    @State private var dailyFavoriteState: LoadState<Bool> = .idle
     @State private var dailyActionLoading = false
+    @State private var dailyPreview: UserImagePreviewItem?
 
     var body: some View {
         List {
@@ -74,11 +81,17 @@ struct StaticInfoView: View {
                 aboutContent
             case .privacy:
                 privacyContent
+            case .terms:
+                termsContent
             }
         }
         .listStyle(.plain)
         .setuBackground()
+        .accessibilityIdentifier("static.info.page")
         .navigationTitle(kind.title)
+        .sheet(item: $dailyPreview) { item in
+            UserImagePreviewSheet(item: item)
+        }
         .task(id: kind.title) {
             if case .docs = kind {
                 await loadDailyExample()
@@ -95,8 +108,8 @@ struct StaticInfoView: View {
     private var docsContent: some View {
         StaticInfoSectionCard(title: "图片") {
             InfoParagraph("图片页面向日常浏览设计，可以查看当前积分、单次消耗和刷图参数。进入刷图后，通过上下左右滑动继续获取新图片。")
-            InfoPair(title: "积分调用", value: "设置 R18、数量、关键词、标签、尺寸和排除 AI 图片等参数。")
-            InfoPair(title: "积分流水", value: "查看积分获得与消耗记录。")
+            InfoPair(title: "批量找图", value: "设置内容级别、数量、关键词、标签、尺寸和是否排除 AI 图片。")
+            InfoPair(title: "积分明细", value: "查看积分获得与消耗记录。")
             InfoPair(title: "图库投稿", value: "提交图片到图库并查看投稿状态。")
         }
 
@@ -109,7 +122,7 @@ struct StaticInfoView: View {
 
         StaticInfoSectionCard(title: "AI 绘画与账号") {
             InfoParagraph("AI 绘画页可以输入提示词、选择画布比例和生成参数，并在历史记录中查看作品、申请删除或进入广场浏览公开作品。")
-            InfoPair(title: "我的", value: "管理个人资料、QQ 绑定、修改密码、通行密钥、隐私政策和关于本站。")
+            InfoPair(title: "我的", value: "管理个人资料、QQ 绑定、修改密码、通行密钥、隐私政策和关于雪涼云。")
             InfoPair(title: "管理员模式", value: "仅管理员账号会显示入口，普通用户不会看到后台管理功能。")
         }
     }
@@ -125,7 +138,7 @@ struct StaticInfoView: View {
             case .loaded(let item):
                 DailySetuExampleCard(
                     item: item,
-                    isFavorited: dailyFavorited,
+                    favoriteState: dailyFavoriteState,
                     isActionLoading: dailyActionLoading,
                     onFavorite: {
                         Task { await toggleFavorite(item) }
@@ -137,19 +150,31 @@ struct StaticInfoView: View {
                         openOriginal(item)
                     }
                 )
+
+                if case .failed(let message) = dailyFavoriteState {
+                    VStack(alignment: .leading, spacing: SetuSpacing.sm) {
+                        SetuFeedbackBanner(feedback: .error(message))
+                        Button("重试收藏状态") {
+                            Task { await loadDailyFavoriteStatus(for: item) }
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.large)
+                        .frame(minHeight: 44)
+                        .accessibilityIdentifier("daily.favorite.retry")
+                    }
+                    .accessibilityIdentifier("daily.favorite.failed")
+                }
             }
 
-            if let dailyMessage {
-                Text(dailyMessage)
-                    .font(SetuTypography.caption)
-                    .foregroundStyle(SetuColor.textSecondary)
+            if let dailyFeedback {
+                SetuFeedbackBanner(feedback: dailyFeedback)
             }
         }
     }
 
     @ViewBuilder
     private var aboutContent: some View {
-        StaticInfoSectionCard(title: "SETU CLOUD") {
+        StaticInfoSectionCard(title: "雪涼云") {
             InfoParagraph("雪涼云是一个围绕图片浏览、AI 绘画、音乐播放和公开广场展开的个人内容 App。")
             InfoPair(title: "定位", value: "图片、AI 创作、音乐、收藏整理和个人账户管理。")
             InfoPair(title: "用途", value: "学习、研究、个人娱乐和内容收藏。")
@@ -162,7 +187,7 @@ struct StaticInfoView: View {
 
         StaticInfoSectionCard(title: "快捷入口") {
             InfoPair(title: "AI 绘画", value: "生成作品、查看历史和管理删除申请。")
-            InfoPair(title: "图片", value: "刷随机图片、查看积分流水、投稿图库。")
+            InfoPair(title: "图片", value: "刷随机图片、查看积分明细、投稿图库。")
             InfoPair(title: "音乐", value: "搜索歌曲、播放歌单、查看播放历史。")
             InfoPair(title: "广场", value: "发现公开收藏夹和 AI 绘画作品。")
         }
@@ -170,20 +195,29 @@ struct StaticInfoView: View {
 
     @ViewBuilder
     private var privacyContent: some View {
+        StaticInfoSectionCard(title: "个人数据") {
+            InfoParagraph("平台会处理账户信息、图片与 AI 使用数据、积分记录、收藏数据、音乐数据和必要技术日志，用于身份验证、配额管理、防滥用和服务维护。")
+            InfoPair(title: "安全措施", value: "密码加密存储、HTTPS 传输、访问日志保留和必要的权限校验。")
+            InfoPair(title: "用户权利", value: "查看、修改、删除个人信息，导出数据，注销账户，撤回同意。")
+        }
+
+        StaticInfoSectionCard(title: "数据保留与选择") {
+            InfoParagraph("只在提供服务、履行安全义务和处理争议所需的期限内保留数据。你可以在账号相关页面修改资料，并通过支持渠道申请导出或删除。")
+            InfoPair(title: "权限选择", value: "通知与照片权限会在相关功能需要时说明用途，你可以随时在系统设置中更改。")
+            InfoPair(title: "最后更新", value: "2026年7月10日")
+        }
+    }
+
+    @ViewBuilder
+    private var termsContent: some View {
         StaticInfoSectionCard(title: "服务说明") {
             InfoParagraph("雪涼云提供图片浏览、AI 绘画、音乐播放、个人收藏管理和公开广场。本服务仅供学习、研究和个人娱乐使用。")
         }
 
         StaticInfoSectionCard(title: "版权声明") {
             InfoPair(title: "图片内容", value: "图片内容来源于 Pixiv，版权归原作者所有，平台仅提供检索服务。")
-            InfoPair(title: "音乐内容", value: "音乐播放功能基于网易云音乐 API，版权归网易云音乐及原版权方所有。")
+            InfoPair(title: "音乐内容", value: "音乐播放功能基于网易云音乐服务，版权归网易云音乐及原版权方所有。")
             InfoPair(title: "平台内容", value: "前端代码、UI 设计和业务逻辑等归平台所有。")
-        }
-
-        StaticInfoSectionCard(title: "个人数据") {
-            InfoParagraph("平台会处理账户信息、图片与 AI 使用数据、积分记录、收藏数据、音乐数据和必要技术日志，用于身份验证、配额管理、防滥用和服务维护。")
-            InfoPair(title: "安全措施", value: "密码加密存储、HTTPS 传输、访问日志保留和必要的权限校验。")
-            InfoPair(title: "用户权利", value: "查看、修改、删除个人信息，导出数据，注销账户，撤回同意。")
         }
 
         StaticInfoSectionCard(title: "使用限制") {
@@ -192,79 +226,78 @@ struct StaticInfoView: View {
 
         StaticInfoSectionCard(title: "免责与变更") {
             InfoParagraph("服务按现状提供，可能因维护、升级或第三方服务故障中断。重大服务或条款变更会通过站内公告或邮件通知。")
-            InfoPair(title: "最后更新", value: "2025年12月28日")
+            InfoPair(title: "最后更新", value: "2026年7月10日")
         }
     }
 
     private func loadDailyExample() async {
         dailyState = .loading
-        dailyMessage = nil
+        dailyFavoriteState = .idle
+        dailyFeedback = nil
         do {
             guard let item = try await environment.publicBlogClient.dailySetu() else {
                 dailyState = .failed("公共示例服务暂未返回图片")
                 return
             }
             dailyState = .loaded(item)
-            dailyFavorited = (try? await environment.favoriteClient.exists(pid: item.pid, p: item.page)) == true
+            await loadDailyFavoriteStatus(for: item)
         } catch {
-            dailyState = .failed(error.localizedDescription)
+            dailyState = .failed(UserFacingErrorMapper.map(error).message)
+        }
+    }
+
+    private func loadDailyFavoriteStatus(for item: SetuImageItem) async {
+        dailyFavoriteState = .loading
+        do {
+            dailyFavoriteState = .loaded(
+                try await environment.favoriteClient.exists(pid: item.pid, p: item.page)
+            )
+        } catch {
+            dailyFavoriteState = .failed(UserFacingErrorMapper.map(error).message)
         }
     }
 
     private func toggleFavorite(_ item: SetuImageItem) async {
+        guard case .loaded(let isFavorited) = dailyFavoriteState else { return }
         dailyActionLoading = true
         defer { dailyActionLoading = false }
 
         do {
-            if dailyFavorited {
+            if isFavorited {
                 try await environment.favoriteClient.remove(pid: item.pid, p: item.page)
-                dailyFavorited = false
-                dailyMessage = "已取消收藏"
+                dailyFavoriteState = .loaded(false)
+                dailyFeedback = .success("已取消收藏")
             } else {
                 try await environment.favoriteClient.add(pid: item.pid, p: item.page)
-                dailyFavorited = true
-                dailyMessage = "已加入默认收藏夹"
+                dailyFavoriteState = .loaded(true)
+                dailyFeedback = .success("已加入默认收藏夹")
             }
         } catch {
-            dailyMessage = error.localizedDescription
+            dailyFeedback = .error(UserFacingErrorMapper.map(error).message)
         }
     }
 
     private func openSignedDownload(for item: SetuImageItem) async {
-        guard let url = item.originalURLString ?? item.previewURLString else {
-            dailyMessage = "这张图片没有可下载链接"
+        guard item.originalURLString != nil || item.previewURLString != nil else {
+            dailyFeedback = .error("这张图片暂时无法下载")
             return
         }
-
-        dailyActionLoading = true
-        defer { dailyActionLoading = false }
-
-        do {
-            let signed = try await environment.downloadClient.sign(url: url, filename: "\(item.pid)_p\(item.page).\(item.ext ?? "jpg")")
-            if let downloadURL = URL(string: signed.downloadUrl) {
-                openURL(downloadURL)
-                dailyMessage = "已打开下载链接"
-            } else {
-                dailyMessage = "下载链接无效"
-            }
-        } catch {
-            dailyMessage = error.localizedDescription
-        }
+        dailyPreview = UserImagePreviewItem(image: item)
     }
 
     private func openOriginal(_ item: SetuImageItem) {
-        guard let urlString = item.originalURLString ?? item.previewURLString, let url = URL(string: urlString) else {
-            dailyMessage = "这张图片没有可打开链接"
+        guard item.originalURLString != nil || item.previewURLString != nil else {
+            dailyFeedback = .error("这张图片暂时无法打开")
             return
         }
-        openURL(url)
-        dailyMessage = "已打开原图"
+        dailyPreview = UserImagePreviewItem(image: item)
+        dailyFeedback = .success("已打开原图")
     }
 }
 
 private struct DailySetuExampleCard: View {
     let item: SetuImageItem
-    let isFavorited: Bool
+    let favoriteState: LoadState<Bool>
     let isActionLoading: Bool
     let onFavorite: () -> Void
     let onDownload: () -> Void
@@ -272,27 +305,15 @@ private struct DailySetuExampleCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: SetuSpacing.md) {
-            AsyncImage(url: item.previewURLString.flatMap(URL.init(string:))) { phase in
-                switch phase {
-                case .empty:
-                    SetuEmptyState(title: "正在加载图片", systemImage: "photo", isLoading: true)
-                case .success(let image):
-                    image
-                        .resizable()
-                        .scaledToFill()
-                case .failure:
-                    SetuEmptyState(title: "图片加载失败", systemImage: "photo")
-                @unknown default:
-                    EmptyView()
-                }
-            }
+            SetuRemoteImage(
+                urlString: item.previewURLString,
+                accessibilityLabel: "每日图片：\(item.title)，作者 \(item.author)",
+                width: nil,
+                height: 220,
+                cornerRadius: SetuRadius.md,
+                contentMode: .fill
+            )
             .frame(maxWidth: .infinity)
-            .frame(height: 220)
-            .clipShape(RoundedRectangle(cornerRadius: SetuRadius.md, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: SetuRadius.md, style: .continuous)
-                    .stroke(SetuColor.separator, lineWidth: 1)
-            }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.title)
@@ -303,34 +324,69 @@ private struct DailySetuExampleCard: View {
                     .font(.subheadline)
                     .foregroundStyle(SetuColor.textSecondary)
                 HStack(spacing: 10) {
-                    Label("\(item.pid)-\(item.page)", systemImage: "number")
                     Label("\(item.width)x\(item.height)", systemImage: "rectangle")
                     if item.r18 == 1 {
-                        Text("R18")
+                        Text("成人内容")
                     }
                 }
                 .font(.caption)
                 .foregroundStyle(SetuColor.textTertiary)
             }
 
-            HStack {
-                Button(action: onFavorite) {
-                    Label(isFavorited ? "取消收藏" : "收藏", systemImage: isFavorited ? "heart.fill" : "heart")
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: SetuSpacing.sm) {
+                    dailyImageActionButtons
                 }
-                .disabled(isActionLoading)
 
-                Button(action: onDownload) {
-                    Label("下载", systemImage: "arrow.down.circle")
-                }
-                .disabled(isActionLoading)
-
-                Button(action: onOpenOriginal) {
-                    Label("原图", systemImage: "arrow.up.forward.square")
+                VStack(spacing: SetuSpacing.xs) {
+                    dailyImageActionButtons
                 }
             }
             .buttonStyle(.borderless)
         }
         .padding(.vertical, SetuSpacing.xs)
+    }
+
+    @ViewBuilder
+    private var dailyImageActionButtons: some View {
+        Button(action: onFavorite) {
+            Label(favoriteActionTitle, systemImage: favoriteActionSystemImage)
+                .frame(maxWidth: .infinity, minHeight: 44)
+        }
+        .disabled(isActionLoading || !favoriteActionIsAvailable)
+        .accessibilityIdentifier("daily.favorite.action")
+
+        Button(action: onDownload) {
+            Label("下载", systemImage: "arrow.down.circle")
+                .frame(maxWidth: .infinity, minHeight: 44)
+        }
+        .disabled(isActionLoading)
+
+        Button(action: onOpenOriginal) {
+            Label("原图", systemImage: "arrow.up.forward.square")
+                .frame(maxWidth: .infinity, minHeight: 44)
+        }
+    }
+
+    private var favoriteActionTitle: String {
+        switch favoriteState {
+        case .idle, .loading:
+            return "正在确认"
+        case .failed:
+            return "暂不可收藏"
+        case .loaded(let isFavorited):
+            return isFavorited ? "取消收藏" : "收藏"
+        }
+    }
+
+    private var favoriteActionSystemImage: String {
+        if case .loaded(true) = favoriteState { return "heart.fill" }
+        return "heart"
+    }
+
+    private var favoriteActionIsAvailable: Bool {
+        if case .loaded = favoriteState { return true }
+        return false
     }
 }
 

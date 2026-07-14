@@ -1,3 +1,4 @@
+import AuthenticationServices
 import SetuIOSCore
 import SwiftUI
 
@@ -7,7 +8,7 @@ struct PasskeyListView: View {
     @State private var renameTarget: PasskeyItem?
     @State private var deleteTarget: PasskeyItem?
     @State private var showingDeleteConfirmation = false
-    @State private var message: String?
+    @State private var feedback: SetuFeedback?
     @State private var nickname = "我的通行密钥"
     @State private var passkeyService = PasskeyAuthorizationService()
     @State private var isRegistering = false
@@ -17,7 +18,7 @@ struct PasskeyListView: View {
             Section {
                 SetuCard {
                     Label {
-                        Text("通行密钥可用于免密码登录。若开通失败，通常需要先完成应用域名配置。")
+                        Text("通行密钥可使用 Face ID、Touch ID 或设备密码安全登录，无需记住密码。")
                             .font(SetuTypography.caption)
                             .foregroundStyle(SetuColor.textSecondary)
                     } icon: {
@@ -37,8 +38,11 @@ struct PasskeyListView: View {
                             Task { await registerPasskey() }
                         } label: {
                             if isRegistering {
-                                ProgressView()
-                                    .tint(.white)
+                                HStack(spacing: SetuSpacing.sm) {
+                                    ProgressView()
+                                        .tint(.white)
+                                    Text("正在开通通行密钥")
+                                }
                             } else {
                                 Label("开通通行密钥", systemImage: "touchid")
                             }
@@ -49,9 +53,9 @@ struct PasskeyListView: View {
                 }
             }
 
-            if let message {
+            if let feedback {
                 Section {
-                    SetuPill(text: message, systemImage: "checkmark.seal", tone: .info)
+                    SetuFeedbackBanner(feedback: feedback)
                 }
             }
 
@@ -65,7 +69,13 @@ struct PasskeyListView: View {
             case .failed(let message):
                 Section {
                     SetuCard {
-                        SetuEmptyState(title: "通行密钥加载失败", message: message, systemImage: "touchid")
+                        SetuEmptyState(
+                            title: "通行密钥加载失败",
+                            message: message,
+                            systemImage: "touchid",
+                            actionTitle: "重试",
+                            action: { Task { await load() } }
+                        )
                     }
                 }
             case .loaded(let passkeys):
@@ -74,7 +84,7 @@ struct PasskeyListView: View {
                         SetuCard {
                             SetuEmptyState(
                                 title: "未开通通行密钥",
-                                message: "在当前设备开通后，下次登录可以直接使用 Face ID、Touch ID 或设备密码验证。",
+                                message: "请使用上方“开通通行密钥”完成设置，下次登录即可使用 Face ID、Touch ID 或设备密码验证。",
                                 systemImage: "touchid"
                             )
                         }
@@ -107,7 +117,7 @@ struct PasskeyListView: View {
         .navigationTitle("通行密钥")
         .sheet(item: $renameTarget) { item in
             PasskeyRenameSheet(environment: environment, item: item) {
-                message = "通行密钥已重命名"
+                feedback = .success("通行密钥已重命名")
                 Task { await load() }
             }
         }
@@ -138,24 +148,24 @@ struct PasskeyListView: View {
         do {
             state = .loaded(try await environment.passkeyClient.list())
         } catch {
-            state = .failed(error.localizedDescription)
+            state = .failed(UserFacingErrorMapper.map(error).message)
         }
     }
 
     private func delete(_ item: PasskeyItem) async {
         do {
             try await environment.passkeyClient.delete(id: item.id)
-            message = "通行密钥已删除"
+            feedback = .success("通行密钥已删除")
             await load()
         } catch {
-            message = PasskeyAuthorizationService.userMessage(for: error)
+            feedback = passkeyFeedback(for: error)
         }
     }
 
     private func registerPasskey() async {
         guard !trimmedNickname.isEmpty else { return }
         isRegistering = true
-        message = nil
+        feedback = nil
         do {
             let options = try await environment.passkeyClient.beginRegistration(nickname: trimmedNickname)
             let credential = try await passkeyService.createCredential(options: options.publicKey.publicKey)
@@ -164,65 +174,107 @@ struct PasskeyListView: View {
                 nickname: trimmedNickname,
                 credential: credential
             )
-            message = "通行密钥已开通"
+            feedback = .success("通行密钥已开通")
             await load()
         } catch {
-            message = PasskeyAuthorizationService.userMessage(for: error)
+            feedback = passkeyFeedback(for: error)
         }
         isRegistering = false
     }
 }
 
 private struct PasskeyRow: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let item: PasskeyItem
     let onRename: () -> Void
     let onDelete: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "touchid")
-                .font(.title2.weight(.semibold))
-                .foregroundStyle(SetuColor.brandPink)
-                .frame(width: 40, height: 40)
-                .background(SetuColor.brandSoft.opacity(0.2), in: RoundedRectangle(cornerRadius: SetuRadius.md, style: .continuous))
-            VStack(alignment: .leading, spacing: 6) {
-                Text(item.displayName)
-                    .font(SetuTypography.headline)
-                    .foregroundStyle(SetuColor.textPrimary)
-                HStack(spacing: 10) {
-                    if let createdAt = item.createdAt {
-                        Label(createdAt, systemImage: "calendar")
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: SetuSpacing.sm) {
+                    HStack(alignment: .top, spacing: SetuSpacing.sm) {
+                        passkeyIcon
+                        Text(item.displayName)
+                            .font(SetuTypography.headline)
+                            .foregroundStyle(SetuColor.textPrimary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        actionsMenu
                     }
-                    if let lastUsedAt = item.lastUsedAt {
-                        Label(lastUsedAt, systemImage: "clock")
-                    }
+                    passkeyDetails
                 }
-                .font(.caption)
-                .foregroundStyle(SetuColor.textSecondary)
-
-                if let transports = item.transports, !transports.isEmpty {
-                    Text(transports.joined(separator: ", "))
-                        .font(.caption)
-                        .foregroundStyle(SetuColor.textSecondary)
+            } else {
+                HStack(spacing: SetuSpacing.sm) {
+                    passkeyIcon
+                    VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+                        Text(item.displayName)
+                            .font(SetuTypography.headline)
+                            .foregroundStyle(SetuColor.textPrimary)
+                        passkeyDetails
+                    }
+                    Spacer()
+                    actionsMenu
                 }
             }
-            Spacer()
-            Menu {
-                Button(action: onRename) {
-                    Label("重命名", systemImage: "pencil")
-                }
-                Button(role: .destructive, action: onDelete) {
-                    Label("删除", systemImage: "trash")
-                }
-            } label: {
-                Image(systemName: "ellipsis.circle")
-                    .font(.title3)
-                    .foregroundStyle(SetuColor.textSecondary)
-                    .frame(width: 44, height: 44)
-            }
-            .buttonStyle(.borderless)
         }
         .padding(.vertical, SetuSpacing.xs)
+    }
+
+    private var passkeyIcon: some View {
+        Image(systemName: "touchid")
+            .font(.title2.weight(.semibold))
+            .foregroundStyle(SetuColor.brandPink)
+            .frame(width: 44, height: 44)
+            .background(SetuColor.brandSoft.opacity(0.2), in: RoundedRectangle(cornerRadius: SetuRadius.md, style: .continuous))
+            .accessibilityHidden(true)
+    }
+
+    private var passkeyDetails: some View {
+        VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+            if let createdAt = item.createdAt {
+                Label("创建于 \(SetuDateFormatter.string(from: createdAt))", systemImage: "calendar")
+            }
+            if let lastUsedAt = item.lastUsedAt {
+                Label("最近使用于 \(SetuDateFormatter.string(from: lastUsedAt))", systemImage: "clock")
+            }
+            if let transportTitle {
+                Text("可用于：\(transportTitle)")
+            }
+        }
+        .font(SetuTypography.caption)
+        .foregroundStyle(SetuColor.textSecondary)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var actionsMenu: some View {
+        Menu {
+            Button(action: onRename) {
+                Label("重命名", systemImage: "pencil")
+            }
+            Button(role: .destructive, action: onDelete) {
+                Label("删除", systemImage: "trash")
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .font(.title3)
+                .foregroundStyle(SetuColor.textSecondary)
+                .frame(width: 44, height: 44)
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel("更多通行密钥操作")
+    }
+
+    private var transportTitle: String? {
+        guard let transports = item.transports else { return nil }
+        let titles = Set(transports.compactMap { transport -> String? in
+            switch transport.lowercased() {
+            case "internal": "此设备"
+            case "hybrid": "附近设备"
+            case "usb", "nfc", "ble": "安全密钥"
+            default: nil
+            }
+        })
+        return titles.isEmpty ? nil : titles.sorted().joined(separator: "、")
     }
 }
 
@@ -233,7 +285,7 @@ private struct PasskeyRenameSheet: View {
     let onSaved: () -> Void
 
     @State private var nickname: String
-    @State private var message: String?
+    @State private var feedback: SetuFeedback?
     @State private var saving = false
 
     init(environment: AppEnvironment, item: PasskeyItem, onSaved: @escaping () -> Void) {
@@ -255,9 +307,9 @@ private struct PasskeyRenameSheet: View {
                         }
                     }
                 }
-                if let message {
+                if let feedback {
                     Section {
-                        SetuPill(text: message, systemImage: "exclamationmark.triangle", tone: .danger)
+                        SetuFeedbackBanner(feedback: feedback)
                     }
                 }
             }
@@ -286,14 +338,24 @@ private struct PasskeyRenameSheet: View {
     private func save() async {
         guard !trimmedNickname.isEmpty else { return }
         saving = true
-        message = nil
+        feedback = nil
         do {
             _ = try await environment.passkeyClient.rename(id: item.id, nickname: trimmedNickname)
             onSaved()
             dismiss()
         } catch {
-            message = PasskeyAuthorizationService.userMessage(for: error)
+            feedback = passkeyFeedback(for: error)
         }
         saving = false
     }
+}
+
+@MainActor
+private func passkeyFeedback(for error: Error) -> SetuFeedback {
+    let message = PasskeyAuthorizationService.userMessage(for: error)
+    if let authorizationError = error as? ASAuthorizationError,
+       authorizationError.code == .canceled {
+        return .info(message)
+    }
+    return .error(message)
 }

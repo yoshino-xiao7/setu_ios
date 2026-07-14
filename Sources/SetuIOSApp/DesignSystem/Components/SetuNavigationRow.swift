@@ -7,7 +7,13 @@ struct SetuNavigationRow: View {
     var iconColor: Color = SetuColor.brandPink
     let action: () -> Void
 
-    init(title: String, subtitle: String? = nil, systemImage: String, iconColor: Color = SetuColor.brandPink, action: @escaping () -> Void) {
+    init(
+        title: String,
+        subtitle: String? = nil,
+        systemImage: String,
+        iconColor: Color = SetuColor.brandPink,
+        action: @escaping () -> Void
+    ) {
         self.title = title
         self.subtitle = subtitle
         self.systemImage = systemImage
@@ -31,8 +37,8 @@ struct SetuNavigationRow: View {
                     if let subtitle {
                         Text(subtitle)
                             .font(SetuTypography.caption)
-                            .foregroundStyle(SetuColor.textSecondary)
-                            .lineLimit(2)
+                            .foregroundStyle(SetuColor.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 .multilineTextAlignment(.leading)
@@ -47,6 +53,12 @@ struct SetuNavigationRow: View {
         }
         .setuButtonFeedback()
         .frame(minHeight: 52)
-        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var accessibilityLabel: String {
+        [title, subtitle]
+            .compactMap { $0 }
+            .joined(separator: "，")
     }
 }

@@ -3,143 +3,154 @@ import SwiftUI
 
 struct AiSquareView: View {
     @Environment(RouterPath.self) private var router
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var environment: AppEnvironment
-    @State private var state: LoadState<PageResult<AiGenerationJob>> = .idle
     @State private var category = "GENERAL"
-    @State private var page = 1
-    @State private var previewSelection: AiSquarePreviewSelection?
-    @State private var message: String?
+    @State private var jobs: [AiPublicWork] = []
+    @State private var total = 0
+    @State private var nextPage = 1
+    @State private var isInitialLoading = true
+    @State private var isLoadingMore = false
+    @State private var loadError: String?
     private let pageSize = 16
 
     var body: some View {
-        List {
-            if let message {
-                Section {
-                    SetuPill(text: message, systemImage: "checkmark.circle", tone: .brand)
-                }
-                .setuListRow()
+        ScrollView {
+            VStack(alignment: .leading, spacing: SetuSpacing.lg) {
+            Picker("分类", selection: $category) {
+                Text("全部").tag("")
+                Text("全年龄").tag("GENERAL")
+                Text("成人内容").tag("R18")
+            }
+            .pickerStyle(.segmented)
+            .onChange(of: category) {
+                Task { await loadFirstPage(clearExisting: true) }
             }
 
-            Section {
-                Picker("分类", selection: $category) {
-                    Text("全部").tag("")
-                    Text("全年龄").tag("GENERAL")
-                    Text("R18").tag("R18")
+            if isInitialLoading {
+                SetuCard {
+                    SetuEmptyState(title: "正在加载 AI 绘画广场", systemImage: "photo.on.rectangle", isLoading: true)
                 }
-                .pickerStyle(.segmented)
-                .onChange(of: category) {
-                    Task {
-                        page = 1
-                        await load()
-                    }
-                }
-            }
-            .setuListRow()
-
-            switch state {
-            case .idle, .loading:
-                Section {
+            } else if jobs.isEmpty {
+                if let loadError {
                     SetuCard {
-                        SetuEmptyState(title: "正在加载 AI 绘画广场", systemImage: "photo.on.rectangle", isLoading: true)
-                    }
-                }
-                .setuListRow()
-            case .failed(let message):
-                Section {
-                    SetuCard {
-                        SetuEmptyState(title: "AI 绘画广场加载失败", message: message, systemImage: "photo.on.rectangle")
-                    }
-                }
-                .setuListRow()
-            case .loaded(let page):
-                if page.list.isEmpty {
-                    Section {
-                        SetuCard {
-                            SetuEmptyState(title: "暂无公开 AI 作品", systemImage: "sparkles")
+                        VStack(spacing: SetuSpacing.md) {
+                            SetuEmptyState(title: "AI 绘画广场加载失败", message: loadError, systemImage: "wifi.exclamationmark")
+                            Button("重试") { Task { await loadFirstPage() } }
+                                .buttonStyle(.borderedProminent)
                         }
                     }
-                    .setuListRow()
                 } else {
-                    Section {
-                        SetuCard {
-                            VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                                SetuSectionHeader(title: "共 \(page.total) 个作品")
-                                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: SetuSpacing.md) {
-                                    ForEach(page.list) { job in
-                                        AiGenerationGridTile(job: job, footerTitle: job.createdAt) {
-                                            previewSelection = AiSquarePreviewSelection(job: job)
-                                        }
-                                    }
+                    SetuCard {
+                        SetuEmptyState(
+                            title: "暂无公开 AI 作品",
+                            message: "稍后再来看看新的公开创作。",
+                            systemImage: "sparkles",
+                            actionTitle: "刷新广场",
+                            action: { Task { await loadFirstPage() } }
+                        )
+                    }
+                }
+            } else {
+                VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                    SetuSectionHeader(title: "广场作品")
+                    LazyVGrid(columns: gridColumns, spacing: SetuSpacing.md) {
+                        ForEach(jobs) { job in
+                            AiGenerationGridTile(work: job, footerTitle: SetuDateFormatter.string(from: job.createdAt)) {
+                                router.navigate(to: .publicAiWork(PublicAiWorkSnapshot(work: job)))
+                            }
+                            .onAppear {
+                                if job.id == jobs.last?.id {
+                                    Task { await loadMore() }
                                 }
                             }
                         }
                     }
-                    .setuListRow()
-                    pagerSection(page)
+                    loadMoreFooter
                 }
             }
         }
-        .listStyle(.plain)
+            .padding(.horizontal, SetuSpacing.lg)
+            .padding(.vertical, SetuSpacing.md)
+        }
         .setuBackground()
         .navigationTitle("AI 绘画广场")
-        .sheet(item: $previewSelection) { selection in
-            AiGenerationImagePreviewSheet(
-                environment: environment,
-                job: selection.job,
-                onOpenDetail: {
-                    previewSelection = nil
-                    router.navigate(to: .aiGenerationDetail(selection.job.id))
-                },
-                onMessage: { message = $0 }
-            )
-        }
-        .task { await load() }
-        .refreshable { await load() }
+        .task { await loadFirstPage() }
+        .refreshable { await loadFirstPage() }
     }
 
-    private func pagerSection(_ result: PageResult<AiGenerationJob>) -> some View {
-        Section {
-            HStack(spacing: SetuSpacing.md) {
-                Button("上一页") {
-                    Task {
-                        page = max(1, page - 1)
-                        await load()
-                    }
-                }
-                .disabled(page <= 1)
-                .buttonStyle(.bordered)
-
-                Spacer()
-                Text("第 \(result.page) 页")
-                    .font(.footnote)
-                    .foregroundStyle(SetuColor.textSecondary)
-                Spacer()
-
-                Button("下一页") {
-                    Task {
-                        page += 1
-                        await load()
-                    }
-                }
-                .disabled(result.page * result.pageSize >= result.total)
-                .buttonStyle(.bordered)
-            }
+    @ViewBuilder
+    private var loadMoreFooter: some View {
+        SetuLoadMoreFooter(state: loadMoreFooterState) {
+            Task { await loadMore() }
         }
-        .setuListRow()
     }
 
-    private func load() async {
-        state = .loading
+    private var loadMoreFooterState: SetuLoadMoreFooterState {
+        if isLoadingMore { return .loading }
+        if let loadError { return .failed(loadError) }
+        if !hasMore { return .complete("已加载全部 \(total) 个作品") }
+        return .idle
+    }
+
+    private var hasMore: Bool { jobs.count < total }
+
+    private var gridColumns: [GridItem] {
+        dynamicTypeSize.isAccessibilitySize
+            ? [GridItem(.flexible())]
+            : [GridItem(.adaptive(minimum: 148), spacing: SetuSpacing.md)]
+    }
+
+    private func loadFirstPage(clearExisting: Bool = false) async {
+        let requestedCategory = category
+        if clearExisting {
+            jobs = []
+            total = 0
+            nextPage = 1
+        }
+        isInitialLoading = jobs.isEmpty
+        isLoadingMore = false
+        loadError = nil
         do {
-            state = .loaded(try await environment.aiGenerationClient.square(category: category, page: page, pageSize: pageSize))
+            let result = try await environment.aiGenerationClient.square(category: requestedCategory, page: 1, pageSize: pageSize)
+            guard requestedCategory == category else { return }
+            jobs = result.list
+            total = result.total
+            nextPage = 2
         } catch {
-            state = .failed(error.localizedDescription)
+            guard requestedCategory == category else { return }
+            loadError = UserFacingErrorMapper.map(error).message
+        }
+        isInitialLoading = false
+    }
+
+    private func loadMore() async {
+        guard hasMore, !isLoadingMore, !isInitialLoading else { return }
+        let requestedCategory = category
+        let requestedPage = nextPage
+        isLoadingMore = true
+        loadError = nil
+        defer { isLoadingMore = false }
+        do {
+            let result = try await environment.aiGenerationClient.square(category: requestedCategory, page: requestedPage, pageSize: pageSize)
+            guard requestedCategory == category, requestedPage == nextPage else { return }
+            let existingIDs = Set(jobs.map(\.id))
+            jobs.append(contentsOf: result.list.filter { !existingIDs.contains($0.id) })
+            total = result.total
+            nextPage += 1
+        } catch {
+            guard requestedCategory == category else { return }
+            loadError = UserFacingErrorMapper.map(error).message
         }
     }
 }
 
-private struct AiSquarePreviewSelection: Identifiable {
-    let job: AiGenerationJob
-
-    var id: Int { job.id }
+#if DEBUG
+#Preview("AI 广场 · 430 · 深色") {
+    SetuFeaturePreviewHost { environment, _ in
+        AiSquareView(environment: environment)
+    }
+    .frame(width: 430, height: 932)
+    .preferredColorScheme(.dark)
 }
+#endif

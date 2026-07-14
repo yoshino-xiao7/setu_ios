@@ -24,7 +24,7 @@ struct CollectionEditorSheet: View {
     @State private var name: String
     @State private var description: String
     @State private var visibility: CollectionVisibility
-    @State private var message: String?
+    @State private var feedback: SetuFeedback?
 
     init(environment: AppEnvironment, context: CollectionEditorContext, onSaved: @escaping () -> Void) {
         self.environment = environment
@@ -65,13 +65,8 @@ struct CollectionEditorSheet: View {
                 }
                 .setuListRow()
 
-                if let message {
-                    SetuCard {
-                        Label(message, systemImage: "exclamationmark.triangle")
-                            .font(SetuTypography.caption)
-                            .foregroundStyle(SetuColor.danger)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
+                if let feedback {
+                    SetuFeedbackBanner(feedback: feedback)
                     .setuListRow()
                 }
             }
@@ -123,7 +118,7 @@ struct CollectionEditorSheet: View {
 
     private func save() async {
         guard !trimmedName.isEmpty else { return }
-        message = nil
+        feedback = nil
         do {
             switch context {
             case .create:
@@ -143,7 +138,7 @@ struct CollectionEditorSheet: View {
             onSaved()
             dismiss()
         } catch {
-            message = error.localizedDescription
+            feedback = .error(UserFacingErrorMapper.map(error).message)
         }
     }
 }

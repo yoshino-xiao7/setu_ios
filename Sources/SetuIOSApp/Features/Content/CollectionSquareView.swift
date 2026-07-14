@@ -3,82 +3,81 @@ import SwiftUI
 
 struct CollectionSquareView: View {
     @Environment(RouterPath.self) private var router
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var environment: AppEnvironment
-    @State private var state: LoadState<PageResult<CollectionInfo>> = .idle
+    @State private var collections: [CollectionInfo] = []
+    @State private var total = 0
+    @State private var nextPage = 1
+    @State private var isInitialLoading = true
+    @State private var isLoadingMore = false
+    @State private var initialError: String?
+    @State private var loadMoreError: String?
     @State private var sort = "hot"
     @State private var searchText = ""
     @State private var keyword = ""
-    @State private var page = 1
-    @State private var actionMessage: String?
+    @State private var feedback: SetuFeedback?
     private let pageSize = 20
 
     var body: some View {
-        List {
-            SetuCard {
-                Picker("排序", selection: $sort) {
-                    Text("热门").tag("hot")
-                    Text("最新").tag("new")
-                    Text("点赞").tag("like")
+        ScrollView {
+            VStack(alignment: .leading, spacing: SetuSpacing.lg) {
+                adaptiveSortPicker
+                .onChange(of: sort) {
+                    Task { await loadFirstPage(clearExisting: true) }
                 }
-                .pickerStyle(.segmented)
-            }
-            .setuListRow()
-            .onChange(of: sort) {
-                Task {
-                    page = 1
-                    await load()
-                }
-            }
 
-            if let actionMessage {
-                SetuCard {
-                    Label(actionMessage, systemImage: "checkmark.circle")
-                        .font(SetuTypography.caption)
-                        .foregroundStyle(SetuColor.textSecondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                if let feedback {
+                    SetuFeedbackBanner(feedback: feedback)
                 }
-                .setuListRow()
-            }
 
-            switch state {
-            case .idle, .loading:
-                ContentImageStateSection(title: "正在加载收藏夹广场", message: "正在整理公开收藏夹。", systemImage: "globe.asia.australia", isLoading: true)
-            case .failed(let message):
-                ContentImageStateSection(title: "广场加载失败", message: message, systemImage: "globe.asia.australia")
-            case .loaded(let page):
-                if page.list.isEmpty {
-                    ContentImageStateSection(title: "暂无公开收藏夹", message: "换个关键词或排序方式再试试。", systemImage: "rectangle.stack")
-                } else {
+                if let initialError, !collections.isEmpty {
+                    SetuLoadMoreFooter(state: .failed(initialError)) {
+                        Task { await loadFirstPage() }
+                    }
+                }
+
+                if isInitialLoading {
                     SetuCard {
-                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                            SetuSectionHeader(title: "共 \(page.total) 个", subtitle: "公开收藏夹")
-                            ForEach(Array(page.list.enumerated()), id: \.element.id) { index, collection in
-                                if index > 0 {
-                                    Divider()
-                                        .overlay(SetuColor.separator)
+                        SetuEmptyState(
+                            title: "正在加载收藏夹广场",
+                            message: "正在整理公开收藏夹。",
+                            systemImage: "globe.asia.australia",
+                            isLoading: true
+                        )
+                    }
+                } else if collections.isEmpty {
+                    emptyState
+                } else {
+                    SetuSectionHeader(title: "公开收藏夹", subtitle: "共 \(total) 个")
+                        .accessibilityIdentifier("collections.square.loaded")
+                    LazyVGrid(columns: gridColumns, spacing: SetuSpacing.md) {
+                        ForEach(collections) { collection in
+                            CollectionSquareTile(collection: collection) {
+                                router.navigate(to: .publicCollectionDetail(collection.id))
+                            } onLike: {
+                                Task { await like(collection) }
+                            } onFavorite: {
+                                Task { await favorite(collection) }
+                            } onOwner: {
+                                router.navigate(to: .publicUserProfile(collection.userId))
+                            }
+                            .onAppear {
+                                if collection.id == collections.last?.id {
+                                    Task { await loadMore() }
                                 }
-                                Button {
-                                    router.navigate(to: .publicCollectionDetail(collection.id))
-                                } label: {
-                                    CollectionSquareRow(collection: collection) {
-                                        Task { await like(collection) }
-                                    } onFavorite: {
-                                        Task { await favorite(collection) }
-                                    } onOwner: {
-                                        router.navigate(to: .publicUserProfile(collection.userId))
-                                    }
-                                }
-                                .buttonStyle(.plain)
                             }
                         }
                     }
-                    .setuListRow()
-                    pagerSection(page)
+                    SetuLoadMoreFooter(state: loadMoreFooterState) {
+                        Task { await loadMore() }
+                    }
                 }
             }
+            .padding(.horizontal, SetuSpacing.lg)
+            .padding(.vertical, SetuSpacing.md)
         }
-        .listStyle(.plain)
         .setuBackground()
+        .accessibilityIdentifier("collections.square.page")
         .navigationTitle("收藏夹广场")
         .searchable(text: $searchText, prompt: "搜索收藏夹")
         .onSubmit(of: .search) {
@@ -88,148 +87,271 @@ struct CollectionSquareView: View {
             if newValue.isEmpty, !keyword.isEmpty {
                 Task {
                     keyword = ""
-                    page = 1
-                    await load()
+                    await loadFirstPage(clearExisting: true)
                 }
             }
         }
-        .task { await load() }
-        .refreshable { await load() }
+        .task { await loadFirstPage() }
+        .refreshable { await loadFirstPage() }
     }
 
-    private func pagerSection(_ result: PageResult<CollectionInfo>) -> some View {
-        SetuCard {
-            HStack {
-                Button {
-                    Task {
-                        page = max(1, page - 1)
-                        await load()
-                    }
-                } label: {
-                    Label("上一页", systemImage: "chevron.left")
-                        .frame(minHeight: 44)
-                }
-                .disabled(page <= 1)
-
-                Spacer()
-                Text("第 \(result.page) 页")
-                    .font(SetuTypography.caption)
-                    .foregroundStyle(SetuColor.textSecondary)
-                Spacer()
-
-                Button {
-                    Task {
-                        page += 1
-                        await load()
-                    }
-                } label: {
-                    Label("下一页", systemImage: "chevron.right")
-                        .frame(minHeight: 44)
-                }
-                .disabled(result.page * result.pageSize >= result.total)
-            }
-            .font(SetuTypography.body)
+    @ViewBuilder
+    private var adaptiveSortPicker: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            sortPicker.pickerStyle(.menu)
+        } else {
+            sortPicker.pickerStyle(.segmented)
         }
-        .setuListRow()
     }
 
-    private func load() async {
-        state = .loading
-        actionMessage = nil
+    private var sortPicker: some View {
+        Picker("排序", selection: $sort) {
+            Text("热门").tag("hot")
+            Text("最新").tag("new")
+            Text("点赞").tag("like")
+        }
+    }
+
+    @ViewBuilder
+    private var emptyState: some View {
+        if let initialError {
+            SetuCard {
+                VStack(spacing: SetuSpacing.md) {
+                    SetuEmptyState(title: "广场加载失败", message: initialError, systemImage: "globe.asia.australia")
+                    Button("重试") {
+                        Task { await loadFirstPage() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+            }
+        } else {
+            SetuCard {
+                SetuEmptyState(title: "暂无公开收藏夹", message: "换个关键词或排序方式再试试。", systemImage: "rectangle.stack")
+            }
+        }
+    }
+
+    private var gridColumns: [GridItem] {
+        if dynamicTypeSize.isAccessibilitySize {
+            return [GridItem(.flexible())]
+        }
+        return [GridItem(.adaptive(minimum: 156), spacing: SetuSpacing.md)]
+    }
+
+    private var hasMore: Bool { collections.count < total }
+
+    private var loadMoreFooterState: SetuLoadMoreFooterState {
+        if isLoadingMore { return .loading }
+        if let loadMoreError { return .failed(loadMoreError) }
+        if !hasMore { return .complete("已加载全部 \(total) 个收藏夹") }
+        return .idle
+    }
+
+    private func loadFirstPage(clearExisting: Bool = false) async {
+        let requestedSort = sort
+        let requestedKeyword = keyword
+        if clearExisting {
+            collections = []
+            total = 0
+            nextPage = 1
+        }
+        isInitialLoading = collections.isEmpty
+        initialError = nil
+        loadMoreError = nil
         do {
-            state = .loaded(try await environment.collectionClient.square(page: page, size: pageSize, sort: sort, keyword: keyword))
+            let result = try await environment.collectionClient.square(
+                page: 1,
+                size: pageSize,
+                sort: requestedSort,
+                keyword: requestedKeyword
+            )
+            guard requestedSort == sort, requestedKeyword == keyword else { return }
+            collections = result.list
+            total = result.total
+            nextPage = 2
         } catch {
-            state = .failed(error.localizedDescription)
+            guard requestedSort == sort, requestedKeyword == keyword else { return }
+            initialError = "暂时无法加载收藏夹，请检查网络后重试。"
+        }
+        isInitialLoading = false
+    }
+
+    private func loadMore() async {
+        guard hasMore, !isLoadingMore, !isInitialLoading else { return }
+        let requestedSort = sort
+        let requestedKeyword = keyword
+        let requestedPage = nextPage
+        isLoadingMore = true
+        loadMoreError = nil
+        defer { isLoadingMore = false }
+        do {
+            let result = try await environment.collectionClient.square(
+                page: requestedPage,
+                size: pageSize,
+                sort: requestedSort,
+                keyword: requestedKeyword
+            )
+            guard requestedSort == sort, requestedKeyword == keyword, requestedPage == nextPage else { return }
+            let existingIDs = Set(collections.map(\.id))
+            collections.append(contentsOf: result.list.filter { !existingIDs.contains($0.id) })
+            total = result.total
+            nextPage += 1
+        } catch {
+            guard requestedSort == sort, requestedKeyword == keyword else { return }
+            loadMoreError = "更多收藏夹加载失败"
         }
     }
 
     private func submitSearch() async {
         keyword = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        page = 1
-        await load()
+        await loadFirstPage(clearExisting: true)
     }
 
     private func like(_ collection: CollectionInfo) async {
+        feedback = nil
         do {
-            try await environment.collectionClient.likeSquareCollection(id: collection.id, liked: collection.likedByMe != true)
-            await load()
+            let shouldLike = collection.likedByMe != true
+            try await environment.collectionClient.likeSquareCollection(id: collection.id, liked: shouldLike)
+            let successMessage = shouldLike ? "已点赞" : "已取消点赞"
+            let didRefresh = await refreshCollection(id: collection.id)
+            feedback = didRefresh
+                ? .success(successMessage)
+                : .warning("\(successMessage)，最新状态稍后刷新")
         } catch {
-            actionMessage = error.localizedDescription
+            feedback = .error(UserFacingErrorMapper.map(error).message)
         }
     }
 
     private func favorite(_ collection: CollectionInfo) async {
+        feedback = nil
         do {
-            try await environment.collectionClient.favoriteSquareCollection(id: collection.id, favorited: collection.favoritedByMe != true)
-            await load()
+            let shouldFavorite = collection.favoritedByMe != true
+            try await environment.collectionClient.favoriteSquareCollection(id: collection.id, favorited: shouldFavorite)
+            let successMessage = shouldFavorite ? "已收藏" : "已取消收藏"
+            let didRefresh = await refreshCollection(id: collection.id)
+            feedback = didRefresh
+                ? .success(successMessage)
+                : .warning("\(successMessage)，最新状态稍后刷新")
         } catch {
-            actionMessage = error.localizedDescription
+            feedback = .error(UserFacingErrorMapper.map(error).message)
         }
+    }
+
+    private func refreshCollection(id: Int) async -> Bool {
+        guard let refreshed = try? await environment.collectionClient.squareDetail(id: id),
+              let index = collections.firstIndex(where: { $0.id == id }) else { return false }
+        collections[index] = refreshed
+        return true
     }
 }
 
-private struct CollectionSquareRow: View {
+private struct CollectionSquareTile: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     let collection: CollectionInfo
+    let onOpen: () -> Void
     let onLike: () -> Void
     let onFavorite: () -> Void
     let onOwner: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SetuSpacing.md) {
-            HStack(alignment: .top, spacing: SetuSpacing.md) {
-                ImageThumbnailView(urlString: collection.coverUrl ?? collection.previewImages?.first?.bestURLString)
-                VStack(alignment: .leading, spacing: SetuSpacing.xs) {
-                    Text(collection.name)
-                        .font(SetuTypography.headline)
-                        .foregroundStyle(SetuColor.textPrimary)
+        SetuCard(padding: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                Button(action: onOpen) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ContentGridImageView(
+                            urlString: collection.coverUrl ?? collection.previewImages?.first?.bestURLString,
+                            accessibilityLabel: collection.name
+                        )
+
+                        Text(collection.name)
+                            .font(SetuTypography.headline)
+                            .foregroundStyle(SetuColor.textPrimary)
+                            .multilineTextAlignment(.leading)
+                            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, SetuSpacing.md)
+                            .padding(.top, SetuSpacing.md)
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("打开收藏夹：\(collection.name)")
+                .accessibilityIdentifier("collections.square.tile.\(collection.id).open")
+
+                VStack(alignment: .leading, spacing: SetuSpacing.sm) {
                     if let description = collection.description, !description.isEmpty {
                         Text(description)
                             .font(SetuTypography.caption)
                             .foregroundStyle(SetuColor.textSecondary)
-                            .lineLimit(2)
+                            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
+
                     Button(action: onOwner) {
                         Label(collection.ownerNickname ?? "匿名分享者", systemImage: "person.crop.circle")
                             .font(SetuTypography.caption)
-                            .frame(minHeight: 44, alignment: .leading)
+                            .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                     }
-                    .buttonStyle(.borderless)
-                }
-            }
+                    .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .accessibilityLabel("查看\(collection.ownerNickname ?? "匿名分享者")的主页")
 
-            if let previews = collection.previewImages, !previews.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(previews.prefix(5)) { image in
-                            ImageThumbnailView(urlString: image.bestURLString, width: 48, height: 48)
+                    VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+                        HStack {
+                            Label("\(collection.itemCount ?? 0) 张", systemImage: "photo")
+                            Spacer(minLength: SetuSpacing.xs)
+                            Label("\(collection.shareViewCount ?? 0)", systemImage: "eye")
+                        }
+                        HStack {
+                            Label("\(collection.likeCount ?? collection.shareLikeCount ?? 0)", systemImage: "hand.thumbsup")
+                            Spacer(minLength: SetuSpacing.xs)
+                            Label("\(collection.favoriteCount ?? collection.shareFavCount ?? 0)", systemImage: "star")
                         }
                     }
-                }
-            }
+                    .font(.caption2)
+                    .foregroundStyle(SetuColor.textSecondary)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(
+                        "共 \(collection.itemCount ?? 0) 张，浏览 \(collection.shareViewCount ?? 0) 次，点赞 \(collection.likeCount ?? collection.shareLikeCount ?? 0) 次，收藏 \(collection.favoriteCount ?? collection.shareFavCount ?? 0) 次"
+                    )
 
-            HStack(spacing: 12) {
-                Label("\(collection.itemCount ?? 0) 张", systemImage: "photo")
-                Label("\(collection.shareViewCount ?? 0)", systemImage: "eye")
-                Label("\(collection.likeCount ?? collection.shareLikeCount ?? 0)", systemImage: "hand.thumbsup")
-                Label("\(collection.favoriteCount ?? collection.shareFavCount ?? 0)", systemImage: "star")
-            }
-            .font(.caption2)
-            .foregroundStyle(SetuColor.textTertiary)
+                    HStack {
+                        Button(action: onLike) {
+                            Image(systemName: collection.likedByMe == true ? "hand.thumbsup.fill" : "hand.thumbsup")
+                                .frame(width: 44, height: 44)
+                        }
+                        .accessibilityLabel(collection.likedByMe == true ? "取消点赞《\(collection.name)》" : "点赞《\(collection.name)》")
+                        .accessibilityValue(collection.likedByMe == true ? "已点赞" : "未点赞")
 
-            HStack {
-                Button(action: onLike) {
-                    Label(collection.likedByMe == true ? "取消点赞" : "点赞", systemImage: "hand.thumbsup")
-                        .frame(minHeight: 44)
+                        Spacer()
+
+                        Button(action: onFavorite) {
+                            Image(systemName: collection.favoritedByMe == true ? "star.fill" : "star")
+                                .frame(width: 44, height: 44)
+                        }
+                        .accessibilityLabel(collection.favoritedByMe == true ? "取消收藏《\(collection.name)》" : "收藏《\(collection.name)》")
+                        .accessibilityValue(collection.favoritedByMe == true ? "已收藏" : "未收藏")
+                    }
+                    .foregroundStyle(SetuColor.brandPink)
                 }
-                Spacer()
-                Button(action: onFavorite) {
-                    Label(collection.favoritedByMe == true ? "取消收藏" : "收藏", systemImage: "star")
-                        .frame(minHeight: 44)
-                }
+                .padding(SetuSpacing.md)
             }
-            .buttonStyle(.borderless)
-            .font(SetuTypography.caption)
         }
-        .padding(.vertical, SetuSpacing.xs)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("collections.square.tile.\(collection.id)")
     }
 }
+
+#if DEBUG
+#Preview("收藏夹广场 · 375 · AX3") {
+    SetuFeaturePreviewHost { environment, _ in
+        CollectionSquareView(environment: environment)
+    }
+    .frame(width: 375, height: 812)
+    .preferredColorScheme(.light)
+    .environment(\.dynamicTypeSize, .accessibility3)
+}
+#endif

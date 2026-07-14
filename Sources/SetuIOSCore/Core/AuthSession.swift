@@ -45,7 +45,7 @@ public final class AuthSession {
             )
             try await acceptLoginResponse(response, fallbackEmail: email)
         } catch {
-            lastError = error.localizedDescription
+            lastError = Self.userFacingMessage(for: error)
         }
     }
 
@@ -59,7 +59,7 @@ public final class AuthSession {
             )
             return true
         } catch {
-            lastError = error.localizedDescription
+            lastError = Self.userFacingMessage(for: error)
             return false
         }
     }
@@ -74,7 +74,7 @@ public final class AuthSession {
             )
             return true
         } catch {
-            lastError = error.localizedDescription
+            lastError = Self.userFacingMessage(for: error)
             return false
         }
     }
@@ -89,7 +89,7 @@ public final class AuthSession {
             )
             return true
         } catch {
-            lastError = error.localizedDescription
+            lastError = Self.userFacingMessage(for: error)
             return false
         }
     }
@@ -152,7 +152,7 @@ public final class AuthSession {
             persistExpireAt(response.expireAt)
             return true
         } catch {
-            lastError = error.localizedDescription
+            lastError = Self.userFacingMessage(for: error)
             return false
         }
     }
@@ -228,6 +228,62 @@ public final class AuthSession {
         try? keychain.remove(currentUserKey)
         currentUser = nil
         expireAt = nil
+    }
+
+    private static func userFacingMessage(for error: Error) -> String {
+        if error is AuthSessionError {
+            return "登录会话确认失败，请重新登录"
+        }
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .notConnectedToInternet, .networkConnectionLost:
+                return "网络似乎断开了，请检查连接后重试"
+            case .timedOut:
+                return "连接超时，请稍后重试"
+            default:
+                return "暂时无法连接服务，请稍后重试"
+            }
+        }
+
+        guard let apiError = error as? APIError else {
+            return "操作没有完成，请稍后重试"
+        }
+
+        switch apiError {
+        case .invalidURL, .invalidResponse:
+            return "服务响应异常，请稍后重试"
+        case .httpStatus(let status, let message, _, _):
+            let safeMessage = sanitizedServerMessage(message)
+            switch status {
+            case 400:
+                return safeMessage ?? "请检查填写内容后重试"
+            case 401:
+                return "邮箱、密码或验证码不正确，请重新输入"
+            case 403:
+                return "当前账号无法执行此操作"
+            case 404:
+                return "请求的内容不存在或已被移除"
+            case 409:
+                return safeMessage ?? "当前状态已发生变化，请刷新后继续"
+            case 429:
+                return "操作有点频繁，请稍后再试"
+            case 500...599:
+                return "服务暂时开小差，请稍后重试"
+            default:
+                return safeMessage ?? "操作没有完成，请稍后重试"
+            }
+        }
+    }
+
+    private static func sanitizedServerMessage(_ message: String?) -> String? {
+        guard let message = message?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !message.isEmpty else {
+            return nil
+        }
+        let normalized = message.lowercased()
+        let technicalMarkers = ["request id", "trace id", "http ", "exception", "stack trace", "/auth/"]
+        guard !technicalMarkers.contains(where: normalized.contains) else { return nil }
+        return message
     }
 }
 

@@ -2,15 +2,8 @@ import Foundation
 import SetuIOSCore
 import SwiftUI
 
-#if os(iOS)
-import UIKit
-typealias PlatformArtworkImage = UIImage
-#elseif os(macOS)
-import AppKit
-typealias PlatformArtworkImage = NSImage
-#endif
-
 struct MusicArtworkView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let urlString: String?
     var width: CGFloat? = 54
     var height: CGFloat = 54
@@ -18,14 +11,15 @@ struct MusicArtworkView: View {
     var artworkSize: MusicArtworkSize = .thumbnail
     var systemImage: String = "music.note"
     var onTap: (() -> Void)?
+    var allowsTapToRetry = false
 
-    @State private var image: PlatformArtworkImage?
+    @State private var image: SetuPlatformImage?
     @State private var loadFailed = false
     @State private var reloadID = UUID()
 
     var body: some View {
         Group {
-            if onTap != nil || loadFailed {
+            if onTap != nil || (loadFailed && allowsTapToRetry) {
                 Button(action: handleTap) {
                     artworkContent
                 }
@@ -65,6 +59,7 @@ struct MusicArtworkView: View {
 
     private func handleTap() {
         if loadFailed {
+            loadFailed = false
             reloadID = UUID()
         } else {
             onTap?()
@@ -75,18 +70,28 @@ struct MusicArtworkView: View {
         secureURLString(urlString, artworkSize: artworkSize)
     }
 
+    @ViewBuilder
     private var placeholder: some View {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(SetuColor.brandSoft.opacity(0.18))
-            .overlay {
-                Image(systemName: loadFailed ? "arrow.clockwise" : systemImage)
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(loadFailed ? SetuColor.danger : SetuColor.brandPink)
-            }
+        if normalizedURLString != nil, !loadFailed {
+            SetuSkeleton(cornerRadius: cornerRadius)
+                .overlay {
+                    Image(systemName: systemImage)
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(SetuColor.textTertiary)
+                }
+        } else {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(SetuColor.brandSoft.opacity(0.18))
+                .overlay {
+                    Image(systemName: loadFailed && allowsTapToRetry ? "arrow.clockwise" : systemImage)
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(loadFailed && allowsTapToRetry ? SetuColor.danger : SetuColor.brandPink)
+                }
+        }
     }
 
     @ViewBuilder
-    private func platformImage(_ image: PlatformArtworkImage) -> Image {
+    private func platformImage(_ image: SetuPlatformImage) -> Image {
         #if os(iOS)
         Image(uiImage: image)
         #elseif os(macOS)
@@ -103,8 +108,8 @@ struct MusicArtworkView: View {
         }
 
         do {
-            let loaded = try await RemoteArtworkLoader.shared.image(from: url)
-            withAnimation(.easeInOut(duration: 0.18)) {
+            let loaded = try await SetuRemoteImageLoader.shared.image(from: url)
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
                 image = loaded
                 loadFailed = false
             }
@@ -112,55 +117,5 @@ struct MusicArtworkView: View {
             image = nil
             loadFailed = true
         }
-    }
-}
-
-actor RemoteArtworkLoader {
-    static let shared = RemoteArtworkLoader()
-
-    private let session: URLSession
-
-    init() {
-        let cache = URLCache(
-            memoryCapacity: 64 * 1024 * 1024,
-            diskCapacity: 256 * 1024 * 1024,
-            diskPath: "SetuMusicArtworkCache"
-        )
-        URLCache.shared.memoryCapacity = max(URLCache.shared.memoryCapacity, 64 * 1024 * 1024)
-        URLCache.shared.diskCapacity = max(URLCache.shared.diskCapacity, 256 * 1024 * 1024)
-
-        let configuration = URLSessionConfiguration.default
-        configuration.urlCache = cache
-        configuration.requestCachePolicy = .returnCacheDataElseLoad
-        session = URLSession(configuration: configuration)
-    }
-
-    func image(from url: URL) async throws -> PlatformArtworkImage {
-        let data = try await data(from: url)
-        guard let image = PlatformArtworkImage(data: data) else {
-            throw URLError(.cannotDecodeContentData)
-        }
-        return image
-    }
-
-    func data(from url: URL) async throws -> Data {
-        let request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad)
-        if let cached = session.configuration.urlCache?.cachedResponse(for: request) {
-            return cached.data
-        }
-
-        do {
-            return try await fetchData(with: request)
-        } catch {
-            return try await fetchData(with: URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData))
-        }
-    }
-
-    private func fetchData(with request: URLRequest) async throws -> Data {
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
-            throw URLError(.badServerResponse)
-        }
-        return data
     }
 }

@@ -6,7 +6,7 @@ struct QqBindingView: View {
     @State private var state: LoadState<QqBinding> = .idle
     @State private var qqNumber = ""
     @State private var verificationCode = ""
-    @State private var message: String?
+    @State private var feedback: SetuFeedback?
 
     var body: some View {
         List {
@@ -20,7 +20,13 @@ struct QqBindingView: View {
             case .failed(let message):
                 Section {
                     SetuCard {
-                        SetuEmptyState(title: "QQ 绑定加载失败", message: message, systemImage: "link.badge.plus")
+                        SetuEmptyState(
+                            title: "QQ 绑定加载失败",
+                            message: message,
+                            systemImage: "link.badge.plus",
+                            actionTitle: "重试",
+                            action: { Task { await load() } }
+                        )
                     }
                 }
             case .loaded(let binding):
@@ -38,7 +44,7 @@ struct QqBindingView: View {
                             }
                             QqBindingInfoRow(title: "QQ", value: binding.qqNumber?.isEmpty == false ? binding.qqNumber! : "-")
                             if let updatedAt = binding.updatedAt, !updatedAt.isEmpty {
-                                QqBindingInfoRow(title: "更新时间", value: updatedAt)
+                                QqBindingInfoRow(title: "更新时间", value: SetuDateFormatter.string(from: updatedAt, style: .full))
                             }
                             if binding.isEnabled {
                                 Button(role: .destructive) {
@@ -85,9 +91,9 @@ struct QqBindingView: View {
                 }
             }
 
-            if let message {
+            if let feedback {
                 Section {
-                    SetuPill(text: message, systemImage: "info.circle", tone: .info)
+                    SetuFeedbackBanner(feedback: feedback)
                 }
             }
         }
@@ -113,13 +119,13 @@ struct QqBindingView: View {
 
     private func load() async {
         state = .loading
-        message = nil
+        feedback = nil
         do {
             let binding = try await environment.userProfileClient.getQqBinding()
             qqNumber = binding.qqNumber ?? qqNumber
             state = .loaded(binding)
         } catch {
-            state = .failed(error.localizedDescription)
+            state = .failed(UserFacingErrorMapper.map(error).message)
         }
     }
 
@@ -129,12 +135,12 @@ struct QqBindingView: View {
         do {
             let response = try await environment.userProfileClient.sendQqBindingVerificationCode(qqNumber: number)
             if let email = response.qqEmail, let seconds = response.expiresInSeconds {
-                message = "验证码已发送到 \(email)，\(seconds) 秒内有效"
+                feedback = .info("验证码已发送到 \(email)，\(seconds) 秒内有效")
             } else {
-                message = "验证码已发送"
+                feedback = .info("验证码已发送")
             }
         } catch {
-            message = error.localizedDescription
+            feedback = .error(UserFacingErrorMapper.map(error).message)
         }
     }
 
@@ -145,20 +151,20 @@ struct QqBindingView: View {
         do {
             let binding = try await environment.userProfileClient.saveQqBinding(qqNumber: number, verificationCode: code)
             verificationCode = ""
-            message = "QQ 绑定已保存"
+            feedback = .success("QQ 绑定已保存")
             state = .loaded(binding)
         } catch {
-            message = error.localizedDescription
+            feedback = .error(UserFacingErrorMapper.map(error).message)
         }
     }
 
     private func disable() async {
         do {
             let binding = try await environment.userProfileClient.disableQqBinding()
-            message = "QQ 通知已停用"
+            feedback = .success("QQ 通知已停用")
             state = .loaded(binding)
         } catch {
-            message = error.localizedDescription
+            feedback = .error(UserFacingErrorMapper.map(error).message)
         }
     }
 }

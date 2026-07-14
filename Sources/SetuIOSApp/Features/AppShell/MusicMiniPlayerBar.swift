@@ -7,6 +7,8 @@ import UIKit
 #endif
 
 struct MusicMiniPlayerBar: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var environment: AppEnvironment
     @Bindable var player: MusicPlaybackController
     var onShowQueue: (() -> Void)?
@@ -25,7 +27,7 @@ struct MusicMiniPlayerBar: View {
             }
             .frame(maxWidth: .infinity, alignment: isCollapsed ? .trailing : .center)
             .padding(.horizontal, isCollapsed ? 0 : SetuSpacing.md)
-            .animation(.spring(response: 0.32, dampingFraction: 0.86), value: isCollapsed)
+            .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.86), value: isCollapsed)
             .sheet(isPresented: $showingDetail) {
                 MusicNowPlayingDetailView(environment: environment, player: player, initialPage: initialDetailPage)
                     .presentationDragIndicator(.visible)
@@ -34,68 +36,29 @@ struct MusicMiniPlayerBar: View {
     }
 
     private func expandedBar(for track: MusicPlaybackTrack) -> some View {
-        HStack(spacing: SetuSpacing.sm) {
-            Button {
-                isCollapsed = true
-            } label: {
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(SetuColor.textSecondary)
-                    .frame(width: 36, height: 44)
-            }
-            .setuButtonFeedback(cornerRadius: 22)
-            .accessibilityLabel("收起迷你播放器")
-
-            MusicArtworkView(
-                urlString: track.coverURLString,
-                width: 44,
-                height: 44,
-                cornerRadius: SetuRadius.sm,
-                onTap: { openDetail(.cover) }
-            )
-
-            Button {
-                openDetail(.cover)
-            } label: {
-                VStack(alignment: .leading, spacing: SetuSpacing.xs) {
-                    Text(track.title)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(SetuColor.textPrimary)
-                        .lineLimit(1)
-                    Text(track.artist)
-                        .font(.caption)
-                        .foregroundStyle(SetuColor.textSecondary)
-                        .lineLimit(1)
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(spacing: SetuSpacing.sm) {
+                    HStack(spacing: SetuSpacing.sm) {
+                        collapseButton
+                        artwork(for: track)
+                        trackSummary(for: track, lineLimit: 2)
+                    }
+                    HStack(spacing: SetuSpacing.md) {
+                        Spacer(minLength: 0)
+                        playButton
+                        queueButton
+                    }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-            }
-            .setuButtonFeedback()
-            .accessibilityLabel("打开正在播放：\(track.title)")
-
-            MiniPlayerCircularPlayButton(
-                isPlaying: player.isPlaying,
-                progress: player.playbackProgress
-            ) {
-                PlayerHaptics.light()
-                player.toggle()
-            }
-
-            Button {
-                onShowQueue?()
-            } label: {
-                VStack(spacing: 2) {
-                    Image(systemName: "list.bullet")
-                        .font(.subheadline.weight(.semibold))
-                    Text("\(player.queueTracks.count)")
-                        .font(.caption2.monospacedDigit().weight(.semibold))
+            } else {
+                HStack(spacing: SetuSpacing.sm) {
+                    collapseButton
+                    artwork(for: track)
+                    trackSummary(for: track, lineLimit: 1)
+                    playButton
+                    queueButton
                 }
-                .foregroundStyle(SetuColor.brandInk)
-                .frame(width: 48, height: 48)
-                .background(SetuColor.surfaceMuted, in: Circle())
             }
-            .setuButtonFeedback(cornerRadius: 24)
-            .accessibilityLabel("查看当前播放列表")
         }
         .padding(.horizontal, SetuSpacing.sm)
         .padding(.vertical, SetuSpacing.xs)
@@ -115,6 +78,78 @@ struct MusicMiniPlayerBar: View {
                     }
                 }
         )
+    }
+
+    private var collapseButton: some View {
+        Button {
+            isCollapsed = true
+        } label: {
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(SetuColor.textSecondary)
+                .frame(width: 44, height: 44)
+        }
+        .setuButtonFeedback(cornerRadius: 22)
+        .accessibilityLabel("收起迷你播放器")
+    }
+
+    private func artwork(for track: MusicPlaybackTrack) -> some View {
+        MusicArtworkView(
+            urlString: track.coverURLString,
+            width: 44,
+            height: 44,
+            cornerRadius: SetuRadius.sm,
+            onTap: { openDetail(.cover) }
+        )
+    }
+
+    private func trackSummary(for track: MusicPlaybackTrack, lineLimit: Int) -> some View {
+        Button {
+            openDetail(.cover)
+        } label: {
+            VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+                Text(track.title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(SetuColor.textPrimary)
+                    .lineLimit(lineLimit)
+                Text(track.artist)
+                    .font(.caption)
+                    .foregroundStyle(SetuColor.textSecondary)
+                    .lineLimit(lineLimit)
+            }
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .setuButtonFeedback()
+        .accessibilityLabel("打开正在播放：\(track.title)")
+    }
+
+    private var playButton: some View {
+        MiniPlayerCircularPlayButton(
+            isPlaying: player.isPlaying,
+            progress: player.playbackProgress
+        ) {
+            PlayerHaptics.light()
+            player.toggle()
+        }
+    }
+
+    private var queueButton: some View {
+        Button {
+            onShowQueue?()
+        } label: {
+            VStack(spacing: 2) {
+                Image(systemName: "list.bullet")
+                    .font(.subheadline.weight(.semibold))
+                Text("\(player.queueTracks.count)")
+                    .font(.caption2.monospacedDigit().weight(.semibold))
+            }
+            .foregroundStyle(SetuColor.brandInk)
+            .frame(width: 48, height: 48)
+            .background(SetuColor.surfaceMuted, in: Circle())
+        }
+        .setuButtonFeedback(cornerRadius: 24)
+        .accessibilityLabel("查看当前播放列表")
     }
 
     private func collapsedHandle(for track: MusicPlaybackTrack) -> some View {
@@ -205,8 +240,8 @@ struct MusicQueueDrawerView: View {
     @Bindable var player: MusicPlaybackController
     let onDismiss: () -> Void
 
-    @State private var toast: String?
-    @State private var toastTask: Task<Void, Never>?
+    @State private var feedback: SetuFeedback?
+    @State private var feedbackTask: Task<Void, Never>?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -233,7 +268,7 @@ struct MusicQueueDrawerView: View {
                     Button(role: .destructive) {
                         PlayerHaptics.medium()
                         player.clearUpcomingTracks()
-                        showToast("已清空待播歌曲")
+                        showFeedback(.success("已清空待播歌曲"))
                     } label: {
                         Image(systemName: "trash")
                             .font(.subheadline.weight(.semibold))
@@ -258,8 +293,8 @@ struct MusicQueueDrawerView: View {
             .padding(.horizontal, SetuSpacing.lg)
             .padding(.bottom, SetuSpacing.sm)
 
-            if let toast {
-                SetuPill(text: toast, systemImage: "info.circle", tone: .info)
+            if let feedback {
+                SetuFeedbackBanner(feedback: feedback)
                     .padding(.horizontal, SetuSpacing.lg)
                     .padding(.bottom, SetuSpacing.sm)
                     .transition(.opacity)
@@ -285,7 +320,7 @@ struct MusicQueueDrawerView: View {
                                 playNext: {
                                     PlayerHaptics.light()
                                     player.playNext(track)
-                                    showToast("已设为下一首播放")
+                                    showFeedback(.success("已设为下一首播放"))
                                 },
                                 remove: {
                                     player.removeQueuedTrack(track)
@@ -312,7 +347,7 @@ struct MusicQueueDrawerView: View {
         }
         .shadow(color: SetuColor.brandPink.opacity(0.18), radius: 24, y: 14)
         .onDisappear {
-            toastTask?.cancel()
+            feedbackTask?.cancel()
         }
     }
 
@@ -326,27 +361,27 @@ struct MusicQueueDrawerView: View {
         guard track.id != player.currentTrack?.id else { return }
         PlayerHaptics.light()
         guard let resolution = await player.resolveTrackURL?(track) else {
-            showToast("播放器尚未准备好")
+            showFeedback(.error("播放器尚未准备好"))
             return
         }
         switch resolution {
         case .success(let url, let notice):
             player.play(url: url, track: track, queueName: player.queueName, queueTracks: player.queueTracks, notice: notice)
             if let notice {
-                showToast(notice)
+                showFeedback(.warning(notice))
             }
         case .unavailable(let reason):
-            showToast(reason)
+            showFeedback(.error(reason))
         }
     }
 
-    private func showToast(_ text: String) {
-        toastTask?.cancel()
-        toast = text
-        toastTask = Task {
+    private func showFeedback(_ nextFeedback: SetuFeedback) {
+        feedbackTask?.cancel()
+        feedback = nextFeedback
+        feedbackTask = Task {
             try? await Task.sleep(nanoseconds: 2_000_000_000)
             guard !Task.isCancelled else { return }
-            toast = nil
+            feedback = nil
         }
     }
 }
@@ -442,7 +477,6 @@ private enum NowPlayingPage: String, CaseIterable, Identifiable {
 private struct MusicNowPlayingDetailView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.openURL) private var openURL
 
     @Bindable var environment: AppEnvironment
     @Bindable var player: MusicPlaybackController
@@ -455,8 +489,9 @@ private struct MusicNowPlayingDetailView: View {
     @State private var playlistTrack: MusicPlaybackTrack?
     @State private var mvTrack: MusicPlaybackTrack?
     @State private var artworkAccentColor: Color?
-    @State private var toast: String?
-    @State private var toastTask: Task<Void, Never>?
+    @State private var feedback: SetuFeedback?
+    @State private var feedbackTask: Task<Void, Never>?
+    @State private var fileSharePayload: SystemFileSharePayload?
 
     init(environment: AppEnvironment, player: MusicPlaybackController, initialPage: NowPlayingPage = .cover) {
         self.environment = environment
@@ -491,23 +526,18 @@ private struct MusicNowPlayingDetailView: View {
             }
         }
         .overlay(alignment: .top) {
-            if let toast {
-                Text(toast)
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(SetuColor.textPrimary)
+            if let feedback {
+                SetuFeedbackBanner(feedback: feedback)
                     .padding(.horizontal, SetuSpacing.lg)
-                    .padding(.vertical, SetuSpacing.sm)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .overlay {
-                        Capsule().stroke(SetuColor.separator, lineWidth: 1)
-                    }
                     .padding(.top, SetuSpacing.xl)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.86), value: toast)
+        .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.86), value: feedback)
         .sheet(item: $playlistTrack) { track in
-            AddPlaybackTrackToPlaylistSheet(environment: environment, track: track)
+            AddPlaybackTrackToPlaylistSheet(environment: environment, track: track) { result in
+                showFeedback(result)
+            }
         }
         .sheet(item: $mvTrack) { track in
             NavigationStack {
@@ -531,8 +561,20 @@ private struct MusicNowPlayingDetailView: View {
                 }
             }
         }
+        .sheet(item: $fileSharePayload) { payload in
+            SystemFileShareSheet(fileURL: payload.fileURL) { result in
+                switch result {
+                case .completed:
+                    showFeedback(.success("已完成保存或分享"))
+                case .cancelled:
+                    showFeedback(.info("已取消保存或分享"))
+                case .failed(let message):
+                    showFeedback(.error("保存或分享失败：\(message)"))
+                }
+            }
+        }
         .onDisappear {
-            toastTask?.cancel()
+            feedbackTask?.cancel()
         }
     }
 
@@ -728,7 +770,7 @@ private struct MusicNowPlayingDetailView: View {
                 ) {
                     PlayerHaptics.light()
                     player.cyclePlayMode()
-                    showToast(player.playMode.title)
+                    showFeedback(.info(player.playMode.title))
                 }
 
                 NowPlayingRoundButton(
@@ -802,14 +844,14 @@ private struct MusicNowPlayingDetailView: View {
                 ForEach(MusicSleepTimerOption.allCases) { option in
                     Button(option.title) {
                         player.startSleepTimer(option)
-                        showToast("睡眠定时：\(option.title)")
+                        showFeedback(.success("睡眠定时：\(option.title)"))
                     }
                 }
                 if player.sleepTimerTitle != nil {
                     Divider()
                     Button("取消定时", role: .destructive) {
                         player.cancelSleepTimer()
-                        showToast("已取消睡眠定时")
+                        showFeedback(.success("已取消睡眠定时"))
                     }
                 }
             } label: {
@@ -884,6 +926,7 @@ private struct MusicNowPlayingDetailView: View {
                 }
                 .font(.caption.weight(.semibold))
                 .buttonStyle(.borderless)
+                .frame(minWidth: 44, minHeight: 44)
             }
         } else if player.isBuffering {
             HStack(spacing: SetuSpacing.sm) {
@@ -911,14 +954,14 @@ private struct MusicNowPlayingDetailView: View {
                 }
                 if horizontal < 0 {
                     guard player.canPlayNext else {
-                        showToast("已经是最后一首")
+                        showFeedback(.warning("已经是最后一首"))
                         return
                     }
                     PlayerHaptics.light()
                     Task { await player.userSkip(by: 1) }
                 } else {
                     guard player.canPlayPrevious else {
-                        showToast("已经是第一首")
+                        showFeedback(.warning("已经是第一首"))
                         return
                     }
                     PlayerHaptics.light()
@@ -973,13 +1016,13 @@ private struct MusicNowPlayingDetailView: View {
         }
     }
 
-    private func showToast(_ text: String) {
-        toastTask?.cancel()
-        toast = text
-        toastTask = Task {
+    private func showFeedback(_ nextFeedback: SetuFeedback) {
+        feedbackTask?.cancel()
+        feedback = nextFeedback
+        feedbackTask = Task {
             try? await Task.sleep(nanoseconds: 2_400_000_000)
             guard !Task.isCancelled else { return }
-            toast = nil
+            feedback = nil
         }
     }
 
@@ -988,30 +1031,31 @@ private struct MusicNowPlayingDetailView: View {
         do {
             lyricState = .loaded(try await environment.musicClient.lyric(songID: songID))
         } catch {
-            lyricState = .failed(error.localizedDescription)
+            lyricState = .failed(UserFacingErrorMapper.map(error).message)
         }
     }
 
     private func download(_ track: MusicPlaybackTrack) async {
         isDownloading = true
-        showToast("正在准备下载")
+        showFeedback(.info("正在准备下载"))
         defer { isDownloading = false }
         do {
             let response = try await environment.musicClient.url(songID: track.id, level: "standard")
             guard let item = response.data?.first, let urlString = item.playableURLString else {
-                showToast(response.data?.first?.unavailableMessage ?? response.playabilityReason ?? response.message ?? "这首歌暂时无法下载")
+                showFeedback(.error(response.unavailableMessage))
                 return
             }
             let filename = "\(track.title) - \(track.artist).mp3"
             let signed = try await environment.downloadClient.sign(url: urlString, filename: filename)
             guard let url = URL(string: signed.downloadUrl) else {
-                showToast("下载地址无效")
+                showFeedback(.error("下载地址无效"))
                 return
             }
-            openURL(url)
-            showToast("已打开下载地址")
+            let fileURL = try await RemoteFileExportService.download(from: url, filename: filename)
+            fileSharePayload = SystemFileSharePayload(fileURL: fileURL)
+            showFeedback(.success("下载完成，请选择保存位置或分享方式"))
         } catch {
-            showToast(error.localizedDescription)
+            showFeedback(.error(RemoteFileExportService.userMessage(for: error)))
         }
     }
 
@@ -1021,7 +1065,7 @@ private struct MusicNowPlayingDetailView: View {
         guard let urlString = secureURLString(track.coverURLString, artworkSize: .thumbnail),
               let url = URL(string: urlString) else { return }
         do {
-            let data = try await RemoteArtworkLoader.shared.data(from: url)
+            let data = try await SetuRemoteImageLoader.shared.data(from: url)
             guard !Task.isCancelled, let image = UIImage(data: data) else { return }
             let color = image.setuAverageColor.map(Color.init(uiColor:))
             await MainActor.run {
@@ -1086,8 +1130,9 @@ private struct AddPlaybackTrackToPlaylistSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var environment: AppEnvironment
     let track: MusicPlaybackTrack
+    let onFeedback: (SetuFeedback) -> Void
     @State private var state: LoadState<[UserMusicPlaylist]> = .idle
-    @State private var message: String?
+    @State private var feedback: SetuFeedback?
 
     var body: some View {
         NavigationStack {
@@ -1111,9 +1156,9 @@ private struct AddPlaybackTrackToPlaylistSheet: View {
                     .setuListRow()
                 }
 
-                if let message {
+                if let feedback {
                     Section {
-                        SetuPill(text: message, systemImage: "info.circle", tone: .info)
+                        SetuFeedbackBanner(feedback: feedback)
                     }
                 }
 
@@ -1180,12 +1225,12 @@ private struct AddPlaybackTrackToPlaylistSheet: View {
         do {
             state = .loaded(try await environment.musicClient.playlists())
         } catch {
-            state = .failed(error.localizedDescription)
+            state = .failed(UserFacingErrorMapper.map(error).message)
         }
     }
 
     private func add(to playlist: UserMusicPlaylist) async {
-        message = "正在加入 \(playlist.name)"
+        feedback = .info("正在加入 \(playlist.name)")
         do {
             try await environment.musicClient.add(
                 AddSongToPlaylistRequest(
@@ -1198,9 +1243,10 @@ private struct AddPlaybackTrackToPlaylistSheet: View {
                 ),
                 toPlaylist: playlist.id
             )
+            onFeedback(.success("已加入 \(playlist.name)"))
             dismiss()
         } catch {
-            message = error.localizedDescription
+            feedback = .error(UserFacingErrorMapper.map(error).message)
         }
     }
 }
@@ -1248,3 +1294,19 @@ private extension View {
         #endif
     }
 }
+
+#if DEBUG
+#Preview("迷你播放器 · 390 · 深色大字") {
+    SetuFeaturePreviewHost(playerState: .listening) { environment, player in
+        VStack {
+            Spacer()
+            MusicMiniPlayerBar(environment: environment, player: player)
+                .padding(.bottom, SetuSpacing.lg)
+        }
+        .setuBackground()
+    }
+    .frame(width: 390, height: 220)
+    .preferredColorScheme(.dark)
+    .environment(\.dynamicTypeSize, .accessibility2)
+}
+#endif

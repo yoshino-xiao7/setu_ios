@@ -18,13 +18,45 @@ struct AppleAuthorizationCredential: Sendable {
 final class AppleAuthorizationService: NSObject {
     private var continuation: CheckedContinuation<AppleAuthorizationCredential, Error>?
     private var rawNonce: String?
+    private var preparationError: Error?
+
+    func configure(_ request: ASAuthorizationAppleIDRequest) {
+        do {
+            let nonce = try Self.makeNonce()
+            rawNonce = nonce
+            preparationError = nil
+            request.requestedScopes = [.fullName, .email]
+            request.nonce = Self.sha256(nonce)
+        } catch {
+            rawNonce = nil
+            preparationError = error
+        }
+    }
+
+    func credential(from result: Result<ASAuthorization, Error>) throws -> AppleAuthorizationCredential {
+        defer {
+            rawNonce = nil
+            preparationError = nil
+        }
+        if let preparationError {
+            throw preparationError
+        }
+        let authorization = try result.get()
+        guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+              let identityTokenData = credential.identityToken,
+              let identityToken = String(data: identityTokenData, encoding: .utf8),
+              let nonce = rawNonce else {
+            throw AppleAuthorizationError.invalidCredential
+        }
+        return AppleAuthorizationCredential(identityToken: identityToken, nonce: nonce)
+    }
 
     func authorize() async throws -> AppleAuthorizationCredential {
-        let nonce = try Self.makeNonce()
-        rawNonce = nonce
         let request = ASAuthorizationAppleIDProvider().createRequest()
-        request.requestedScopes = [.fullName, .email]
-        request.nonce = Self.sha256(nonce)
+        configure(request)
+        if let preparationError {
+            throw preparationError
+        }
 
         return try await withCheckedThrowingContinuation { continuation in
             self.continuation = continuation
@@ -37,7 +69,10 @@ final class AppleAuthorizationService: NSObject {
 
     static func userMessage(for error: Error) -> String {
         guard let authorizationError = error as? ASAuthorizationError else {
-            return error.localizedDescription
+            if let appleError = error as? AppleAuthorizationError {
+                return appleError.errorDescription ?? "Apple 登录未完成，请稍后重试。"
+            }
+            return "Apple 登录未完成，请稍后重试。"
         }
         switch authorizationError.code {
         case .canceled:
@@ -47,7 +82,7 @@ final class AppleAuthorizationService: NSObject {
         case .failed, .invalidResponse, .unknown:
             return "Apple 身份验证失败，请稍后重试。"
         default:
-            return authorizationError.localizedDescription
+            return "Apple 身份验证暂时不可用，请稍后重试。"
         }
     }
 
@@ -79,14 +114,11 @@ extension AppleAuthorizationService: ASAuthorizationControllerDelegate {
         didCompleteWithAuthorization authorization: ASAuthorization
     ) {
         Task { @MainActor in
-            guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
-                  let identityTokenData = credential.identityToken,
-                  let identityToken = String(data: identityTokenData, encoding: .utf8),
-                  let nonce = rawNonce else {
-                finish(.failure(AppleAuthorizationError.invalidCredential))
-                return
+            do {
+                finish(.success(try credential(from: .success(authorization))))
+            } catch {
+                finish(.failure(error))
             }
-            finish(.success(AppleAuthorizationCredential(identityToken: identityToken, nonce: nonce)))
         }
     }
 

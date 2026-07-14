@@ -246,15 +246,15 @@ public enum GalleryUploadStatus {
         case "REJECTED":
             return "已拒绝"
         case "REJECT_DELETE_FAILED":
-            return "拒绝后清理失败"
+            return "处理遇到问题"
         case "CANCELED":
             return "已取消"
         case "PUBLISH_FAILED":
-            return "发布失败"
+            return "发布未完成"
         case "EXPIRED":
             return "已过期"
         default:
-            return status
+            return "处理中"
         }
     }
 }

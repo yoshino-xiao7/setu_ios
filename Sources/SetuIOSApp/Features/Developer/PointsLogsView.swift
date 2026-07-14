@@ -3,95 +3,111 @@ import SwiftUI
 
 struct PointsLogsView: View {
     @Bindable var environment: AppEnvironment
-    @State private var state: LoadState<PointsLogPage> = .idle
-    @State private var page = 1
+    @State private var items: [PointsLogItem] = []
+    @State private var total = 0
+    @State private var nextPage = 1
+    @State private var isInitialLoading = true
+    @State private var isLoadingMore = false
+    @State private var loadError: String?
     private let pageSize = 10
 
     var body: some View {
         List {
-            switch state {
-            case .idle, .loading:
+            if isInitialLoading {
                 Section {
                     SetuCard {
                         SetuEmptyState(title: "正在加载", systemImage: "list.bullet.rectangle", isLoading: true)
                     }
                 }
-            case .failed(let message):
+            } else if items.isEmpty, let loadError {
                 Section {
                     SetuCard {
-                        SetuEmptyState(title: "积分流水加载失败", message: message, systemImage: "exclamationmark.triangle")
+                        SetuEmptyState(
+                            title: "积分明细加载失败",
+                            message: loadError,
+                            systemImage: "wifi.exclamationmark",
+                            actionTitle: "重试",
+                            action: { Task { await loadFirstPage() } }
+                        )
                     }
                 }
-            case .loaded(let page):
-                if page.items.isEmpty {
-                    Section {
-                        SetuCard {
-                            SetuEmptyState(title: "暂无积分流水", message: "积分获得和消耗记录会显示在这里。", systemImage: "list.bullet.rectangle")
-                        }
+            } else if items.isEmpty {
+                Section {
+                    SetuCard {
+                        SetuEmptyState(title: "暂无积分明细", message: "积分获得和消耗记录会显示在这里。", systemImage: "list.bullet.rectangle")
                     }
-                } else {
-                    Section {
-                        SetuCard {
-                            SetuSectionHeader(title: "积分流水", subtitle: "共 \(page.total) 条")
-                        }
+                }
+            } else {
+                Section {
+                    SetuCard {
+                        SetuSectionHeader(title: "积分明细", subtitle: "共 \(total) 条")
                     }
-                    Section {
-                        ForEach(page.items) { item in
-                            SetuCard {
-                                PointsLogRow(item: item)
+                }
+                Section {
+                    ForEach(items) { item in
+                        SetuCard {
+                            PointsLogRow(item: item)
+                        }
+                        .onAppear {
+                            if item.id == items.last?.id {
+                                Task { await loadMore() }
                             }
                         }
                     }
-                    pagerSection(page)
+                }
+                Section {
+                    SetuLoadMoreFooter(state: loadMoreFooterState) {
+                        Task { await loadMore() }
+                    }
                 }
             }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .setuBackground()
-        .navigationTitle("积分流水")
-        .task { await load() }
-        .refreshable { await load() }
+        .navigationTitle("积分明细")
+        .task { await loadFirstPage() }
+        .refreshable { await loadFirstPage() }
     }
 
-    private func pagerSection(_ result: PointsLogPage) -> some View {
-        Section {
-            SetuCard {
-                HStack {
-                Button("上一页") {
-                    Task {
-                        page = max(1, page - 1)
-                        await load()
-                    }
-                }
-                .disabled(page <= 1)
+    private var hasMore: Bool { items.count < total }
 
-                Spacer()
-                Text("第 \(result.page) 页")
-                        .font(SetuTypography.caption)
-                        .foregroundStyle(SetuColor.textSecondary)
-                Spacer()
-
-                Button("下一页") {
-                    Task {
-                        page += 1
-                        await load()
-                    }
-                }
-                .disabled(result.page * result.size >= result.total)
-                }
-                .buttonStyle(.bordered)
-                .tint(SetuColor.brandPink)
-            }
-        }
+    private var loadMoreFooterState: SetuLoadMoreFooterState {
+        if isLoadingMore { return .loading }
+        if let loadError { return .failed(loadError) }
+        if !hasMore { return .complete("已加载全部 \(total) 条明细") }
+        return .idle
     }
 
-    private func load() async {
-        state = .loading
+    private func loadFirstPage() async {
+        isInitialLoading = items.isEmpty
+        loadError = nil
         do {
-            state = .loaded(try await environment.pointsClient.logs(page: page, size: pageSize))
+            let result = try await environment.pointsClient.logs(page: 1, size: pageSize)
+            items = result.items
+            total = result.total
+            nextPage = 2
         } catch {
-            state = .failed(error.localizedDescription)
+            loadError = UserFacingErrorMapper.map(error).message
+        }
+        isInitialLoading = false
+    }
+
+    private func loadMore() async {
+        guard hasMore, !isLoadingMore, !isInitialLoading else { return }
+        let requestedPage = nextPage
+        isLoadingMore = true
+        loadError = nil
+        defer { isLoadingMore = false }
+        do {
+            let result = try await environment.pointsClient.logs(page: requestedPage, size: pageSize)
+            guard requestedPage == nextPage else { return }
+            let existingIDs = Set(items.map(\.id))
+            items.append(contentsOf: result.items.filter { !existingIDs.contains($0.id) })
+            total = result.total
+            nextPage += 1
+        } catch {
+            loadError = UserFacingErrorMapper.map(error).message
         }
     }
 }
@@ -111,7 +127,7 @@ private struct PointsLogRow: View {
                     .foregroundStyle(deltaColor)
             }
             if let createdAt = item.createdAt {
-                Label(createdAt, systemImage: "clock")
+                Label(SetuDateFormatter.string(from: createdAt), systemImage: "clock")
                     .font(.caption)
                     .foregroundStyle(SetuColor.textSecondary)
             }
@@ -127,11 +143,11 @@ private struct PointsLogRow: View {
         case "DAILY_LOGIN":
             return "每日登录奖励"
         case "SETU_CALL":
-            return "图片积分调用"
+            return "获取图片"
         case "AI_GENERATION":
             return "AI 绘画消耗"
         case "ADMIN_CALL":
-            return "管理员免费调用"
+            return "管理员免费获取"
         case "REFUND":
             return "积分返还"
         default:
@@ -144,13 +160,13 @@ private struct PointsLogRow: View {
         case "DAILY_LOGIN":
             return "登录后获得的可用积分。"
         case "SETU_CALL":
-            return "用于随机图片查看或图片参数调用。"
+            return "用于查看随机高清图或按条件获取图片。"
         case "AI_GENERATION":
-            return "用于提交 AI 绘画任务。"
+            return "用于生成 AI 绘画作品。"
         case "ADMIN_CALL":
-            return "管理员权限下的免费图片调用。"
+            return "管理员权限下免费获取图片。"
         case "REFUND":
-            return "任务失败或撤销后返还的积分。"
+            return "作品生成失败或取消后返还的积分。"
         default:
             return item.delta >= 0 ? "系统记录的一笔积分增加。" : "系统记录的一笔积分扣减。"
         }

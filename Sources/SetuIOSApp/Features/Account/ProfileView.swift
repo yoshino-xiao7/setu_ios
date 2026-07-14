@@ -4,10 +4,11 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct ProfileView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var environment: AppEnvironment
     @State private var state: LoadState<UserProfile> = .idle
     @State private var nickname = ""
-    @State private var message: String?
+    @State private var feedback: SetuFeedback?
     @State private var selectedAvatarItem: PhotosPickerItem?
     @State private var isUploadingAvatar = false
 
@@ -24,32 +25,44 @@ struct ProfileView: View {
             case .failed(let message):
                 Section {
                     SetuCard {
-                        SetuEmptyState(title: "资料加载失败", message: message, systemImage: "person.crop.circle.badge.exclamationmark")
+                        SetuEmptyState(
+                            title: "资料加载失败",
+                            message: message,
+                            systemImage: "person.crop.circle.badge.exclamationmark",
+                            actionTitle: "重试",
+                            action: { Task { await load() } }
+                        )
                     }
                 }
                 .setuListRow()
             case .loaded(let profile):
                 Section {
                     SetuCard(padding: SetuSpacing.xl) {
-                        HStack(spacing: SetuSpacing.lg) {
-                            AvatarView(urlString: profile.avatarUrl, name: profile.displayName)
-                            VStack(alignment: .leading, spacing: SetuSpacing.xs) {
-                                Text(profile.displayName)
-                                    .font(SetuTypography.title)
-                                    .foregroundStyle(SetuColor.textPrimary)
-                                Text(profile.email)
-                                    .font(SetuTypography.caption)
-                                    .foregroundStyle(SetuColor.textSecondary)
-                                SetuPill(text: profile.role == .admin ? "管理员" : "用户", systemImage: "person.crop.circle.fill", tone: .brand)
+                        Group {
+                            if dynamicTypeSize.isAccessibilitySize {
+                                VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                                    AvatarView(urlString: profile.avatarUrl, name: profile.displayName)
+                                    profileIdentity(profile)
+                                }
+                            } else {
+                                HStack(spacing: SetuSpacing.lg) {
+                                    AvatarView(urlString: profile.avatarUrl, name: profile.displayName)
+                                    profileIdentity(profile)
+                                }
                             }
                         }
 
                         PhotosPicker(selection: $selectedAvatarItem, matching: .images) {
                             if isUploadingAvatar {
-                                ProgressView()
-                                    .tint(SetuColor.brandPink)
+                                HStack(spacing: SetuSpacing.sm) {
+                                    ProgressView()
+                                        .tint(SetuColor.brandPink)
+                                    Text("正在更换头像")
+                                }
+                                .frame(minHeight: 44)
                             } else {
                                 Label("更换头像", systemImage: "photo.badge.plus")
+                                    .frame(minHeight: 44)
                             }
                         }
                         .buttonStyle(.bordered)
@@ -64,12 +77,7 @@ struct ProfileView: View {
                     SetuCard {
                         VStack(alignment: .leading, spacing: SetuSpacing.md) {
                             SetuSectionHeader(title: "账号")
-                            LabeledContent("用户 ID", value: "\(profile.id)")
-                            LabeledContent("角色", value: profile.role == .admin ? "管理员" : "用户")
-                            LabeledContent("注册时间", value: profile.createdAt)
-                            if profile.lastLoginIp?.isEmpty == false {
-                                LabeledContent("最近登录", value: "已记录")
-                            }
+                            LabeledContent("注册时间", value: SetuDateFormatter.string(from: profile.createdAt, style: .full))
                         }
                     }
                 }
@@ -93,9 +101,9 @@ struct ProfileView: View {
                 .setuListRow()
             }
 
-            if let message {
+            if let feedback {
                 Section {
-                    SetuPill(text: message, systemImage: "checkmark.circle", tone: .brand)
+                    SetuFeedbackBanner(feedback: feedback)
                 }
                 .setuListRow()
             }
@@ -110,16 +118,32 @@ struct ProfileView: View {
         .refreshable { await load() }
     }
 
+    private func profileIdentity(_ profile: UserProfile) -> some View {
+        VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+            Text(profile.displayName)
+                .font(SetuTypography.title)
+                .foregroundStyle(SetuColor.textPrimary)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+            Text(profile.email)
+                .font(SetuTypography.caption)
+                .foregroundStyle(SetuColor.textSecondary)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+            if profile.role == .admin {
+                SetuPill(text: "管理员", systemImage: "person.crop.circle.fill", tone: .brand)
+            }
+        }
+    }
+
     private func load() async {
         state = .loading
-        message = nil
+        feedback = nil
         do {
             let profile = try await environment.userProfileClient.getUserInfo()
             try? environment.authSession.applyUserProfile(profile)
             nickname = profile.nickname ?? ""
             state = .loaded(profile)
         } catch {
-            state = .failed(error.localizedDescription)
+            state = .failed(UserFacingErrorMapper.map(error).message)
         }
     }
 
@@ -128,17 +152,17 @@ struct ProfileView: View {
         guard !trimmed.isEmpty else { return }
         do {
             try await environment.userProfileClient.updateNickname(trimmed)
-            message = "昵称已更新"
             await load()
+            feedback = .success("昵称已更新")
         } catch {
-            message = error.localizedDescription
+            feedback = .error(UserFacingErrorMapper.map(error).message)
         }
     }
 
     private func uploadSelectedAvatar() async {
         guard let selectedAvatarItem else { return }
         isUploadingAvatar = true
-        message = nil
+        feedback = nil
         defer {
             isUploadingAvatar = false
             self.selectedAvatarItem = nil
@@ -146,7 +170,7 @@ struct ProfileView: View {
 
         do {
             guard let data = try await selectedAvatarItem.loadTransferable(type: Data.self) else {
-                message = "无法读取所选图片"
+                feedback = .error("无法读取所选图片，请重新选择。")
                 return
             }
             let contentType = selectedAvatarItem.supportedContentTypes.first { $0.conforms(to: .image) } ?? .jpeg
@@ -157,10 +181,10 @@ struct ProfileView: View {
                 fileName: "ios-avatar.\(fileExtension)",
                 mimeType: mimeType
             )
-            message = "头像已更新"
             await load()
+            feedback = .success("头像已更新")
         } catch {
-            message = error.localizedDescription
+            feedback = .error(UserFacingErrorMapper.map(error).message)
         }
     }
 }
@@ -186,6 +210,7 @@ private struct AvatarView: View {
         }
         .frame(width: 56, height: 56)
         .clipShape(Circle())
+        .accessibilityHidden(true)
     }
 
     private var placeholder: some View {

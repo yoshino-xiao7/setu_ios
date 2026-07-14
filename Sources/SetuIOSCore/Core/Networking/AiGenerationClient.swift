@@ -85,12 +85,38 @@ public struct AiGenerationClient: Sendable {
         return try await apiClient.get(path)
     }
 
-    public func square(category: String? = nil, page: Int = 1, pageSize: Int = 20) async throws -> PageResult<AiGenerationJob> {
+    public func square(
+        category: String? = nil,
+        page: Int = 1,
+        pageSize: Int = 20,
+        ownerID: Int? = nil
+    ) async throws -> PageResult<AiPublicWork> {
         var path = "/ai/square?page=\(page)&pageSize=\(pageSize)"
         if let category, !category.isEmpty {
             path += "&category=\(category)"
         }
+        if let ownerID {
+            path += "&ownerId=\(ownerID)"
+        }
         return try await apiClient.get(path)
+    }
+
+    public func squareDetail(id: Int) async throws -> AiPublicWork {
+        try await apiClient.get("/ai/square/\(id)")
+    }
+
+    public func setSquareLiked(id: Int, liked: Bool) async throws -> AiPublicWork {
+        try await apiClient.requestWithoutBody(
+            "/ai/square/\(id)/like",
+            method: liked ? "PUT" : "DELETE"
+        )
+    }
+
+    public func setSquareFavorited(id: Int, favorited: Bool) async throws -> AiPublicWork {
+        try await apiClient.requestWithoutBody(
+            "/ai/square/\(id)/favorite",
+            method: favorited ? "PUT" : "DELETE"
+        )
     }
 
     public func adminGenerations(

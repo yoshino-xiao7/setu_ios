@@ -3,6 +3,7 @@ import SwiftUI
 
 struct PointsCallView: View {
     @Environment(RouterPath.self) private var router
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var environment: AppEnvironment
 
     @State private var pointsState: LoadState<PointsBalance> = .idle
@@ -14,10 +15,13 @@ struct PointsCallView: View {
     @State private var size = "regular"
     @State private var excludeAI = true
     @State private var calling = false
-    @State private var message: String?
+    @State private var feedback: SetuFeedback?
+    @State private var userFacingError: UserFacingError?
     @State private var favoriteTarget: SetuImageItem?
     @State private var deleteTarget: SetuImageItem?
-    @State private var defaultFavoriteIDs: Set<String> = []
+    @State private var previewTarget: UserImagePreviewItem?
+    @State private var favoriteStates: [String: LoadState<Bool>] = [:]
+    @State private var favoriteStatusLoadID = UUID()
 
     private let costPerCall = 20
 
@@ -25,14 +29,14 @@ struct PointsCallView: View {
         List {
             overviewSection
             requestSection
-            if let message {
+            if let userFacingError {
                 Section {
-                    SetuCard {
-                        Label(message, systemImage: "sparkles")
-                            .font(SetuTypography.caption)
-                            .foregroundStyle(SetuColor.brandInk)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
+                    SetuFeedbackBanner(error: userFacingError, onAction: handleErrorAction)
+                }
+                .setuListRow()
+            } else if let feedback {
+                Section {
+                    SetuFeedbackBanner(feedback: feedback)
                 }
                 .setuListRow()
             }
@@ -40,24 +44,33 @@ struct PointsCallView: View {
         }
         .listStyle(.plain)
         .setuBackground()
-        .navigationTitle("积分调用")
+        .accessibilityIdentifier("points.page")
+        .navigationTitle("按条件找图")
         .toolbar {
             Button {
                 router.navigate(to: .pointsLogs)
             } label: {
                 Image(systemName: "list.bullet.rectangle")
             }
+            .accessibilityLabel("查看积分明细")
         }
         .sheet(item: $favoriteTarget) { item in
-            PointsFavoriteSheet(environment: environment, item: item) { text in
-                defaultFavoriteIDs.insert(item.id)
-                message = text
+            PointsFavoriteSheet(environment: environment, item: item) { result, savedToDefault in
+                if case .success = result, savedToDefault {
+                    favoriteStates[item.id] = .loaded(true)
+                }
+                userFacingError = nil
+                feedback = result
             }
         }
         .sheet(item: $deleteTarget) { item in
-            PointsDeleteRequestSheet(environment: environment, item: item) { text in
-                message = text
+            PointsDeleteRequestSheet(environment: environment, item: item) { result in
+                userFacingError = nil
+                feedback = result
             }
+        }
+        .sheet(item: $previewTarget) { item in
+            UserImagePreviewSheet(item: item)
         }
         .task { await loadPoints() }
         .refreshable { await loadPoints() }
@@ -67,24 +80,27 @@ struct PointsCallView: View {
         Section {
             SetuCard {
                 VStack(alignment: .leading, spacing: SetuSpacing.lg) {
-                    SetuSectionHeader(title: "积分概览", subtitle: "每次调用会消耗积分，获取结果后自动刷新余额")
+                    SetuSectionHeader(title: "积分概览", subtitle: "每次获取会消耗积分，完成后自动刷新余额")
                     switch pointsState {
                     case .idle, .loading:
                         SetuEmptyState(title: "正在加载积分", message: "同步你的当前积分余额", systemImage: "creditcard", isLoading: true)
                     case .failed(let message):
-                        SetuEmptyState(title: "积分加载失败", message: message, systemImage: "exclamationmark.triangle")
+                        SetuEmptyState(
+                            title: "积分加载失败",
+                            message: message,
+                            systemImage: "exclamationmark.triangle",
+                            actionTitle: "重试",
+                            action: { Task { await loadPoints() } }
+                        )
                     case .loaded(let balance):
-                        HStack(spacing: SetuSpacing.md) {
+                        statLayout {
                             SetuStatTile(title: "当前积分", value: "\(balance.points)", systemImage: "sparkles", color: SetuColor.brandPink)
                             SetuStatTile(title: "单次消耗", value: "\(costPerCall)", systemImage: "minus.circle", color: SetuColor.warning)
                         }
-                        HStack(spacing: SetuSpacing.sm) {
-                            SetuPill(text: r18Title, systemImage: "shield.lefthalf.filled", tone: r18 == 1 ? .danger : .muted)
-                            SetuPill(text: size, systemImage: "rectangle", tone: .info)
-                            SetuPill(text: "数量 \(num)", systemImage: "photo.stack", tone: .brand)
-                            SetuPill(text: "\(results.count) 张结果", systemImage: "photo.on.rectangle", tone: .success)
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: SetuSpacing.sm) { parameterPills }
+                            VStack(alignment: .leading, spacing: SetuSpacing.sm) { parameterPills }
                         }
-                        .lineLimit(1)
                     }
                     VStack(alignment: .leading, spacing: SetuSpacing.xs) {
                         Text("关键词：\(keyword.isEmpty ? "未填写" : keyword)")
@@ -99,20 +115,34 @@ struct PointsCallView: View {
         .setuListRow()
     }
 
+    private var statLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: SetuSpacing.md))
+            : AnyLayout(HStackLayout(spacing: SetuSpacing.md))
+    }
+
+    @ViewBuilder
+    private var parameterPills: some View {
+        SetuPill(text: r18Title, systemImage: "shield.lefthalf.filled", tone: r18 == 1 ? .danger : .muted)
+        SetuPill(text: sizeTitle, systemImage: "rectangle", tone: .info)
+        SetuPill(text: "数量 \(num)", systemImage: "photo.stack", tone: .brand)
+        SetuPill(text: "\(results.count) 张结果", systemImage: "photo.on.rectangle", tone: .success)
+    }
+
     private var requestSection: some View {
         Section {
             SetuCard {
                 VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                    SetuSectionHeader(title: "图片参数", subtitle: "设置范围、数量与标签后发起积分调用")
-                    Picker("R18", selection: $r18) {
-                        Text("非 R18").tag(0)
-                        Text("R18").tag(1)
+                    SetuSectionHeader(title: "筛选条件", subtitle: "选择内容、清晰度与数量后开始找图")
+                    Picker("内容级别", selection: $r18) {
+                        Text("普通内容").tag(0)
+                        Text("成人内容").tag(1)
                         Text("混合").tag(2)
                     }
                     Picker("图片尺寸", selection: $size) {
-                        Text("regular（推荐）").tag("regular")
-                        Text("original（原图）").tag("original")
-                        Text("small（小图）").tag("small")
+                        Text("清晰（推荐）").tag("regular")
+                        Text("原始尺寸").tag("original")
+                        Text("流量节省").tag("small")
                     }
                     Stepper("数量：\(num)", value: $num, in: 1...20)
                     TextField("关键词", text: $keyword)
@@ -131,14 +161,17 @@ struct PointsCallView: View {
                         Task { await callSetu() }
                     } label: {
                         if calling {
-                            ProgressView()
-                                .tint(.white)
+                            HStack(spacing: SetuSpacing.sm) {
+                                ProgressView()
+                                    .tint(.white)
+                                Text("正在寻找图片")
+                            }
                         } else {
                             Label("获取图片", systemImage: "photo.on.rectangle")
                         }
                     }
-                    .disabled(calling || !canCall)
-                    .opacity(calling || !canCall ? 0.55 : 1)
+                    .disabled(calling || !canAttemptCall)
+                    .accessibilityIdentifier("points.call")
                 }
             }
         }
@@ -159,8 +192,12 @@ struct PointsCallView: View {
                     .setuListRow()
                 ForEach(results) { item in
                     SetuCard {
-                        PointsResultRow(item: item, isDefaultFavorited: defaultFavoriteIDs.contains(item.id)) {
+                        PointsResultRow(item: item, favoriteState: favoriteStates[item.id] ?? .idle) {
+                            previewTarget = UserImagePreviewItem(image: item)
+                        } onFavorite: {
                             favoriteTarget = item
+                        } onRetryFavoriteStatus: {
+                            Task { await retryDefaultFavoriteStatus(for: item) }
                         } onDeleteRequest: {
                             deleteTarget = item
                         }
@@ -182,11 +219,26 @@ struct PointsCallView: View {
         currentPoints >= costPerCall
     }
 
+    private var canAttemptCall: Bool {
+        if case .loaded = pointsState {
+            return true
+        }
+        return false
+    }
+
     private var r18Title: String {
         switch r18 {
-        case 1: "R18"
+        case 1: "成人内容"
         case 2: "混合"
-        default: "非R18"
+        default: "普通内容"
+        }
+    }
+
+    private var sizeTitle: String {
+        switch size {
+        case "original": "原始尺寸"
+        case "small": "流量节省"
+        default: "清晰"
         }
     }
 
@@ -202,52 +254,144 @@ struct PointsCallView: View {
         do {
             pointsState = .loaded(try await environment.pointsClient.balance())
         } catch {
-            pointsState = .failed(error.localizedDescription)
+            pointsState = .failed(UserFacingErrorMapper.map(error).message)
         }
     }
 
     private func callSetu() async {
         guard canCall else {
-            message = "积分不足：至少需要 \(costPerCall) 积分"
+            feedback = nil
+            userFacingError = UserFacingError(
+                title: "积分不足",
+                message: "至少需要 \(costPerCall) 积分才能获取图片，你可以先查看积分明细。",
+                action: .viewPoints,
+                diagnosticCode: nil
+            )
             return
         }
         calling = true
-        message = nil
+        feedback = nil
+        userFacingError = nil
         results = []
-        defaultFavoriteIDs = []
+        favoriteStatusLoadID = UUID()
+        favoriteStates = [:]
         do {
             let request = PointsCallRequest(r18: r18, num: num, keyword: keyword, tags: parsedTags, size: size, excludeAI: excludeAI)
-            results = try await environment.pointsClient.callSetu(request: request)
-            await loadDefaultFavoriteStatuses(for: results)
+            let nextResults = try await environment.pointsClient.callSetu(request: request)
+            let loadID = UUID()
+            favoriteStatusLoadID = loadID
+            favoriteStates = Dictionary(uniqueKeysWithValues: nextResults.map { ($0.id, .loading) })
+            results = nextResults
+            Task { await loadDefaultFavoriteStatuses(for: nextResults, loadID: loadID) }
             await loadPoints()
-            message = results.isEmpty ? "当前筛选条件没有匹配图片" : "已获取 \(results.count) 张图片"
+            feedback = results.isEmpty
+                ? .info("当前筛选条件没有匹配图片")
+                : .success("已获取 \(results.count) 张图片")
         } catch {
-            message = error.localizedDescription
+            userFacingError = UserFacingErrorMapper.map(error)
             await loadPoints()
         }
         calling = false
     }
 
-    private func loadDefaultFavoriteStatuses(for items: [SetuImageItem]) async {
-        var nextIDs = Set<String>()
-        for item in items {
-            if (try? await environment.favoriteClient.exists(pid: item.pid, p: item.page)) == true {
-                nextIDs.insert(item.id)
+    private func handleErrorAction(_ action: UserFacingErrorAction) {
+        switch action {
+        case .retry:
+            Task { await callSetu() }
+        case .refresh:
+            Task { await loadPoints() }
+        case .signIn:
+            environment.authSession.invalidateLocalSession()
+        case .goBack:
+            if !router.path.isEmpty {
+                router.path.removeLast()
+            }
+        case .reviewInput:
+            userFacingError = nil
+            feedback = .info("请检查筛选条件后重试。")
+        case .wait:
+            userFacingError = nil
+        case .viewPoints:
+            userFacingError = nil
+            router.navigate(to: .pointsLogs)
+        }
+    }
+
+    private func loadDefaultFavoriteStatuses(for items: [SetuImageItem], loadID: UUID) async {
+        let client = environment.favoriteClient
+        let batchSize = 4
+
+        for start in stride(from: 0, to: items.count, by: batchSize) {
+            guard loadID == favoriteStatusLoadID else { return }
+            let end = min(start + batchSize, items.count)
+            let batch = Array(items[start..<end])
+
+            await withTaskGroup(of: (String, PointsFavoriteStatusResult).self) { group in
+                for item in batch {
+                    group.addTask {
+                        do {
+                            let isFavorited = try await client.exists(pid: item.pid, p: item.page)
+                            return (item.id, .loaded(isFavorited))
+                        } catch {
+                            return (item.id, .failed(UserFacingErrorMapper.map(error).message))
+                        }
+                    }
+                }
+
+                for await (itemID, result) in group {
+                    guard loadID == favoriteStatusLoadID,
+                          results.contains(where: { $0.id == itemID }) else { continue }
+                    favoriteStates[itemID] = result.loadState
+                }
             }
         }
-        defaultFavoriteIDs = nextIDs
+    }
+
+    private func retryDefaultFavoriteStatus(for item: SetuImageItem) async {
+        let loadID = favoriteStatusLoadID
+        guard results.contains(where: { $0.id == item.id }) else { return }
+        favoriteStates[item.id] = .loading
+        do {
+            let isFavorited = try await environment.favoriteClient.exists(pid: item.pid, p: item.page)
+            guard loadID == favoriteStatusLoadID,
+                  results.contains(where: { $0.id == item.id }) else { return }
+            favoriteStates[item.id] = .loaded(isFavorited)
+        } catch {
+            guard loadID == favoriteStatusLoadID,
+                  results.contains(where: { $0.id == item.id }) else { return }
+            favoriteStates[item.id] = .failed(UserFacingErrorMapper.map(error).message)
+        }
+    }
+}
+
+private enum PointsFavoriteStatusResult: Sendable {
+    case loaded(Bool)
+    case failed(String)
+
+    var loadState: LoadState<Bool> {
+        switch self {
+        case .loaded(let value): .loaded(value)
+        case .failed(let message): .failed(message)
+        }
     }
 }
 
 private struct PointsResultRow: View {
     let item: SetuImageItem
-    let isDefaultFavorited: Bool
+    let favoriteState: LoadState<Bool>
+    let onPreview: () -> Void
     let onFavorite: () -> Void
+    let onRetryFavoriteStatus: () -> Void
     let onDeleteRequest: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
-            ImageThumbnailView(urlString: item.previewURLString)
+            SetuRemoteImage(
+                urlString: item.previewURLString,
+                accessibilityLabel: "图片：\(item.title)",
+                onActivate: onPreview,
+                activationHint: "打开预览，可保存或分享"
+            )
             VStack(alignment: .leading, spacing: 6) {
                 Text(item.title)
                     .font(SetuTypography.headline)
@@ -257,30 +401,41 @@ private struct PointsResultRow: View {
                     .font(.footnote)
                     .foregroundStyle(SetuColor.textSecondary)
                 HStack(spacing: 10) {
-                    Label("\(item.pid)-\(item.page)", systemImage: "number")
-                    Label("\(item.width)x\(item.height)", systemImage: "rectangle")
+                    Label("\(item.width) × \(item.height)", systemImage: "rectangle")
                     if item.r18 == 1 {
-                        SetuPill(text: "R18", tone: .danger)
+                        SetuPill(text: "成人内容", tone: .danger)
                     }
-                    if isDefaultFavorited {
+                    if case .loaded(true) = favoriteState {
                         Label("已收藏", systemImage: "heart.fill")
+                    } else if case .loading = favoriteState {
+                        Label("正在确认收藏", systemImage: "clock")
+                    } else if case .failed = favoriteState {
+                        Label("收藏状态未知", systemImage: "exclamationmark.triangle")
+                            .foregroundStyle(SetuColor.warning)
                     }
                 }
                 .font(.caption)
                 .foregroundStyle(SetuColor.textSecondary)
+
+                if case .failed = favoriteState {
+                    Button("重试收藏状态", action: onRetryFavoriteStatus)
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .frame(minHeight: 44)
+                        .accessibilityIdentifier("points.favorite.retry.\(item.id)")
+                }
             }
             Spacer()
             Menu {
                 Button(action: onFavorite) {
-                    Label(isDefaultFavorited ? "收藏到其他收藏夹" : "收藏", systemImage: isDefaultFavorited ? "heart.fill" : "heart")
+                    Label(favoriteActionTitle, systemImage: favoriteActionSystemImage)
                 }
+                .disabled(!favoriteActionIsAvailable)
                 Button(action: onDeleteRequest) {
                     Label("申请删除", systemImage: "trash")
                 }
-                if let urlString = item.originalURLString, let url = URL(string: urlString) {
-                    Link(destination: url) {
-                        Label("打开原图", systemImage: "arrow.up.forward.square")
-                    }
+                Button(action: onPreview) {
+                    Label("预览、保存与分享", systemImage: "eye")
                 }
             } label: {
                 Image(systemName: "ellipsis.circle")
@@ -289,8 +444,29 @@ private struct PointsResultRow: View {
                     .frame(width: 44, height: 44)
             }
             .buttonStyle(.borderless)
+            .accessibilityLabel("更多图片操作")
         }
         .padding(.vertical, 4)
+        .accessibilityIdentifier("points.result.\(item.id)")
+    }
+
+    private var favoriteActionTitle: String {
+        switch favoriteState {
+        case .loaded(true): "收藏到其他收藏夹"
+        case .loaded(false): "收藏"
+        case .idle, .loading: "正在确认收藏状态"
+        case .failed: "收藏状态未知"
+        }
+    }
+
+    private var favoriteActionSystemImage: String {
+        if case .loaded(true) = favoriteState { return "heart.fill" }
+        return "heart"
+    }
+
+    private var favoriteActionIsAvailable: Bool {
+        if case .loaded = favoriteState { return true }
+        return false
     }
 }
 
@@ -298,11 +474,12 @@ private struct PointsFavoriteSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var environment: AppEnvironment
     let item: SetuImageItem
-    let onDone: (String) -> Void
+    let onDone: (SetuFeedback, Bool) -> Void
 
     @State private var state: LoadState<[CollectionInfo]> = .idle
     @State private var selectedID: Int?
     @State private var saving = false
+    @State private var feedback: SetuFeedback?
 
     var body: some View {
         NavigationStack {
@@ -327,6 +504,13 @@ private struct PointsFavoriteSheet: View {
                     }
                 }
                 .setuListRow()
+
+                if let feedback {
+                    Section {
+                        SetuFeedbackBanner(feedback: feedback)
+                    }
+                    .setuListRow()
+                }
             }
             .listStyle(.plain)
             .setuBackground()
@@ -353,7 +537,7 @@ private struct PointsFavoriteSheet: View {
             state = .loaded(collections)
             selectedID = collections.first(where: { $0.isDefault })?.id ?? collections.first?.id
         } catch {
-            state = .failed(error.localizedDescription)
+            state = .failed(UserFacingErrorMapper.map(error).message)
         }
     }
 
@@ -367,10 +551,13 @@ private struct PointsFavoriteSheet: View {
             } else {
                 try await environment.collectionClient.addItem(collectionID: selectedID, pid: item.pid, p: item.page)
             }
-            onDone("已收藏到「\(collection?.name ?? "收藏夹")」")
+            onDone(
+                .success("已收藏到「\(collection?.name ?? "收藏夹")」"),
+                collection?.isDefault == true
+            )
             dismiss()
         } catch {
-            onDone(error.localizedDescription)
+            feedback = .error(UserFacingErrorMapper.map(error).message)
         }
         saving = false
     }
@@ -380,10 +567,11 @@ private struct PointsDeleteRequestSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var environment: AppEnvironment
     let item: SetuImageItem
-    let onDone: (String) -> Void
+    let onDone: (SetuFeedback) -> Void
 
     @State private var reason = ""
     @State private var submitting = false
+    @State private var feedback: SetuFeedback?
 
     var body: some View {
         NavigationStack {
@@ -393,11 +581,19 @@ private struct PointsDeleteRequestSheet: View {
                         VStack(alignment: .leading, spacing: SetuSpacing.md) {
                             SetuSectionHeader(title: "图片", subtitle: "确认要申请删除的图片")
                             LabeledContent("标题", value: item.title)
-                            LabeledContent("PID", value: "\(item.pid)_p\(item.page)")
+                            LabeledContent("作者", value: item.author)
+                            LabeledContent("画幅", value: "\(item.width) × \(item.height)")
                         }
                     }
                 }
                 .setuListRow()
+
+                if let feedback {
+                    Section {
+                        SetuFeedbackBanner(feedback: feedback)
+                    }
+                    .setuListRow()
+                }
 
                 Section {
                     SetuCard {
@@ -433,10 +629,10 @@ private struct PointsDeleteRequestSheet: View {
         do {
             let trimmedReason = reason.trimmingCharacters(in: .whitespacesAndNewlines)
             try await environment.imageDeleteRequestClient.submit(pid: item.pid, p: item.page, reason: trimmedReason.isEmpty ? nil : trimmedReason)
-            onDone("申请已提交，请在我的删除申请中查看进度")
+            onDone(.success("申请已提交，请在我的删除申请中查看进度"))
             dismiss()
         } catch {
-            onDone(error.localizedDescription)
+            feedback = .error(UserFacingErrorMapper.map(error).message)
         }
         submitting = false
     }

@@ -5,33 +5,36 @@ struct GalleryUploadDetailView: View {
     @Bindable var environment: AppEnvironment
     let batchID: Int
     @State private var state: LoadState<GalleryUploadBatchDetail> = .idle
-    @State private var message: String?
+    @State private var feedback: SetuFeedback?
+    @State private var showingCancelConfirmation = false
+    @State private var isCancelling = false
 
     var body: some View {
         List {
-            if let message {
-                SetuCard {
-                    Label(message, systemImage: "checkmark.circle")
-                        .font(SetuTypography.caption)
-                        .foregroundStyle(SetuColor.textSecondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
+            if let feedback {
+                SetuFeedbackBanner(feedback: feedback)
                 .setuListRow()
             }
 
             switch state {
             case .idle, .loading:
-                ContentImageStateSection(title: "正在加载批次详情", message: "正在同步图片状态。", systemImage: "tray.full", isLoading: true)
+                ContentImageStateSection(title: "正在加载投稿详情", message: "正在同步图片状态。", systemImage: "tray.full", isLoading: true)
             case .failed(let message):
-                ContentImageStateSection(title: "批次详情加载失败", message: message, systemImage: "tray.full")
+                ContentImageStateSection(
+                    title: "投稿详情加载失败",
+                    message: message,
+                    systemImage: "tray.full",
+                    actionTitle: "重试",
+                    action: { Task { await load() } }
+                )
             case .loaded(let batch):
                 SetuCard {
                     VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                        SetuSectionHeader(title: "批次", subtitle: "#\(batch.batchId)")
+                        SetuSectionHeader(title: "投稿信息")
                         GalleryUploadMetadataRow(title: "状态") {
                             GalleryUploadStatusPill(status: batch.status, title: batch.statusTitle)
                         }
-                        GalleryUploadMetadataRow(title: "PID 模式", value: batch.pidMode)
+                        GalleryUploadMetadataRow(title: "作品关系", value: workRelationshipTitle(batch.pidMode))
                         if let title = batch.title, !title.isEmpty {
                             GalleryUploadMetadataRow(title: "标题", value: title)
                         }
@@ -39,17 +42,17 @@ struct GalleryUploadDetailView: View {
                             GalleryUploadMetadataRow(title: "作者", value: author)
                         }
                         if let aiType = batch.aiType {
-                            GalleryUploadMetadataRow(title: "AI 类型", value: "\(aiType)")
+                            GalleryUploadMetadataRow(title: "图片来源", value: aiSourceTitle(aiType))
                         }
                         if let tags = batch.tags, !tags.isEmpty {
                             GalleryUploadMetadataRow(title: "标签", value: tags.joined(separator: " / "))
                         }
-                        GalleryUploadMetadataRow(title: "创建时间", value: batch.createdAt)
+                        GalleryUploadMetadataRow(title: "创建时间", value: SetuDateFormatter.string(from: batch.createdAt, style: .full))
                         if let reviewedAt = batch.reviewedAt {
-                            GalleryUploadMetadataRow(title: "审核时间", value: reviewedAt)
+                            GalleryUploadMetadataRow(title: "审核时间", value: SetuDateFormatter.string(from: reviewedAt, style: .full))
                         }
                         if let publishedAt = batch.publishedAt {
-                            GalleryUploadMetadataRow(title: "发布时间", value: publishedAt)
+                            GalleryUploadMetadataRow(title: "发布时间", value: SetuDateFormatter.string(from: publishedAt, style: .full))
                         }
                     }
                 }
@@ -63,7 +66,7 @@ struct GalleryUploadDetailView: View {
                                 Divider()
                                     .overlay(SetuColor.separator)
                             }
-                            GalleryUploadItemRow(item: item)
+                            GalleryUploadItemRow(item: item, order: index + 1)
                         }
                     }
                 }
@@ -72,13 +75,22 @@ struct GalleryUploadDetailView: View {
         }
         .listStyle(.plain)
         .setuBackground()
-        .navigationTitle("投稿 #\(batchID)")
+        .navigationTitle("投稿详情")
         .toolbar {
             if case .loaded(let batch) = state, canCancel(batch) {
-                Button("取消批次", role: .destructive) {
-                    Task { await cancel() }
+                Button("取消投稿", role: .destructive) {
+                    showingCancelConfirmation = true
                 }
+                .disabled(isCancelling)
             }
+        }
+        .alert("取消这次投稿？", isPresented: $showingCancelConfirmation) {
+            Button("确认取消", role: .destructive) {
+                Task { await cancel() }
+            }
+            Button("继续保留", role: .cancel) {}
+        } message: {
+            Text("取消后，这次投稿将不再进入审核，已经上传的进度也不会继续。")
         }
         .task { await load() }
         .refreshable { await load() }
@@ -86,37 +98,66 @@ struct GalleryUploadDetailView: View {
 
     private func load() async {
         state = .loading
-        message = nil
+        feedback = nil
         do {
             state = .loaded(try await environment.galleryUploadClient.detail(batchID: batchID))
         } catch {
-            state = .failed(error.localizedDescription)
+            state = .failed(UserFacingErrorMapper.map(error).message)
         }
     }
 
     private func cancel() async {
+        guard !isCancelling else { return }
+        isCancelling = true
+        defer { isCancelling = false }
+
         do {
             try await environment.galleryUploadClient.cancel(batchID: batchID)
-            message = "批次已取消"
             await load()
+            feedback = .success("投稿已取消")
         } catch {
-            message = error.localizedDescription
+            feedback = .error(UserFacingErrorMapper.map(error).message)
         }
     }
 
     private func canCancel(_ batch: GalleryUploadBatchDetail) -> Bool {
         batch.status == "UPLOADING" || batch.status == "WAITING_MANUAL_REVIEW"
     }
+
+    private func workRelationshipTitle(_ value: String) -> String {
+        switch value {
+        case "SINGLE_PID_MULTI_PAGE": "多张属于同一作品"
+        case "MULTI_PID_P0": "每张都是独立作品"
+        default: "未知作品关系"
+        }
+    }
+
+    private func aiSourceTitle(_ value: Int) -> String {
+        switch value {
+        case 1: "非 AI"
+        case 2: "AI 生成"
+        default: "未知"
+        }
+    }
 }
 
 struct GalleryUploadItemRow: View {
     let item: GalleryUploadItem
+    let order: Int?
+
+    init(item: GalleryUploadItem, order: Int? = nil) {
+        self.item = item
+        self.order = order
+    }
 
     var body: some View {
         HStack(spacing: SetuSpacing.md) {
-            ImageThumbnailView(urlString: item.previewUrl)
+            SetuRemoteImage(
+                urlString: item.previewUrl,
+                accessibilityLabel: "投稿图片：\(displayTitle)"
+            )
             VStack(alignment: .leading, spacing: SetuSpacing.xs) {
-                Text(item.title ?? item.filename ?? "投稿图片 #\(item.submissionId)")
+                Text(displayTitle)
                     .font(SetuTypography.headline)
                     .foregroundStyle(SetuColor.textPrimary)
                     .lineLimit(2)
@@ -125,12 +166,6 @@ struct GalleryUploadItemRow: View {
                     .foregroundStyle(SetuColor.textSecondary)
                 HStack(spacing: 10) {
                     Label(item.statusTitle, systemImage: "flag")
-                    if let uploadStatus = item.uploadStatus {
-                        Label(uploadStatus, systemImage: "icloud")
-                    }
-                    if let publicPid = item.publicPid {
-                        Label("\(publicPid)-\(item.publicP ?? 0)", systemImage: "number")
-                    }
                 }
                 .font(.caption)
                 .foregroundStyle(SetuColor.textTertiary)
@@ -143,9 +178,17 @@ struct GalleryUploadItemRow: View {
         }
         .padding(.vertical, SetuSpacing.xs)
     }
+
+    private var displayTitle: String {
+        let title = item.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard title.isEmpty else { return title }
+        return order.map { "第 \($0) 张图片" } ?? "投稿图片"
+    }
 }
 
 private struct GalleryUploadMetadataRow: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     let title: String
     private let value: AnyView
 
@@ -160,18 +203,41 @@ private struct GalleryUploadMetadataRow: View {
             Text(value)
                 .font(SetuTypography.body)
                 .foregroundStyle(SetuColor.textPrimary)
-                .multilineTextAlignment(.trailing)
         )
     }
 
+    @ViewBuilder
     var body: some View {
-        HStack(alignment: .top, spacing: SetuSpacing.md) {
-            Text(title)
-                .font(SetuTypography.caption)
-                .foregroundStyle(SetuColor.textSecondary)
-                .frame(width: 72, alignment: .leading)
-            value
-                .frame(maxWidth: .infinity, alignment: .trailing)
+        if dynamicTypeSize.isAccessibilitySize {
+            verticalRow
+        } else {
+            horizontalRow
         }
+    }
+
+    private var horizontalRow: some View {
+        HStack(alignment: .top, spacing: SetuSpacing.md) {
+            titleLabel
+                .layoutPriority(1)
+            Spacer(minLength: SetuSpacing.sm)
+            value
+                .multilineTextAlignment(.trailing)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var verticalRow: some View {
+        VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+            titleLabel
+            value
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var titleLabel: some View {
+        Text(title)
+            .font(SetuTypography.caption)
+            .foregroundStyle(SetuColor.textSecondary)
     }
 }

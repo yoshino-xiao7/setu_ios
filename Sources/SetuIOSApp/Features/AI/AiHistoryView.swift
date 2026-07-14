@@ -7,105 +7,95 @@ import UIKit
 
 struct AiHistoryView: View {
     @Environment(RouterPath.self) private var router
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var environment: AppEnvironment
-    @State private var state: LoadState<PageResult<AiGenerationJob>> = .idle
     @State private var statusFilter = ""
-    @State private var page = 1
-    @State private var message: String?
+    @State private var jobs: [AiGenerationJob] = []
+    @State private var total = 0
+    @State private var nextPage = 1
+    @State private var isInitialLoading = true
+    @State private var isLoadingMore = false
+    @State private var loadError: String?
+    @State private var feedback: SetuFeedback?
     @State private var showingDeleteRequests = false
     @State private var previewSelection: AiHistoryPreviewSelection?
     private let pageSize = 12
 
     var body: some View {
-        List {
-            if let message {
-                Section {
-                    SetuPill(text: message, systemImage: "checkmark.circle", tone: .brand)
-                }
-                .setuListRow()
+        ScrollView {
+            VStack(alignment: .leading, spacing: SetuSpacing.lg) {
+            if let feedback {
+                SetuFeedbackBanner(feedback: feedback)
             }
 
-            Section {
-                Picker("状态", selection: $statusFilter) {
-                    Text("全部").tag("")
-                    Text("排队中").tag("QUEUED")
-                    Text("生成中").tag("RUNNING")
-                    Text("已完成").tag("COMPLETED")
-                    Text("失败").tag("FAILED")
-                }
-                .pickerStyle(.segmented)
-                .onChange(of: statusFilter) {
-                    Task {
-                        page = 1
-                        await load()
-                    }
-                }
+            adaptiveStatusPicker
+            .onChange(of: statusFilter) {
+                Task { await loadFirstPage(clearExisting: true) }
             }
-            .setuListRow()
 
-            switch state {
-            case .idle, .loading:
-                Section {
-                    SetuCard {
-                        SetuEmptyState(title: "正在加载 AI 绘画历史", systemImage: "sparkles", isLoading: true)
-                    }
+            if isInitialLoading {
+                SetuCard {
+                    SetuEmptyState(title: "正在加载 AI 绘画历史", systemImage: "sparkles", isLoading: true)
                 }
-                .setuListRow()
-            case .failed(let message):
-                Section {
+            } else if jobs.isEmpty {
+                if let loadError {
                     SetuCard {
-                        SetuEmptyState(title: "历史加载失败", message: message, systemImage: "clock.badge.exclamationmark")
-                    }
-                }
-                .setuListRow()
-            case .loaded(let page):
-                if page.list.isEmpty {
-                    Section {
-                        SetuCard {
-                            SetuEmptyState(title: "暂无 AI 绘画记录", message: "创建绘画任务后，任务状态和结果会显示在这里。", systemImage: "sparkles")
+                        VStack(spacing: SetuSpacing.md) {
+                            SetuEmptyState(title: "历史加载失败", message: loadError, systemImage: "wifi.exclamationmark")
+                            Button("重试") { Task { await loadFirstPage() } }
+                                .buttonStyle(.borderedProminent)
                         }
                     }
-                    .setuListRow()
                 } else {
-                    Section {
-                        SetuCard {
-                            VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                                SetuSectionHeader(title: "共 \(page.total) 条")
-                                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: SetuSpacing.md) {
-                                    ForEach(page.list) { job in
-                                        AiGenerationGridTile(job: job, footerTitle: job.createdAt) {
-                                            router.navigate(to: .aiGenerationDetail(job.id))
-                                        }
-                                        .contextMenu {
-                                            Button {
-                                                reuse(job)
-                                            } label: {
-                                                Label("复用参数", systemImage: "arrow.triangle.2.circlepath")
-                                            }
-                                            Button {
-                                                copyPrompt(job)
-                                            } label: {
-                                                Label("复制提示词", systemImage: "doc.on.doc")
-                                            }
-                                            if job.status == "COMPLETED" {
-                                                Button {
-                                                    previewSelection = AiHistoryPreviewSelection(job: job)
-                                                } label: {
-                                                    Label("查看图片", systemImage: "eye")
-                                                }
-                                            }
-                                        }
+                    SetuCard {
+                        VStack(spacing: SetuSpacing.md) {
+                            SetuEmptyState(title: "暂无 AI 绘画记录", message: "描述一个画面，开始你的第一幅作品。", systemImage: "sparkles")
+                            Button("开始创作") { router.navigate(to: .aiDraw) }
+                                .buttonStyle(.borderedProminent)
+                        }
+                    }
+                }
+            } else {
+                VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                    SetuSectionHeader(title: "我的作品")
+                    LazyVGrid(columns: gridColumns, spacing: SetuSpacing.md) {
+                        ForEach(jobs) { job in
+                            AiGenerationGridTile(job: job, footerTitle: SetuDateFormatter.string(from: job.createdAt)) {
+                                router.navigate(to: .aiGenerationDetail(job.id))
+                            }
+                            .contextMenu {
+                                Button {
+                                    reuse(job)
+                                } label: {
+                                    Label("复用参数", systemImage: "arrow.triangle.2.circlepath")
+                                }
+                                Button {
+                                    copyPrompt(job)
+                                } label: {
+                                    Label("复制提示词", systemImage: "doc.on.doc")
+                                }
+                                if job.status == "COMPLETED" {
+                                    Button {
+                                        previewSelection = AiHistoryPreviewSelection(job: job)
+                                    } label: {
+                                        Label("查看图片", systemImage: "eye")
                                     }
+                                }
+                            }
+                            .onAppear {
+                                if job.id == jobs.last?.id {
+                                    Task { await loadMore() }
                                 }
                             }
                         }
                     }
-                    .setuListRow()
-                    pagerSection(page)
+                    loadMoreFooter
                 }
             }
         }
-        .listStyle(.plain)
+            .padding(.horizontal, SetuSpacing.lg)
+            .padding(.vertical, SetuSpacing.md)
+        }
         .setuBackground()
         .navigationTitle("AI 绘画历史")
         .toolbar {
@@ -128,51 +118,95 @@ struct AiHistoryView: View {
                     previewSelection = nil
                     router.navigate(to: .aiGenerationDetail(selection.job.id))
                 },
-                onMessage: { message = $0 }
+                onFeedback: { feedback = $0 }
             )
         }
-        .task { await load() }
-        .refreshable { await load() }
+        .task { await loadFirstPage() }
+        .refreshable { await loadFirstPage() }
     }
 
-    private func pagerSection(_ result: PageResult<AiGenerationJob>) -> some View {
-        Section {
-            HStack(spacing: SetuSpacing.md) {
-                Button("上一页") {
-                    Task {
-                        page = max(1, page - 1)
-                        await load()
-                    }
-                }
-                .disabled(page <= 1)
-                .buttonStyle(.bordered)
-
-                Spacer()
-                Text("第 \(result.page) 页")
-                    .font(.footnote)
-                    .foregroundStyle(SetuColor.textSecondary)
-                Spacer()
-
-                Button("下一页") {
-                    Task {
-                        page += 1
-                        await load()
-                    }
-                }
-                .disabled(result.page * result.pageSize >= result.total)
-                .buttonStyle(.bordered)
-            }
+    @ViewBuilder
+    private var adaptiveStatusPicker: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            statusPicker.pickerStyle(.menu)
+        } else {
+            statusPicker.pickerStyle(.segmented)
         }
-        .setuListRow()
     }
 
-    private func load() async {
-        state = .loading
-        message = nil
+    private var statusPicker: some View {
+        Picker("状态", selection: $statusFilter) {
+            Text("全部").tag("")
+            Text("排队中").tag("QUEUED")
+            Text("生成中").tag("RUNNING")
+            Text("已完成").tag("COMPLETED")
+            Text("失败").tag("FAILED")
+        }
+    }
+
+    @ViewBuilder
+    private var loadMoreFooter: some View {
+        SetuLoadMoreFooter(state: loadMoreFooterState) {
+            Task { await loadMore() }
+        }
+    }
+
+    private var loadMoreFooterState: SetuLoadMoreFooterState {
+        if isLoadingMore { return .loading }
+        if let loadError { return .failed(loadError) }
+        if !hasMore { return .complete("已加载全部 \(total) 条记录") }
+        return .idle
+    }
+
+    private var hasMore: Bool { jobs.count < total }
+
+    private var gridColumns: [GridItem] {
+        dynamicTypeSize.isAccessibilitySize
+            ? [GridItem(.flexible())]
+            : [GridItem(.adaptive(minimum: 148), spacing: SetuSpacing.md)]
+    }
+
+    private func loadFirstPage(clearExisting: Bool = false) async {
+        let requestedFilter = statusFilter
+        if clearExisting {
+            jobs = []
+            total = 0
+            nextPage = 1
+        }
+        isInitialLoading = jobs.isEmpty
+        isLoadingMore = false
+        loadError = nil
+        feedback = nil
         do {
-            state = .loaded(try await environment.aiGenerationClient.listMine(status: statusFilter, page: page, pageSize: pageSize))
+            let result = try await environment.aiGenerationClient.listMine(status: requestedFilter, page: 1, pageSize: pageSize)
+            guard requestedFilter == statusFilter else { return }
+            jobs = result.list
+            total = result.total
+            nextPage = 2
         } catch {
-            state = .failed(error.localizedDescription)
+            guard requestedFilter == statusFilter else { return }
+            loadError = UserFacingErrorMapper.map(error).message
+        }
+        isInitialLoading = false
+    }
+
+    private func loadMore() async {
+        guard hasMore, !isLoadingMore, !isInitialLoading else { return }
+        let requestedFilter = statusFilter
+        let requestedPage = nextPage
+        isLoadingMore = true
+        loadError = nil
+        defer { isLoadingMore = false }
+        do {
+            let result = try await environment.aiGenerationClient.listMine(status: requestedFilter, page: requestedPage, pageSize: pageSize)
+            guard requestedFilter == statusFilter, requestedPage == nextPage else { return }
+            let existingIDs = Set(jobs.map(\.id))
+            jobs.append(contentsOf: result.list.filter { !existingIDs.contains($0.id) })
+            total = result.total
+            nextPage += 1
+        } catch {
+            guard requestedFilter == statusFilter else { return }
+            loadError = UserFacingErrorMapper.map(error).message
         }
     }
 
@@ -187,7 +221,7 @@ struct AiHistoryView: View {
             "反向提示词：\(job.promptNegative ?? "")"
         ].joined(separator: "\n")
         PlatformClipboard.copy(text)
-        message = "提示词已复制"
+        feedback = .success("提示词已复制")
     }
 
 }
@@ -205,7 +239,11 @@ private struct AiGenerationRow: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top) {
                 if job.status == "COMPLETED" {
-                    ImageThumbnailView(urlString: job.imageUrl)
+                    SetuRemoteImage(
+                        urlString: job.imageUrl,
+                        accessibilityLabel: "AI 作品：\(job.promptCn)",
+                        allowsTapToRetry: false
+                    )
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -213,7 +251,7 @@ private struct AiGenerationRow: View {
                         .font(SetuTypography.headline)
                         .foregroundStyle(SetuColor.textPrimary)
                         .lineLimit(2)
-                    Text("#\(job.id) · \(job.width)x\(job.height) · \(job.steps) 步")
+                    Text("\(job.width) × \(job.height) · \(job.steps) 步")
                         .font(.caption)
                         .foregroundStyle(SetuColor.textSecondary)
                 }
@@ -221,7 +259,7 @@ private struct AiGenerationRow: View {
                 StatusBadge(title: job.statusTitle, status: job.status)
             }
 
-            if let detail = job.userErrorMessage ?? job.workerDetail, !detail.isEmpty {
+            if let detail = job.userErrorMessage, !detail.isEmpty {
                 Text(detail)
                     .font(SetuTypography.caption)
                     .foregroundStyle(job.status == "FAILED" ? SetuColor.danger : SetuColor.textSecondary)
@@ -239,7 +277,7 @@ private struct AiGenerationRow: View {
                     Label("公开", systemImage: "globe")
                 }
                 if let createdAt = job.createdAt {
-                    Label(createdAt, systemImage: "calendar")
+                    Label(SetuDateFormatter.string(from: createdAt), systemImage: "calendar")
                 }
             }
             .font(.caption)
@@ -249,7 +287,7 @@ private struct AiGenerationRow: View {
                 HStack(spacing: 8) {
                     StatusBadge(title: "公开：\(reviewStatusTitle)", status: job.reviewStatus)
                     if let publicCategory = job.publicCategory {
-                        StatusBadge(title: publicCategory == "R18" ? "R18" : "全年龄", status: publicCategory)
+                        StatusBadge(title: publicCategory == "R18" ? "成人内容" : "全年龄", status: publicCategory)
                     }
                     if let deleteStatus = job.deleteStatus, deleteStatus != "NONE" {
                         StatusBadge(title: deleteStatusTitle(deleteStatus), status: deleteStatus)
@@ -262,7 +300,7 @@ private struct AiGenerationRow: View {
                     .font(.caption)
                     .foregroundStyle(SetuColor.textSecondary)
             } else if job.status == "COMPLETED", let expiresAt = job.privateOssExpiresAt {
-                Label("图片仅保留 30 天，预计 \(expiresAt) 清理", systemImage: "clock")
+                Label("图片仅保留 30 天，预计 \(SetuDateFormatter.string(from: expiresAt)) 清理", systemImage: "clock")
                     .font(.caption)
                     .foregroundStyle(SetuColor.textSecondary)
             }
@@ -276,7 +314,7 @@ private struct AiGenerationRow: View {
         case "APPROVED": "已进广场"
         case "REJECTED": "已拒绝"
         case "NONE": "未提交"
-        default: job.reviewStatus
+        default: "状态更新中"
         }
     }
 
@@ -285,7 +323,7 @@ private struct AiGenerationRow: View {
         case "WAITING": "删除待审核"
         case "APPROVED": "删除已通过"
         case "REJECTED": "删除已拒绝"
-        default: status
+        default: "状态更新中"
         }
     }
 
@@ -309,10 +347,11 @@ struct AiGenerationImagePreviewSheet: View {
     @Bindable var environment: AppEnvironment
     let job: AiGenerationJob
     let onOpenDetail: () -> Void
-    let onMessage: (String) -> Void
+    let onFeedback: (SetuFeedback) -> Void
 
     @State private var imageState: LoadState<String> = .idle
-    @State private var localMessage: String?
+    @State private var localFeedback: SetuFeedback?
+    @State private var fileSharePayload: SystemFileSharePayload?
 
     var body: some View {
         NavigationStack {
@@ -326,14 +365,11 @@ struct AiGenerationImagePreviewSheet: View {
                                 .font(SetuTypography.headline)
                                 .foregroundStyle(SetuColor.textPrimary)
                             .textSelection(.enabled)
-                        Text("#\(job.id) · \(job.width)x\(job.height) · \(job.statusTitle)")
+                        Text("\(job.width) × \(job.height) · \(job.statusTitle)")
                                 .font(.caption)
                                 .foregroundStyle(SetuColor.textSecondary)
-                        if let localMessage {
-                            Text(localMessage)
-                                    .font(SetuTypography.caption)
-                                    .foregroundStyle(SetuColor.textSecondary)
-                                .textSelection(.enabled)
+                        if let localFeedback {
+                            SetuFeedbackBanner(feedback: localFeedback)
                         }
                     }
                     }
@@ -354,6 +390,18 @@ struct AiGenerationImagePreviewSheet: View {
             .task(id: job.id) {
                 await prepareImageURL()
             }
+            .sheet(item: $fileSharePayload) { payload in
+                SystemFileShareSheet(fileURL: payload.fileURL) { result in
+                    switch result {
+                    case .completed:
+                        localFeedback = .success("已完成保存或分享")
+                    case .cancelled:
+                        localFeedback = .info("已取消保存或分享")
+                    case .failed(let text):
+                        localFeedback = .error("保存或分享失败：\(text)")
+                    }
+                }
+            }
         }
     }
 
@@ -371,27 +419,16 @@ struct AiGenerationImagePreviewSheet: View {
                 .frame(maxWidth: .infinity, minHeight: 320)
             }
         case .loaded(let urlString):
-            if let url = URL(string: urlString) {
+            if URL(string: urlString) != nil {
                 SetuCard {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFit()
-                                .clipShape(RoundedRectangle(cornerRadius: SetuRadius.md, style: .continuous))
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: SetuRadius.md, style: .continuous)
-                                        .stroke(SetuColor.separator, lineWidth: 1)
-                                }
-                    case .failure:
-                            SetuEmptyState(title: "图片加载失败", message: "可以尝试刷新图片。", systemImage: "photo")
-                                .frame(maxWidth: .infinity, minHeight: 320)
-                    default:
-                            SetuEmptyState(title: "正在加载图片", systemImage: "photo", isLoading: true)
-                            .frame(maxWidth: .infinity, minHeight: 320)
-                    }
-                }
+                    SetuRemoteImage(
+                        urlString: urlString,
+                        accessibilityLabel: "AI 作品图片：\(job.promptCn)",
+                        width: nil,
+                        height: 320,
+                        cornerRadius: SetuRadius.md,
+                        contentMode: .fit
+                    )
                 }
             } else {
                 SetuCard {
@@ -432,7 +469,7 @@ struct AiGenerationImagePreviewSheet: View {
             Button {
                 onOpenDetail()
             } label: {
-                Label("查看任务详情", systemImage: "list.bullet.rectangle")
+                Label("查看作品详情", systemImage: "list.bullet.rectangle")
                         .frame(maxWidth: .infinity, minHeight: 44)
             }
             .buttonStyle(.borderedProminent)
@@ -454,10 +491,10 @@ struct AiGenerationImagePreviewSheet: View {
         do {
             let result = try await environment.aiGenerationClient.imageURL(id: job.id)
             imageState = .loaded(result.url)
-            localMessage = "\(result.expiresInSeconds) 秒内有效"
+            localFeedback = .info("图片链接将在 \(result.expiresInSeconds) 秒后失效")
         } catch {
-            imageState = .failed(error.localizedDescription)
-            localMessage = error.localizedDescription
+            imageState = .failed(UserFacingErrorMapper.map(error).message)
+            localFeedback = .error(UserFacingErrorMapper.map(error).message)
         }
     }
 
@@ -465,17 +502,26 @@ struct AiGenerationImagePreviewSheet: View {
         do {
             let result = try await environment.aiGenerationClient.download(id: job.id)
             guard let url = URL(string: result.downloadUrl) else {
-                localMessage = "下载地址无效"
+                localFeedback = .error("下载地址无效，请稍后重试。")
                 return
             }
-            #if os(iOS)
-            await UIApplication.shared.open(url)
-            #endif
-            localMessage = "已打开下载"
-            onMessage("已打开下载")
+            let fileURL = try await RemoteFileExportService.download(from: url, filename: exportFilename)
+            fileSharePayload = SystemFileSharePayload(fileURL: fileURL)
+            localFeedback = .info("下载完成，请选择保存位置或分享方式")
+            onFeedback(.success("图片已准备好"))
         } catch {
-            localMessage = error.localizedDescription
+            localFeedback = .error(RemoteFileExportService.userMessage(for: error))
         }
+    }
+
+    private var exportFilename: String {
+        let forbidden = CharacterSet(charactersIn: "/:\\?%*|\"<>")
+        let sanitized = job.promptCn
+            .components(separatedBy: forbidden)
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = sanitized.isEmpty ? "AI作品" : String(sanitized.prefix(24))
+        return "雪涼云-\(title).png"
     }
 
     private func copyPrompt() {
@@ -484,8 +530,8 @@ struct AiGenerationImagePreviewSheet: View {
             "反向提示词：\(job.promptNegative ?? "")"
         ].joined(separator: "\n")
         PlatformClipboard.copy(text)
-        localMessage = "提示词已复制"
-        onMessage("提示词已复制")
+        localFeedback = .success("提示词已复制")
+        onFeedback(.success("提示词已复制"))
     }
 }
 

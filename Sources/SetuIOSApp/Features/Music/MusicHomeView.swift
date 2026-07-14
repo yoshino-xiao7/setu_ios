@@ -7,6 +7,7 @@ import UIKit
 
 struct MusicHomeView: View {
     @Environment(RouterPath.self) private var router
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var environment: AppEnvironment
     @Bindable var player: MusicPlaybackController
     @State private var hotState: LoadState<[MusicHotSearchItem]> = .idle
@@ -18,16 +19,57 @@ struct MusicHomeView: View {
     @State private var selectedSong: MusicSong?
     @State private var mvSong: MusicSong?
     @State private var selectedRecommendedPlaylist: MusicRecommendedPlaylist?
+    @State private var fileSharePayload: SystemFileSharePayload?
+    @State private var searchQuery = ""
 
     var body: some View {
         List {
-            recentHistoryContent
-            myPlaylistContent
-            hotSearchContent
-            recommendationsContent
+            if dynamicTypeSize.isAccessibilitySize {
+                Section {
+                    SetuCard {
+                        TextField("搜索音乐", text: $searchQuery)
+                            .font(.body)
+                            .textFieldStyle(.roundedBorder)
+                            .submitLabel(.search)
+                            .frame(minHeight: 44)
+                            .accessibilityLabel("搜索歌曲、歌手或专辑")
+                    }
+                    .setuListRow()
+                }
+            }
+            if let feedback = player.feedback {
+                Section {
+                    SetuFeedbackBanner(feedback: feedback)
+                }
+                .setuListRow()
+            }
+            if isReturningListener {
+                recentHistoryContent
+                myPlaylistContent
+                dailySongsContent
+                otherRecommendationsContent
+                hotSearchContent
+            } else {
+                dailySongsContent
+                newSongsContent
+                recommendedPlaylistSection
+                hotSearchContent
+                myPlaylistContent
+                recentHistoryContent
+            }
         }
         .listStyle(.plain)
         .setuBackground()
+        .accessibilityIdentifier("music.home.page")
+        .modifier(
+            MusicHomeSearchModifier(
+                query: $searchQuery,
+                usesNavigationSearch: !dynamicTypeSize.isAccessibilitySize
+            )
+        )
+        .onSubmit(of: .search) {
+            openSearch()
+        }
         .navigationTitle("")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -37,20 +79,16 @@ struct MusicHomeView: View {
             ToolbarItem(placement: .topBarLeading) {
                 toolbarLogo
             }
-            ToolbarItem(placement: .topBarTrailing) {
-                searchToolbarButton
-            }
             #else
             ToolbarItem(placement: .automatic) {
                 toolbarLogo
             }
-            ToolbarItem(placement: .primaryAction) {
-                searchToolbarButton
-            }
             #endif
         }
         .sheet(item: $selectedSong) { song in
-            AddSongToPlaylistSheet(environment: environment, song: song)
+            AddSongToPlaylistSheet(environment: environment, song: song) { result in
+                player.showFeedback(result)
+            }
         }
         .sheet(item: $mvSong) { song in
             MusicMvSheet(environment: environment, player: player, song: song)
@@ -58,31 +96,17 @@ struct MusicHomeView: View {
         .sheet(item: $selectedRecommendedPlaylist) { playlist in
             RecommendedPlaylistSheet(environment: environment, player: player, playlist: playlist)
         }
+        .sheet(item: $fileSharePayload) { payload in
+            SystemFileShareSheet(fileURL: payload.fileURL) { result in
+                player.showFeedback(fileShareFeedback(result))
+            }
+        }
         .task { await loadLandingContent() }
         .refreshable { await loadLandingContent() }
     }
 
     private var toolbarLogo: some View {
-        Image("MusicHomeLogo")
-            .resizable()
-            .scaledToFit()
-            .frame(width: SetuToolbarLogoMetrics.width, height: SetuToolbarLogoMetrics.height)
-            .accessibilityLabel("扣扣音乐")
-            .accessibilityAddTraits(.isImage)
-    }
-
-    private var searchToolbarButton: some View {
-        Button {
-            router.navigate(to: .musicSearch(nil))
-        } label: {
-            Image(systemName: "magnifyingglass")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(SetuColor.textPrimary)
-                .frame(width: 44, height: 44)
-                .contentShape(Circle())
-        }
-        .setuButtonFeedback(cornerRadius: 22)
-        .accessibilityLabel("搜索音乐")
+        SetuToolbarLogo(assetName: "MusicHomeLogo", accessibilityLabel: "扣扣音乐")
     }
 
     @ViewBuilder
@@ -100,7 +124,9 @@ struct MusicHomeView: View {
                 title: "热门搜索",
                 stateTitle: "热门搜索加载失败",
                 message: message,
-                systemImage: "exclamationmark.triangle"
+                systemImage: "exclamationmark.triangle",
+                actionTitle: "重试",
+                action: { Task { await loadHotSearch() } }
             )
         case .loaded(let hots):
             if !hots.isEmpty {
@@ -108,7 +134,7 @@ struct MusicHomeView: View {
                     SetuCard {
                         VStack(alignment: .leading, spacing: SetuSpacing.md) {
                             SetuSectionHeader(title: "热门搜索", subtitle: "点一下直接搜索")
-                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: SetuSpacing.sm)], alignment: .leading, spacing: SetuSpacing.sm) {
+                            LazyVGrid(columns: hotSearchColumns, alignment: .leading, spacing: SetuSpacing.sm) {
                                 ForEach(Array(hots.prefix(12).enumerated()), id: \.element.id) { index, item in
                                     Button {
                                         router.navigate(to: .musicSearch(item.first))
@@ -116,17 +142,20 @@ struct MusicHomeView: View {
                                         Label(item.first, systemImage: index < 3 ? "flame.fill" : "magnifyingglass")
                                             .font(.caption.weight(.semibold))
                                             .foregroundStyle(index < 3 ? SetuColor.brandInk : SetuColor.textPrimary)
-                                            .lineLimit(1)
+                                            .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+                                            .fixedSize(horizontal: false, vertical: true)
                                             .frame(maxWidth: .infinity, minHeight: 44)
                                             .padding(.horizontal, SetuSpacing.sm)
                                             .background(SetuColor.surfaceMuted, in: Capsule())
                                     }
                                     .setuButtonFeedback(cornerRadius: 22)
+                                    .accessibilityIdentifier("music.hot.\(index)")
                                 }
                             }
                         }
                     }
                     .setuListRow()
+                    .accessibilityIdentifier("music.home.section.hot")
                 }
             }
         }
@@ -138,16 +167,30 @@ struct MusicHomeView: View {
         case .idle, .loading:
             MusicStateSection(title: "最近播放", stateTitle: "正在加载最近播放", systemImage: "clock.arrow.circlepath", isLoading: true)
         case .failed(let message):
-            MusicStateSection(title: "最近播放", stateTitle: "最近播放加载失败", message: message, systemImage: "exclamationmark.triangle")
+            MusicStateSection(
+                title: "最近播放",
+                stateTitle: "最近播放加载失败",
+                message: message,
+                systemImage: "exclamationmark.triangle",
+                actionTitle: "重试",
+                action: { Task { await loadRecentHistory() } }
+            )
         case .loaded(let records):
             let visibleRecords = Array(records.prefix(8))
             if visibleRecords.isEmpty {
-                MusicStateSection(title: "最近播放", stateTitle: "暂无播放历史", message: "播放过的歌曲会出现在这里。", systemImage: "clock.arrow.circlepath")
+                MusicStateSection(
+                    title: "继续听",
+                    stateTitle: "还没有播放记录",
+                    message: "找到喜欢的歌后，之后可以从这里继续听。",
+                    systemImage: "clock.arrow.circlepath",
+                    actionTitle: "去找一首歌",
+                    action: { router.navigate(to: .musicSearch(nil)) }
+                )
             } else {
                 Section {
                     SetuCard {
                         VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                            SetuSectionHeader(title: "最近播放", subtitle: "\(visibleRecords.count) 首")
+                            SetuSectionHeader(title: "继续听", subtitle: "最近播放")
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(alignment: .top, spacing: SetuSpacing.md) {
                                     ForEach(visibleRecords) { record in
@@ -169,12 +212,19 @@ struct MusicHomeView: View {
                                 Label("查看全部播放历史", systemImage: "chevron.right")
                                     .font(.footnote.weight(.semibold))
                                     .foregroundStyle(SetuColor.brandInk)
+                                    .lineLimit(nil)
+                                    .multilineTextAlignment(.center)
+                                    .fixedSize(horizontal: false, vertical: true)
                                     .frame(maxWidth: .infinity, minHeight: 44)
+                                    .padding(.vertical, SetuSpacing.xs)
                             }
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .contentShape(Rectangle())
                             .setuButtonFeedback()
                         }
                     }
                     .setuListRow()
+                    .accessibilityIdentifier("music.home.section.history")
                 }
             }
         }
@@ -186,11 +236,25 @@ struct MusicHomeView: View {
         case .idle, .loading:
             MusicStateSection(title: "我的歌单", stateTitle: "正在加载我的歌单", systemImage: "music.note.list", isLoading: true)
         case .failed(let message):
-            MusicStateSection(title: "我的歌单", stateTitle: "我的歌单加载失败", message: message, systemImage: "exclamationmark.triangle")
+            MusicStateSection(
+                title: "我的歌单",
+                stateTitle: "我的歌单加载失败",
+                message: message,
+                systemImage: "exclamationmark.triangle",
+                actionTitle: "重试",
+                action: { Task { await loadMyPlaylists() } }
+            )
         case .loaded(let playlists):
             let visiblePlaylists = Array(playlists.prefix(6))
             if visiblePlaylists.isEmpty {
-                MusicStateSection(title: "我的歌单", stateTitle: "暂无歌单", message: "创建歌单后会显示在这里。", systemImage: "music.note.list")
+                MusicStateSection(
+                    title: "我的歌单",
+                    stateTitle: "还没有歌单",
+                    message: "把喜欢的歌曲整理到自己的歌单中。",
+                    systemImage: "music.note.list",
+                    actionTitle: "创建第一个歌单",
+                    action: { router.navigate(to: .playlists) }
+                )
             } else {
                 Section {
                     SetuCard {
@@ -204,6 +268,7 @@ struct MusicHomeView: View {
                                         MusicPlaylistCompactRow(playlist: playlist)
                                     }
                                     .setuButtonFeedback()
+                                    .accessibilityIdentifier("music.playlist.\(playlist.id)")
                                 }
                             }
                             Button {
@@ -212,8 +277,14 @@ struct MusicHomeView: View {
                                 Label("管理全部歌单", systemImage: "music.note.list")
                                     .font(.footnote.weight(.semibold))
                                     .foregroundStyle(SetuColor.brandInk)
+                                    .lineLimit(nil)
+                                    .multilineTextAlignment(.center)
+                                    .fixedSize(horizontal: false, vertical: true)
                                     .frame(maxWidth: .infinity, minHeight: 44)
+                                    .padding(.vertical, SetuSpacing.xs)
                             }
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .contentShape(Rectangle())
                             .setuButtonFeedback()
                         }
                     }
@@ -224,26 +295,43 @@ struct MusicHomeView: View {
     }
 
     @ViewBuilder
-    private var recommendationsContent: some View {
-        musicSongSection(
-            title: "推荐新歌",
-            loadingTitle: "正在加载推荐新歌",
-            emptyTitle: "暂无推荐新歌",
-            systemImage: "music.note",
-            queueName: "推荐新歌",
-            state: newSongsState
-        )
-
+    private var dailySongsContent: some View {
         musicSongSection(
             title: "每日推荐",
             loadingTitle: "正在加载每日推荐",
             emptyTitle: "暂无每日推荐",
             systemImage: "sparkles",
             queueName: "每日推荐",
-            state: dailySongsState
+            state: dailySongsState,
+            retry: { Task { await loadRecommendations() } }
         )
+    }
 
+    @ViewBuilder
+    private var newSongsContent: some View {
+        musicSongSection(
+            title: "推荐新歌",
+            loadingTitle: "正在加载推荐新歌",
+            emptyTitle: "暂无推荐新歌",
+            systemImage: "music.note",
+            queueName: "推荐新歌",
+            state: newSongsState,
+            retry: { Task { await loadRecommendations() } }
+        )
+    }
+
+    @ViewBuilder
+    private var otherRecommendationsContent: some View {
+        newSongsContent
         recommendedPlaylistSection
+    }
+
+    private var isReturningListener: Bool {
+        if player.currentTrack != nil { return true }
+        if case .loaded(let records) = recentHistoryState {
+            return !records.isEmpty
+        }
+        return true
     }
 
     @ViewBuilder
@@ -253,13 +341,21 @@ struct MusicHomeView: View {
         emptyTitle: String,
         systemImage: String,
         queueName: String,
-        state: LoadState<[MusicSong]>
+        state: LoadState<[MusicSong]>,
+        retry: @escaping () -> Void
     ) -> some View {
         switch state {
         case .idle, .loading:
             MusicStateSection(title: title, stateTitle: loadingTitle, systemImage: systemImage, isLoading: true)
         case .failed(let message):
-            MusicStateSection(title: title, stateTitle: "\(title)加载失败", message: message, systemImage: "exclamationmark.triangle")
+            MusicStateSection(
+                title: title,
+                stateTitle: "\(title)加载失败",
+                message: message,
+                systemImage: "exclamationmark.triangle",
+                actionTitle: "重试",
+                action: retry
+            )
         case .loaded(let songs):
             let visibleSongs = Array(songs.prefix(5))
             if visibleSongs.isEmpty {
@@ -298,7 +394,14 @@ struct MusicHomeView: View {
         case .idle, .loading:
             MusicStateSection(title: "推荐歌单", stateTitle: "正在加载推荐歌单", systemImage: "music.note.list", isLoading: true)
         case .failed(let message):
-            MusicStateSection(title: "推荐歌单", stateTitle: "推荐歌单加载失败", message: message, systemImage: "exclamationmark.triangle")
+            MusicStateSection(
+                title: "推荐歌单",
+                stateTitle: "推荐歌单加载失败",
+                message: message,
+                systemImage: "exclamationmark.triangle",
+                actionTitle: "重试",
+                action: { Task { await loadRecommendations() } }
+            )
         case .loaded(let playlists):
             let visiblePlaylists = Array(playlists.prefix(6))
             if visiblePlaylists.isEmpty {
@@ -330,6 +433,13 @@ struct MusicHomeView: View {
         }
     }
 
+    private var hotSearchColumns: [GridItem] {
+        if dynamicTypeSize.isAccessibilitySize {
+            return [GridItem(.flexible())]
+        }
+        return [GridItem(.adaptive(minimum: 96), spacing: SetuSpacing.sm)]
+    }
+
     private func loadLandingContent() async {
         async let hot: Void = loadHotSearch()
         async let recommended: Void = loadRecommendations()
@@ -343,7 +453,7 @@ struct MusicHomeView: View {
         do {
             hotState = .loaded(try await environment.musicClient.hotSearch().result.hots)
         } catch {
-            hotState = .failed(error.localizedDescription)
+            hotState = .failed(UserFacingErrorMapper.map(error).message)
         }
     }
 
@@ -359,19 +469,19 @@ struct MusicHomeView: View {
         do {
             recommendedPlaylistState = .loaded(try await playlists.result)
         } catch {
-            recommendedPlaylistState = .failed(error.localizedDescription)
+            recommendedPlaylistState = .failed(UserFacingErrorMapper.map(error).message)
         }
 
         do {
             newSongsState = .loaded(try await newSongs.result)
         } catch {
-            newSongsState = .failed(error.localizedDescription)
+            newSongsState = .failed(UserFacingErrorMapper.map(error).message)
         }
 
         do {
             dailySongsState = .loaded(try await dailySongs.data.dailySongs)
         } catch {
-            dailySongsState = .failed(error.localizedDescription)
+            dailySongsState = .failed(UserFacingErrorMapper.map(error).message)
         }
     }
 
@@ -380,7 +490,7 @@ struct MusicHomeView: View {
         do {
             recentHistoryState = .loaded(try await environment.musicClient.history(limit: 8, offset: 0))
         } catch {
-            recentHistoryState = .failed(error.localizedDescription)
+            recentHistoryState = .failed(UserFacingErrorMapper.map(error).message)
         }
     }
 
@@ -389,44 +499,45 @@ struct MusicHomeView: View {
         do {
             myPlaylistState = .loaded(try await environment.musicClient.playlists())
         } catch {
-            myPlaylistState = .failed(error.localizedDescription)
+            myPlaylistState = .failed(UserFacingErrorMapper.map(error).message)
         }
     }
 
     private func play(_ song: MusicSong, queueName: String? = nil, queueTracks: [MusicPlaybackTrack] = []) async {
-        player.showMessage("正在准备播放")
+        player.showFeedback(.info("正在准备播放"))
         let track = MusicPlaybackTrack(song: song)
         guard let resolution = await player.resolveTrackURL?(track) else {
-            player.showMessage("播放器尚未准备好")
+            player.showFeedback(.error("播放器尚未准备好"))
             return
         }
         switch resolution {
         case .success(let url, let notice):
             player.play(url: url, track: track, queueName: queueName, queueTracks: queueTracks, notice: notice)
             try? await environment.musicClient.addHistory(song: song)
-            player.showMessage(notice ?? "已开始播放")
+            player.showFeedback(notice.map(SetuFeedback.warning) ?? .success("已开始播放"))
         case .unavailable(let reason):
-            player.showMessage(reason)
+            player.showFeedback(.error(reason))
         }
     }
 
     private func download(_ song: MusicSong) async {
-        player.showMessage("正在准备下载")
+        player.showFeedback(.info("正在准备下载"))
         do {
             let response = try await environment.musicClient.url(songID: song.id, level: "exhigh")
             guard let item = response.data?.first, let urlString = item.playableURLString else {
-                player.showMessage(response.data?.first?.unavailableMessage ?? response.playabilityReason ?? response.message ?? "暂无可下载地址")
+                player.showFeedback(.error(response.unavailableMessage))
                 return
             }
             let signed = try await environment.downloadClient.sign(url: urlString, filename: downloadFilename(for: song))
             guard let url = URL(string: signed.downloadUrl) else {
-                player.showMessage("下载地址无效")
+                player.showFeedback(.error("下载地址无效"))
                 return
             }
-            openExternalURL(url)
-            player.showMessage("已打开下载地址")
+            let fileURL = try await RemoteFileExportService.download(from: url, filename: downloadFilename(for: song))
+            fileSharePayload = SystemFileSharePayload(fileURL: fileURL)
+            player.showFeedback(.success("下载完成，请选择保存位置或分享方式"))
         } catch {
-            player.showMessage(error.localizedDescription)
+            player.showFeedback(.error(RemoteFileExportService.userMessage(for: error)))
         }
     }
 
@@ -435,9 +546,39 @@ struct MusicHomeView: View {
         return "\(song.name) - \(artists).mp3"
     }
 
-    private func openExternalURL(_ url: URL) {
+    private func fileShareFeedback(_ result: SystemFileShareResult) -> SetuFeedback {
+        switch result {
+        case .completed: .success("已完成保存或分享")
+        case .cancelled: .info("已取消保存或分享")
+        case .failed(let message): .error("保存或分享失败：\(message)")
+        }
+    }
+
+    private func openSearch() {
+        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        router.navigate(to: .musicSearch(query.isEmpty ? nil : query))
+        searchQuery = ""
+    }
+}
+
+private struct MusicHomeSearchModifier: ViewModifier {
+    @Binding var query: String
+    let usesNavigationSearch: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
         #if os(iOS)
-        UIApplication.shared.open(url)
+        if usesNavigationSearch {
+            content.searchable(
+                text: $query,
+                placement: .navigationBarDrawer(displayMode: .always),
+                prompt: "搜索歌曲、歌手或专辑"
+            )
+        } else {
+            content
+        }
+        #else
+        content.searchable(text: $query, prompt: "搜索歌曲、歌手或专辑")
         #endif
     }
 }
@@ -448,6 +589,8 @@ private struct MusicStateSection: View {
     var message: String?
     var systemImage: String
     var isLoading = false
+    var actionTitle: String?
+    var action: (() -> Void)?
 
     var body: some View {
         Section {
@@ -458,7 +601,9 @@ private struct MusicStateSection: View {
                         title: stateTitle,
                         message: message,
                         systemImage: systemImage,
-                        isLoading: isLoading
+                        isLoading: isLoading,
+                        actionTitle: actionTitle,
+                        action: action
                     )
                 }
             }
@@ -581,7 +726,7 @@ private struct RecommendedPlaylistSheet: View {
     @State private var state: LoadState<[MusicSong]> = .idle
     @State private var selectedSong: MusicSong?
     @State private var mvSong: MusicSong?
-    @State private var message: String?
+    @State private var feedback: SetuFeedback?
 
     var body: some View {
         NavigationStack {
@@ -596,11 +741,9 @@ private struct RecommendedPlaylistSheet: View {
                     .setuListRow()
                 }
 
-                if let message {
+                if let feedback {
                     Section {
-                        SetuCard {
-                            SetuPill(text: message, systemImage: "waveform", tone: .info)
-                        }
+                        SetuFeedbackBanner(feedback: feedback)
                         .setuListRow()
                     }
                 }
@@ -646,7 +789,9 @@ private struct RecommendedPlaylistSheet: View {
                 }
             }
             .sheet(item: $selectedSong) { song in
-                AddSongToPlaylistSheet(environment: environment, song: song)
+                AddSongToPlaylistSheet(environment: environment, song: song) { result in
+                    feedback = result
+                }
             }
             .sheet(item: $mvSong) { song in
                 MusicMvSheet(environment: environment, player: player, song: song)
@@ -661,24 +806,24 @@ private struct RecommendedPlaylistSheet: View {
         do {
             state = .loaded(try await environment.musicClient.playlistTracks(id: playlist.id).songs)
         } catch {
-            state = .failed(error.localizedDescription)
+            state = .failed(UserFacingErrorMapper.map(error).message)
         }
     }
 
     private func play(_ song: MusicSong, queueTracks: [MusicPlaybackTrack] = []) async {
-        message = "正在准备播放"
+        feedback = .info("正在准备播放")
         let track = MusicPlaybackTrack(song: song)
         guard let resolution = await player.resolveTrackURL?(track) else {
-            message = "播放器尚未准备好"
+            feedback = .error("播放器尚未准备好")
             return
         }
         switch resolution {
         case .success(let url, let notice):
             player.play(url: url, track: track, queueName: playlist.name, queueTracks: queueTracks, notice: notice)
             try? await environment.musicClient.addHistory(song: song)
-            message = notice ?? "已开始播放《\(playlist.name)》"
+            feedback = notice.map(SetuFeedback.warning) ?? .success("已开始播放《\(playlist.name)》")
         case .unavailable(let reason):
-            message = reason
+            feedback = .error(reason)
         }
     }
 }
@@ -692,12 +837,15 @@ struct MusicSearchView: View {
     @State private var state: LoadState<MusicSearchResultState> = .idle
     @State private var selectedSong: MusicSong?
     @State private var mvSong: MusicSong?
-    @State private var message: String?
-    @State private var page = 1
+    @State private var feedback: SetuFeedback?
     @State private var searchKeyword = ""
+    @State private var isLoadingMore = false
+    @State private var loadMoreError: String?
+    @State private var searchRevision = 0
     @State private var searchHistory: [String] = MusicSearchHistoryStore.load()
     @State private var didRunInitialSearch = false
     @State private var selectedSegment: MusicSearchSegment = .songs
+    @State private var fileSharePayload: SystemFileSharePayload?
 
     private let searchHistoryLimit = 10
     private let pageSize = 10
@@ -727,11 +875,9 @@ struct MusicSearchView: View {
                 .setuListRow()
             }
 
-            if let message {
+            if let feedback {
                 Section {
-                    SetuCard {
-                        SetuPill(text: message, systemImage: "waveform", tone: .info)
-                    }
+                    SetuFeedbackBanner(feedback: feedback)
                     .setuListRow()
                 }
             }
@@ -743,10 +889,24 @@ struct MusicSearchView: View {
         .setuBackground()
         .navigationTitle("搜索音乐")
         .sheet(item: $selectedSong) { song in
-            AddSongToPlaylistSheet(environment: environment, song: song)
+            AddSongToPlaylistSheet(environment: environment, song: song) { result in
+                feedback = result
+            }
         }
         .sheet(item: $mvSong) { song in
             MusicMvSheet(environment: environment, player: player, song: song)
+        }
+        .sheet(item: $fileSharePayload) { payload in
+            SystemFileShareSheet(fileURL: payload.fileURL) { result in
+                switch result {
+                case .completed:
+                    feedback = .success("已完成保存或分享")
+                case .cancelled:
+                    feedback = .info("已取消保存或分享")
+                case .failed(let text):
+                    feedback = .error("保存或分享失败：\(text)")
+                }
+            }
         }
         .task {
             guard !didRunInitialSearch else { return }
@@ -879,18 +1039,14 @@ struct MusicSearchView: View {
                             }
 
                             if result.hasMore {
-                                Button {
-                                    Task { await loadMore() }
-                                } label: {
-                                    Label("加载更多 \(result.songs.count)/\(result.total)", systemImage: "plus.circle")
-                                        .font(.footnote.weight(.semibold))
-                                        .foregroundStyle(SetuColor.brandInk)
-                                        .frame(maxWidth: .infinity, minHeight: 44)
-                                }
-                                .setuButtonFeedback()
-                            } else {
-                                SetuPill(text: "已加载全部 \(result.total) 首歌曲", systemImage: "checkmark.circle", tone: .success)
-                                    .frame(maxWidth: .infinity, alignment: .center)
+                                Color.clear
+                                    .frame(height: 1)
+                                    .onAppear {
+                                        Task { await loadMore() }
+                                    }
+                            }
+                            SetuLoadMoreFooter(state: searchLoadMoreState(for: result)) {
+                                Task { await loadMore() }
                             }
                         }
                     }
@@ -905,69 +1061,95 @@ struct MusicSearchView: View {
         guard !keywords.isEmpty else { return }
         saveSearchHistory(keywords)
         searchKeyword = keywords
-        page = 1
+        searchRevision += 1
+        let revision = searchRevision
+        isLoadingMore = false
+        loadMoreError = nil
         state = .loading
-        message = nil
+        feedback = nil
         do {
             let result = try await environment.musicClient.search(keywords: keywords, limit: pageSize, offset: 0)
+            guard revision == searchRevision else { return }
             state = .loaded(MusicSearchResultState(result: result))
         } catch {
-            state = .failed(error.localizedDescription)
+            guard revision == searchRevision else { return }
+            state = .failed(UserFacingErrorMapper.map(error).message)
         }
     }
 
     private func loadMore() async {
-        guard case .loaded(let current) = state, current.hasMore else { return }
-        page += 1
+        guard case .loaded(let current) = state,
+              current.hasMore,
+              !isLoadingMore else { return }
+        let revision = searchRevision
+        let requestedOffset = current.songs.count
+        isLoadingMore = true
+        loadMoreError = nil
+        defer {
+            if revision == searchRevision {
+                isLoadingMore = false
+            }
+        }
         do {
             let result = try await environment.musicClient.search(
                 keywords: searchKeyword,
                 limit: pageSize,
-                offset: (page - 1) * pageSize
+                offset: requestedOffset
             )
-            state = .loaded(current.appending(result))
+            guard revision == searchRevision,
+                  case .loaded(let latest) = state,
+                  latest.songs.count == requestedOffset else { return }
+            state = .loaded(latest.appending(result))
         } catch {
-            state = .failed(error.localizedDescription)
+            guard revision == searchRevision else { return }
+            loadMoreError = UserFacingErrorMapper.map(error).message
         }
     }
 
+    private func searchLoadMoreState(for result: MusicSearchResultState) -> SetuLoadMoreFooterState {
+        if isLoadingMore { return .loading }
+        if let loadMoreError { return .failed(loadMoreError) }
+        if !result.hasMore { return .complete("已加载全部 \(result.total) 首歌曲") }
+        return .idle
+    }
+
     private func play(_ song: MusicSong, queueTracks: [MusicPlaybackTrack]) async {
-        message = "正在准备播放"
+        feedback = .info("正在准备播放")
         let track = MusicPlaybackTrack(song: song)
         guard let resolution = await player.resolveTrackURL?(track) else {
-            message = "播放器尚未准备好"
+            feedback = .error("播放器尚未准备好")
             return
         }
         switch resolution {
         case .success(let url, let notice):
             player.play(url: url, track: track, queueName: "搜索结果", queueTracks: queueTracks, notice: notice)
             try? await environment.musicClient.addHistory(song: song)
-            message = notice ?? "已开始播放"
+            feedback = notice.map(SetuFeedback.warning) ?? .success("已开始播放")
         case .unavailable(let reason):
-            message = reason
+            feedback = .error(reason)
         }
     }
 
     private func download(_ song: MusicSong) async {
-        message = "正在准备下载"
+        feedback = .info("正在准备下载")
         do {
             let response = try await environment.musicClient.url(songID: song.id, level: "exhigh")
             guard let item = response.data?.first, let urlString = item.playableURLString else {
-                message = response.data?.first?.unavailableMessage ?? response.playabilityReason ?? response.message ?? "这首歌暂时无法下载"
+                feedback = .error(response.unavailableMessage)
                 return
             }
             let artists = song.artistNames.isEmpty ? "未知歌手" : song.artistNames.replacingOccurrences(of: " / ", with: ", ")
             let signed = try await environment.downloadClient.sign(url: urlString, filename: "\(song.name) - \(artists).mp3")
             guard let url = URL(string: signed.downloadUrl) else {
-                message = "下载暂时不可用"
+                feedback = .error("下载暂时不可用")
                 return
             }
-            #if os(iOS)
-            await UIApplication.shared.open(url)
-            #endif
-            message = "已打开下载"
+            let filename = "\(song.name) - \(artists).mp3"
+            let fileURL = try await RemoteFileExportService.download(from: url, filename: filename)
+            fileSharePayload = SystemFileSharePayload(fileURL: fileURL)
+            feedback = .success("下载完成，请选择保存位置或分享方式")
         } catch {
-            message = error.localizedDescription
+            feedback = .error(RemoteFileExportService.userMessage(for: error))
         }
     }
 
@@ -991,37 +1173,49 @@ struct MusicSearchView: View {
 }
 
 private struct MusicRecentHistoryCard: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     let record: MusicHistoryRecord
     let onPlay: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SetuSpacing.sm) {
-            MusicArtworkView(urlString: record.coverUrl, width: 116, height: 116, cornerRadius: SetuRadius.md, onTap: onPlay)
-            Button(action: onPlay) {
+        Button(action: onPlay) {
+            VStack(alignment: .leading, spacing: SetuSpacing.sm) {
+                MusicArtworkView(
+                    urlString: record.coverUrl,
+                    width: dynamicTypeSize.isAccessibilitySize ? 168 : 116,
+                    height: dynamicTypeSize.isAccessibilitySize ? 168 : 116,
+                    cornerRadius: SetuRadius.md,
+                    allowsTapToRetry: false
+                )
                 VStack(alignment: .leading, spacing: SetuSpacing.xs) {
                     Text(record.songName)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(SetuColor.textPrimary)
-                        .lineLimit(1)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
                         .truncationMode(.tail)
                     Text(record.artistName)
                         .font(.caption)
                         .foregroundStyle(SetuColor.textSecondary)
-                        .lineLimit(1)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
                         .truncationMode(.tail)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
             }
-            .setuButtonFeedback()
-            .accessibilityLabel("播放 \(record.songName)")
+            .frame(width: dynamicTypeSize.isAccessibilitySize ? 184 : 132, alignment: .leading)
+            .contentShape(Rectangle())
         }
-        .frame(width: 132, alignment: .leading)
-        .contentShape(Rectangle())
+        .buttonStyle(.plain)
+        .frame(minWidth: 44, minHeight: 44)
+        .setuButtonFeedback()
+        .accessibilityLabel("播放 \(record.songName)，歌手 \(record.artistName)")
+        .accessibilityIdentifier("music.history.\(record.id)")
     }
 }
 
 private struct MusicPlaylistCompactRow: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     let playlist: UserMusicPlaylist
 
     var body: some View {
@@ -1032,30 +1226,49 @@ private struct MusicPlaylistCompactRow: View {
                 Text(playlist.name)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(SetuColor.textPrimary)
-                    .lineLimit(1)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
                     .truncationMode(.tail)
 
-                HStack(spacing: SetuSpacing.sm) {
-                    Label("\(playlist.songCount ?? 0) 首", systemImage: "music.note")
-                    if let playCount = playlist.playCount {
-                        Label("\(playCount)", systemImage: "play.circle")
+                Group {
+                    if dynamicTypeSize.isAccessibilitySize {
+                        VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+                            playlistStats
+                        }
+                    } else {
+                        HStack(spacing: SetuSpacing.sm) {
+                            playlistStats
+                        }
                     }
                 }
                 .font(.caption)
                 .foregroundStyle(SetuColor.textSecondary)
-                .lineLimit(1)
             }
+            .layoutPriority(1)
 
-            Spacer(minLength: SetuSpacing.sm)
+            Spacer(minLength: dynamicTypeSize.isAccessibilitySize ? 0 : SetuSpacing.sm)
 
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(SetuColor.textTertiary)
+            if !dynamicTypeSize.isAccessibilitySize {
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(SetuColor.textTertiary)
+            }
         }
         .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
         .padding(SetuSpacing.sm)
         .background(SetuColor.surfaceMuted, in: RoundedRectangle(cornerRadius: SetuRadius.md, style: .continuous))
         .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private var playlistStats: some View {
+        Label("\(playlist.songCount ?? 0) 首", systemImage: "music.note")
+            .lineLimit(nil)
+            .fixedSize(horizontal: false, vertical: true)
+        if let playCount = playlist.playCount {
+            Label("播放 \(playCount) 次", systemImage: "play.circle")
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 
@@ -1214,6 +1427,8 @@ private struct MusicSearchInputModifier: ViewModifier {
 }
 
 struct MusicSongRow: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     let song: MusicSong
     var onPlay: (() -> Void)?
     var onPlayMv: (() -> Void)?
@@ -1221,24 +1436,44 @@ struct MusicSongRow: View {
     var onDownload: (() -> Void)?
 
     var body: some View {
-        HStack(spacing: SetuSpacing.md) {
-            MusicArtworkView(urlString: song.coverURLString)
-
-            if let onPlay {
-                Button(action: onPlay) {
-                    songText
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: SetuSpacing.sm) {
+                    HStack(alignment: .top, spacing: SetuSpacing.md) {
+                        MusicArtworkView(urlString: song.coverURLString)
+                        playableSongText
+                    }
+                    if hasActions {
+                        actionsRow
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                    }
                 }
-                .setuButtonFeedback()
-                .accessibilityLabel("播放 \(song.name)")
             } else {
-                songText
-            }
+                HStack(spacing: SetuSpacing.md) {
+                    MusicArtworkView(urlString: song.coverURLString)
+                    playableSongText
 
-            if hasActions {
-                actionsGrid
+                    if hasActions {
+                        actionsGrid
+                    }
+                }
             }
         }
         .padding(.vertical, SetuSpacing.sm)
+    }
+
+    @ViewBuilder
+    private var playableSongText: some View {
+        if let onPlay {
+            Button(action: onPlay) {
+                songText
+                    .frame(minHeight: 44)
+            }
+            .setuButtonFeedback()
+            .accessibilityLabel("播放 \(song.name)")
+        } else {
+            songText
+        }
     }
 
     private var songText: some View {
@@ -1246,17 +1481,17 @@ struct MusicSongRow: View {
             Text(song.name)
                 .font(SetuTypography.headline)
                 .foregroundStyle(SetuColor.textPrimary)
-                .lineLimit(1)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
                 .truncationMode(.tail)
             Text(song.artistNames.isEmpty ? "未知歌手" : song.artistNames)
                 .font(SetuTypography.caption)
                 .foregroundStyle(SetuColor.textSecondary)
-                .lineLimit(1)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
                 .truncationMode(.tail)
             Text(song.albumName)
                 .font(SetuTypography.caption)
                 .foregroundStyle(SetuColor.textTertiary)
-                .lineLimit(1)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
                 .truncationMode(.tail)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1265,20 +1500,11 @@ struct MusicSongRow: View {
 
     private var actionsGrid: some View {
         LazyVGrid(columns: actionColumns, alignment: .trailing, spacing: SetuSpacing.xs) {
-            if let onPlay {
-                MusicIconButton(
-                    systemImage: "play.fill",
-                    accessibilityLabel: "播放 \(song.name)",
-                    tint: SetuColor.brandPink
-                ) {
-                    onPlay()
-                }
-            }
             if song.mv ?? 0 > 0 {
                 if let onPlayMv {
                     MusicIconButton(
                         systemImage: "play.rectangle.fill",
-                        accessibilityLabel: "播放 MV",
+                        accessibilityLabel: "播放《\(song.name)》的 MV",
                         tint: SetuColor.info
                     ) {
                         onPlayMv()
@@ -1287,12 +1513,13 @@ struct MusicSongRow: View {
                     Image(systemName: "play.rectangle")
                         .foregroundStyle(SetuColor.brandPink)
                         .frame(width: 44, height: 44)
+                        .accessibilityLabel("《\(song.name)》有 MV")
                 }
             }
             if let onAddToPlaylist {
                 MusicIconButton(
                     systemImage: "text.badge.plus",
-                    accessibilityLabel: "加入歌单",
+                    accessibilityLabel: "将《\(song.name)》加入歌单",
                     tint: SetuColor.brandInk
                 ) {
                     onAddToPlaylist()
@@ -1311,6 +1538,47 @@ struct MusicSongRow: View {
         .frame(width: 92, alignment: .trailing)
     }
 
+    private var actionsRow: some View {
+        HStack(spacing: SetuSpacing.xs) {
+            actionButtons
+        }
+    }
+
+    @ViewBuilder
+    private var actionButtons: some View {
+        if song.mv ?? 0 > 0 {
+            if let onPlayMv {
+                MusicIconButton(
+                    systemImage: "play.rectangle.fill",
+                    accessibilityLabel: "播放《\(song.name)》的 MV",
+                    tint: SetuColor.info,
+                    action: onPlayMv
+                )
+            } else {
+                Image(systemName: "play.rectangle")
+                    .foregroundStyle(SetuColor.brandPink)
+                    .frame(width: 44, height: 44)
+                    .accessibilityLabel("《\(song.name)》有 MV")
+            }
+        }
+        if let onAddToPlaylist {
+            MusicIconButton(
+                systemImage: "text.badge.plus",
+                accessibilityLabel: "将《\(song.name)》加入歌单",
+                tint: SetuColor.brandInk,
+                action: onAddToPlaylist
+            )
+        }
+        if let onDownload {
+            MusicIconButton(
+                systemImage: "arrow.down",
+                accessibilityLabel: "下载 \(song.name)",
+                tint: SetuColor.success,
+                action: onDownload
+            )
+        }
+    }
+
     private var actionColumns: [GridItem] {
         [
             GridItem(.fixed(44), spacing: SetuSpacing.xs),
@@ -1319,7 +1587,7 @@ struct MusicSongRow: View {
     }
 
     private var hasActions: Bool {
-        onPlay != nil || (song.mv ?? 0) > 0 || onAddToPlaylist != nil || onDownload != nil
+        (song.mv ?? 0) > 0 || onAddToPlaylist != nil || onDownload != nil
     }
 }
 
@@ -1327,8 +1595,9 @@ struct AddSongToPlaylistSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var environment: AppEnvironment
     let song: MusicSong
+    let onFeedback: (SetuFeedback) -> Void
     @State private var state: LoadState<[UserMusicPlaylist]> = .idle
-    @State private var message: String?
+    @State private var feedback: SetuFeedback?
 
     var body: some View {
         NavigationStack {
@@ -1343,11 +1612,9 @@ struct AddSongToPlaylistSheet: View {
                     .setuListRow()
                 }
 
-                if let message {
+                if let feedback {
                     Section {
-                        SetuCard {
-                            SetuPill(text: message, systemImage: "checkmark.circle", tone: .success)
-                        }
+                        SetuFeedbackBanner(feedback: feedback)
                         .setuListRow()
                     }
                 }
@@ -1417,17 +1684,17 @@ struct AddSongToPlaylistSheet: View {
         do {
             state = .loaded(try await environment.musicClient.playlists())
         } catch {
-            state = .failed(error.localizedDescription)
+            state = .failed(UserFacingErrorMapper.map(error).message)
         }
     }
 
     private func add(to playlist: UserMusicPlaylist) async {
         do {
             try await environment.musicClient.add(song: song, toPlaylist: playlist.id)
-            message = "已加入 \(playlist.name)"
+            onFeedback(.success("已加入 \(playlist.name)"))
             dismiss()
         } catch {
-            message = error.localizedDescription
+            feedback = .error(UserFacingErrorMapper.map(error).message)
         }
     }
 }
@@ -1536,7 +1803,7 @@ private struct MusicMvSheet: View {
             let response = try await environment.musicClient.mvDetail(id: mvID)
             detailState = .loaded(response.data)
         } catch {
-            detailState = .failed(error.localizedDescription)
+            detailState = .failed(UserFacingErrorMapper.map(error).message)
         }
     }
 
@@ -1561,3 +1828,13 @@ private struct MusicMvCoverView: View {
         .frame(maxWidth: .infinity)
     }
 }
+
+#if DEBUG
+#Preview("音乐首页 · 390 · 浅色") {
+    SetuFeaturePreviewHost(playerState: .listening) { environment, player in
+        MusicHomeView(environment: environment, player: player)
+    }
+    .frame(width: 390, height: 844)
+    .preferredColorScheme(.light)
+}
+#endif

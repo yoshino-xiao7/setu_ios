@@ -2,14 +2,14 @@ import SetuIOSCore
 import SwiftUI
 
 struct ApiKeyListView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var environment: AppEnvironment
     @State private var state: LoadState<[ApiKeyItem]> = .idle
     @State private var newKeyName = ""
     @State private var dailyQuota = 1000
     @State private var totalQuotaText = ""
     @State private var createdKey: String?
-    @State private var copyMessage: String?
-    @State private var errorMessage: String?
+    @State private var feedback: SetuFeedback?
     @State private var renameTarget: ApiKeyItem?
 
     var body: some View {
@@ -56,16 +56,13 @@ struct ApiKeyListView: View {
                             }
                         }
 
-                        if let copyMessage {
-                            SetuPill(text: copyMessage, systemImage: "checkmark.seal", tone: .success)
-                        }
                     }
                 }
             }
 
-            if let errorMessage {
+            if let feedback {
                 Section {
-                    SetuPill(text: errorMessage, systemImage: "exclamationmark.triangle", tone: .danger)
+                    SetuFeedbackBanner(feedback: feedback)
                 }
             }
 
@@ -79,6 +76,7 @@ struct ApiKeyListView: View {
         .navigationTitle("API Keys")
         .sheet(item: $renameTarget) { key in
             ApiKeyRenameSheet(environment: environment, key: key) {
+                feedback = .success("API Key 已重命名")
                 Task { await load() }
             }
         }
@@ -93,10 +91,7 @@ struct ApiKeyListView: View {
                 SetuCard {
                     VStack(alignment: .leading, spacing: SetuSpacing.md) {
                         SetuSectionHeader(title: "概览", subtitle: "API Key 使用情况")
-                        LazyVGrid(columns: [
-                            GridItem(.flexible(), spacing: SetuSpacing.sm),
-                            GridItem(.flexible(), spacing: SetuSpacing.sm)
-                        ], spacing: SetuSpacing.sm) {
+                        LazyVGrid(columns: statColumns, spacing: SetuSpacing.sm) {
                             SetuStatTile(title: "全部 Key", value: "\(keys.count)", systemImage: "key", color: SetuColor.brandPink)
                             SetuStatTile(title: "启用中", value: "\(keys.filter(\.isEnabled).count)", systemImage: "checkmark.circle", color: SetuColor.success)
                             SetuStatTile(title: "今日调用", value: "\(keys.reduce(0) { $0 + $1.callsToday })", systemImage: "calendar", color: SetuColor.info)
@@ -106,6 +101,11 @@ struct ApiKeyListView: View {
                 }
             }
         }
+    }
+
+    private var statColumns: [GridItem] {
+        let count = dynamicTypeSize.isAccessibilitySize ? 1 : 2
+        return Array(repeating: GridItem(.flexible(), spacing: SetuSpacing.sm), count: count)
     }
 
     @ViewBuilder
@@ -185,48 +185,50 @@ struct ApiKeyListView: View {
         do {
             state = .loaded(try await environment.apiKeyClient.list())
         } catch {
-            state = .failed(error.localizedDescription)
+            state = .failed(UserFacingErrorMapper.map(error).message)
         }
     }
 
     private func createKey() async {
         let name = newKeyName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return }
-        errorMessage = nil
-        copyMessage = nil
+        feedback = nil
         do {
             createdKey = try await environment.apiKeyClient.create(name: name, dailyQuota: dailyQuota, totalQuota: parsedTotalQuota)
             newKeyName = ""
             dailyQuota = 1000
             totalQuotaText = ""
             await load()
+            feedback = .warning("API Key 已创建，请立即复制并妥善保存。")
         } catch {
-            errorMessage = error.localizedDescription
+            feedback = .error(UserFacingErrorMapper.map(error).message)
         }
     }
 
     private func copyCreatedKey(_ key: String) {
         PlatformClipboard.copy(key)
-        copyMessage = "新 API Key 已复制"
+        feedback = .success("新 API Key 已复制")
     }
 
     private func toggle(_ key: ApiKeyItem) async {
-        errorMessage = nil
+        feedback = nil
         do {
             try await environment.apiKeyClient.setEnabled(id: key.id, enabled: !key.isEnabled)
             await load()
+            feedback = .success(key.isEnabled ? "API Key 已禁用" : "API Key 已启用")
         } catch {
-            errorMessage = error.localizedDescription
+            feedback = .error(UserFacingErrorMapper.map(error).message)
         }
     }
 
     private func delete(_ key: ApiKeyItem) async {
-        errorMessage = nil
+        feedback = nil
         do {
             try await environment.apiKeyClient.delete(id: key.id)
             await load()
+            feedback = .success("API Key 已删除")
         } catch {
-            errorMessage = error.localizedDescription
+            feedback = .error(UserFacingErrorMapper.map(error).message)
         }
     }
 }
@@ -266,9 +268,12 @@ private struct ApiKeyRow: View {
             .foregroundStyle(SetuColor.textSecondary)
             HStack {
                 Button(key.isEnabled ? "禁用" : "启用", action: onToggle)
+                    .frame(minWidth: 44, minHeight: 44)
                 Button("重命名", action: onRename)
+                    .frame(minWidth: 44, minHeight: 44)
                 Spacer()
                 Button("删除", role: .destructive, action: onDelete)
+                    .frame(minWidth: 44, minHeight: 44)
             }
             .buttonStyle(.borderless)
         }
@@ -283,7 +288,7 @@ private struct ApiKeyRenameSheet: View {
     let onSaved: () -> Void
 
     @State private var name: String
-    @State private var message: String?
+    @State private var feedback: SetuFeedback?
 
     init(environment: AppEnvironment, key: ApiKeyItem, onSaved: @escaping () -> Void) {
         self.environment = environment
@@ -306,9 +311,9 @@ private struct ApiKeyRenameSheet: View {
                     }
                 }
 
-                if let message {
+                if let feedback {
                     Section {
-                        SetuPill(text: message, systemImage: "exclamationmark.triangle", tone: .danger)
+                        SetuFeedbackBanner(feedback: feedback)
                     }
                 }
             }
@@ -338,13 +343,13 @@ private struct ApiKeyRenameSheet: View {
 
     private func save() async {
         guard !trimmedName.isEmpty, trimmedName != key.name else { return }
-        message = nil
+        feedback = nil
         do {
             try await environment.apiKeyClient.rename(id: key.id, name: trimmedName)
             onSaved()
             dismiss()
         } catch {
-            message = error.localizedDescription
+            feedback = .error(UserFacingErrorMapper.map(error).message)
         }
     }
 }

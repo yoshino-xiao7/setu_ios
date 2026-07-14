@@ -8,14 +8,25 @@ enum SetuPillTone {
     case info
     case muted
 
-    var color: Color {
+    var foreground: Color {
         switch self {
         case .brand: SetuColor.brandInk
+        case .success: SetuColor.successForeground
+        case .warning: SetuColor.warningForeground
+        case .danger: SetuColor.dangerForeground
+        case .info: SetuColor.infoForeground
+        case .muted: SetuColor.textSecondary
+        }
+    }
+
+    var fill: Color {
+        switch self {
+        case .brand: SetuColor.brandSoft
         case .success: SetuColor.success
         case .warning: SetuColor.warning
         case .danger: SetuColor.danger
         case .info: SetuColor.info
-        case .muted: SetuColor.textSecondary
+        case .muted: SetuColor.surfaceMuted
         }
     }
 }
@@ -34,13 +45,13 @@ struct SetuPill: View {
             }
         }
         .font(.caption.weight(.semibold))
-        .foregroundStyle(tone.color)
+        .foregroundStyle(tone.foreground)
         .padding(.horizontal, SetuSpacing.md)
         .padding(.vertical, SetuSpacing.xs)
-        .background(tone.color.opacity(0.12), in: Capsule())
+        .background(tone.fill.opacity(0.18), in: Capsule())
         .overlay {
             Capsule()
-                .stroke(tone.color.opacity(0.18), lineWidth: 1)
+                .stroke(tone.foreground.opacity(0.20), lineWidth: 1)
         }
     }
 }

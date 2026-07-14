@@ -83,4 +83,5 @@ Bundle IDs: app `icu.yukiryou.setuios`, core `.core`, widget `.liveactivity`.
 - `docs/backend-mobile-contract.md` — `/mobile/**`, APNs, Live Activity contract
 - `docs/frontend-feature-map.md` — Web feature → iOS module coverage
 - `docs/ios-soft-pink-ui-design.md` — soft-pink design system & page-structure plan
+- `docs/ios-product-polish-plan.md` — productization priorities, target UX, rollout phases, and acceptance criteria
 - `docs/passkey-associated-domains.md` — passkey / associated domains setup

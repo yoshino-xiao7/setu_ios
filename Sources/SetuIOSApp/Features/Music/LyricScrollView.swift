@@ -4,6 +4,7 @@ import UIKit
 #endif
 
 struct LyricScrollView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let lines: [LyricLine]
     let currentTime: TimeInterval
     /// Fill all available height (full-page lyrics) instead of the compact inline size.
@@ -72,7 +73,7 @@ struct LyricScrollView: View {
                         }
                         .onChange(of: activeIndex) { _, index in
                             guard !isAutoScrollSuspended, let index, lines.indices.contains(index) else { return }
-                            withAnimation(.easeInOut(duration: 0.22)) {
+                            animate(.easeInOut(duration: 0.22)) {
                                 proxy.scrollTo(lines[index].id, anchor: .center)
                             }
                         }
@@ -92,8 +93,8 @@ struct LyricScrollView: View {
                             .transition(.opacity)
                         }
                     }
-                    .animation(.easeInOut(duration: 0.16), value: isSelectionGuideVisible)
-                    .animation(.easeInOut(duration: 0.16), value: selectedBrowsingIndex)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: isSelectionGuideVisible)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: selectedBrowsingIndex)
                 }
             }
         }
@@ -149,7 +150,7 @@ struct LyricScrollView: View {
         }
         updateSelectedBrowsingIndex(viewportHeight: viewportHeight)
         if !isSelectionGuideVisible {
-            withAnimation(.easeInOut(duration: 0.15)) {
+            animate(.easeInOut(duration: 0.15)) {
                 isSelectionGuideVisible = true
             }
         }
@@ -165,7 +166,7 @@ struct LyricScrollView: View {
         resumeAutoScrollTask = Task {
             try? await Task.sleep(nanoseconds: 3_000_000_000)
             guard !Task.isCancelled else { return }
-            withAnimation(.easeInOut(duration: 0.15)) {
+            animate(.easeInOut(duration: 0.15)) {
                 isAutoScrollSuspended = false
                 isSelectionGuideVisible = false
                 selectedBrowsingIndex = nil
@@ -176,13 +177,21 @@ struct LyricScrollView: View {
     private func seekSelectedLine(_ line: LyricLine, proxy: ScrollViewProxy) {
         resumeAutoScrollTask?.cancel()
         onSeek(line.time)
-        withAnimation(.easeInOut(duration: 0.15)) {
+        animate(.easeInOut(duration: 0.15)) {
             isAutoScrollSuspended = false
             isSelectionGuideVisible = false
             selectedBrowsingIndex = nil
         }
-        withAnimation(.easeInOut(duration: 0.25)) {
+        animate(.easeInOut(duration: 0.25)) {
             proxy.scrollTo(line.id, anchor: .center)
+        }
+    }
+
+    private func animate(_ animation: Animation, changes: () -> Void) {
+        if reduceMotion {
+            changes()
+        } else {
+            withAnimation(animation, changes)
         }
     }
 
@@ -263,10 +272,10 @@ struct LyricScrollView: View {
                     Image(systemName: "play.fill")
                         .font(.subheadline.weight(.bold))
                         .foregroundStyle(.white)
-                        .frame(width: 40, height: 40)
+                        .frame(width: 44, height: 44)
                         .background(SetuColor.heroGradient, in: Circle())
                 }
-                .setuButtonFeedback(cornerRadius: 20)
+                .setuButtonFeedback(cornerRadius: 22)
                 .accessibilityLabel("从当前选中歌词播放")
             }
             .padding(.horizontal, SetuSpacing.md)

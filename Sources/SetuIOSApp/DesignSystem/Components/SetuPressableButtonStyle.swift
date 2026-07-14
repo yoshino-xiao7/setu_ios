@@ -19,7 +19,10 @@ struct SetuPressableButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(configuration.isPressed ? SetuColor.brandSoft.opacity(0.18) : .clear)
             }
-            .animation(.spring(response: 0.16, dampingFraction: 0.78), value: configuration.isPressed)
+            .animation(
+                reduceMotion ? .easeOut(duration: 0.1) : .spring(response: 0.16, dampingFraction: 0.78),
+                value: configuration.isPressed
+            )
     }
 }
 
@@ -38,9 +41,13 @@ private struct SetuTapFeedbackModifier: ViewModifier {
 }
 
 extension View {
-    func setuButtonFeedback(cornerRadius: CGFloat = SetuRadius.md) -> some View {
-        buttonStyle(SetuPressableButtonStyle(cornerRadius: cornerRadius))
-            .modifier(SetuTapFeedbackModifier())
+    @ViewBuilder
+    func setuButtonFeedback(cornerRadius: CGFloat = SetuRadius.md, haptic: Bool = false) -> some View {
+        if haptic {
+            buttonStyle(SetuPressableButtonStyle(cornerRadius: cornerRadius))
+                .modifier(SetuTapFeedbackModifier())
+        } else {
+            buttonStyle(SetuPressableButtonStyle(cornerRadius: cornerRadius))
+        }
     }
 }
-

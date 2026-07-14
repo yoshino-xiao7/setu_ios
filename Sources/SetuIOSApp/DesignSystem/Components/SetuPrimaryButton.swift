@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct SetuPrimaryButton<Label: View>: View {
+    @Environment(\.isEnabled) private var isEnabled
+
     let action: () -> Void
     private let label: Label
 
@@ -17,8 +19,9 @@ struct SetuPrimaryButton<Label: View>: View {
                 .frame(maxWidth: .infinity, minHeight: 48)
                 .padding(.horizontal, SetuSpacing.lg)
                 .background(SetuColor.heroGradient, in: Capsule())
-                .shadow(color: SetuColor.brandPink.opacity(0.24), radius: 14, y: 8)
+                .shadow(color: SetuColor.brandPink.opacity(isEnabled ? 0.24 : 0), radius: 14, y: 8)
         }
         .setuButtonFeedback(cornerRadius: 24)
+        .opacity(isEnabled ? 1 : 0.52)
     }
 }

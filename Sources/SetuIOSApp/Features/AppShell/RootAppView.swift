@@ -3,10 +3,11 @@ import SwiftUI
 
 struct RootAppView: View {
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var environment: AppEnvironment
     @Bindable var pushNotifications: SystemPushCoordinator
-    @State private var selectedTab: AppTab = .home
-    @State private var tabRouter = TabRouter()
+    @State private var navigationCoordinator = AppNavigationCoordinator()
     @State private var loggedOutRouter = RouterPath()
     @State private var musicPlayer = MusicPlaybackController()
     @State private var showingMusicQueueDrawer = false
@@ -47,7 +48,7 @@ struct RootAppView: View {
         .task(id: environment.authSession.currentUser?.id) {
             await ensureSessionState()
             if environment.authSession.isSignedIn {
-                await pushNotifications.enableForSignedInUser()
+                await pushNotifications.syncForSignedInUser()
                 openPendingPushIfPossible()
             }
         }
@@ -58,14 +59,14 @@ struct RootAppView: View {
         .onChange(of: environment.authSession.currentUser?.id) { oldUserID, newUserID in
             switchMusicPlaybackUser(from: oldUserID, to: newUserID)
             if newUserID != nil {
-                Task { await pushNotifications.enableForSignedInUser() }
+                Task { await pushNotifications.syncForSignedInUser() }
                 openPendingPushIfPossible()
             }
         }
         .onChange(of: pushNotifications.pendingDestination) {
             openPendingPushIfPossible()
         }
-        .onChange(of: selectedTab) { oldValue, _ in
+        .onChange(of: navigationCoordinator.selectedTab) { oldValue, _ in
             if oldValue == .music {
                 musicPlayer.savePlaybackSnapshot()
             }
@@ -76,6 +77,7 @@ struct RootAppView: View {
             }
         }
         .tint(SetuColor.brandPink)
+        .environment(pushNotifications)
     }
 
     private func switchMusicPlaybackUser(from oldUserID: Int?, to newUserID: Int?) {
@@ -126,7 +128,7 @@ struct RootAppView: View {
             }
             highQualityFailure = unavailableReason(from: highQuality)
         } catch {
-            highQualityFailure = error.localizedDescription
+            highQualityFailure = UserFacingErrorMapper.map(error).message
         }
 
         do {
@@ -134,9 +136,9 @@ struct RootAppView: View {
             if let url = playableURL(from: standard) {
                 return .success(url, notice: "已切换标准音质")
             }
-            return .unavailable(unavailableReason(from: standard) ?? highQualityFailure ?? "这首歌暂时无法播放")
+            return .unavailable(unavailableReason(from: standard))
         } catch {
-            return .unavailable(highQualityFailure ?? error.localizedDescription)
+            return .unavailable(highQualityFailure ?? UserFacingErrorMapper.map(error).message)
         }
     }
 
@@ -146,16 +148,16 @@ struct RootAppView: View {
         return URL(string: urlString)
     }
 
-    private func unavailableReason(from response: MusicUrlResponse) -> String? {
-        response.data?.first?.unavailableMessage
-            ?? response.playabilityReason
-            ?? response.message
-            ?? response.msg
+    private func unavailableReason(from response: MusicUrlResponse) -> String {
+        response.unavailableMessage
     }
 
     private var appTabs: some View {
         ZStack(alignment: .bottom) {
-            TabView(selection: $selectedTab) {
+            TabView(selection: Binding(
+                get: { navigationCoordinator.selectedTab },
+                set: { navigationCoordinator.selectedTab = $0 }
+            )) {
                 ForEach(AppTab.allCases) { tab in
                     tabContent(for: tab)
                         .tabItem {
@@ -168,7 +170,7 @@ struct RootAppView: View {
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if musicPlayer.currentTrack != nil {
                     Color.clear
-                        .frame(height: 88)
+                        .frame(height: dynamicTypeSize.isAccessibilitySize ? 144 : 88)
                         .allowsHitTesting(false)
                 }
             }
@@ -199,30 +201,31 @@ struct RootAppView: View {
                 .zIndex(3)
             }
         }
-        .animation(.spring(response: 0.32, dampingFraction: 0.86), value: showingMusicQueueDrawer)
-        .animation(.spring(response: 0.32, dampingFraction: 0.86), value: musicPlayer.currentTrack?.id)
+        .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.86), value: showingMusicQueueDrawer)
+        .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.86), value: musicPlayer.currentTrack?.id)
         .onChange(of: musicPlayer.currentTrack?.id) { _, trackID in
             if trackID == nil {
                 showingMusicQueueDrawer = false
             }
         }
+        .environment(navigationCoordinator)
     }
 
     private func tabContent(for tab: AppTab) -> some View {
-        NavigationStack(path: tabRouter.binding(for: tab)) {
+        NavigationStack(path: navigationCoordinator.binding(for: tab)) {
             content(for: tab)
                 .navigationDestination(for: AppRoute.self) { route in
                     destination(for: route)
                 }
         }
-        .environment(tabRouter.router(for: tab))
+        .environment(navigationCoordinator.router(for: tab))
     }
 
     @ViewBuilder
     private func content(for tab: AppTab) -> some View {
         switch tab {
         case .home:
-            DashboardView(environment: environment)
+            DashboardView(environment: environment, player: musicPlayer)
         case .ai:
             AiHubView(environment: environment)
         case .images:
@@ -251,6 +254,8 @@ struct RootAppView: View {
             StaticInfoView(environment: environment, kind: .about)
         case .privacy:
             StaticInfoView(environment: environment, kind: .privacy)
+        case .terms:
+            StaticInfoView(environment: environment, kind: .terms)
         case .passkeys:
             PasskeyListView(environment: environment)
         case .points:
@@ -297,6 +302,8 @@ struct RootAppView: View {
             AiDeleteRequestsView(environment: environment)
         case .aiGenerationDetail(let id):
             AiGenerationDetailView(environment: environment, jobID: id)
+        case .publicAiWork(let work):
+            PublicAiWorkDetailView(environment: environment, work: work)
         case .aiSquare:
             AiSquareView(environment: environment)
         case .musicHome:
@@ -367,20 +374,24 @@ struct RootAppView: View {
         guard environment.authSession.isSignedIn,
               let destination = pushNotifications.consumePendingDestination() else { return }
         let targetType = (destination.targetType ?? "").uppercased()
+        let target: AppTab
         let route: AppRoute
         if let id = destination.targetID,
            targetType == "AI_GENERATION" || destination.type == "AI_GENERATION_COMPLETED" {
+            target = .ai
             route = .aiGenerationDetail(id)
         } else if let id = destination.targetID,
                   targetType.contains("GALLERY") || destination.type?.hasPrefix("GALLERY_SUBMISSION_") == true {
+            target = .images
             route = .galleryUploadDetail(id)
         } else if let id = destination.targetID,
                   targetType.contains("DELETE") || destination.type?.hasPrefix("IMAGE_DELETE_REQUEST_") == true {
+            target = .images
             route = .imageDeleteRequestDetail(id)
         } else {
+            target = .home
             route = .notifications
         }
-        selectedTab = .home
-        tabRouter.router(for: .home).navigate(to: route)
+        navigationCoordinator.navigate(to: target, route: route)
     }
 }

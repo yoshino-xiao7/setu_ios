@@ -24,6 +24,7 @@ struct SetuEmptyState: View {
                         .foregroundStyle(SetuColor.brandPink)
                 }
             }
+            .accessibilityHidden(true)
 
             VStack(spacing: SetuSpacing.xs) {
                 Text(title)
@@ -41,10 +42,12 @@ struct SetuEmptyState: View {
                 Button(actionTitle, action: action)
                     .buttonStyle(.bordered)
                     .tint(SetuColor.brandPink)
+                    .frame(minHeight: 44)
             }
         }
         .frame(maxWidth: .infinity)
         .padding(SetuSpacing.xl)
+        .accessibilityElement(children: action == nil ? .combine : .contain)
     }
 }
 

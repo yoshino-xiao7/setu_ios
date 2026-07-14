@@ -48,6 +48,50 @@ final class CollectionClientTests: XCTestCase {
         XCTAssertEqual(url, "https://api.example.com/collections/7/items?page=2&size=24")
     }
 
+    func testPublicUserProfileDecodesDiscoverableIdentitySummary() async throws {
+        let capturedRequest = CollectionClientRequestProbe()
+        let session = URLSession(
+            configuration: .collectionClientMock { request in
+                Task {
+                    await capturedRequest.capture(request)
+                }
+                return """
+                {"id":7,"nickname":"雪夜画师","avatarUrl":"https://cdn.example.com/avatars/7.png","publicCollectionCount":3,"publicAiWorkCount":5}
+                """
+            }
+        )
+        let client = CollectionClient(apiClient: makeAPIClient(session: session))
+
+        let profile = try await client.publicUserProfile(userID: 7)
+
+        XCTAssertEqual(profile.id, 7)
+        XCTAssertEqual(profile.nickname, "雪夜画师")
+        XCTAssertEqual(profile.publicCollectionCount, 3)
+        XCTAssertEqual(profile.publicAiWorkCount, 5)
+        let url = await capturedRequest.lastURL
+        XCTAssertEqual(url, "https://api.example.com/square/users/7")
+    }
+
+    func testSquareCanRequestOnlyOneOwnersPublicCollections() async throws {
+        let capturedRequest = CollectionClientRequestProbe()
+        let session = URLSession(
+            configuration: .collectionClientMock { request in
+                Task {
+                    await capturedRequest.capture(request)
+                }
+                return """
+                {"total":0,"page":1,"pageSize":20,"list":[]}
+                """
+            }
+        )
+        let client = CollectionClient(apiClient: makeAPIClient(session: session))
+
+        _ = try await client.square(page: 1, size: 20, sort: "new", ownerID: 7)
+
+        let url = await capturedRequest.lastURL
+        XCTAssertEqual(url, "https://api.example.com/square/collections?page=1&size=20&sort=new&ownerId=7")
+    }
+
     private func makeAPIClient(session: URLSession) -> APIClient {
         let keychain = CollectionClientTestKeychain()
         try? keychain.setString("secret", for: "signSecret")

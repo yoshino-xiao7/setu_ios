@@ -1,8 +1,8 @@
 import SetuIOSCore
 import Foundation
 import Observation
-#if os(iOS)
 import UserNotifications
+#if os(iOS)
 import UIKit
 #endif
 
@@ -34,6 +34,9 @@ final class SystemPushCoordinator: NSObject {
     private let environment: AppEnvironment
     private(set) var authorizationStatus: UNAuthorizationStatus = .notDetermined
     var pendingDestination: SystemPushDestination?
+    #if DEBUG
+    private var previewAuthorizationStatus: UNAuthorizationStatus?
+    #endif
 
     init(environment: AppEnvironment) {
         self.environment = environment
@@ -47,24 +50,57 @@ final class SystemPushCoordinator: NSObject {
         }
     }
 
-    func enableForSignedInUser() async {
+    func refreshAuthorizationStatus() async {
+        #if DEBUG
+        if let previewAuthorizationStatus {
+            authorizationStatus = previewAuthorizationStatus
+            return
+        }
+        #endif
+        authorizationStatus = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+    }
+
+    #if DEBUG
+    func setPreviewAuthorizationStatus(_ status: UNAuthorizationStatus) {
+        previewAuthorizationStatus = status
+        authorizationStatus = status
+    }
+    #endif
+
+    func syncForSignedInUser() async {
         guard environment.authSession.isSignedIn else { return }
         let center = UNUserNotificationCenter.current()
-        var settings = await center.notificationSettings()
+        let settings = await center.notificationSettings()
         authorizationStatus = settings.authorizationStatus
-        if settings.authorizationStatus == .notDetermined {
-            do {
-                _ = try await center.requestAuthorization(options: [.alert, .badge, .sound])
-                settings = await center.notificationSettings()
-                authorizationStatus = settings.authorizationStatus
-            } catch {
-                return
-            }
-        }
         guard settings.authorizationStatus == .authorized
                 || settings.authorizationStatus == .provisional
                 || settings.authorizationStatus == .ephemeral else { return }
         UIApplication.shared.registerForRemoteNotifications()
+    }
+
+    @discardableResult
+    func requestAuthorizationForGenerationUpdates() async -> Bool {
+        guard environment.authSession.isSignedIn else { return false }
+        let center = UNUserNotificationCenter.current()
+        do {
+            let granted = try await center.requestAuthorization(options: [.alert, .badge, .sound])
+            await refreshAuthorizationStatus()
+            if granted {
+                UIApplication.shared.registerForRemoteNotifications()
+            }
+            return granted
+        } catch {
+            await refreshAuthorizationStatus()
+            return false
+        }
+    }
+
+    func openSystemSettings() {
+        #if DEBUG
+        if previewAuthorizationStatus != nil { return }
+        #endif
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
     }
 
     func consumePendingDestination() -> SystemPushDestination? {
@@ -143,11 +179,20 @@ final class SetuAppDelegate: NSObject, UIApplicationDelegate {
 @MainActor
 @Observable
 final class SystemPushCoordinator {
+    private(set) var authorizationStatus: UNAuthorizationStatus = .denied
     var pendingDestination: SystemPushDestination?
 
     init(environment: AppEnvironment) {}
     func configure() {}
-    func enableForSignedInUser() async {}
+    func refreshAuthorizationStatus() async {}
+    func syncForSignedInUser() async {}
+    func requestAuthorizationForGenerationUpdates() async -> Bool { false }
+    func openSystemSettings() {}
+    #if DEBUG
+    func setPreviewAuthorizationStatus(_ status: UNAuthorizationStatus) {
+        authorizationStatus = status
+    }
+    #endif
     func consumePendingDestination() -> SystemPushDestination? {
         defer { pendingDestination = nil }
         return pendingDestination

@@ -12,6 +12,14 @@ public enum CollectionVisibility: Int, Codable, Sendable, CaseIterable {
     }
 }
 
+public struct PublicUserProfile: Decodable, Identifiable, Sendable, Hashable {
+    public let id: Int
+    public let nickname: String?
+    public let avatarUrl: String?
+    public let publicCollectionCount: Int
+    public let publicAiWorkCount: Int
+}
+
 public struct CollectionInfo: Decodable, Identifiable, Sendable {
     public let id: Int
     public let userId: Int

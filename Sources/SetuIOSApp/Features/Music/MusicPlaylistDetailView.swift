@@ -3,11 +3,13 @@ import SwiftUI
 
 struct MusicPlaylistDetailView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var environment: AppEnvironment
     @Bindable var player: MusicPlaybackController
     let playlistID: Int
     @State private var state: LoadState<UserMusicPlaylistDetail> = .idle
-    @State private var message: String?
+    @State private var feedback: SetuFeedback?
     @State private var selectedMode = "sequence"
     @State private var editingPlaylist: UserMusicPlaylistDetail?
     @State private var showingDeleteConfirmation = false
@@ -20,9 +22,9 @@ struct MusicPlaylistDetailView: View {
 
     var body: some View {
         List {
-            if let message {
+            if let feedback {
                 Section {
-                    SetuPill(text: message, systemImage: "info.circle", tone: .info)
+                    SetuFeedbackBanner(feedback: feedback)
                 }
             }
             nowPlayingSection
@@ -37,7 +39,13 @@ struct MusicPlaylistDetailView: View {
             case .failed(let message):
                 Section {
                     SetuCard {
-                        SetuEmptyState(title: "歌单加载失败", message: message, systemImage: "music.note.list")
+                        SetuEmptyState(
+                            title: "歌单加载失败",
+                            message: message,
+                            systemImage: "music.note.list",
+                            actionTitle: "重试",
+                            action: { Task { await load() } }
+                        )
                     }
                 }
             case .loaded(let playlist):
@@ -80,13 +88,7 @@ struct MusicPlaylistDetailView: View {
                     SetuCard {
                         VStack(alignment: .leading, spacing: SetuSpacing.md) {
                             SetuSectionHeader(title: "播放模式")
-                            Picker("播放模式", selection: $selectedMode) {
-                                Text("顺序").tag("sequence")
-                                Text("随机").tag("random")
-                                Text("循环").tag("loop")
-                                Text("单曲").tag("single")
-                            }
-                            .pickerStyle(.segmented)
+                            adaptivePlaybackModePicker
                             .tint(SetuColor.brandPink)
                             .onChange(of: selectedMode) {
                                 Task { await setMode(selectedMode) }
@@ -99,7 +101,11 @@ struct MusicPlaylistDetailView: View {
                     let songs = playlist.songs ?? []
                     if songs.isEmpty {
                         SetuCard {
-                            SetuEmptyState(title: "暂无歌曲", systemImage: "music.note")
+                            SetuEmptyState(
+                                title: "暂无歌曲",
+                                message: "可在歌曲搜索结果中选择“加入歌单”，将歌曲添加到这里。",
+                                systemImage: "music.note"
+                            )
                         }
                     } else {
                         SetuCard {
@@ -110,7 +116,7 @@ struct MusicPlaylistDetailView: View {
                                 )
                                 Spacer()
                                 Button(isSelectionMode ? "完成" : "多选") {
-                                    withAnimation {
+                                    withAnimation(reduceMotion ? nil : .default) {
                                         isSelectionMode.toggle()
                                         if !isSelectionMode {
                                             selectedSongIDs.removeAll()
@@ -169,6 +175,7 @@ struct MusicPlaylistDetailView: View {
             } label: {
                 Image(systemName: "ellipsis.circle")
             }
+            .accessibilityLabel("更多歌单操作")
         }
         .sheet(item: $editingPlaylist) { playlist in
             EditMusicPlaylistSheet(environment: environment, playlist: playlist) {
@@ -181,7 +188,7 @@ struct MusicPlaylistDetailView: View {
                 sourcePlaylistID: playlistID,
                 songs: selectedSongsForBulkAction
             ) {
-                finishSelectionMode(message: "已加入其它歌单")
+                finishSelectionMode(feedback: .success("已加入其它歌单"))
             }
         }
         .confirmationDialog("删除这个歌单？", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) {
@@ -254,6 +261,24 @@ struct MusicPlaylistDetailView: View {
     }
 
     @ViewBuilder
+    private var adaptivePlaybackModePicker: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            playbackModePicker.pickerStyle(.menu)
+        } else {
+            playbackModePicker.pickerStyle(.segmented)
+        }
+    }
+
+    private var playbackModePicker: some View {
+        Picker("播放模式", selection: $selectedMode) {
+            Text("顺序").tag("sequence")
+            Text("随机").tag("random")
+            Text("循环").tag("loop")
+            Text("单曲").tag("single")
+        }
+    }
+
+    @ViewBuilder
     private var nowPlayingSection: some View {
         if let track = player.currentTrack {
             Section {
@@ -298,32 +323,32 @@ struct MusicPlaylistDetailView: View {
 
     private func load() async {
         state = .loading
-        message = nil
+        feedback = nil
         do {
             let playlist = try await environment.musicClient.playlist(id: playlistID)
             selectedMode = playlist.playMode ?? "sequence"
             state = .loaded(playlist)
         } catch {
-            state = .failed(error.localizedDescription)
+            state = .failed(UserFacingErrorMapper.map(error).message)
         }
     }
 
     private func setMode(_ mode: String) async {
         do {
             try await environment.musicClient.setPlayMode(playlistID: playlistID, playMode: mode)
-            message = "播放模式已更新"
+            feedback = .success("播放模式已更新")
         } catch {
-            message = error.localizedDescription
+            feedback = .error(UserFacingErrorMapper.map(error).message)
         }
     }
 
     private func remove(_ song: PlaylistSong) async {
         do {
             try await environment.musicClient.removeSong(playlistID: playlistID, songID: song.songId)
-            message = "已移除 \(song.songName)"
             await load()
+            feedback = .success("已移除 \(song.songName)")
         } catch {
-            message = error.localizedDescription
+            feedback = .error(UserFacingErrorMapper.map(error).message)
         }
     }
 
@@ -343,23 +368,23 @@ struct MusicPlaylistDetailView: View {
             for song in songs {
                 try await environment.musicClient.removeSong(playlistID: playlistID, songID: song.songId)
             }
-            finishSelectionMode(message: "已移除 \(songs.count) 首歌曲")
             await load()
+            finishSelectionMode(feedback: .success("已移除 \(songs.count) 首歌曲"))
         } catch {
-            message = error.localizedDescription
+            feedback = .error(UserFacingErrorMapper.map(error).message)
         }
     }
 
-    private func finishSelectionMode(message: String) {
+    private func finishSelectionMode(feedback: SetuFeedback) {
         selectedSongIDs.removeAll()
         isSelectionMode = false
-        self.message = message
+        self.feedback = feedback
     }
 
     private func playAll(_ playlist: UserMusicPlaylistDetail) async {
         let songs = playlist.songs ?? []
         guard !songs.isEmpty else {
-            message = "歌单为空"
+            feedback = .warning("歌单为空")
             return
         }
         let firstSong = selectedMode == "random" ? songs.randomElement() ?? songs[0] : songs[0]
@@ -370,16 +395,16 @@ struct MusicPlaylistDetailView: View {
             queueTracks: songs.map { MusicPlaybackTrack(song: $0) },
             playMode: MusicPlayMode(playlistMode: selectedMode)
         )
-        if message == "已开始播放" {
-            message = "开始播放《\(playlist.name)》"
+        if feedback == .success("已开始播放") {
+            feedback = .success("开始播放《\(playlist.name)》")
         }
     }
 
     private func play(_ song: PlaylistSong, queueName: String? = nil, queueTracks: [MusicPlaybackTrack] = [], playMode: MusicPlayMode? = nil) async {
-        message = "正在准备播放"
+        feedback = .info("正在准备播放")
         let track = MusicPlaybackTrack(song: song)
         guard let resolution = await player.resolveTrackURL?(track) else {
-            message = "播放器尚未准备好"
+            feedback = .error("播放器尚未准备好")
             return
         }
         switch resolution {
@@ -395,9 +420,9 @@ struct MusicPlaylistDetailView: View {
                     duration: track.durationMilliseconds
                 )
             )
-            message = notice ?? "已开始播放"
+            feedback = notice.map(SetuFeedback.warning) ?? .success("已开始播放")
         case .unavailable(let reason):
-            message = reason
+            feedback = .error(reason)
         }
     }
 
@@ -406,7 +431,7 @@ struct MusicPlaylistDetailView: View {
             try await environment.musicClient.deletePlaylist(id: playlistID)
             dismiss()
         } catch {
-            message = error.localizedDescription
+            feedback = .error(UserFacingErrorMapper.map(error).message)
         }
     }
 }
@@ -420,7 +445,7 @@ private struct EditMusicPlaylistSheet: View {
     @State private var description: String
     @State private var coverUrl: String
     @State private var isPublic: Bool
-    @State private var message: String?
+    @State private var feedback: SetuFeedback?
 
     init(environment: AppEnvironment, playlist: UserMusicPlaylistDetail, onSaved: @escaping () -> Void) {
         self.environment = environment
@@ -457,9 +482,9 @@ private struct EditMusicPlaylistSheet: View {
                         }
                     }
                 }
-                if let message {
+                if let feedback {
                     Section {
-                        SetuPill(text: message, systemImage: "exclamationmark.triangle", tone: .danger)
+                        SetuFeedbackBanner(feedback: feedback)
                     }
                 }
             }
@@ -495,7 +520,7 @@ private struct EditMusicPlaylistSheet: View {
             onSaved()
             dismiss()
         } catch {
-            message = error.localizedDescription
+            feedback = .error(UserFacingErrorMapper.map(error).message)
         }
     }
 }
@@ -507,7 +532,7 @@ private struct BulkAddPlaylistSongsSheet: View {
     let songs: [PlaylistSong]
     let onDone: () -> Void
     @State private var state: LoadState<[UserMusicPlaylist]> = .idle
-    @State private var message: String?
+    @State private var feedback: SetuFeedback?
 
     var body: some View {
         NavigationStack {
@@ -519,9 +544,9 @@ private struct BulkAddPlaylistSongsSheet: View {
                     .setuListRow()
                 }
 
-                if let message {
+                if let feedback {
                     Section {
-                        SetuPill(text: message, systemImage: "info.circle", tone: .info)
+                        SetuFeedbackBanner(feedback: feedback)
                     }
                 }
 
@@ -532,13 +557,23 @@ private struct BulkAddPlaylistSongsSheet: View {
                     }
                 case .failed(let error):
                     Section {
-                        SetuEmptyState(title: "歌单加载失败", message: error, systemImage: "exclamationmark.triangle")
+                        SetuEmptyState(
+                            title: "歌单加载失败",
+                            message: error,
+                            systemImage: "exclamationmark.triangle",
+                            actionTitle: "重试",
+                            action: { Task { await load() } }
+                        )
                     }
                 case .loaded(let playlists):
                     let targets = playlists.filter { $0.id != sourcePlaylistID }
                     if targets.isEmpty {
                         Section {
-                            SetuEmptyState(title: "暂无其它歌单", message: "先创建另一个歌单再进行批量加入。", systemImage: "music.note.list")
+                            SetuEmptyState(
+                                title: "暂无其它歌单",
+                                message: "关闭本页并回到“我的歌单”新建另一个歌单后，再进行批量加入。",
+                                systemImage: "music.note.list"
+                            )
                         }
                     } else {
                         Section("选择目标歌单") {
@@ -590,13 +625,13 @@ private struct BulkAddPlaylistSongsSheet: View {
         do {
             state = .loaded(try await environment.musicClient.playlists())
         } catch {
-            state = .failed(error.localizedDescription)
+            state = .failed(UserFacingErrorMapper.map(error).message)
         }
     }
 
     private func add(to playlist: UserMusicPlaylist) async {
         guard !songs.isEmpty else { return }
-        message = "正在加入 \(playlist.name)"
+        feedback = .info("正在加入 \(playlist.name)")
         do {
             for song in songs {
                 try await environment.musicClient.add(song: song, toPlaylist: playlist.id)
@@ -604,7 +639,7 @@ private struct BulkAddPlaylistSongsSheet: View {
             onDone()
             dismiss()
         } catch {
-            message = error.localizedDescription
+            feedback = .error(UserFacingErrorMapper.map(error).message)
         }
     }
 }

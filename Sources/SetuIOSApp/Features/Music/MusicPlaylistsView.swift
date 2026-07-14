@@ -3,19 +3,20 @@ import SwiftUI
 
 struct MusicPlaylistsView: View {
     @Environment(RouterPath.self) private var router
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var environment: AppEnvironment
     @Bindable var player: MusicPlaybackController
     @State private var state: LoadState<[UserMusicPlaylist]> = .idle
     @State private var showingCreate = false
-    @State private var message: String?
+    @State private var feedback: SetuFeedback?
     @State private var playlistPendingDeletion: UserMusicPlaylist?
     @State private var showingDeleteConfirmation = false
 
     var body: some View {
         List {
-            if let message {
+            if let feedback {
                 Section {
-                    SetuPill(text: message, systemImage: "checkmark.seal", tone: .success)
+                    SetuFeedbackBanner(feedback: feedback)
                 }
             }
 
@@ -29,14 +30,26 @@ struct MusicPlaylistsView: View {
             case .failed(let message):
                 Section {
                     SetuCard {
-                        SetuEmptyState(title: "歌单加载失败", message: message, systemImage: "music.note.list")
+                        SetuEmptyState(
+                            title: "歌单加载失败",
+                            message: message,
+                            systemImage: "music.note.list",
+                            actionTitle: "重试",
+                            action: { Task { await load() } }
+                        )
                     }
                 }
             case .loaded(let playlists):
                 if playlists.isEmpty {
                     Section {
                         SetuCard {
-                            SetuEmptyState(title: "暂无歌单", message: "创建歌单后会显示在这里。", systemImage: "music.note.list")
+                            SetuEmptyState(
+                                title: "暂无歌单",
+                                message: "创建第一个歌单，把喜欢的歌曲整理到一起。",
+                                systemImage: "music.note.list",
+                                actionTitle: "创建歌单",
+                                action: { showingCreate = true }
+                            )
                         }
                     }
                 } else {
@@ -74,6 +87,7 @@ struct MusicPlaylistsView: View {
             } label: {
                 Image(systemName: "plus")
             }
+            .accessibilityLabel("创建歌单")
         }
         .sheet(isPresented: $showingCreate) {
             CreatePlaylistSheet(environment: environment) {
@@ -99,10 +113,7 @@ struct MusicPlaylistsView: View {
             SetuCard {
                 VStack(alignment: .leading, spacing: SetuSpacing.md) {
                     SetuSectionHeader(title: "概览", subtitle: "共 \(playlists.count) 个歌单")
-                    LazyVGrid(columns: [
-                        GridItem(.flexible(), spacing: SetuSpacing.sm),
-                        GridItem(.flexible(), spacing: SetuSpacing.sm)
-                    ], spacing: SetuSpacing.sm) {
+                    LazyVGrid(columns: statColumns, spacing: SetuSpacing.sm) {
                         SetuStatTile(title: "歌单数量", value: "\(playlists.count)", systemImage: "music.note.list", color: SetuColor.brandPink)
                         SetuStatTile(title: "歌曲总数", value: "\(playlists.reduce(0) { $0 + ($1.songCount ?? 0) })", systemImage: "music.note", color: SetuColor.info)
                         SetuStatTile(title: "播放总量", value: "\(playlists.reduce(0) { $0 + ($1.playCount ?? 0) })", systemImage: "play.circle", color: SetuColor.success)
@@ -112,13 +123,18 @@ struct MusicPlaylistsView: View {
         }
     }
 
+    private var statColumns: [GridItem] {
+        let count = dynamicTypeSize.isAccessibilitySize ? 1 : 2
+        return Array(repeating: GridItem(.flexible(), spacing: SetuSpacing.sm), count: count)
+    }
+
     private func load() async {
         state = .loading
-        message = nil
+        feedback = nil
         do {
             state = .loaded(try await environment.musicClient.playlists())
         } catch {
-            state = .failed(error.localizedDescription)
+            state = .failed(UserFacingErrorMapper.map(error).message)
         }
     }
 
@@ -127,9 +143,9 @@ struct MusicPlaylistsView: View {
             try await environment.musicClient.deletePlaylist(id: playlist.id)
             playlistPendingDeletion = nil
             await load()
-            message = "已删除《\(playlist.name)》"
+            feedback = .success("已删除《\(playlist.name)》")
         } catch {
-            message = error.localizedDescription
+            feedback = .error(UserFacingErrorMapper.map(error).message)
         }
     }
 }
@@ -183,7 +199,7 @@ private struct CreatePlaylistSheet: View {
     @State private var name = ""
     @State private var description = ""
     @State private var isPublic = false
-    @State private var message: String?
+    @State private var feedback: SetuFeedback?
 
     var body: some View {
         NavigationStack {
@@ -206,9 +222,9 @@ private struct CreatePlaylistSheet: View {
                     }
                 }
 
-                if let message {
+                if let feedback {
                     Section {
-                        SetuPill(text: message, systemImage: "exclamationmark.triangle", tone: .danger)
+                        SetuFeedbackBanner(feedback: feedback)
                     }
                 }
             }
@@ -244,7 +260,7 @@ private struct CreatePlaylistSheet: View {
             onCreated()
             dismiss()
         } catch {
-            message = error.localizedDescription
+            feedback = .error(UserFacingErrorMapper.map(error).message)
         }
     }
 }
