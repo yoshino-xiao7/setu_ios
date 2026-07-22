@@ -77,13 +77,22 @@ public struct MobileLiveActivityTokenRequest: Encodable, Sendable {
     public let deviceId: String
     public let activityId: String
     public let activityType: String
+    public let targetId: String?
     public let pushToken: String
     public let staleAt: String?
 
-    public init(deviceId: String, activityId: String, activityType: String, pushToken: String, staleAt: String?) {
+    public init(
+        deviceId: String,
+        activityId: String,
+        activityType: String,
+        targetId: String? = nil,
+        pushToken: String,
+        staleAt: String?
+    ) {
         self.deviceId = deviceId
         self.activityId = activityId
         self.activityType = activityType
+        self.targetId = targetId
         self.pushToken = pushToken
         self.staleAt = staleAt
     }

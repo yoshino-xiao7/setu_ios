@@ -114,10 +114,13 @@ POST /mobile/live-activities
   "deviceId": "vendor-or-installation-id",
   "activityId": "local-activity-id",
   "activityType": "AI_GENERATION",
+  "targetId": "12345",
   "pushToken": "activity-push-token",
   "staleAt": "2026-07-06T18:30:00"
 }
 ```
+
+`targetId` 用于把 Live Activity 精确关联到业务对象；AI 生图传任务 ID。旧客户端可不传，但只有已关联任务的活动才能收到后端状态更新。
 
 ### 结束 Live Activity
 
@@ -132,7 +135,7 @@ POST /mobile/live-activities/{activityId}/end
 后端提供 `ApnsPushService` 供业务服务调用：
 
 - `sendAlertToUser(...)`: 向用户已启用 iOS 设备发送普通 APNs alert。
-- `updateLiveActivity(...)`: 使用保存的 Live Activity push token 发送 `liveactivity` 更新。
+- `updateLiveActivity(...)`: 使用保存的 Live Activity push token 发送 `liveactivity` 更新。AI 生图会在任务领取、生成、上传、完成或失败时更新对应活动。
 - `hasBroadcastChannel(...)`: 检查指定 Live Activity 类型是否已登记可用 broadcast channel。
 
 后端已新增 `apns_live_activity_broadcast_channel` 表，用于登记 APNs Live Activity broadcast channel。当前实现先完成 channel 管理和可用性查询；具体 channel 创建/轮换仍应在接入 Apple APNs broadcast 流程时配置，避免在未完成证书和 bundle 能力验证前发送错误请求。
@@ -159,7 +162,7 @@ POST /mobile/live-activities/{activityId}/end
 
 1. `SID` Cookie 的域名、`Secure`、`SameSite=Lax` 在生产域名和 `URLSession` 下的行为。
 2. APNs token 的 sandbox/production 环境切换与失效重绑。
-3. Live Activities 服务端推送发送器尚未实现，本次只保存 push token 和生命周期状态。
+3. Live Activities 已具备 AI 生图状态推送链路，仍需在配置真实 APNs 密钥和生产域名后进行真机联调。
 4. 音乐播放当前返回上游播放 URL，iOS 后台播放的 Range 表现需要用真实 URL 验证。
 5. 若需要后端媒体代理流，必须新增支持 Range 请求的 streaming endpoint。
 

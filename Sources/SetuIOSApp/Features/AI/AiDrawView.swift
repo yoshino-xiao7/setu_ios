@@ -211,10 +211,23 @@ struct AiDrawView: View {
             SetuCard {
                 VStack(alignment: .leading, spacing: SetuSpacing.md) {
                     SetuSectionHeader(title: "风格与角色", subtitle: "可选，不选择也能直接生成")
+                    Picker("人物数量", selection: $generationMode) {
+                        Text("单人物").tag("SINGLE")
+                        Text("双人物").tag("DUAL")
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("ai.draw.generationMode")
                     SetuNavigationRow(title: "选择风格与角色", subtitle: "浏览风格、角色和画面预设", systemImage: "photo.stack") {
                         isNavigatingToAssetBrowser = true
                         saveDraft()
                         router.navigate(to: .aiAssets)
+                    }
+                    if generationMode == "DUAL" {
+                        SetuPill(
+                            text: "双人物已开启，请在角色库分别选择主角色和副角色",
+                            systemImage: "person.2.fill",
+                            tone: .brand
+                        )
                     }
                     if !enabledStylePresetNames.isEmpty {
                         Text(enabledStylePresetNames.joined(separator: "、"))
@@ -284,10 +297,6 @@ struct AiDrawView: View {
     @ViewBuilder
     private var advancedModelSettings: some View {
         if case .loaded(let capabilities) = capabilityState {
-            Picker("人物构图", selection: $generationMode) {
-                Text("单人物").tag("SINGLE")
-                Text("双人物").tag("DUAL")
-            }
             Picker("基础画风", selection: $selectedCheckpoint) {
                 Text("推荐").tag("")
                 ForEach(capabilities.checkpoints) { item in

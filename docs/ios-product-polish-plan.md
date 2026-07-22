@@ -726,7 +726,7 @@ Xcode 27 beta 的滚动视口 audit 只排除两类已确认噪声：`issue.elem
 ### Phase 5：回归与发布前验收
 
 - [x] 代码开发范围已完成（2026-07-11）：Phase 1–4 的产品化实现、失败恢复、状态一致性与自动化夹具均已落地；以下未勾选项属于真机、全路由无障碍与发布环境验收，由产品方后续执行，不阻塞本轮代码交付；
-- [x] Swift 单元测试（2026-07-11 当前工作树 `swift test --disable-sandbox`：99/99 通过）；
+- [x] Swift 单元测试（2026-07-22 `xcodebuild test`：101/101 通过）；
 - [x] App 构建（2026-07-11 `generic/platform=iOS Simulator`，App、Core 与 Live Activity Widget 的 arm64/x86_64 双架构构建通过）；
 - [x] UI tests 基线（2026-07-11，iOS 27.0：`Setu QA 375` 保留本轮 12/12 完整基线，并在此前页面语义调整后复核新增矩阵 2/2；`Setu QA 390` 保留此前 10/10 完整回归基线；`Setu QA 430` 保留此前 10/10 完整基线，并另行通过新增的 Light 默认与 Dark AX5 两项登录后页面矩阵。本轮后续新增的 Dashboard、账号安全、通知一致性、每日图片、按条件找图与随机刷图失败态用例均不计入上述历史基线；各自的 build、手动核验与待补跑状态以 `docs/qa/ios-product-polish/README.md` 为准，只有 runner 输出完整结果并封口后才更新通过计数）；
 - [x] 375/390/430 浅深模式截图对照（欢迎页共 6 张，见 `docs/qa/ios-product-polish/README.md`）；
@@ -740,7 +740,7 @@ Xcode 27 beta 的滚动视口 audit 只排除两类已确认噪声：`issue.elem
 | --- | --- | --- |
 | Phase 1–4 产品化改造 | 各阶段实现清单均已勾选；普通用户错误映射、状态组件、导航闭环、权限预提示、Dynamic Type 与 Reduce Motion 已落到源码 | 代码完成 |
 | 异步状态与竞态 | Dashboard 分区状态、收藏显式未知态、随机 feed generation/request ID、通知 `NotificationReadConsistency` 对账均已实现 | 代码完成 |
-| 自动化资产 | Swift 99/99；App、Core、Widget、单元测试及 UI 测试目标 `build-for-testing` 成功；离线失败夹具已落地 | 代码完成 |
+| 自动化资产 | Swift 101/101；App、Core、Widget、单元测试及 UI 测试目标 `build-for-testing` 成功；离线失败夹具已落地 | 代码完成 |
 | 真机与系统能力 | 通知、照片、Apple 登录、Passkey、后台音乐、耳机中断、Live Activity、真实 VoiceOver 手势 | 由产品方后续真机验收 |
 | 发布环境 | OSS/CDN 下架和缓存失效 | 需要部署环境验收 |
 | 图片验证码等价挑战 | iOS 端无法自行生成安全的等价答案；需要后端先提供音频或其他可访问挑战接口 | 外部接口依赖，不属于本轮 iOS 遗留实现 |
@@ -769,7 +769,7 @@ Xcode 27 beta 的滚动视口 audit 只排除两类已确认噪声：`issue.elem
 - [ ] 375pt 与 430pt 无水平溢出；
 - [x] 普通内容流使用增量加载，不使用上一页/下一页；
 - [ ] 新增交互有 Preview 或 UI 测试；
-- [x] 当前代码的相关 `swift test` / `xcodebuild` 通过（2026-07-11：Swift 99/99、后端 Maven 158/158、Web `typecheck`/`lint` 通过；通用 iOS Simulator App、Core、Live Activity Widget、单元测试与 UI 测试目标的 arm64/x86_64 `build-for-testing` 成功；375pt 保留本轮 12/12 完整基线并在最新页面语义调整后复核新增矩阵 2/2，390pt 保留 10/10 基线，430pt 保留 10/10 基线并通过新增 2/2 页面矩阵）。
+- [x] 当前代码的相关 `swift test` / `xcodebuild` 通过（2026-07-22：Swift 101/101、后端 Maven 160/160、双角色主入口 UI 测试 1/1 通过；通用 iOS Simulator App、Core 与 Live Activity Widget 构建成功；原有 375pt / 390pt / 430pt 页面矩阵基线保留）。
 
 ---
 

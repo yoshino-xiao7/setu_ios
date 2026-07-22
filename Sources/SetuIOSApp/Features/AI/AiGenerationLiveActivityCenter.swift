@@ -11,6 +11,11 @@ import UIKit
 
 @MainActor
 enum AiGenerationLiveActivityCenter {
+    #if os(iOS) && canImport(ActivityKit)
+    @available(iOS 16.1, *)
+    static var pushType: PushType? { .token }
+    #endif
+
     static func start(job: AiGenerationJob, mobileClient: MobileAppClient) async {
         #if os(iOS) && canImport(ActivityKit)
         guard #available(iOS 16.1, *) else { return }
@@ -26,7 +31,7 @@ enum AiGenerationLiveActivityCenter {
             let activity = try Activity<AiGenerationActivityAttributes>.request(
                 attributes: AiGenerationActivityAttributes(jobID: job.id, title: "AI 绘画生成"),
                 content: ActivityContent(state: contentState(for: job), staleDate: Date().addingTimeInterval(30 * 60)),
-                pushType: nil
+                pushType: pushType
             )
             observePushTokenUpdates(for: activity, mobileClient: mobileClient)
         } catch {
@@ -93,6 +98,7 @@ enum AiGenerationLiveActivityCenter {
                     deviceId: deviceID,
                     activityId: activityID,
                     activityType: "AI_GENERATION",
+                    targetId: String(activity.attributes.jobID),
                     pushToken: token,
                     staleAt: ISO8601DateFormatter().string(from: Date().addingTimeInterval(30 * 60))
                 )
@@ -106,7 +112,7 @@ enum AiGenerationLiveActivityCenter {
             status: job.status,
             statusTitle: job.statusTitle,
             detail: job.aiLiveActivityDetail,
-            updatedAt: Date()
+            updatedAt: Date().timeIntervalSince1970
         )
     }
     #endif

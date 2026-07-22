@@ -53,6 +53,7 @@
 		3D50376C6502C6F4002E7058 /* AiHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7562E6545A9C3CFDDC3E01A6 /* AiHistoryView.swift */; };
 		3DBF3F96ECAA7446DEDBCC6A /* ImageFeedClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95D0902F5419B07BE72C4054 /* ImageFeedClientTests.swift */; };
 		40A01F59C55EA319E3D470A0 /* MusicPlaylistDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BE9E4DDC8AE1829202E1009 /* MusicPlaylistDetailView.swift */; };
+		441F696BFAACD6DDE9E3EB63 /* AiGenerationLiveActivityCenterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3AD9011C87227302D738CFA /* AiGenerationLiveActivityCenterTests.swift */; };
 		44CEB24F612AF9D7953A7B57 /* AdminImageInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C599E30B49EEEABA0F352C3A /* AdminImageInfoView.swift */; };
 		46017994CF8F0412079F46E6 /* MusicHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9D3419CDE37B276AEA2AEA2 /* MusicHomeView.swift */; };
 		4639554CE8E9633EDA40CF99 /* SetuImageTile.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4FAD2C108F0B5598D70D72A /* SetuImageTile.swift */; };
@@ -420,6 +421,7 @@
 		CA9BD954C658365380A65DDC /* SetuIOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuIOSApp.swift; sourceTree = "<group>"; };
 		CF20EAE938A450CBFCD46498 /* ApiKeyListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApiKeyListView.swift; sourceTree = "<group>"; };
 		CF51F5B2D42C9C81CB07E14E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		D3AD9011C87227302D738CFA /* AiGenerationLiveActivityCenterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AiGenerationLiveActivityCenterTests.swift; sourceTree = "<group>"; };
 		D46C56046A2FDC984DB1B0CE /* PublicCollectionDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicCollectionDetailView.swift; sourceTree = "<group>"; };
 		D62E77C6D951D355D788C5E8 /* AdminAiWorkersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminAiWorkersView.swift; sourceTree = "<group>"; };
 		D65CD600EB96DA067D349D7E /* AdminPixivCrawlView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminPixivCrawlView.swift; sourceTree = "<group>"; };
@@ -822,6 +824,7 @@
 				9B54E7B0273F0A02B89981E1 /* AdminClientTests.swift */,
 				548F9CFC8424F16CB224B613 /* AiDrawDraftStoreTests.swift */,
 				3158EED0A26DE3CE6E0463E8 /* AiGenerationClientTests.swift */,
+				D3AD9011C87227302D738CFA /* AiGenerationLiveActivityCenterTests.swift */,
 				A0108E10626523C9CDE6E2A4 /* ApiKeyClientTests.swift */,
 				33C3FD265E1FD43010883478 /* AppleAuthClientTests.swift */,
 				40D9EE0BCFD272325492B397 /* AppNavigationCoordinatorTests.swift */,
@@ -1063,6 +1066,7 @@
 				D3335ECA866B699F6648CDF0 /* AdminClientTests.swift in Sources */,
 				85E02A7ADDEA08B12CA49EFA /* AiDrawDraftStoreTests.swift in Sources */,
 				5C2F5EB5C924FF83EC641E94 /* AiGenerationClientTests.swift in Sources */,
+				441F696BFAACD6DDE9E3EB63 /* AiGenerationLiveActivityCenterTests.swift in Sources */,
 				9133E4D363ECDEC3F97EFE7F /* ApiKeyClientTests.swift in Sources */,
 				71A5791BB8782745A489A3DF /* AppNavigationCoordinatorTests.swift in Sources */,
 				D7DE67A5B334A549195732FA /* AppleAuthClientTests.swift in Sources */,

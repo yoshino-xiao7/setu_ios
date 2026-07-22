@@ -8,9 +8,9 @@ public struct AiGenerationActivityAttributes: ActivityAttributes {
         public let status: String
         public let statusTitle: String
         public let detail: String
-        public let updatedAt: Date
+        public let updatedAt: Double
 
-        public init(status: String, statusTitle: String, detail: String, updatedAt: Date) {
+        public init(status: String, statusTitle: String, detail: String, updatedAt: Double) {
             self.status = status
             self.statusTitle = statusTitle
             self.detail = detail
