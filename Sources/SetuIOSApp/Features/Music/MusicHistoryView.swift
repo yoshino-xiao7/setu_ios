@@ -5,18 +5,15 @@ struct MusicHistoryView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var environment: AppEnvironment
     @Bindable var player: MusicPlaybackController
-    @State private var records: [MusicHistoryRecord] = []
-    @State private var count: Int?
+    @Environment(MusicStore.self) private var store
+    private var records: [MusicHistoryRecord] { store.history.value?.records ?? [] }
+    private var count: Int? { store.history.value?.count }
+    private var isInitialLoading: Bool { store.history.value == nil && store.history.error == nil }
+    private var isLoadingMore: Bool { store.isLoadingMore }
+    private var loadError: String? { (store.history.error ?? store.historyMoreError)?.message }
     @State private var feedback: SetuFeedback?
-    @State private var nextOffset = 0
-    @State private var isInitialLoading = true
-    @State private var isLoadingMore = false
-    @State private var loadError: String?
-    @State private var loadGeneration = 0
     @State private var selectedSong: MusicSong?
     @State private var showingClearConfirmation = false
-
-    private let pageSize = 20
 
     var body: some View {
         List {
@@ -107,7 +104,7 @@ struct MusicHistoryView: View {
             Text("确定要清空所有播放历史吗？此操作不可恢复。")
         }
         .task { await loadFirstPage() }
-        .refreshable { await loadFirstPage() }
+        .refreshable { await loadFirstPage(force: true) }
     }
 
     @ViewBuilder
@@ -192,81 +189,23 @@ struct MusicHistoryView: View {
         return records.count < count
     }
 
-    private func loadFirstPage() async {
-        loadGeneration += 1
-        let requestedGeneration = loadGeneration
-        isInitialLoading = records.isEmpty
-        isLoadingMore = false
-        loadError = nil
-        feedback = nil
-
-        do {
-            async let records = environment.musicClient.history(limit: pageSize, offset: 0)
-            async let total = environment.musicClient.historyCount()
-            let (freshRecords, freshCount) = try await (records, total)
-            guard requestedGeneration == loadGeneration else { return }
-            self.records = freshRecords
-            count = freshCount
-            nextOffset = freshRecords.count
-        } catch {
-            guard requestedGeneration == loadGeneration else { return }
-            loadError = "暂时无法加载播放历史，请检查网络后重试。"
-        }
-        guard requestedGeneration == loadGeneration else { return }
-        isInitialLoading = false
+    private func loadFirstPage(force: Bool = false) async {
+        await store.loadHistory(force: force)
     }
 
     private func loadMore() async {
-        guard hasMore, !isLoadingMore, !isInitialLoading else { return }
-        let requestedGeneration = loadGeneration
-        let requestedOffset = nextOffset
-        isLoadingMore = true
-        loadError = nil
-        defer {
-            if requestedGeneration == loadGeneration {
-                isLoadingMore = false
-            }
-        }
-
-        do {
-            let result = try await environment.musicClient.history(limit: pageSize, offset: requestedOffset)
-            guard requestedGeneration == loadGeneration, requestedOffset == nextOffset else { return }
-            let existingIDs = Set(records.map(\.id))
-            records.append(contentsOf: result.filter { !existingIDs.contains($0.id) })
-            nextOffset = requestedOffset + result.count
-            if result.count < pageSize {
-                count = records.count
-            }
-        } catch {
-            guard requestedGeneration == loadGeneration else { return }
-            loadError = "更多播放记录加载失败"
-        }
+        await store.loadMoreHistory()
     }
 
     private func play(_ record: MusicHistoryRecord, queueTracks: [MusicPlaybackTrack] = []) async {
         feedback = .info("正在准备播放")
         let track = MusicPlaybackTrack(record: record)
-        guard let resolution = await player.resolveTrackURL?(track) else {
-            feedback = .error("播放器尚未准备好")
-            return
-        }
-        switch resolution {
-        case .success(let url, let notice):
-            player.play(url: url, track: track, queueName: "播放历史", queueTracks: queueTracks, notice: notice)
-            try? await environment.musicClient.addHistory(song: record.song)
-            feedback = notice.map(SetuFeedback.warning) ?? .success("已开始播放")
-        case .unavailable(let reason):
-            feedback = .error(reason)
-        }
+        _ = await player.play(track: track, in: queueTracks, queueName: "播放历史")
     }
 
     private func clear() async {
         do {
-            try await environment.musicClient.clearHistory()
-            records = []
-            nextOffset = 0
-            count = 0
-            await loadFirstPage()
+            try await store.clearHistory()
             feedback = .success("播放历史已清空")
         } catch {
             feedback = .error(UserFacingErrorMapper.map(error))

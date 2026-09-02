@@ -8,12 +8,15 @@ import SwiftUI
 struct MvPlaybackView: View {
     @Bindable var environment: AppEnvironment
     let mvID: Int
+    /// nil loads its own detail; a parent-provided list (even empty) avoids a second request.
+    var suppliedResolutions: [MusicMvQuality]? = nil
     /// Called once when the video actually starts, so the caller can pause music
     /// playback and avoid two audio streams at once.
     var onStart: (() -> Void)?
 
     @State private var urlState: LoadState<MusicMvUrlData?> = .idle
-    @State private var resolutions: [MusicMvQuality] = []
+    @State private var loadedResolutions: [MusicMvQuality] = []
+    private var resolutions: [MusicMvQuality] { suppliedResolutions ?? loadedResolutions }
     @State private var selectedResolution: Int?
     @State private var avPlayer: AVPlayer?
     #if os(iOS)
@@ -27,6 +30,10 @@ struct MvPlaybackView: View {
                 resolutionPicker
             }
         }
+        .accessibilityIdentifier("music.mv.playback")
+        #if DEBUG
+        .accessibilityValue("details=\(MusicPerformanceProbe.shared.mvDetailCount)")
+        #endif
         .task(id: mvID) {
             await loadResolutions()
             await loadURL()
@@ -151,10 +158,11 @@ struct MvPlaybackView: View {
     }
 
     private func loadResolutions() async {
-        guard resolutions.isEmpty else { return }
+        guard suppliedResolutions == nil, loadedResolutions.isEmpty else { return }
         do {
             let detail = try await environment.musicClient.mvDetail(id: mvID)
-            resolutions = detail.data.brs ?? []
+            guard !Task.isCancelled else { return }
+            loadedResolutions = detail.data.brs ?? []
         } catch {
             // Resolution list is optional; playback still works at default quality.
         }
@@ -164,9 +172,11 @@ struct MvPlaybackView: View {
         urlState = .loading
         do {
             let response = try await environment.musicClient.mvUrl(id: mvID, resolution: selectedResolution)
+            guard !Task.isCancelled else { return }
             urlState = .loaded(response.data)
             configurePlayer(with: response.data)
         } catch {
+            guard !Task.isCancelled else { return }
             urlState = .failed(UserFacingErrorMapper.map(error))
         }
     }

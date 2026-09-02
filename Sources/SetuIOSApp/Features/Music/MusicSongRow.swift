@@ -9,7 +9,23 @@ import UIKit
 struct MusicSongRow: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    let song: MusicSong
+    let model: MusicSongRowModel
+    private var song: MusicSong { model.song }
+
+    init(song: MusicSong, onPlay: (() -> Void)? = nil, onPlayMv: (() -> Void)? = nil,
+         onAddToPlaylist: (() -> Void)? = nil, onDownload: (() -> Void)? = nil) {
+        self.init(model: MusicSongRowModel(song: song), onPlay: onPlay, onPlayMv: onPlayMv,
+                  onAddToPlaylist: onAddToPlaylist, onDownload: onDownload)
+    }
+
+    init(model: MusicSongRowModel, onPlay: (() -> Void)? = nil, onPlayMv: (() -> Void)? = nil,
+         onAddToPlaylist: (() -> Void)? = nil, onDownload: (() -> Void)? = nil) {
+        self.model = model
+        self.onPlay = onPlay
+        self.onPlayMv = onPlayMv
+        self.onAddToPlaylist = onAddToPlaylist
+        self.onDownload = onDownload
+    }
     var onPlay: (() -> Void)?
     var onPlayMv: (() -> Void)?
     var onAddToPlaylist: (() -> Void)?
@@ -20,7 +36,7 @@ struct MusicSongRow: View {
             if dynamicTypeSize.isAccessibilitySize {
                 VStack(alignment: .leading, spacing: SetuSpacing.sm) {
                     HStack(alignment: .top, spacing: SetuSpacing.md) {
-                        MusicArtworkView(urlString: song.coverURLString)
+                        MusicArtworkView(urlString: model.coverURLString)
                         playableSongText
                     }
                     if hasActions {
@@ -30,7 +46,7 @@ struct MusicSongRow: View {
                 }
             } else {
                 HStack(spacing: SetuSpacing.md) {
-                    MusicArtworkView(urlString: song.coverURLString)
+                    MusicArtworkView(urlString: model.coverURLString)
                     playableSongText
 
                     if hasActions {
@@ -58,18 +74,18 @@ struct MusicSongRow: View {
 
     private var songText: some View {
         VStack(alignment: .leading, spacing: SetuSpacing.xs) {
-            Text(song.name)
+            Text(model.title)
                 .font(SetuTypography.headline)
                 .foregroundStyle(SetuColor.textPrimary)
                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
                 .fixedSize(horizontal: false, vertical: true)
                 .truncationMode(.tail)
-            Text(song.artistNames.isEmpty ? "未知歌手" : song.artistNames)
+            Text(model.artist)
                 .font(SetuTypography.caption)
                 .foregroundStyle(SetuColor.textSecondary)
                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
                 .truncationMode(.tail)
-            Text(song.albumName)
+            Text(model.album)
                 .font(SetuTypography.caption)
                 .foregroundStyle(SetuColor.textTertiary)
                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
@@ -81,7 +97,7 @@ struct MusicSongRow: View {
 
     private var actionsGrid: some View {
         LazyVGrid(columns: actionColumns, alignment: .trailing, spacing: SetuSpacing.xs) {
-            if song.mv ?? 0 > 0 {
+            if model.hasMV {
                 if let onPlayMv {
                     MusicIconButton(
                         systemImage: "play.rectangle.fill",
@@ -127,7 +143,7 @@ struct MusicSongRow: View {
 
     @ViewBuilder
     private var actionButtons: some View {
-        if song.mv ?? 0 > 0 {
+        if model.hasMV {
             if let onPlayMv {
                 MusicIconButton(
                     systemImage: "play.rectangle.fill",
@@ -168,6 +184,6 @@ struct MusicSongRow: View {
     }
 
     private var hasActions: Bool {
-        (song.mv ?? 0) > 0 || onAddToPlaylist != nil || onDownload != nil
+        model.hasMV || onAddToPlaylist != nil || onDownload != nil
     }
 }

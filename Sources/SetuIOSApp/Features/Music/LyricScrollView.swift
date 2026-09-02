@@ -26,6 +26,7 @@ struct LyricScrollView: View {
     }
 
     var body: some View {
+        let activeIndex = activeIndex
         if lines.isEmpty {
             SetuEmptyState(title: "暂无歌词", systemImage: "text.quote")
         } else {

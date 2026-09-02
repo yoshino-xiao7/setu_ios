@@ -11,6 +11,7 @@ typealias SetuPlatformImage = NSImage
 
 struct SetuRemoteImage: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.displayScale) private var displayScale
 
     let urlString: String?
     let accessibilityLabel: String
@@ -22,9 +23,7 @@ struct SetuRemoteImage: View {
     var onActivate: (() -> Void)?
     var activationHint: String?
 
-    @State private var image: SetuPlatformImage?
-    @State private var isLoading = false
-    @State private var loadFailed = false
+    @State private var imageState = SetuRemoteImageState()
     @State private var reloadID = UUID()
 
     var body: some View {
@@ -50,13 +49,17 @@ struct SetuRemoteImage: View {
                     .accessibilityLabel(accessibilityDescription)
             }
         }
-        .task(id: reloadID) { await load() }
-        .onChange(of: urlString) { _, _ in
-            image = nil
-            loadFailed = false
-            reloadID = UUID()
+        .task(id: SetuImageLoadID(key: imageKey, retry: reloadID)) {
+            await imageState.load(imageKey, animation: reduceMotion ? nil : .easeInOut(duration: 0.18))
         }
     }
+
+    private var imageKey: SetuImageKey? {
+        normalizedURL.map { SetuImageKey(url: $0, size: .fitting(width: width, height: height, scale: displayScale)) }
+    }
+    private var image: SetuPlatformImage? { imageState.displayedImage(for: imageKey) }
+    private var loadFailed: Bool { imageState.key == imageKey && imageState.failed && image == nil }
+    private var isLoading: Bool { imageState.key == imageKey && imageState.isLoading && image == nil }
 
     private var imageContent: some View {
         ZStack {
@@ -137,8 +140,6 @@ struct SetuRemoteImage: View {
 
     private func retry() {
         guard normalizedURL != nil else { return }
-        image = nil
-        loadFailed = false
         reloadID = UUID()
     }
 
@@ -146,75 +147,4 @@ struct SetuRemoteImage: View {
         urlString.flatMap(URL.init(string:))
     }
 
-    @MainActor
-    private func load() async {
-        guard let url = normalizedURL else {
-            image = nil
-            isLoading = false
-            loadFailed = false
-            return
-        }
-
-        isLoading = true
-        loadFailed = false
-        do {
-            let loaded = try await SetuRemoteImageLoader.shared.image(from: url)
-            guard !Task.isCancelled else { return }
-            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
-                image = loaded
-                isLoading = false
-            }
-        } catch {
-            guard !Task.isCancelled else { return }
-            image = nil
-            isLoading = false
-            loadFailed = true
-        }
-    }
-}
-
-actor SetuRemoteImageLoader {
-    static let shared = SetuRemoteImageLoader()
-
-    private let session: URLSession
-
-    init() {
-        let configuration = URLSessionConfiguration.default
-        configuration.urlCache = URLCache(
-            memoryCapacity: 64 * 1024 * 1024,
-            diskCapacity: 256 * 1024 * 1024,
-            diskPath: "SetuRemoteImageCache"
-        )
-        configuration.requestCachePolicy = .returnCacheDataElseLoad
-        session = URLSession(configuration: configuration)
-    }
-
-    func image(from url: URL) async throws -> SetuPlatformImage {
-        let data = try await data(from: url)
-        guard let image = SetuPlatformImage(data: data) else {
-            throw URLError(.cannotDecodeContentData)
-        }
-        return image
-    }
-
-    func data(from url: URL) async throws -> Data {
-        let request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad)
-        if let cached = session.configuration.urlCache?.cachedResponse(for: request) {
-            return cached.data
-        }
-
-        do {
-            return try await fetchData(with: request)
-        } catch {
-            return try await fetchData(with: URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData))
-        }
-    }
-
-    private func fetchData(with request: URLRequest) async throws -> Data {
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
-            throw URLError(.badServerResponse)
-        }
-        return data
-    }
 }

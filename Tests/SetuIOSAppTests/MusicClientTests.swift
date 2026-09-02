@@ -1,5 +1,6 @@
 import Foundation
 import XCTest
+@testable import SetuIOSApp
 @testable import SetuIOSCore
 @testable import SetuIOSApp
 
@@ -14,6 +15,17 @@ final class MusicClientTests: XCTestCase {
             })
             _ = try await MusicClient(apiClient: makeAPIClient(session: session)).url(songID: 7, level: quality.rawValue)
         }
+    }
+
+    func testBatchPlaybackURLSendsCommaSeparatedIDsAndDecodesExpiry() async throws {
+        let session = URLSession(configuration: .musicClientMock { request in
+            let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems
+            XCTAssertEqual(query?.first(where: { $0.name == "id" })?.value, "7,8")
+            return #"{"data":[{"id":8,"expi":1200},{"id":7,"expi":60}]}"#
+        })
+        let response = try await MusicClient(apiClient: makeAPIClient(session: session)).url(songIDs: [7, 8])
+        XCTAssertEqual(response.data?.map(\.id), [8, 7])
+        XCTAssertEqual(response.data?.first(where: { $0.id == 7 })?.expi, 60)
     }
 
     override func tearDown() {
@@ -171,10 +183,12 @@ final class MusicClientTests: XCTestCase {
 
     func testAddHistoryRequestPostsPlaybackTrackPayload() async throws {
         let capturedRequests = MusicClientRequestProbe()
+        let captured = expectation(description: "history request recorded")
         let session = URLSession(
             configuration: .musicClientMock { request in
                 Task {
                     await capturedRequests.capture(request)
+                    captured.fulfill()
                 }
                 return #""ok""#
             }
@@ -192,6 +206,7 @@ final class MusicClientTests: XCTestCase {
             )
         )
 
+        await fulfillment(of: [captured], timeout: 2)
         let requests = await capturedRequests.requests
         XCTAssertEqual(requests.first?.method, "POST")
         XCTAssertEqual(requests.first?.url, "https://api.example.com/user/music/history")
@@ -250,6 +265,35 @@ final class MusicClientTests: XCTestCase {
 
         XCTAssertEqual(response.data?.id, 5_436_712)
         XCTAssertEqual(response.data?.httpsURLString, "https://example.com/mv.mp4")
+    }
+
+    @MainActor
+    func testSearchSessionNetworkUsesTenItemOffsetsAndCachesRepeatedKeyword() async throws {
+        let probe = MusicClientRequestProbe()
+        let received = expectation(description: "three search HTTP requests")
+        received.expectedFulfillmentCount = 3
+        let session = URLSession(configuration: .musicClientMock { request in
+            Task { await probe.capture(request); received.fulfill() }
+            let params = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!.queryItems!
+            let offset = Int(params.first { $0.name == "offset" }!.value!)!
+            let songs = (offset..<offset + 10).map { "{\"id\":\($0),\"name\":\"歌曲\($0)\"}" }.joined(separator: ",")
+            return "{\"result\":{\"songs\":[\(songs)],\"songCount\":30}}"
+        })
+        let repo = MusicRepository(client: MusicClient(apiClient: makeAPIClient(session: session)))
+        let search = MusicSearchSession(repository: repo, historyDefaults: UserDefaults(suiteName: UUID().uuidString)!)
+        search.query = "周杰伦"; await search.submit()
+        XCTAssertEqual(search.pager.items.count, 10)
+        await search.submit()
+        await search.loadMore(near: 7)
+        search.query = "陈"; await search.submit()
+        search.query = "周杰伦"; await search.submit()
+        await fulfillment(of: [received], timeout: 2)
+        let requests = await probe.urls
+        XCTAssertEqual(requests.count, 3)
+        let queries = requests.map { URLComponents(string: $0)!.queryItems! }
+        XCTAssertEqual(queries.map { $0.first { $0.name == "keywords" }!.value! }, ["周杰伦", "周杰伦", "陈"])
+        XCTAssertEqual(queries.map { $0.first { $0.name == "offset" }!.value! }, ["0", "10", "0"])
+        XCTAssertTrue(queries.allSatisfy { $0.first { $0.name == "limit" }?.value == "10" })
     }
 
     private func makeAPIClient(session: URLSession) -> APIClient {

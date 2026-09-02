@@ -10,15 +10,20 @@ final class AppleAuthClientTests: XCTestCase {
 
     func testLoginPostsIdentityTokenAndNonceWithoutRequestSignature() async throws {
         let probe = AppleAuthRequestProbe()
+        let captured = expectation(description: "request probe completed")
         let session = URLSession(configuration: .appleAuthMock { request in
             let body = request.httpBody ?? request.httpBodyStream.flatMap(Self.readBody)
-            Task { await probe.capture(request, body: body) }
+            Task {
+                await probe.capture(request, body: body)
+                captured.fulfill()
+            }
             return #"{"userId":7,"role":0,"signSecret":"secret","expireAt":4102444800000}"#
         })
         let client = AppleAuthClient(apiClient: makeAPIClient(session: session))
 
         let response = try await client.login(identityToken: "apple-token", nonce: "raw-nonce")
 
+        await fulfillment(of: [captured], timeout: 2)
         XCTAssertEqual(response.userId, 7)
         let request = await probe.request
         XCTAssertEqual(request?.url?.path, "/auth/apple/login")

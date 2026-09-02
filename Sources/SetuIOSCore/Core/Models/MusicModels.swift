@@ -294,6 +294,7 @@ public struct MusicUrlItem: Decodable, Identifiable, Sendable {
     public let url: String?
     public let trialUrl: String?
     public let level: String?
+    public let expi: Int?
     public let size: Int?
     public let playability: String?
     public let fullPlayable: Bool?
@@ -597,18 +598,25 @@ public struct NeteasePlaybackProbe: Decodable, Sendable {
 public struct UserMusicPlaylist: Decodable, Identifiable, Sendable {
     public let id: Int
     public let userId: Int?
-    public let name: String
-    public let description: String?
-    private let rawCoverUrl: String?
-    public let isPublic: Int?
-    public let playMode: String?
-    public let songCount: Int?
-    public let playCount: Int?
+    public var name: String
+    public var description: String?
+    private var rawCoverUrl: String?
+    public var isPublic: Int?
+    public var playMode: String?
+    public var songCount: Int?
+    public var playCount: Int?
     public let createdAt: String?
     public let updatedAt: String?
 
     public var coverUrl: String? {
         secureURLString(rawCoverUrl, artworkSize: .lockScreen)
+    }
+
+    public mutating func updateMetadata(name: String, description: String?, coverUrl: String?, isPublic: Int) {
+        self.name = name
+        self.description = description
+        self.rawCoverUrl = coverUrl
+        self.isPublic = isPublic
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -628,19 +636,26 @@ public struct UserMusicPlaylist: Decodable, Identifiable, Sendable {
 
 public struct UserMusicPlaylistDetail: Decodable, Identifiable, Sendable {
     public let id: Int
-    public let name: String
-    public let description: String?
-    private let rawCoverUrl: String?
-    public let isPublic: Int?
-    public let playMode: String?
-    public let songCount: Int?
-    public let playCount: Int?
+    public var name: String
+    public var description: String?
+    private var rawCoverUrl: String?
+    public var isPublic: Int?
+    public var playMode: String?
+    public var songCount: Int?
+    public var playCount: Int?
     public let createdAt: String?
     public let updatedAt: String?
-    public let songs: [PlaylistSong]?
+    public var songs: [PlaylistSong]?
 
     public var coverUrl: String? {
         secureURLString(rawCoverUrl, artworkSize: .lockScreen)
+    }
+
+    public mutating func updateMetadata(name: String, description: String?, coverUrl: String?, isPublic: Int) {
+        self.name = name
+        self.description = description
+        self.rawCoverUrl = coverUrl
+        self.isPublic = isPublic
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -673,6 +688,19 @@ public struct PlaylistSong: Decodable, Identifiable, Sendable {
         secureURLString(rawCoverUrl, artworkSize: .lockScreen)
     }
 
+    /// Negative IDs are local placeholders until a detail refresh resolves the DB relation ID.
+    public init(local request: AddSongToPlaylistRequest) {
+        id = -request.songId
+        songId = request.songId
+        songName = request.songName
+        artistName = request.artistName
+        albumName = request.albumName
+        rawCoverUrl = request.coverUrl
+        duration = request.duration
+        sortOrder = nil
+        createdAt = nil
+    }
+
     private enum CodingKeys: String, CodingKey {
         case id
         case songId
@@ -699,6 +727,20 @@ public struct MusicHistoryRecord: Decodable, Identifiable, Sendable {
 
     public var coverUrl: String? {
         secureURLString(rawCoverUrl, artworkSize: .lockScreen)
+    }
+
+    public init(local request: AddMusicHistoryRequest, userID: Int, date: Date) {
+        id = -request.songId
+        userId = userID
+        songId = request.songId
+        songName = request.songName
+        artistName = request.artistName
+        albumName = request.albumName
+        rawCoverUrl = request.coverUrl
+        duration = request.duration
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        playTime = formatter.string(from: date)
     }
 
     private enum CodingKeys: String, CodingKey {

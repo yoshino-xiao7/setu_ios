@@ -6,7 +6,8 @@ struct MusicPlaylistsView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var environment: AppEnvironment
     @Bindable var player: MusicPlaybackController
-    @State private var state: LoadState<[UserMusicPlaylist]> = .idle
+    @Environment(MusicStore.self) private var store
+    private var state: LoadState<[UserMusicPlaylist]> { store.playlists.state }
     @State private var showingCreate = false
     @State private var feedback: SetuFeedback?
     @State private var playlistPendingDeletion: UserMusicPlaylist?
@@ -64,6 +65,7 @@ struct MusicPlaylistsView: View {
                                 }
                             }
                             .setuButtonFeedback()
+                            .accessibilityIdentifier("music.playlists.row.\(playlist.id)")
                             .swipeActions {
                                 Button(role: .destructive) {
                                     playlistPendingDeletion = playlist
@@ -91,9 +93,7 @@ struct MusicPlaylistsView: View {
             .accessibilityLabel("创建歌单")
         }
         .sheet(isPresented: $showingCreate) {
-            CreatePlaylistSheet(environment: environment) {
-                Task { await load() }
-            }
+            CreatePlaylistSheet(environment: environment)
         }
         .confirmationDialog("删除这个歌单？", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) {
             Button("删除歌单", role: .destructive) {
@@ -106,7 +106,7 @@ struct MusicPlaylistsView: View {
             Text("确定删除歌单《\(playlistPendingDeletion?.name ?? "这个歌单")》吗？")
         }
         .task { await load() }
-        .refreshable { await load() }
+        .refreshable { await load(force: true) }
     }
 
     private func statsSection(_ playlists: [UserMusicPlaylist]) -> some View {
@@ -129,21 +129,14 @@ struct MusicPlaylistsView: View {
         return Array(repeating: GridItem(.flexible(), spacing: SetuSpacing.sm), count: count)
     }
 
-    private func load() async {
-        state = .loading
-        feedback = nil
-        do {
-            state = .loaded(try await environment.musicClient.playlists())
-        } catch {
-            state = .failed(UserFacingErrorMapper.map(error))
-        }
+    private func load(force: Bool = false) async {
+        await store.loadPlaylists(force: force)
     }
 
     private func delete(_ playlist: UserMusicPlaylist) async {
         do {
-            try await environment.musicClient.deletePlaylist(id: playlist.id)
+            try await store.deletePlaylist(id: playlist.id)
             playlistPendingDeletion = nil
-            await load()
             feedback = .success("已删除《\(playlist.name)》")
         } catch {
             feedback = .error(UserFacingErrorMapper.map(error))
@@ -196,7 +189,7 @@ private struct MusicPlaylistRow: View {
 private struct CreatePlaylistSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var environment: AppEnvironment
-    let onCreated: () -> Void
+    @Environment(MusicStore.self) private var store
     @State private var name = ""
     @State private var description = ""
     @State private var isPublic = false
@@ -253,12 +246,11 @@ private struct CreatePlaylistSheet: View {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return }
         do {
-            _ = try await environment.musicClient.createPlaylist(
+            try await store.createPlaylist(
                 name: trimmedName,
                 description: description.trimmingCharacters(in: .whitespacesAndNewlines),
                 isPublic: isPublic ? 1 : 0
             )
-            onCreated()
             dismiss()
         } catch {
             feedback = .error(UserFacingErrorMapper.map(error))

@@ -67,6 +67,9 @@ struct MusicMiniPlayerBar: View {
     @State private var showingDetail = false
     @State private var initialDetailPage: NowPlayingPage = .cover
     @State private var isCollapsed = false
+    #if DEBUG
+    @StateObject private var lifetime = MusicMiniPlayerLifetime()
+    #endif
 
     var body: some View {
         if let track = player.currentTrack {
@@ -79,6 +82,9 @@ struct MusicMiniPlayerBar: View {
             }
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("music.mini-player")
+            #if DEBUG
+            .accessibilityValue(lifetime.diagnosticValue)
+            #endif
             .frame(maxWidth: .infinity, alignment: isCollapsed ? .trailing : .center)
             .padding(.horizontal, isCollapsed ? 0 : SetuSpacing.md)
             .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.86), value: isCollapsed)
@@ -414,19 +420,8 @@ struct MusicQueueDrawerView: View {
     private func playQueuedTrack(_ track: MusicPlaybackTrack) async {
         guard track.id != player.currentTrack?.id else { return }
         PlayerHaptics.light()
-        guard let resolution = await player.resolveTrackURL?(track) else {
-            showFeedback(.error("播放器尚未准备好"))
-            return
-        }
-        switch resolution {
-        case .success(let url, let notice):
-            player.play(url: url, track: track, queueName: player.queueName, queueTracks: player.queueTracks, notice: notice)
-            if let notice {
-                showFeedback(.warning(notice))
-            }
-        case .unavailable(let reason):
-            showFeedback(.error(reason))
-        }
+        _ = await player.play(track: track, in: player.queueTracks, queueName: player.queueName)
+        if let feedback = player.feedback { showFeedback(feedback) }
     }
 
     private func showFeedback(_ nextFeedback: SetuFeedback) {
@@ -537,13 +532,13 @@ private struct MusicNowPlayingDetailView: View {
     @Bindable var player: MusicPlaybackController
 
     @State private var page: NowPlayingPage
-    @State private var lyricState: LoadState<MusicLyricResponse> = .idle
+    @State private var lyricState: LoadState<[LyricLine]> = .idle
     @State private var scrubTime: Double = 0
     @State private var isScrubbing = false
     @State private var isDownloading = false
     @State private var playlistTrack: MusicPlaybackTrack?
     @State private var mvTrack: MusicPlaybackTrack?
-    @State private var artworkAccentColor: Color?
+    @State private var loadedArtworkAccent: (key: SetuImageKey, color: Color)?
     @State private var feedback: SetuFeedback?
     @State private var feedbackTask: Task<Void, Never>?
     @State private var fileSharePayload: SystemFileSharePayload?
@@ -572,7 +567,7 @@ private struct MusicNowPlayingDetailView: View {
                 .task(id: track.id) {
                     await loadLyric(songID: track.id)
                 }
-                .task(id: track.id) {
+                .task(id: SetuImageKey.music(track.coverURLString, size: .large)) {
                     await loadArtworkAccent(for: track)
                 }
             } else {
@@ -778,10 +773,8 @@ private struct MusicNowPlayingDetailView: View {
                         showCover()
                     }
                 Spacer()
-            case .loaded(let lyric):
-                let rawLyric = lyric.lrc?.lyric ?? ""
-                let translation = lyric.tlyric?.lyric ?? ""
-                if rawLyric.isEmpty && translation.isEmpty {
+            case .loaded(let lines):
+                if lines.isEmpty {
                     Spacer()
                     SetuEmptyState(title: "暂无歌词", message: "这首歌暂时没有可用歌词", systemImage: "text.quote")
                         .contentShape(Rectangle())
@@ -792,7 +785,7 @@ private struct MusicNowPlayingDetailView: View {
                     Spacer()
                 } else {
                     LyricScrollView(
-                        lines: LyricParser.parse(rawLyric, translation: translation),
+                        lines: lines,
                         currentTime: player.currentTimeSeconds,
                         expands: true,
                         onBackgroundTap: {
@@ -803,6 +796,11 @@ private struct MusicNowPlayingDetailView: View {
                         PlayerHaptics.light()
                         player.seek(to: time)
                     }
+                    .id(track.id)
+                    .accessibilityIdentifier("music.lyrics")
+                    #if DEBUG
+                    .accessibilityValue("parses=\(MusicPerformanceProbe.shared.parseCount)")
+                    #endif
                     .padding(.horizontal, SetuSpacing.sm)
                 }
             }
@@ -1088,8 +1086,15 @@ private struct MusicNowPlayingDetailView: View {
     private func loadLyric(songID: Int) async {
         lyricState = .loading
         do {
-            lyricState = .loaded(try await environment.musicClient.lyric(songID: songID))
+            let response = try await environment.musicClient.lyric(songID: songID)
+            try Task.checkCancellation()
+            let lines = await Task.detached(priority: .utility) {
+                LyricParser.parse(response.lrc?.lyric ?? "", translation: response.tlyric?.lyric)
+            }.value
+            guard !Task.isCancelled, player.currentTrack?.id == songID else { return }
+            lyricState = .loaded(lines)
         } catch {
+            guard !Task.isCancelled, player.currentTrack?.id == songID else { return }
             lyricState = .failed(UserFacingErrorMapper.map(error))
         }
     }
@@ -1118,24 +1123,22 @@ private struct MusicNowPlayingDetailView: View {
         }
     }
 
+    private var artworkAccentColor: Color? {
+        guard let track = player.currentTrack, let key = SetuImageKey.music(track.coverURLString, size: .large) else { return nil }
+        if loadedArtworkAccent?.key == key { return loadedArtworkAccent?.color }
+        return SetuRemoteImageLoader.shared.cachedAccent(for: key).map { Color(red: $0.red, green: $0.green, blue: $0.blue) }
+    }
+
     private func loadArtworkAccent(for track: MusicPlaybackTrack) async {
-        artworkAccentColor = nil
-        #if os(iOS)
-        guard let urlString = secureURLString(track.coverURLString, artworkSize: .thumbnail),
-              let url = URL(string: urlString) else { return }
+        guard let key = SetuImageKey.music(track.coverURLString, size: .large) else { return }
         do {
-            let data = try await SetuRemoteImageLoader.shared.data(from: url)
-            guard !Task.isCancelled, let image = UIImage(data: data) else { return }
-            let color = image.setuAverageColor.map(Color.init(uiColor:))
-            await MainActor.run {
-                if player.currentTrack?.id == track.id {
-                    artworkAccentColor = color
-                }
-            }
+            let accent = try await SetuRemoteImageLoader.shared.averageColor(for: key)
+            guard !Task.isCancelled, player.currentTrack?.id == track.id,
+                  SetuImageKey.music(player.currentTrack?.coverURLString, size: .large) == key else { return }
+            loadedArtworkAccent = accent.map { (key, Color(red: $0.red, green: $0.green, blue: $0.blue)) }
         } catch {
-            // The fixed soft-pink background remains the fallback when artwork is unavailable.
+            // The existing soft-pink background remains the fallback.
         }
-        #endif
     }
 
     private func formatTime(_ seconds: Double) -> String {
@@ -1186,162 +1189,27 @@ enum PlayerHaptics {
 // MARK: - Add to playlist
 
 private struct AddPlaybackTrackToPlaylistSheet: View {
-    @Environment(\.dismiss) private var dismiss
     @Bindable var environment: AppEnvironment
     let track: MusicPlaybackTrack
     let onFeedback: (SetuFeedback) -> Void
-    @State private var state: LoadState<[UserMusicPlaylist]> = .idle
-    @State private var feedback: SetuFeedback?
 
     var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    SetuCard {
-                        HStack(spacing: SetuSpacing.md) {
-                            MusicArtworkView(urlString: track.coverURLString)
-                            VStack(alignment: .leading, spacing: SetuSpacing.xs) {
-                                Text(track.title)
-                                    .font(SetuTypography.headline)
-                                    .foregroundStyle(SetuColor.textPrimary)
-                                    .lineLimit(2)
-                                Text(track.artist)
-                                    .font(SetuTypography.caption)
-                                    .foregroundStyle(SetuColor.textSecondary)
-                                    .lineLimit(1)
-                            }
-                        }
-                    }
-                    .setuListRow()
-                }
-
-                if let feedback {
-                    Section {
-                        SetuFeedbackBanner(feedback: feedback)
-                    }
-                }
-
-                switch state {
-                case .idle, .loading:
-                    Section {
-                        SetuEmptyState(title: "正在加载歌单", systemImage: "music.note.list", isLoading: true)
-                    }
-                case .failed(let error):
-                    Section {
-                        SetuEmptyState(title: "歌单加载失败", message: error, systemImage: "exclamationmark.triangle")
-                    }
-                case .loaded(let playlists):
-                    if playlists.isEmpty {
-                        Section {
-                            SetuEmptyState(title: "暂无歌单", message: "先创建歌单再收藏当前歌曲。", systemImage: "music.note.list")
-                        }
-                    } else {
-                        Section("选择歌单") {
-                            ForEach(playlists) { playlist in
-                                Button {
-                                    Task { await add(to: playlist) }
-                                } label: {
-                                    HStack(spacing: SetuSpacing.md) {
-                                        MusicArtworkView(urlString: playlist.coverUrl)
-                                        VStack(alignment: .leading, spacing: SetuSpacing.xs) {
-                                            Text(playlist.name)
-                                                .font(SetuTypography.headline)
-                                                .foregroundStyle(SetuColor.textPrimary)
-                                                .lineLimit(1)
-                                            Text("\(playlist.songCount ?? 0) 首")
-                                                .font(SetuTypography.caption)
-                                                .foregroundStyle(SetuColor.textSecondary)
-                                        }
-                                        Spacer()
-                                        Image(systemName: "plus.circle.fill")
-                                            .foregroundStyle(SetuColor.brandPink)
-                                    }
-                                    .frame(minHeight: 56)
-                                }
-                                .setuButtonFeedback()
-                            }
-                        }
-                    }
-                }
-            }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .setuBackground()
-            .navigationTitle("收藏到歌单")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") {
-                        dismiss()
-                    }
-                }
-            }
-        }
-        .task { await load() }
-    }
-
-    private func load() async {
-        state = .loading
-        do {
-            state = .loaded(try await environment.musicClient.playlists())
-        } catch {
-            state = .failed(UserFacingErrorMapper.map(error))
-        }
-    }
-
-    private func add(to playlist: UserMusicPlaylist) async {
-        feedback = .info("正在加入 \(playlist.name)")
-        do {
-            try await environment.musicClient.add(
-                AddSongToPlaylistRequest(
-                    songId: track.id,
-                    songName: track.title,
-                    artistName: track.artist,
-                    albumName: track.album,
-                    coverUrl: track.coverURLString,
-                    duration: track.durationMilliseconds
-                ),
-                toPlaylist: playlist.id
-            )
+        PlaylistSelectionSheet(presentation: .playback, requests: [
+            AddSongToPlaylistRequest(songId: track.id, songName: track.title, artistName: track.artist,
+                                     albumName: track.album, coverUrl: track.coverURLString, duration: track.durationMilliseconds)
+        ]) { playlist in
             onFeedback(.success("已加入 \(playlist.name)"))
-            dismiss()
-        } catch {
-            feedback = .error(UserFacingErrorMapper.map(error))
+        } summary: {
+            HStack(spacing: SetuSpacing.md) {
+                MusicArtworkView(urlString: track.coverURLString)
+                VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+                    Text(track.title).font(SetuTypography.headline).foregroundStyle(SetuColor.textPrimary).lineLimit(2)
+                    Text(track.artist).font(SetuTypography.caption).foregroundStyle(SetuColor.textSecondary).lineLimit(1)
+                }
+            }
         }
     }
 }
-
-#if os(iOS)
-private extension UIImage {
-    var setuAverageColor: UIColor? {
-        guard let inputImage = CIImage(image: self) else { return nil }
-        let extent = inputImage.extent
-        let filter = CIFilter(
-            name: "CIAreaAverage",
-            parameters: [
-                kCIInputImageKey: inputImage,
-                kCIInputExtentKey: CIVector(cgRect: extent)
-            ]
-        )
-        guard let outputImage = filter?.outputImage else { return nil }
-        var bitmap = [UInt8](repeating: 0, count: 4)
-        let context = CIContext(options: [.workingColorSpace: kCFNull as Any])
-        context.render(
-            outputImage,
-            toBitmap: &bitmap,
-            rowBytes: 4,
-            bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
-            format: .RGBA8,
-            colorSpace: nil
-        )
-        return UIColor(
-            red: CGFloat(bitmap[0]) / 255,
-            green: CGFloat(bitmap[1]) / 255,
-            blue: CGFloat(bitmap[2]) / 255,
-            alpha: 1
-        )
-    }
-}
-#endif
 
 private extension View {
     @ViewBuilder

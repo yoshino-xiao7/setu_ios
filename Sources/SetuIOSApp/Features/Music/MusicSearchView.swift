@@ -7,47 +7,45 @@ import UIKit
 
 
 struct MusicSearchView: View {
+    @Environment(MusicStore.self) private var store
     @Bindable var environment: AppEnvironment
     @Bindable var player: MusicPlaybackController
     let initialQuery: String?
 
-    @State private var query = ""
-    @State private var state: LoadState<MusicSearchResultState> = .idle
+    @State private var routeID = UUID()
     @State private var selectedSong: MusicSong?
     @State private var mvSong: MusicSong?
     @State private var feedback: SetuFeedback?
-    @State private var searchKeyword = ""
-    @State private var isLoadingMore = false
-    @State private var loadMoreError: UserFacingError?
-    @State private var searchRevision = 0
-    @State private var searchHistory: [String] = MusicSearchHistoryStore.load()
-    @State private var didRunInitialSearch = false
-    @State private var selectedSegment: MusicSearchSegment = .songs
     @State private var fileSharePayload: SystemFileSharePayload?
 
-    private let searchHistoryLimit = 10
-    private let pageSize = 10
+
+    // Presentation-only viewport state; all query/results/paging live in MusicStore.
+    @State private var scrolledKeyword: String?
+    @State private var visibleNearEndIDs: Set<Int> = []
+    @State private var viewport = CGRect.zero
+    private var session: MusicSearchSession { store.searchSession }
 
     var body: some View {
+        @Bindable var session = session
         List {
             Section {
                 SetuCard {
                     VStack(alignment: .leading, spacing: SetuSpacing.md) {
                         SetuSectionHeader(title: "搜索")
-                        TextField("歌曲、歌手或专辑", text: $query)
+                        TextField("歌曲、歌手或专辑", text: $session.query)
                             .modifier(MusicSearchInputModifier())
                             .textFieldStyle(.roundedBorder)
                             .onSubmit {
-                                Task { await search() }
+                                Task { await session.submit() }
                             }
 
                         SetuPrimaryButton {
-                            Task { await search() }
+                            Task { await session.submit() }
                         } label: {
                             Label("搜索音乐", systemImage: "magnifyingglass")
                         }
-                        .opacity(query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.55 : 1)
-                        .disabled(query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .opacity(session.normalizedQuery.isEmpty ? 0.55 : 1)
+                        .disabled(session.normalizedQuery.isEmpty)
                     }
                 }
                 .setuListRow()
@@ -63,6 +61,11 @@ struct MusicSearchView: View {
             historySection
             resultSection
         }
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { viewport = $0 }
+        .simultaneousGesture(DragGesture(minimumDistance: 8).onChanged { _ in
+            scrolledKeyword = session.resultKeyword
+            requestVisiblePage()
+        })
         .listStyle(.plain)
         .setuBackground()
         .setuFeedbackPresentation($feedback)
@@ -87,29 +90,32 @@ struct MusicSearchView: View {
                 }
             }
         }
-        .task {
-            guard !didRunInitialSearch else { return }
-            didRunInitialSearch = true
-            if let initialQuery, !initialQuery.isEmpty {
-                query = initialQuery
-                await search()
-            }
+        .task { await session.activate(initialQuery: initialQuery, routeID: routeID) }
+    }
+
+    private func requestVisiblePage() {
+        guard scrolledKeyword == session.resultKeyword, session.selectedSegment == .songs,
+              let id = session.pager.items.suffix(3).first(where: { visibleNearEndIDs.contains($0.id) })?.id else { return }
+        let keyword = session.resultKeyword
+        Task {
+            guard session.resultKeyword == keyword else { return }
+            await session.loadMore(near: id)
         }
     }
 
     @ViewBuilder
     private var historySection: some View {
-        if !searchHistory.isEmpty {
+        if !session.hasResults && !session.history.isEmpty {
             Section {
                 SetuCard {
                     VStack(alignment: .leading, spacing: SetuSpacing.md) {
                         SetuSectionHeader(title: "搜索历史")
                         VStack(spacing: 0) {
-                            ForEach(Array(searchHistory.enumerated()), id: \.element) { index, keyword in
+                            ForEach(Array(session.history.enumerated()), id: \.element) { index, keyword in
                                 HStack(spacing: SetuSpacing.md) {
                                     Button {
-                                        query = keyword
-                                        Task { await search() }
+                                        session.query = keyword
+                                        Task { await session.submit() }
                                     } label: {
                                         Label(keyword, systemImage: "clock.arrow.circlepath")
                                             .font(SetuTypography.body)
@@ -125,23 +131,23 @@ struct MusicSearchView: View {
                                         accessibilityLabel: "删除搜索记录",
                                         tint: SetuColor.danger
                                     ) {
-                                        removeSearchHistory(keyword)
+                                        session.removeHistory(keyword)
                                     }
 
-                                    if index < searchHistory.count - 1 {
+                                    if index < session.history.count - 1 {
                                         EmptyView()
                                     }
                                 }
                                 .frame(minHeight: 44)
 
-                                if index < searchHistory.count - 1 {
+                                if index < session.history.count - 1 {
                                     Divider().overlay(SetuColor.separator)
                                 }
                             }
                         }
 
                         Button(role: .destructive) {
-                            clearSearchHistory()
+                            session.clearHistory()
                         } label: {
                             Label("清空搜索历史", systemImage: "trash")
                                 .font(.footnote.weight(.semibold))
@@ -158,155 +164,112 @@ struct MusicSearchView: View {
 
     @ViewBuilder
     private var resultSection: some View {
-        switch state {
-        case .idle:
-            MusicStateSection(title: "搜索结果", stateTitle: "搜索音乐", message: "输入歌曲、歌手或专辑开始搜索。", systemImage: "magnifyingglass")
-        case .loading:
-            MusicStateSection(title: "搜索结果", stateTitle: "正在搜索", systemImage: "magnifyingglass", isLoading: true)
-        case .failed(let message):
-            MusicStateSection(title: "搜索结果", stateTitle: "搜索失败", message: message, systemImage: "exclamationmark.triangle")
-        case .loaded(let result):
-            if result.songs.isEmpty {
-                MusicStateSection(title: "搜索结果", stateTitle: "没有找到音乐", systemImage: "magnifyingglass")
-            } else {
-                Section {
-                    SetuCard {
-                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                            SetuSectionHeader(title: "搜索结果", subtitle: "\(result.songs.count)/\(result.total)")
-                            Picker("搜索分类", selection: $selectedSegment) {
-                                ForEach(MusicSearchSegment.allCases) { segment in
-                                    Text(segment.title).tag(segment)
-                                }
-                            }
-                            .pickerStyle(.segmented)
-                            .accessibilityLabel("搜索分类")
-
-                            switch selectedSegment {
-                            case .songs:
-                                MusicSongList(songs: result.songs) { song in
-                                    Task {
-                                        await play(
-                                            song,
-                                            queueTracks: result.songs.map { MusicPlaybackTrack(song: $0) }
-                                        )
-                                    }
-                                } onPlayMv: { song in
-                                    mvSong = song
-                                } onAddToPlaylist: { song in
-                                    selectedSong = song
-                                } onDownload: { song in
-                                    Task { await download(song) }
-                                }
-                            case .artists:
-                                MusicSearchAggregateList(
-                                    items: result.artistItems,
-                                    emptyTitle: "当前结果暂无歌手信息",
-                                    systemImage: "music.mic"
-                                ) { item in
-                                    query = item.title
-                                    Task { await search() }
-                                }
-                            case .albums:
-                                MusicSearchAggregateList(
-                                    items: result.albumItems,
-                                    emptyTitle: "当前结果暂无专辑信息",
-                                    systemImage: "rectangle.stack"
-                                ) { item in
-                                    query = item.title
-                                    Task { await search() }
-                                }
-                            }
-
-                            if result.hasMore {
-                                Color.clear
-                                    .frame(height: 1)
-                                    .onAppear {
-                                        Task { await loadMore() }
-                                    }
-                            }
-                            SetuLoadMoreFooter(state: searchLoadMoreState(for: result)) {
-                                Task { await loadMore() }
-                            }
+        if session.hasResults {
+            Section {
+                SetuCard {
+                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                        SetuSectionHeader(title: "搜索结果", subtitle: "\(session.pager.items.count)/\(session.pager.total)")
+                        Picker("搜索分类", selection: Binding(get: { session.selectedSegment }, set: { session.selectedSegment = $0 })) {
+                            ForEach(MusicSearchSegment.allCases) { segment in Text(segment.title).tag(segment) }
+                        }
+                        .pickerStyle(.segmented)
+                        .accessibilityLabel("搜索分类")
+                        if session.isSearching { ProgressView("正在搜索") }
+                        if let error = session.pager.initialError {
+                            Text(error.message).foregroundStyle(SetuColor.danger)
+                            SetuErrorRecoveryButton(error: error) { Task { await session.submit() } }
                         }
                     }
-                    .setuListRow()
+                }
+                .setuListRow()
+            }
+            // Each ForEach element is a real List row. There is no wrapping VStack/card row.
+            Section {
+                switch session.selectedSegment {
+                case .songs:
+                    ForEach(session.pager.items) { row in
+                        MusicSongRow(model: row, onPlay: {
+                            Task { await play(row.song, queueTracks: session.pager.items.map { MusicPlaybackTrack(song: $0.song) }) }
+                        }, onPlayMv: { mvSong = row.song }, onAddToPlaylist: { selectedSong = row.song }, onDownload: {
+                            Task { await download(row.song) }
+                        })
+                        .background {
+                            if session.pager.items.suffix(3).contains(where: { $0.id == row.id }) {
+                                Color.clear
+                                    .onGeometryChange(for: Bool.self) { proxy in
+                                        proxy.frame(in: .global).intersects(viewport)
+                                    } action: { visible in
+                                        if visible { visibleNearEndIDs.insert(row.id) }
+                                        else { visibleNearEndIDs.remove(row.id) }
+                                        requestVisiblePage()
+                                    }
+                                    .onDisappear { visibleNearEndIDs.remove(row.id) }
+                            }
+                        }
+                        .accessibilityIdentifier("music.search.song.\(row.id)")
+                        .listRowBackground(SetuColor.surface)
+                    }
+                case .artists:
+                    aggregateRows(session.artistItems, systemImage: "music.mic", emptyTitle: "当前结果暂无歌手信息")
+                case .albums:
+                    aggregateRows(session.albumItems, systemImage: "rectangle.stack", emptyTitle: "当前结果暂无专辑信息")
                 }
             }
-        }
-    }
-
-    private func search() async {
-        let keywords = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !keywords.isEmpty else { return }
-        saveSearchHistory(keywords)
-        searchKeyword = keywords
-        searchRevision += 1
-        let revision = searchRevision
-        isLoadingMore = false
-        loadMoreError = nil
-        state = .loading
-        feedback = nil
-        do {
-            let result = try await environment.musicClient.search(keywords: keywords, limit: pageSize, offset: 0)
-            guard revision == searchRevision else { return }
-            state = .loaded(MusicSearchResultState(result: result))
-        } catch {
-            guard revision == searchRevision else { return }
-            state = .failed(UserFacingErrorMapper.map(error))
-        }
-    }
-
-    private func loadMore() async {
-        guard case .loaded(let current) = state,
-              current.hasMore,
-              !isLoadingMore else { return }
-        let revision = searchRevision
-        let requestedOffset = current.songs.count
-        isLoadingMore = true
-        loadMoreError = nil
-        defer {
-            if revision == searchRevision {
-                isLoadingMore = false
+            Section {
+                if session.canLoadMore, session.pager.phase == .idle {
+                    Button("加载更多歌曲") { Task { await session.loadMore() } }
+                        .frame(minHeight: 44)
+                        .setuListRow()
+                }
+                SetuLoadMoreFooter(state: loadMoreState) { Task { await session.loadMore() } }
+                    .setuListRow()
             }
-        }
-        do {
-            let result = try await environment.musicClient.search(
-                keywords: searchKeyword,
-                limit: pageSize,
-                offset: requestedOffset
-            )
-            guard revision == searchRevision,
-                  case .loaded(let latest) = state,
-                  latest.songs.count == requestedOffset else { return }
-            state = .loaded(latest.appending(result))
-        } catch {
-            guard revision == searchRevision else { return }
-            loadMoreError = UserFacingErrorMapper.map(error)
+        } else if session.showsSkeleton {
+            MusicStateSection(title: "搜索结果", stateTitle: "正在搜索", systemImage: "magnifyingglass", isLoading: true)
+        } else if let error = session.pager.initialError {
+            MusicStateSection(title: "搜索结果", stateTitle: "搜索失败", message: error, systemImage: "exclamationmark.triangle")
+        } else if session.pager.hasLoadedFirstPage {
+            MusicStateSection(title: "搜索结果", stateTitle: "没有找到音乐", systemImage: "magnifyingglass")
+        } else {
+            MusicStateSection(title: "搜索结果", stateTitle: "搜索音乐", message: "输入歌曲、歌手或专辑开始搜索。", systemImage: "magnifyingglass")
         }
     }
 
-    private func searchLoadMoreState(for result: MusicSearchResultState) -> SetuLoadMoreFooterState {
-        if isLoadingMore { return .loading }
-        if let loadMoreError { return .failed(loadMoreError) }
-        if !result.hasMore { return .complete("已加载全部 \(result.total) 首歌曲") }
+    @ViewBuilder
+    private func aggregateRows(_ items: [MusicSearchAggregateItem], systemImage: String, emptyTitle: String) -> some View {
+        if items.isEmpty { SetuEmptyState(title: emptyTitle, systemImage: systemImage).setuListRow() }
+        ForEach(items) { item in
+            Button {
+                session.query = item.title
+                Task { await session.submit() }
+            } label: {
+                HStack(spacing: SetuSpacing.md) {
+                    Image(systemName: systemImage).foregroundStyle(SetuColor.brandPink).frame(width: 44, height: 44)
+                    VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+                        Text(item.title).font(SetuTypography.headline).foregroundStyle(SetuColor.textPrimary)
+                        Text("\(item.count) 首相关歌曲").font(SetuTypography.caption).foregroundStyle(SetuColor.textSecondary)
+                    }
+                    Spacer()
+                    Image(systemName: "magnifyingglass").foregroundStyle(SetuColor.textTertiary)
+                }
+                .frame(minHeight: 56)
+            }
+            .setuButtonFeedback()
+            .listRowBackground(SetuColor.surface)
+        }
+    }
+
+    private var loadMoreState: SetuLoadMoreFooterState {
+        if session.isSearching || session.pager.phase == .loadingMore { return .loading }
+        if let error = session.pager.loadMoreError { return .failed(error) }
+        if !session.pager.hasMore { return .complete("已加载全部 \(session.pager.total) 首歌曲") }
         return .idle
     }
 
     private func play(_ song: MusicSong, queueTracks: [MusicPlaybackTrack]) async {
         feedback = .info("正在准备播放")
         let track = MusicPlaybackTrack(song: song)
-        guard let resolution = await player.resolveTrackURL?(track) else {
-            feedback = .error("播放器尚未准备好")
-            return
-        }
-        switch resolution {
-        case .success(let url, let notice):
-            player.play(url: url, track: track, queueName: "搜索结果", queueTracks: queueTracks, notice: notice)
-            try? await environment.musicClient.addHistory(song: song)
-            feedback = notice.map(SetuFeedback.warning) ?? .success("已开始播放")
-        case .unavailable(let reason):
-            feedback = .error(reason)
-        }
+        _ = await player.play(track: track, in: queueTracks, queueName: "搜索结果")
     }
 
     private func download(_ song: MusicSong) async {
@@ -332,23 +295,6 @@ struct MusicSearchView: View {
         }
     }
 
-    private func saveSearchHistory(_ keyword: String) {
-        let normalized = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalized.isEmpty else { return }
-        let nextHistory = [normalized] + searchHistory.filter { $0 != normalized }
-        searchHistory = Array(nextHistory.prefix(searchHistoryLimit))
-        MusicSearchHistoryStore.save(searchHistory)
-    }
-
-    private func removeSearchHistory(_ keyword: String) {
-        searchHistory.removeAll { $0 == keyword }
-        MusicSearchHistoryStore.save(searchHistory)
-    }
-
-    private func clearSearchHistory() {
-        searchHistory = []
-        MusicSearchHistoryStore.clear()
-    }
 }
 
 struct MusicRecentHistoryCard: View {
@@ -455,154 +401,10 @@ struct MusicPlaylistCompactRow: View {
     }
 }
 
-private enum MusicSearchHistoryStore {
-    private static let key = "icu.yukiryou.setu.musicSearchHistory"
-
-    static func load() -> [String] {
-        UserDefaults.standard.stringArray(forKey: key) ?? []
-    }
-
-    static func save(_ history: [String]) {
-        UserDefaults.standard.set(history, forKey: key)
-    }
-
-    static func clear() {
-        UserDefaults.standard.removeObject(forKey: key)
-    }
-}
-
-private struct MusicSearchResultState: Sendable {
-    let songs: [MusicSong]
-    let total: Int
-
-    var hasMore: Bool {
-        songs.count < total
-    }
-
-    var artistItems: [MusicSearchAggregateItem] {
-        aggregate(
-            songs.flatMap { song in
-                song.artistNames
-                    .split(separator: "/")
-                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                    .filter { !$0.isEmpty }
-            }
-        )
-    }
-
-    var albumItems: [MusicSearchAggregateItem] {
-        aggregate(songs.map(\.albumName).filter { !$0.isEmpty && $0 != "未知专辑" })
-    }
-
-    init(result: MusicSearchResult) {
-        self.songs = result.result.songs
-        self.total = result.result.songCount
-    }
-
-    private init(songs: [MusicSong], total: Int) {
-        self.songs = songs
-        self.total = total
-    }
-
-    func appending(_ result: MusicSearchResult) -> MusicSearchResultState {
-        MusicSearchResultState(
-            songs: songs + result.result.songs,
-            total: result.result.songCount
-        )
-    }
-
-    private func aggregate(_ values: [String]) -> [MusicSearchAggregateItem] {
-        var counts: [String: Int] = [:]
-        for value in values {
-            counts[value, default: 0] += 1
-        }
-        return counts
-            .map { MusicSearchAggregateItem(title: $0.key, count: $0.value) }
-            .sorted {
-                if $0.count == $1.count {
-                    return $0.title.localizedStandardCompare($1.title) == .orderedAscending
-                }
-                return $0.count > $1.count
-            }
-    }
-}
-
-private enum MusicSearchSegment: String, CaseIterable, Identifiable {
-    case songs
-    case artists
-    case albums
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .songs: "歌曲"
-        case .artists: "歌手"
-        case .albums: "专辑"
-        }
-    }
-}
-
-private struct MusicSearchAggregateItem: Identifiable, Sendable {
-    let title: String
-    let count: Int
-
-    var id: String { title }
-}
-
-private struct MusicSearchAggregateList: View {
-    let items: [MusicSearchAggregateItem]
-    let emptyTitle: String
-    let systemImage: String
-    let onSelect: (MusicSearchAggregateItem) -> Void
-
-    var body: some View {
-        if items.isEmpty {
-            SetuEmptyState(title: emptyTitle, systemImage: systemImage)
-        } else {
-            VStack(spacing: 0) {
-                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                    Button {
-                        onSelect(item)
-                    } label: {
-                        HStack(spacing: SetuSpacing.md) {
-                            Image(systemName: systemImage)
-                                .font(.title3)
-                                .foregroundStyle(SetuColor.brandPink)
-                                .frame(width: 44, height: 44)
-                                .background(SetuColor.brandSoft.opacity(0.16), in: Circle())
-                            VStack(alignment: .leading, spacing: SetuSpacing.xs) {
-                                Text(item.title)
-                                    .font(SetuTypography.headline)
-                                    .foregroundStyle(SetuColor.textPrimary)
-                                    .lineLimit(1)
-                                Text("\(item.count) 首相关歌曲")
-                                    .font(SetuTypography.caption)
-                                    .foregroundStyle(SetuColor.textSecondary)
-                            }
-                            Spacer()
-                            Image(systemName: "magnifyingglass")
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(SetuColor.textTertiary)
-                        }
-                        .frame(minHeight: 56)
-                        .contentShape(Rectangle())
-                    }
-                    .setuButtonFeedback()
-
-                    if index < items.count - 1 {
-                        Divider().overlay(SetuColor.separator)
-                    }
-                }
-            }
-        }
-    }
-}
-
 private struct MusicSearchInputModifier: ViewModifier {
     func body(content: Content) -> some View {
         #if os(iOS)
-        content.textInputAutocapitalization(.never)
+        content.textInputAutocapitalization(.never).submitLabel(.search)
         #else
         content
         #endif

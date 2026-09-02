@@ -33,7 +33,12 @@ public struct MusicClient: Sendable {
     }
 
     public func url(songID: Int, level: String = "standard") async throws -> MusicUrlResponse {
-        try await apiClient.get("/user/music/url?id=\(songID)&level=\(level)")
+        try await url(songIDs: [songID], level: level)
+    }
+
+    public func url(songIDs: [Int], level: String = "standard") async throws -> MusicUrlResponse {
+        let ids = songIDs.map(String.init).joined(separator: ",")
+        return try await apiClient.get("/user/music/url?id=\(ids)&level=\(level)")
     }
 
     public func lyric(songID: Int) async throws -> MusicLyricResponse {
@@ -66,8 +71,8 @@ public struct MusicClient: Sendable {
         )
     }
 
-    public func updatePlaylist(id: Int, name: String, description: String? = nil, coverUrl: String? = nil, isPublic: Int = 0) async throws -> UserMusicPlaylist {
-        try await apiClient.put(
+    public func updatePlaylist(id: Int, name: String, description: String? = nil, coverUrl: String? = nil, isPublic: Int = 0) async throws {
+        let _: String = try await apiClient.put(
             "/user/playlists/\(id)",
             body: CreateMusicPlaylistRequest(name: name, description: description, coverUrl: coverUrl, isPublic: isPublic)
         )

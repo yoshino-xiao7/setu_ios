@@ -12,10 +12,13 @@ extension RootAppView {
             MusicSearchView(environment: environment, player: musicPlayer, initialQuery: initialQuery)
         case .musicHistory:
             MusicHistoryView(environment: environment, player: musicPlayer)
+                .environment(musicStore)
         case .playlists:
             MusicPlaylistsView(environment: environment, player: musicPlayer)
+                .environment(musicStore)
         case .playlistDetail(let id):
             MusicPlaylistDetailView(environment: environment, player: musicPlayer, playlistID: id)
+                .environment(musicStore)
         default:
             EmptyView()
         }

@@ -20,6 +20,10 @@ struct MusicMvSheet: View {
                 urlSection
                 detailSection
             }
+            .accessibilityIdentifier("music.mv")
+            #if DEBUG
+            .accessibilityValue("details=\(MusicPerformanceProbe.shared.mvDetailCount)")
+            #endif
             .listStyle(.plain)
             .setuBackground()
             .navigationTitle("MV")
@@ -84,7 +88,7 @@ struct MusicMvSheet: View {
                 SetuCard {
                     VStack(alignment: .leading, spacing: SetuSpacing.md) {
                         SetuSectionHeader(title: "播放 MV")
-                        MvPlaybackView(environment: environment, mvID: mvID) {
+                        MvPlaybackView(environment: environment, mvID: mvID, suppliedResolutions: detailResolutions) {
                             player.pause()
                         }
                     }
@@ -94,6 +98,11 @@ struct MusicMvSheet: View {
         } else {
             MusicStateSection(title: "播放 MV", stateTitle: "暂无 MV", message: "该歌曲没有可播放的 MV", systemImage: "play.rectangle")
         }
+    }
+
+    private var detailResolutions: [MusicMvQuality] {
+        if case .loaded(let detail) = detailState { return detail.brs ?? [] }
+        return []
     }
 
     private func load() async {
@@ -108,8 +117,10 @@ struct MusicMvSheet: View {
         detailState = .loading
         do {
             let response = try await environment.musicClient.mvDetail(id: mvID)
+            guard !Task.isCancelled else { return }
             detailState = .loaded(response.data)
         } catch {
+            guard !Task.isCancelled else { return }
             detailState = .failed(UserFacingErrorMapper.map(error))
         }
     }
@@ -135,13 +146,3 @@ private struct MusicMvCoverView: View {
         .frame(maxWidth: .infinity)
     }
 }
-
-#if DEBUG
-#Preview("音乐首页 · 390 · 浅色") {
-    SetuFeaturePreviewHost(playerState: .listening) { environment, player in
-        MusicHomeView(environment: environment, player: player)
-    }
-    .frame(width: 390, height: 844)
-    .preferredColorScheme(.light)
-}
-#endif

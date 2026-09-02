@@ -10,12 +10,13 @@ struct MusicHomeView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var environment: AppEnvironment
     @Bindable var player: MusicPlaybackController
-    @State private var hotState: LoadState<[MusicHotSearchItem]> = .idle
-    @State private var recommendedPlaylistState: LoadState<[MusicRecommendedPlaylist]> = .idle
-    @State private var newSongsState: LoadState<[MusicSong]> = .idle
-    @State private var dailySongsState: LoadState<[MusicSong]> = .idle
-    @State private var recentHistoryState: LoadState<[MusicHistoryRecord]> = .idle
-    @State private var myPlaylistState: LoadState<[UserMusicPlaylist]> = .idle
+    @Environment(MusicStore.self) private var store
+    private var hotState: LoadState<[MusicHotSearchItem]> { store.hotSearch.state }
+    private var recommendedPlaylistState: LoadState<[MusicRecommendedPlaylist]> { store.recommendedPlaylists.state }
+    private var newSongsState: LoadState<[MusicSong]> { store.newSongs.state }
+    private var dailySongsState: LoadState<[MusicSong]> { store.dailySongs.state }
+    private var recentHistoryState: LoadState<[MusicHistoryRecord]> { store.recentHistory.state }
+    private var myPlaylistState: LoadState<[UserMusicPlaylist]> { store.playlists.state }
     @State private var selectedSong: MusicSong?
     @State private var mvSong: MusicSong?
     @State private var selectedRecommendedPlaylist: MusicRecommendedPlaylist?
@@ -99,7 +100,7 @@ struct MusicHomeView: View {
             }
         }
         .task { await loadLandingContent() }
-        .refreshable { await loadLandingContent() }
+        .refreshable { await loadLandingContent(force: true) }
     }
 
     private var toolbarLogo: some View {
@@ -123,7 +124,7 @@ struct MusicHomeView: View {
                 message: message,
                 systemImage: "exclamationmark.triangle",
                 actionTitle: "重试",
-                action: { Task { await loadHotSearch() } }
+                action: { Task { await loadLandingContent() } }
             )
         case .loaded(let hots):
             if !hots.isEmpty {
@@ -175,7 +176,7 @@ struct MusicHomeView: View {
                 message: message,
                 systemImage: "exclamationmark.triangle",
                 actionTitle: "重试",
-                action: { Task { await loadRecentHistory() } }
+                action: { Task { await loadLandingContent() } }
             )
         case .loaded(let records):
             let visibleRecords = Array(records.prefix(8))
@@ -244,7 +245,7 @@ struct MusicHomeView: View {
                 message: message,
                 systemImage: "exclamationmark.triangle",
                 actionTitle: "重试",
-                action: { Task { await loadMyPlaylists() } }
+                action: { Task { await loadLandingContent() } }
             )
         case .loaded(let playlists):
             let visiblePlaylists = Array(playlists.prefix(6))
@@ -305,7 +306,7 @@ struct MusicHomeView: View {
             systemImage: "sparkles",
             queueName: "每日推荐",
             state: dailySongsState,
-            retry: { Task { await loadRecommendations() } }
+            retry: { Task { await loadLandingContent() } }
         )
     }
 
@@ -318,7 +319,7 @@ struct MusicHomeView: View {
             systemImage: "music.note",
             queueName: "推荐新歌",
             state: newSongsState,
-            retry: { Task { await loadRecommendations() } }
+            retry: { Task { await loadLandingContent() } }
         )
     }
 
@@ -388,7 +389,7 @@ struct MusicHomeView: View {
                 message: message,
                 systemImage: "exclamationmark.triangle",
                 actionTitle: "重试",
-                action: { Task { await loadRecommendations() } }
+                action: { Task { await loadLandingContent() } }
             )
         case .loaded(let playlists):
             let visiblePlaylists = Array(playlists.prefix(6))
@@ -428,84 +429,14 @@ struct MusicHomeView: View {
         return [GridItem(.adaptive(minimum: 96), spacing: SetuSpacing.sm)]
     }
 
-    private func loadLandingContent() async {
-        async let hot: Void = loadHotSearch()
-        async let recommended: Void = loadRecommendations()
-        async let recent: Void = loadRecentHistory()
-        async let playlists: Void = loadMyPlaylists()
-        _ = await (hot, recommended, recent, playlists)
-    }
-
-    private func loadHotSearch() async {
-        hotState = .loading
-        do {
-            hotState = .loaded(try await environment.musicClient.hotSearch().result.hots)
-        } catch {
-            hotState = .failed(UserFacingErrorMapper.map(error))
-        }
-    }
-
-    private func loadRecommendations() async {
-        recommendedPlaylistState = .loading
-        newSongsState = .loading
-        dailySongsState = .loading
-
-        async let playlists = environment.musicClient.personalizedPlaylists(limit: 6)
-        async let newSongs = environment.musicClient.personalizedNewSongs()
-        async let dailySongs = environment.musicClient.recommendSongs()
-
-        do {
-            recommendedPlaylistState = .loaded(try await playlists.result)
-        } catch {
-            recommendedPlaylistState = .failed(UserFacingErrorMapper.map(error))
-        }
-
-        do {
-            newSongsState = .loaded(try await newSongs.result)
-        } catch {
-            newSongsState = .failed(UserFacingErrorMapper.map(error))
-        }
-
-        do {
-            dailySongsState = .loaded(try await dailySongs.data.dailySongs)
-        } catch {
-            dailySongsState = .failed(UserFacingErrorMapper.map(error))
-        }
-    }
-
-    private func loadRecentHistory() async {
-        recentHistoryState = .loading
-        do {
-            recentHistoryState = .loaded(try await environment.musicClient.history(limit: 8, offset: 0))
-        } catch {
-            recentHistoryState = .failed(UserFacingErrorMapper.map(error))
-        }
-    }
-
-    private func loadMyPlaylists() async {
-        myPlaylistState = .loading
-        do {
-            myPlaylistState = .loaded(try await environment.musicClient.playlists())
-        } catch {
-            myPlaylistState = .failed(UserFacingErrorMapper.map(error))
-        }
+    private func loadLandingContent(force: Bool = false) async {
+        await store.loadHome(force: force)
     }
 
     private func play(_ song: MusicSong, queueName: String? = nil, queueTracks: [MusicPlaybackTrack] = []) async {
         player.showFeedback(.info("正在准备播放"))
         let track = MusicPlaybackTrack(song: song)
-        guard let resolution = await player.resolveTrackURL?(track) else {
-            player.showFeedback(.error("播放器尚未准备好"))
-            return
-        }
-        switch resolution {
-        case .success(let url, let notice):
-            player.play(url: url, track: track, queueName: queueName, queueTracks: queueTracks, notice: notice)
-            try? await environment.musicClient.addHistory(song: song)
-            player.showFeedback(notice.map(SetuFeedback.warning) ?? .success("已开始播放"))
-        case .unavailable(let reason):
-            player.showFeedback(.error(reason))
-        }
+        _ = await player.play(track: track, in: queueTracks, queueName: queueName)
     }
 
     private func download(_ song: MusicSong) async {
@@ -689,7 +620,8 @@ private struct RecommendedPlaylistSheet: View {
     @Bindable var player: MusicPlaybackController
     let playlist: MusicRecommendedPlaylist
 
-    @State private var state: LoadState<[MusicSong]> = .idle
+    @Environment(MusicStore.self) private var store
+    private var state: LoadState<[MusicSong]> { store.recommendedTracks[playlist.id]?.state ?? .idle }
     @State private var selectedSong: MusicSong?
     @State private var mvSong: MusicSong?
     @State private var feedback: SetuFeedback?
@@ -764,33 +696,27 @@ private struct RecommendedPlaylistSheet: View {
                 MusicMvSheet(environment: environment, player: player, song: song)
             }
             .task { await load() }
-            .refreshable { await load() }
+            .refreshable { await load(force: true) }
         }
     }
 
-    private func load() async {
-        state = .loading
-        do {
-            state = .loaded(try await environment.musicClient.playlistTracks(id: playlist.id).songs)
-        } catch {
-            state = .failed(UserFacingErrorMapper.map(error))
-        }
+    private func load(force: Bool = false) async {
+        await store.loadTracks(playlist.id, force: force)
     }
 
     private func play(_ song: MusicSong, queueTracks: [MusicPlaybackTrack] = []) async {
         feedback = .info("正在准备播放")
         let track = MusicPlaybackTrack(song: song)
-        guard let resolution = await player.resolveTrackURL?(track) else {
-            feedback = .error("播放器尚未准备好")
-            return
-        }
-        switch resolution {
-        case .success(let url, let notice):
-            player.play(url: url, track: track, queueName: playlist.name, queueTracks: queueTracks, notice: notice)
-            try? await environment.musicClient.addHistory(song: song)
-            feedback = notice.map(SetuFeedback.warning) ?? .success("已开始播放《\(playlist.name)》")
-        case .unavailable(let reason):
-            feedback = .error(reason)
-        }
+        _ = await player.play(track: track, in: queueTracks, queueName: playlist.name)
     }
 }
+
+#if DEBUG
+#Preview("音乐首页 · 390 · 浅色") {
+    SetuFeaturePreviewHost(playerState: .listening) { environment, player in
+        MusicHomeView(environment: environment, player: player)
+    }
+    .frame(width: 390, height: 844)
+    .preferredColorScheme(.light)
+}
+#endif

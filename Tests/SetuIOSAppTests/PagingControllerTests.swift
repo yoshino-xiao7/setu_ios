@@ -120,4 +120,30 @@ final class PagingControllerTests: XCTestCase {
         XCTAssertEqual(pager.phase, .idle)
     }
 
+    func testCancellationKeepsRowsAndLeavesIdleWithoutError() async {
+        let pager = makeController()
+        await pager.loadFirstPage { _ in .init(items: [Row(id: 1)], total: 10) }
+        let gate = MusicTestGate()
+        let started = expectation(description: "page requested")
+        let pending = Task { await pager.loadMore { _ in
+            started.fulfill()
+            await gate.wait()
+            return .init(items: [Row(id: 2)], total: 10)
+        } }
+        await fulfillment(of: [started], timeout: 2)
+        pending.cancel()
+        await gate.open(); await pending.value
+        XCTAssertEqual(pager.items.map(\.id), [1])
+        XCTAssertNil(pager.loadMoreError)
+        XCTAssertEqual(pager.phase, .idle)
+    }
+
+    func testOffsetExhaustionOverridesUniqueItemCount() async {
+        let pager = makeController()
+        await pager.loadFirstPage { _ in .init(items: [Row(id: 1)], total: 4) }
+        await pager.loadMore { _ in .init(items: [Row(id: 1), Row(id: 2)], total: 4, hasMore: false) }
+        XCTAssertEqual(pager.items.map(\.id), [1, 2])
+        XCTAssertFalse(pager.hasMore)
+    }
+
 }

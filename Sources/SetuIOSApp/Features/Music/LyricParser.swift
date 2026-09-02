@@ -9,6 +9,9 @@ struct LyricLine: Identifiable, Equatable, Sendable {
 
 enum LyricParser {
     static func parse(_ rawLyric: String, translation rawTranslation: String? = nil) -> [LyricLine] {
+        #if DEBUG
+        MusicPerformanceProbe.shared.lyricParsed()
+        #endif
         let baseLines = parseTimedLines(rawLyric)
         guard !baseLines.isEmpty else {
             return fallbackLines(rawLyric, translation: rawTranslation)
@@ -31,11 +34,15 @@ enum LyricParser {
 
     static func activeIndex(in lines: [LyricLine], at currentTime: TimeInterval) -> Int? {
         guard !lines.isEmpty else { return nil }
-        var candidate: Int?
-        for (index, line) in lines.enumerated() where currentTime >= line.time {
-            candidate = index
+        // Upper bound preserves the last line at duplicate timestamps, including backwards seeks.
+        var lower = 0
+        var upper = lines.count
+        while lower < upper {
+            let middle = lower + (upper - lower) / 2
+            if lines[middle].time <= currentTime { lower = middle + 1 }
+            else { upper = middle }
         }
-        return candidate ?? 0
+        return max(0, lower - 1)
     }
 
     private static func parseTimedLines(_ raw: String) -> [LyricLine] {

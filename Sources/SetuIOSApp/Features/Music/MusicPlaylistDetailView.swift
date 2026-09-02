@@ -8,9 +8,10 @@ struct MusicPlaylistDetailView: View {
     @Bindable var environment: AppEnvironment
     @Bindable var player: MusicPlaybackController
     let playlistID: Int
-    @State private var state: LoadState<UserMusicPlaylistDetail> = .idle
+    @Environment(MusicStore.self) private var store
+    private var state: LoadState<UserMusicPlaylistDetail> { store.playlistDetails[playlistID]?.state ?? .idle }
     @State private var feedback: SetuFeedback?
-    @State private var selectedMode = "sequence"
+    private var selectedMode: String { store.playlistDetails[playlistID]?.value?.playMode ?? "sequence" }
     @State private var editingPlaylist: UserMusicPlaylistDetail?
     @State private var showingDeleteConfirmation = false
     @State private var songPendingRemoval: PlaylistSong?
@@ -90,9 +91,6 @@ struct MusicPlaylistDetailView: View {
                             SetuSectionHeader(title: "播放模式")
                             adaptivePlaybackModePicker
                             .tint(SetuColor.brandPink)
-                            .onChange(of: selectedMode) {
-                                Task { await setMode(selectedMode) }
-                            }
                         }
                     }
                 }
@@ -129,7 +127,7 @@ struct MusicPlaylistDetailView: View {
                             }
                         }
                         ForEach(songs) { song in
-                            SetuCard {
+                            SetuCard(hasShadow: false) {
                                 PlaylistSongRow(
                                     song: song,
                                     isSelectionMode: isSelectionMode,
@@ -180,7 +178,7 @@ struct MusicPlaylistDetailView: View {
         }
         .sheet(item: $editingPlaylist) { playlist in
             EditMusicPlaylistSheet(environment: environment, playlist: playlist) {
-                Task { await load() }
+                feedback = .success("歌单已更新")
             }
         }
         .sheet(isPresented: $showingBulkAddSheet) {
@@ -219,7 +217,7 @@ struct MusicPlaylistDetailView: View {
             Text("这些歌曲会从当前歌单移除，稍后可从其它入口重新加入。")
         }
         .task { await load() }
-        .refreshable { await load() }
+        .refreshable { await load(force: true) }
         .safeAreaInset(edge: .bottom) {
             if isSelectionMode {
                 playlistBatchActionBar
@@ -271,7 +269,10 @@ struct MusicPlaylistDetailView: View {
     }
 
     private var playbackModePicker: some View {
-        Picker("播放模式", selection: $selectedMode) {
+        Picker("播放模式", selection: Binding(
+            get: { store.playlistDetails[playlistID]?.value?.playMode ?? "sequence" },
+            set: { mode in Task { await setMode(mode) } }
+        )) {
             Text("顺序").tag("sequence")
             Text("随机").tag("random")
             Text("循环").tag("loop")
@@ -322,21 +323,13 @@ struct MusicPlaylistDetailView: View {
         }
     }
 
-    private func load() async {
-        state = .loading
-        feedback = nil
-        do {
-            let playlist = try await environment.musicClient.playlist(id: playlistID)
-            selectedMode = playlist.playMode ?? "sequence"
-            state = .loaded(playlist)
-        } catch {
-            state = .failed(UserFacingErrorMapper.map(error))
-        }
+    private func load(force: Bool = false) async {
+        await store.loadDetail(playlistID, force: force)
     }
 
     private func setMode(_ mode: String) async {
         do {
-            try await environment.musicClient.setPlayMode(playlistID: playlistID, playMode: mode)
+            try await store.setPlayMode(playlistID: playlistID, playMode: mode)
             feedback = .success("播放模式已更新")
         } catch {
             feedback = .error(UserFacingErrorMapper.map(error))
@@ -345,8 +338,7 @@ struct MusicPlaylistDetailView: View {
 
     private func remove(_ song: PlaylistSong) async {
         do {
-            try await environment.musicClient.removeSong(playlistID: playlistID, songID: song.songId)
-            await load()
+            try await store.removeSong(playlistID: playlistID, song: song)
             feedback = .success("已移除 \(song.songName)")
         } catch {
             feedback = .error(UserFacingErrorMapper.map(error))
@@ -367,9 +359,9 @@ struct MusicPlaylistDetailView: View {
         guard !songs.isEmpty else { return }
         do {
             for song in songs {
-                try await environment.musicClient.removeSong(playlistID: playlistID, songID: song.songId)
+                try await store.removeSong(playlistID: playlistID, song: song)
+                selectedSongIDs.remove(song.songId)
             }
-            await load()
             finishSelectionMode(feedback: .success("已移除 \(songs.count) 首歌曲"))
         } catch {
             feedback = .error(UserFacingErrorMapper.map(error))
@@ -389,7 +381,11 @@ struct MusicPlaylistDetailView: View {
             return
         }
         let firstSong = selectedMode == "random" ? songs.randomElement() ?? songs[0] : songs[0]
-        try? await environment.musicClient.recordPlaylistPlay(id: playlistID)
+        let owner = store.sessionToken
+        Task {
+            guard owner == store.sessionToken else { return }
+            try? await store.recordPlaylistPlay(id: playlistID)
+        }
         await play(
             firstSong,
             queueName: playlist.name,
@@ -404,32 +400,13 @@ struct MusicPlaylistDetailView: View {
     private func play(_ song: PlaylistSong, queueName: String? = nil, queueTracks: [MusicPlaybackTrack] = [], playMode: MusicPlayMode? = nil) async {
         feedback = .info("正在准备播放")
         let track = MusicPlaybackTrack(song: song)
-        guard let resolution = await player.resolveTrackURL?(track) else {
-            feedback = .error("播放器尚未准备好")
-            return
-        }
-        switch resolution {
-        case .success(let url, let notice):
-            player.play(url: url, track: track, queueName: queueName, queueTracks: queueTracks, playMode: playMode, notice: notice)
-            try? await environment.musicClient.addHistory(
-                AddMusicHistoryRequest(
-                    songId: track.id,
-                    songName: track.title,
-                    artistName: track.artist,
-                    albumName: track.album,
-                    coverUrl: track.coverURLString,
-                    duration: track.durationMilliseconds
-                )
-            )
-            feedback = notice.map(SetuFeedback.warning) ?? .success("已开始播放")
-        case .unavailable(let reason):
-            feedback = .error(reason)
-        }
+        _ = await player.play(track: track, in: queueTracks, queueName: queueName, playMode: playMode)
+        feedback = player.feedback
     }
 
     private func deletePlaylist() async {
         do {
-            try await environment.musicClient.deletePlaylist(id: playlistID)
+            try await store.deletePlaylist(id: playlistID)
             dismiss()
         } catch {
             feedback = .error(UserFacingErrorMapper.map(error))
@@ -438,6 +415,7 @@ struct MusicPlaylistDetailView: View {
 }
 
 private struct EditMusicPlaylistSheet: View {
+    @Environment(MusicStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @Bindable var environment: AppEnvironment
     let playlist: UserMusicPlaylistDetail
@@ -511,7 +489,7 @@ private struct EditMusicPlaylistSheet: View {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return }
         do {
-            _ = try await environment.musicClient.updatePlaylist(
+            try await store.updatePlaylist(
                 id: playlist.id,
                 name: trimmedName,
                 description: description.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -527,120 +505,17 @@ private struct EditMusicPlaylistSheet: View {
 }
 
 private struct BulkAddPlaylistSongsSheet: View {
-    @Environment(\.dismiss) private var dismiss
     @Bindable var environment: AppEnvironment
     let sourcePlaylistID: Int
     let songs: [PlaylistSong]
     let onDone: () -> Void
-    @State private var state: LoadState<[UserMusicPlaylist]> = .idle
-    @State private var feedback: SetuFeedback?
 
     var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    SetuCard {
-                        SetuSectionHeader(title: "批量加入歌单", subtitle: "已选 \(songs.count) 首歌曲")
-                    }
-                    .setuListRow()
-                }
-
-                if let feedback {
-                    Section {
-                        SetuFeedbackBanner(feedback: feedback)
-                    }
-                }
-
-                switch state {
-                case .idle, .loading:
-                    Section {
-                        SetuEmptyState(title: "正在加载歌单", systemImage: "music.note.list", isLoading: true)
-                    }
-                case .failed(let error):
-                    Section {
-                        SetuEmptyState(
-                            title: "歌单加载失败",
-                            message: error,
-                            systemImage: "exclamationmark.triangle",
-                            actionTitle: "重试",
-                            action: { Task { await load() } }
-                        )
-                    }
-                case .loaded(let playlists):
-                    let targets = playlists.filter { $0.id != sourcePlaylistID }
-                    if targets.isEmpty {
-                        Section {
-                            SetuEmptyState(
-                                title: "暂无其它歌单",
-                                message: "关闭本页并回到“我的歌单”新建另一个歌单后，再进行批量加入。",
-                                systemImage: "music.note.list"
-                            )
-                        }
-                    } else {
-                        Section("选择目标歌单") {
-                            ForEach(targets) { playlist in
-                                Button {
-                                    Task { await add(to: playlist) }
-                                } label: {
-                                    HStack(spacing: SetuSpacing.md) {
-                                        MusicArtworkView(urlString: playlist.coverUrl)
-                                        VStack(alignment: .leading, spacing: SetuSpacing.xs) {
-                                            Text(playlist.name)
-                                                .font(SetuTypography.headline)
-                                                .foregroundStyle(SetuColor.textPrimary)
-                                                .lineLimit(1)
-                                            Text("\(playlist.songCount ?? 0) 首")
-                                                .font(SetuTypography.caption)
-                                                .foregroundStyle(SetuColor.textSecondary)
-                                        }
-                                        Spacer()
-                                        Image(systemName: "plus.circle.fill")
-                                            .foregroundStyle(SetuColor.brandPink)
-                                    }
-                                    .frame(minHeight: 56)
-                                    .contentShape(Rectangle())
-                                }
-                                .setuButtonFeedback()
-                            }
-                        }
-                    }
-                }
-            }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .setuBackground()
-            .navigationTitle("加入其它歌单")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") {
-                        dismiss()
-                    }
-                }
-            }
-        }
-        .task { await load() }
-    }
-
-    private func load() async {
-        state = .loading
-        do {
-            state = .loaded(try await environment.musicClient.playlists())
-        } catch {
-            state = .failed(UserFacingErrorMapper.map(error))
-        }
-    }
-
-    private func add(to playlist: UserMusicPlaylist) async {
-        guard !songs.isEmpty else { return }
-        feedback = .info("正在加入 \(playlist.name)")
-        do {
-            for song in songs {
-                try await environment.musicClient.add(song: song, toPlaylist: playlist.id)
-            }
+        PlaylistSelectionSheet(presentation: .bulk, requests: songs.map { AddSongToPlaylistRequest(song: $0) },
+                               excludingPlaylistID: sourcePlaylistID) { _ in
             onDone()
-            dismiss()
-        } catch {
-            feedback = .error(UserFacingErrorMapper.map(error))
+        } summary: {
+            SetuSectionHeader(title: "批量加入歌单", subtitle: "已选 \(songs.count) 首歌曲")
         }
     }
 }

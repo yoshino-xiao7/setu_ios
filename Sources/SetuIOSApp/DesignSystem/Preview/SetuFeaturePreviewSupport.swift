@@ -13,6 +13,7 @@ import SwiftUI
 struct SetuFeaturePreviewHost<Content: View>: View {
     private let environment: AppEnvironment
     private let player: MusicPlaybackController
+    @State private var musicStore: MusicStore
     private let router = RouterPath()
     private let navigation = AppNavigationCoordinator()
     private let pushNotifications: SystemPushCoordinator
@@ -38,6 +39,7 @@ struct SetuFeaturePreviewHost<Content: View>: View {
             )
         }
 
+        _musicStore = State(initialValue: MusicStore(client: environment.musicClient, userID: environment.authSession.currentUser?.id))
         self.environment = environment
         self.player = player
         pushNotifications = SystemPushCoordinator(environment: environment)
@@ -51,6 +53,7 @@ struct SetuFeaturePreviewHost<Content: View>: View {
         .environment(router)
         .environment(navigation)
         .environment(pushNotifications)
+        .environment(musicStore)
         .tint(SetuColor.brandPink)
     }
 }
@@ -661,6 +664,35 @@ private enum SetuPreviewAPI {
             """)
         case "/user/music/search/hot":
             return json(musicHotSearch)
+        case "/user/music/search" where ProcessInfo.processInfo.arguments.contains("-ui-testing-music-search-pages"):
+            let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            let keyword = query.first { $0.name == "keywords" }?.value ?? "测试"
+            let offset = Int(query.first { $0.name == "offset" }?.value ?? "0") ?? 0
+            let limit = Int(query.first { $0.name == "limit" }?.value ?? "10") ?? 10
+            let songs: [[String: Any]] = (offset..<min(offset + limit, 100)).map { index in
+                ["id": 8000 + index, "name": "\(keyword) 歌曲 \(index + 1)",
+                 "artists": [["id": 1, "name": "分页歌手"]], "album": ["id": 1, "name": "分页专辑"]]
+            }
+            let data = try! JSONSerialization.data(withJSONObject: ["result": ["songs": songs, "songCount": 100]])
+            return json(String(decoding: data, as: UTF8.self))
+        case "/user/music/search" where ProcessInfo.processInfo.arguments.contains("-ui-testing-music-mv"):
+            return json("{\"result\":{\"songs\":\(musicSongsJSON.replacingOccurrences(of: "\"mv\":0", with: "\"mv\":99")),\"songCount\":3}}")
+        case "/user/music/search":
+            return json("{\"result\":{\"songs\":\(musicSongsJSON),\"songCount\":3}}")
+        case "/user/music/url" where ProcessInfo.processInfo.arguments.contains("-ui-testing-lyrics-playback"):
+            guard let requestURL = request.url, let audioURL = lyricPlaybackURL else {
+                return json(#"{"message":"本地音频夹具不可用"}"#, statusCode: 500)
+            }
+            let query = URLComponents(url: requestURL, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            let ids = (query.first { $0.name == "id" }?.value ?? "").split(separator: ",").compactMap { Int($0) }
+            let level = query.first { $0.name == "level" }?.value ?? "exhigh"
+            let items: [[String: Any]] = ids.map { ["id": $0, "url": audioURL.absoluteString, "level": level, "expi": 600, "playability": "FULL", "fullPlayable": true] }
+            do {
+                let data = try JSONSerialization.data(withJSONObject: ["data": items])
+                return Fixture(statusCode: 200, data: data)
+            } catch {
+                return json(#"{"message":"本地音频夹具编码失败"}"#, statusCode: 500)
+            }
         case "/user/music/url" where ProcessInfo.processInfo.arguments.contains("-ui-testing-quality-unavailable"):
             return json("{\"message\":\"该音质暂不可用\"}", statusCode: 503)
         case "/user/music/personalized":
@@ -671,14 +703,42 @@ private enum SetuPreviewAPI {
             return json("{\"data\":{\"dailySongs\":\(musicSongsJSON)}}")
         case "/user/music/history":
             return json(musicHistory)
+        case "/user/music/history/count":
+            return json("2")
+        case "/user/playlists/7401":
+            return json("""
+            {"id":7401,"name":"我的专注时刻","songCount":1,"playMode":"sequence","songs":[{"id":8101,"songId":7301,"songName":"夏夜微风","artistName":"预览歌手"}]}
+            """)
         case "/user/playlists":
             return json(musicPlaylists)
+        case "/user/music/mv/detail":
+            MusicPerformanceProbe.shared.mvDetailRequested()
+            return json(#"{"data":{"id":99,"name":"预览 MV","brs":[{"br":480},{"br":720}]}}"#)
+        case "/user/music/mv/url":
+            return json(#"{"data":null}"#)
         case "/user/music/lyric":
             return json("{\"lrc\":{\"lyric\":\"[00:00.00] 夏夜微风\\n[00:12.00] 沿着星光慢慢回家\"},\"tlyric\":null}")
         default:
             return json("{\"message\":\"此页面操作未配置离线预览\"}", statusCode: 404)
         }
     }
+
+    /// A real silent PCM file for the opt-in lyrics success-path test. Ordinary preview errors stay unchanged.
+    private static let lyricPlaybackURL: URL? = {
+        var data = Data()
+        func append<T: FixedWidthInteger>(_ value: T) {
+            var little = value.littleEndian
+            withUnsafeBytes(of: &little) { data.append(contentsOf: $0) }
+        }
+        let bytes = 8_000 * 2 * 180
+        data.append(Data("RIFF".utf8)); append(UInt32(36 + bytes)); data.append(Data("WAVEfmt ".utf8))
+        append(UInt32(16)); append(UInt16(1)); append(UInt16(1)); append(UInt32(8_000))
+        append(UInt32(16_000)); append(UInt16(2)); append(UInt16(16))
+        data.append(Data("data".utf8)); append(UInt32(bytes)); data.append(Data(repeating: 0, count: bytes))
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("setu-lyrics-playback.wav")
+        do { try data.write(to: url, options: .atomic); return url }
+        catch { return nil }
+    }()
 
     private static func json(_ value: String, statusCode: Int = 200) -> Fixture {
         Fixture(statusCode: statusCode, data: Data(value.utf8))

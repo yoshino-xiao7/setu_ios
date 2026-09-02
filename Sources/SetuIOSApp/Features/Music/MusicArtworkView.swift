@@ -4,6 +4,7 @@ import SwiftUI
 
 struct MusicArtworkView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.displayScale) private var displayScale
     let urlString: String?
     var width: CGFloat? = 54
     var height: CGFloat = 54
@@ -13,8 +14,7 @@ struct MusicArtworkView: View {
     var onTap: (() -> Void)?
     var allowsTapToRetry = false
 
-    @State private var image: SetuPlatformImage?
-    @State private var loadFailed = false
+    @State private var imageState = SetuRemoteImageState()
     @State private var reloadID = UUID()
 
     var body: some View {
@@ -30,15 +30,21 @@ struct MusicArtworkView: View {
                     .accessibilityLabel("音乐封面")
             }
         }
-        .task(id: reloadID) {
-            await load()
-        }
-        .onChange(of: urlString) { _, _ in
-            image = nil
-            loadFailed = false
-            reloadID = UUID()
+        .task(id: SetuImageLoadID(key: imageKey, retry: reloadID)) {
+            await imageState.load(imageKey, animation: reduceMotion ? nil : .easeInOut(duration: 0.18))
         }
     }
+
+    private var imageKey: SetuImageKey? {
+        let size: SetuImageSize
+        switch artworkSize {
+        case .lockScreen: size = .large
+        case .thumbnail, .custom: size = .fitting(width: width, height: height, scale: displayScale)
+        }
+        return SetuImageKey.music(urlString, size: size)
+    }
+    private var image: SetuPlatformImage? { imageState.displayedImage(for: imageKey) }
+    private var loadFailed: Bool { imageState.key == imageKey && imageState.failed && image == nil }
 
     private var artworkContent: some View {
         ZStack {
@@ -59,7 +65,6 @@ struct MusicArtworkView: View {
 
     private func handleTap() {
         if loadFailed {
-            loadFailed = false
             reloadID = UUID()
         } else {
             onTap?()
@@ -67,7 +72,7 @@ struct MusicArtworkView: View {
     }
 
     private var normalizedURLString: String? {
-        secureURLString(urlString, artworkSize: artworkSize)
+        imageKey?.url.absoluteString
     }
 
     @ViewBuilder
@@ -99,23 +104,4 @@ struct MusicArtworkView: View {
         #endif
     }
 
-    @MainActor
-    private func load() async {
-        guard let normalizedURLString, let url = URL(string: normalizedURLString) else {
-            image = nil
-            loadFailed = false
-            return
-        }
-
-        do {
-            let loaded = try await SetuRemoteImageLoader.shared.image(from: url)
-            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
-                image = loaded
-                loadFailed = false
-            }
-        } catch {
-            image = nil
-            loadFailed = true
-        }
-    }
 }

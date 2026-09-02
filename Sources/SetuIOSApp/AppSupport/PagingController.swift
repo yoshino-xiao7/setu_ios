@@ -20,6 +20,8 @@ final class PagingController<Item: Identifiable> {
     struct PageResult {
         let items: [Item]
         let total: Int
+        // Offset APIs can report exhaustion using raw page size, independently of ID deduplication.
+        var hasMore: Bool? = nil
     }
 
     enum LoadPhase: Equatable {
@@ -53,6 +55,7 @@ final class PagingController<Item: Identifiable> {
         _ fetch: @MainActor (_ page: Int) async throws -> PageResult,
         onError: ((Error) -> String)? = nil
     ) async {
+        guard !Task.isCancelled else { return }
         generation += 1
         let currentGeneration = generation
         if clearExisting {
@@ -67,15 +70,16 @@ final class PagingController<Item: Identifiable> {
         do {
             let result = try await fetch(1)
             guard generation == currentGeneration else { return }
+            try Task.checkCancellation()
             var seen: Set<Item.ID> = []
             items = result.items.filter { seen.insert($0.id).inserted }
             hasLoadedFirstPage = true
-            reachedEnd = result.items.isEmpty
+            reachedEnd = result.items.isEmpty || result.hasMore == false
             total = result.total
             nextPage = 2
         } catch {
             guard generation == currentGeneration else { return }
-            initialError = mappedError(error, message: onError?(error))
+            if !Task.isCancelled, !(error is CancellationError) { initialError = mappedError(error, message: onError?(error)) }
         }
         phase = .idle
     }
@@ -85,7 +89,7 @@ final class PagingController<Item: Identifiable> {
         _ fetch: @MainActor (_ page: Int) async throws -> PageResult,
         onError: ((Error) -> String)? = nil
     ) async {
-        guard hasMore, phase != .loadingMore, phase != .loadingInitial else { return }
+        guard !Task.isCancelled, hasMore, phase != .loadingMore, phase != .loadingInitial else { return }
         let requestedPage = nextPage
         generation += 1
         let currentGeneration = generation
@@ -94,14 +98,15 @@ final class PagingController<Item: Identifiable> {
         do {
             let result = try await fetch(requestedPage)
             guard generation == currentGeneration, requestedPage == nextPage else { return }
+            try Task.checkCancellation()
             var existingIDs = Set(items.map(\.id))
             items.append(contentsOf: result.items.filter { existingIDs.insert($0.id).inserted })
-            reachedEnd = result.items.isEmpty
+            reachedEnd = result.items.isEmpty || result.hasMore == false
             total = result.total
             nextPage += 1
         } catch {
             guard generation == currentGeneration else { return }
-            loadMoreError = mappedError(error, message: onError?(error))
+            if !Task.isCancelled, !(error is CancellationError) { loadMoreError = mappedError(error, message: onError?(error)) }
         }
         phase = .idle
     }
@@ -113,6 +118,8 @@ final class PagingController<Item: Identifiable> {
     func invalidate(clearExisting: Bool = false) {
         generation += 1
         phase = .idle
+        initialError = nil
+        loadMoreError = nil
         if clearExisting {
             items = []
             total = 0

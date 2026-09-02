@@ -8,8 +8,11 @@ struct RootAppView: View {
     @Bindable var pushNotifications: SystemPushCoordinator
     @State private var navigationCoordinator = AppNavigationCoordinator()
     @State private var loggedOutRouter = RouterPath()
+    @State var musicStore: MusicStore
     @State var musicPlayer = MusicPlaybackController()
     @State private var showingMusicQueueDrawer = false
+    @State private var musicInsetHeight: CGFloat = 0
+    @State private var musicInsetFrame: CGRect = .zero
     @State private var isSessionReady = false
     @State private var showingReauthentication = false
     @State private var sessionOwnerID: Int?
@@ -20,6 +23,7 @@ struct RootAppView: View {
         navigationCoordinator: AppNavigationCoordinator? = nil,
         musicPlayer: MusicPlaybackController? = nil
     ) {
+        _musicStore = State(initialValue: MusicStore(client: environment.musicClient, userID: environment.authSession.currentUser?.id))
         _musicPlayer = State(initialValue: musicPlayer ?? MusicPlaybackController())
         _navigationCoordinator = State(initialValue: navigationCoordinator ?? AppNavigationCoordinator())
         self.environment = environment
@@ -63,11 +67,13 @@ struct RootAppView: View {
             }
         }
         .task {
-            configureMusicPlayerResolver()
             switchMusicPlaybackUser(from: environment.authSession.currentUser?.id, to: environment.authSession.currentUser?.id)
+            configureMusicPlayerResolver()
         }
         .onChange(of: environment.authSession.currentUser?.id) { oldUserID, newUserID in
+            musicStore.reset(for: newUserID)
             switchMusicPlaybackUser(from: oldUserID, to: newUserID)
+            configureMusicPlayerResolver()
             if newUserID != nil {
                 if !environment.authSession.requiresReauthentication { updateSessionOwner() }
                 Task { await pushNotifications.syncForSignedInUser() }
@@ -102,6 +108,7 @@ struct RootAppView: View {
             }
         }
         .environment(pushNotifications)
+        .environment(musicStore)
     }
 
     private func beginReauthentication() {
@@ -140,15 +147,10 @@ struct RootAppView: View {
     /// Lets the playback controller fetch a fresh URL for the next track on its own, so
     /// end-of-track auto-play and lock-screen/headphone skip work without a visible view.
     private func configureMusicPlayerResolver() {
-        musicPlayer.resolveTrackURL = { track in
-            musicPlayer.cancelPendingQualityChange()
-            return await resolvePlaybackURL(for: track, quality: musicPlayer.audioQuality, allowsFallback: true)
-        }
-        musicPlayer.resolveQualityURL = { track, quality in
-            await resolvePlaybackURL(for: track, quality: quality, allowsFallback: false)
-        }
+        musicPlayer.urlResolver = PlaybackURLResolver(client: environment.musicClient)
+        let store = musicStore
         musicPlayer.recordPlaybackHistory = { track in
-            try? await environment.musicClient.addHistory(
+            try? await store.addHistory(
                 AddMusicHistoryRequest(
                     songId: track.id,
                     songName: track.title,
@@ -159,45 +161,6 @@ struct RootAppView: View {
                 )
             )
         }
-    }
-
-    private func resolvePlaybackURL(for track: MusicPlaybackTrack, quality: MusicAudioQuality,
-                                    allowsFallback: Bool) async -> MusicURLResolution {
-        let failure: UserFacingError
-        do {
-            let response = try await environment.musicClient.url(songID: track.id, level: quality.rawValue)
-            if let url = playableURL(from: response) {
-                let actual = response.data?.first?.level.flatMap(MusicAudioQuality.init(rawValue:))
-                let notice = actual.flatMap { $0 != quality ? "音源返回\($0.title)音质" : nil }
-                return .success(url, notice: notice)
-            }
-            failure = UserFacingError(message: unavailableReason(from: response))
-        } catch {
-            let mapped = UserFacingErrorMapper.map(error)
-            if mapped.action == .signIn { return .unavailable(mapped) }
-            failure = mapped
-        }
-        guard allowsFallback, quality != .standard else { return .unavailable(failure) }
-        do {
-            let standard = try await environment.musicClient.url(songID: track.id, level: "standard")
-            if let url = playableURL(from: standard) {
-                return .success(url, notice: "\(quality.title)音质不可用，本曲使用标准音质")
-            }
-            return .unavailable(unavailableReason(from: standard))
-        } catch {
-            let mapped = UserFacingErrorMapper.map(error)
-            return .unavailable(mapped.action == .signIn ? mapped : failure)
-        }
-    }
-
-    private func playableURL(from response: MusicUrlResponse) -> URL? {
-        guard let item = response.data?.first,
-              let urlString = item.playableURLString else { return nil }
-        return URL(string: urlString)
-    }
-
-    private func unavailableReason(from response: MusicUrlResponse) -> String {
-        response.unavailableMessage
     }
 
     private var appTabs: some View {
@@ -215,6 +178,20 @@ struct RootAppView: View {
                 }
             }
             .background(SetuColor.pageGradient.ignoresSafeArea())
+            .overlay {
+                if musicPlayer.currentTrack != nil {
+                    GeometryReader { rootGeometry in
+                        musicPlayerInset
+                            .fixedSize(horizontal: false, vertical: true)
+                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { musicInsetHeight = $0 }
+                            .position(
+                                x: rootGeometry.size.width / 2,
+                                y: musicInsetFrame.minY - rootGeometry.frame(in: .global).minY + musicInsetHeight / 2
+                            )
+                            .opacity(musicInsetFrame.isEmpty ? 0 : 1)
+                    }
+                }
+            }
 
             if showingMusicQueueDrawer {
                 Color.black.opacity(0.28)
@@ -234,7 +211,6 @@ struct RootAppView: View {
             }
         }
         .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.86), value: showingMusicQueueDrawer)
-        .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.86), value: musicPlayer.currentTrack?.id)
         .onChange(of: musicPlayer.currentTrack?.id) { _, trackID in
             if trackID == nil {
                 showingMusicQueueDrawer = false
@@ -248,9 +224,9 @@ struct RootAppView: View {
             content(for: tab)
                 .navigationDestination(for: AppRoute.self) { route in
                     destination(for: route)
-                        .safeAreaInset(edge: .bottom, spacing: 0) { musicPlayerInset }
+                        .safeAreaInset(edge: .bottom, spacing: 0) { musicPlayerSpace(for: tab) }
                 }
-                .safeAreaInset(edge: .bottom, spacing: 0) { musicPlayerInset }
+                .safeAreaInset(edge: .bottom, spacing: 0) { musicPlayerSpace(for: tab) }
         }
         .environment(navigationCoordinator.router(for: tab))
         .environment(\.setuRecoveryActions, SetuRecoveryActions(
@@ -261,6 +237,22 @@ struct RootAppView: View {
             },
             viewPoints: { navigationCoordinator.navigate(to: .images, route: .pointsLogs) }
         ))
+    }
+
+    @ViewBuilder
+    private func musicPlayerSpace(for tab: AppTab) -> some View {
+        if musicPlayer.currentTrack != nil {
+            let isSelected = navigationCoordinator.selectedTab == tab
+            // Keep the original inset ordering relative to page-specific bottom actions.
+            // These placeholders own no player, progress observation or artwork task.
+            Color.clear
+                .frame(height: musicInsetHeight)
+                .onGeometryChange(for: CGRect.self) {
+                    isSelected ? $0.frame(in: .global) : .zero
+                } action: { frame in
+                    if navigationCoordinator.selectedTab == tab, !frame.isEmpty { musicInsetFrame = frame }
+                }
+        }
     }
 
     @ViewBuilder
