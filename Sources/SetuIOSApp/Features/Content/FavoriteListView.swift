@@ -5,19 +5,12 @@ struct FavoriteListView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Bindable var environment: AppEnvironment
-    @State private var items: [FavoriteItem] = []
-    @State private var total = 0
-    @State private var nextPage = 1
-    @State private var isInitialLoading = true
-    @State private var isLoadingMore = false
-    @State private var initialError: String?
-    @State private var loadMoreError: String?
+    @State private var pager = PagingController<FavoriteItem>(pageSize: 24)
     @State private var feedback: SetuFeedback?
     @State private var previewItem: UserImagePreviewItem?
     @State private var movingItem: FavoriteItem?
     @State private var recentlyRemovedItem: FavoriteItem?
     @State private var undoDismissTask: Task<Void, Never>?
-    private let pageSize = 24
 
     var body: some View {
         ScrollView {
@@ -26,13 +19,13 @@ struct FavoriteListView: View {
                     SetuFeedbackBanner(feedback: feedback)
                 }
 
-                if let initialError, !items.isEmpty {
+                if let initialError = pager.initialError, !pager.items.isEmpty {
                     SetuLoadMoreFooter(state: .failed(initialError)) {
                         Task { await loadFirstPage() }
                     }
                 }
 
-                if isInitialLoading {
+                if pager.phase == .loadingInitial {
                     SetuCard {
                         SetuEmptyState(
                             title: "正在加载收藏",
@@ -41,12 +34,12 @@ struct FavoriteListView: View {
                             isLoading: true
                         )
                     }
-                } else if items.isEmpty {
+                } else if pager.items.isEmpty {
                     emptyState
                 } else {
-                    SetuSectionHeader(title: "默认收藏", subtitle: "共 \(total) 张")
+                    SetuSectionHeader(title: "默认收藏", subtitle: "共 \(pager.total) 张")
                     LazyVGrid(columns: gridColumns, spacing: SetuSpacing.md) {
-                        ForEach(items) { item in
+                        ForEach(pager.items) { item in
                             FavoriteImageTile(item: item) {
                                 previewItem = UserImagePreviewItem(favorite: item)
                             } onMove: {
@@ -55,7 +48,7 @@ struct FavoriteListView: View {
                                 Task { await remove(item) }
                             }
                             .onAppear {
-                                if item.id == items.last?.id {
+                                if item.id == pager.items.last?.id {
                                     Task { await loadMore() }
                                 }
                             }
@@ -70,6 +63,9 @@ struct FavoriteListView: View {
             .padding(.vertical, SetuSpacing.md)
         }
         .setuBackground()
+        .setuFeedbackPresentation($feedback)
+        .setuRefreshAfterLogin(environment.authSession) { Task { await loadFirstPage() } }
+        .setuRetry { Task { await loadFirstPage() } }
         .navigationTitle("默认收藏")
         .sheet(item: $previewItem) { item in
             UserImagePreviewSheet(item: item)
@@ -94,7 +90,7 @@ struct FavoriteListView: View {
 
     @ViewBuilder
     private var emptyState: some View {
-        if let initialError {
+        if let initialError = pager.initialError {
             SetuCard {
                 VStack(spacing: SetuSpacing.md) {
                     SetuEmptyState(title: "收藏加载失败", message: initialError, systemImage: "heart.slash")
@@ -118,46 +114,31 @@ struct FavoriteListView: View {
         return [GridItem(.adaptive(minimum: 156), spacing: SetuSpacing.md)]
     }
 
-    private var hasMore: Bool { items.count < total }
+    private var hasMore: Bool { pager.hasMore }
 
     private var loadMoreFooterState: SetuLoadMoreFooterState {
-        if isLoadingMore { return .loading }
-        if let loadMoreError { return .failed(loadMoreError) }
-        if !hasMore { return .complete("已加载全部 \(total) 张收藏") }
+        if pager.phase == .loadingMore { return .loading }
+        if let loadMoreError = pager.loadMoreError { return .failed(loadMoreError) }
+        if !hasMore { return .complete("已加载全部 \(pager.total) 张收藏") }
         return .idle
     }
 
     private func loadFirstPage() async {
-        isInitialLoading = items.isEmpty
-        initialError = nil
-        loadMoreError = nil
-        do {
-            let result = try await environment.favoriteClient.list(page: 1, size: pageSize)
-            items = result.items
-            total = result.total
-            nextPage = 2
-        } catch {
-            initialError = "暂时无法加载收藏，请检查网络后重试。"
-        }
-        isInitialLoading = false
+        await pager.loadFirstPage(
+            { [environment] page in
+                let result = try await environment.favoriteClient.list(page: page, size: 24)
+                return .init(items: result.items, total: result.total)
+            },
+            onError: { _ in "暂时无法加载收藏，请检查网络后重试。" })
     }
 
     private func loadMore() async {
-        guard hasMore, !isLoadingMore, !isInitialLoading else { return }
-        let requestedPage = nextPage
-        isLoadingMore = true
-        loadMoreError = nil
-        defer { isLoadingMore = false }
-        do {
-            let result = try await environment.favoriteClient.list(page: requestedPage, size: pageSize)
-            guard requestedPage == nextPage else { return }
-            let existingIDs = Set(items.map(\.id))
-            items.append(contentsOf: result.items.filter { !existingIDs.contains($0.id) })
-            total = result.total
-            nextPage += 1
-        } catch {
-            loadMoreError = "更多收藏加载失败"
-        }
+        await pager.loadMore(
+            { [environment] page in
+                let result = try await environment.favoriteClient.list(page: page, size: 24)
+                return .init(items: result.items, total: result.total)
+            },
+            onError: { _ in "更多收藏加载失败" })
     }
 
     private func remove(_ item: FavoriteItem) async {
@@ -168,7 +149,7 @@ struct FavoriteListView: View {
             scheduleUndoDismissal(for: item)
             await loadFirstPage()
         } catch {
-            feedback = .error(UserFacingErrorMapper.map(error).message)
+            feedback = .error(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -197,7 +178,7 @@ struct FavoriteListView: View {
             await loadFirstPage()
             feedback = .success("已恢复收藏")
         } catch {
-            feedback = .error("撤销失败：\(UserFacingErrorMapper.map(error).message)")
+            feedback = .failure(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -363,7 +344,7 @@ private struct FavoriteMoveSheet: View {
             state = .loaded(collections)
             selectedCollectionID = collections.first?.id
         } catch {
-            state = .failed(UserFacingErrorMapper.map(error).message)
+            state = .failed(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -378,7 +359,7 @@ private struct FavoriteMoveSheet: View {
             onMoved()
             dismiss()
         } catch {
-            feedback = .error(UserFacingErrorMapper.map(error).message)
+            feedback = .error(UserFacingErrorMapper.map(error))
         }
     }
 }
@@ -390,9 +371,13 @@ struct ContentImageStateSection: View {
     var isLoading = false
     var actionTitle: String?
     var action: (() -> Void)?
+    var error: UserFacingError?
 
     var body: some View {
         SetuCard {
+            if let error {
+                SetuEmptyState(error: error, retry: action)
+            } else {
             SetuEmptyState(
                 title: title,
                 message: message,
@@ -401,7 +386,15 @@ struct ContentImageStateSection: View {
                 actionTitle: actionTitle,
                 action: action
             )
+            }
         }
         .setuListRow()
+    }
+}
+
+
+extension ContentImageStateSection {
+    init(title: String, message: UserFacingError, systemImage: String, isLoading: Bool = false, actionTitle: String? = nil, action: (() -> Void)? = nil) {
+        self.init(title: title, systemImage: systemImage, isLoading: isLoading, actionTitle: actionTitle, action: action, error: message)
     }
 }

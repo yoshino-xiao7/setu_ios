@@ -3,8 +3,6 @@ import SwiftUI
 
 enum AppRoute: Hashable {
     case account
-    case authRegister
-    case authRecovery
     case profile
     case docs
     case about
@@ -12,11 +10,11 @@ enum AppRoute: Hashable {
     case terms
     case passkeys
     case points
+    case apiKeys
     case pointsLogs
     case imageSwipe
     case collections
     case collectionDetail(Int)
-    case squareHub
     case collectionSquare
     case publicCollectionDetail(Int)
     case publicUserProfile(Int)
@@ -29,7 +27,6 @@ enum AppRoute: Hashable {
     case aiGenerationDetail(Int)
     case publicAiWork(PublicAiWorkSnapshot)
     case aiSquare
-    case musicHome
     case musicSearch(String?)
     case musicHistory
     case playlists

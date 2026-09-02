@@ -33,6 +33,7 @@ Two SwiftPM targets plus a widget extension and tests:
   - `Core/Networking/` — `APIClient`, `AuthSigner`, and one `*Client` per domain
   - `Core/Models/` — `Codable` DTOs, one `*Models.swift` per domain
   - `Core/Security/KeychainStore.swift`, `Core/AuthSession.swift`, `Core/AppEnvironment.swift`, `Core/AppConfig.swift`, `Core/LoadState.swift`
+  - `Core/AppConfig.resolved()` honors `SETU_API_BASE_URL` / `SETU_SITE_BASE_URL` overrides in DEBUG builds for local backend testing; production URLs remain the default
 - `Sources/SetuIOSApp` — SwiftUI app. `Features/<Domain>/` views, `Features/AppShell/` (`RootAppView`, `AppRoute`, tab/router), `Resources/Assets.xcassets`
 - `Sources/SetuIOSLiveActivityWidget` — Live Activity widget extension
 - `Tests/SetuIOSAppTests` — unit tests (client/DTO/auth focused), one `*ClientTests.swift` per domain

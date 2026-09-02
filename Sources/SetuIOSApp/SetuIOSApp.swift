@@ -23,13 +23,19 @@ struct SetuIOSApp: App {
     var body: some Scene {
         WindowGroup {
             appContent
+                #if DEBUG
+                .modifier(SetuUITestAppearance())
+                #endif
         }
     }
 
     @ViewBuilder
     private var appContent: some View {
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("-ui-testing-public-ai-work")
+        if ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("-ui-testing-root") })
+            || ProcessInfo.processInfo.arguments.contains("-ui-testing-welcome-fixture") {
+            SetuRootUITestScenario()
+        } else if ProcessInfo.processInfo.arguments.contains("-ui-testing-public-ai-work")
             || ProcessInfo.processInfo.arguments.contains("-ui-testing-public-ai-work-detail-404") {
             SetuPublicAiWorkUITestScenario()
         } else if ProcessInfo.processInfo.arguments.contains("-ui-testing-random-image")
@@ -79,3 +85,21 @@ struct SetuIOSApp: App {
             .task { pushNotifications.configure() }
     }
 }
+
+#if DEBUG
+/// Keep UI scenarios independent of the simulator's cached launch-time text settings.
+private struct SetuUITestAppearance: ViewModifier {
+    func body(content: Content) -> some View {
+        let arguments = ProcessInfo.processInfo.arguments
+        if arguments.contains(where: { $0.hasPrefix("-ui-testing-") }) {
+            let usesAX5 = arguments.contains("UICTContentSizeCategoryAccessibilityExtraExtraExtraLarge")
+                || arguments.contains("UICTContentSizeCategoryAccessibilityXXXL")
+            content
+                .dynamicTypeSize(usesAX5 ? .accessibility5 : .large)
+                .preferredColorScheme(arguments.contains("Dark") ? .dark : .light)
+        } else {
+            content
+        }
+    }
+}
+#endif

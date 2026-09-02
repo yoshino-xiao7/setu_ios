@@ -30,7 +30,15 @@ struct DashboardView: View {
         .listStyle(.plain)
         .setuBackground()
         .accessibilityIdentifier("dashboard.page")
+        .navigationTitle("首页")
         .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button { navigation.navigate(to: .home, route: .notifications) } label: {
+                    Image(systemName: hasUnreadNotifications ? "bell.badge" : "bell")
+                }
+                .accessibilityLabel("通知中心")
+                .accessibilityIdentifier("dashboard.notifications")
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     navigation.navigate(to: .home, route: .account)
@@ -50,6 +58,11 @@ struct DashboardView: View {
         .refreshable {
             await load()
         }
+    }
+
+    private var hasUnreadNotifications: Bool {
+        if case .loaded(let count) = notificationState { return count > 0 }
+        return false
     }
 
     private var greetingSection: some View {
@@ -118,7 +131,7 @@ struct DashboardView: View {
                             subtitle: "继续编辑上次保存的参数",
                             systemImage: "square.and.pencil"
                         ) {
-                            navigation.navigate(to: .ai, route: .aiDraw)
+                            navigation.navigate(to: .ai, reset: true)
                         }
                     }
 
@@ -128,7 +141,7 @@ struct DashboardView: View {
                             message: "描述一个画面，开始今天的第一幅作品。",
                             systemImage: "clock.arrow.circlepath",
                             actionTitle: "开始创作",
-                            action: { navigation.navigate(to: .ai, route: .aiDraw) }
+                            action: { navigation.navigate(to: .ai, reset: true) }
                         )
                     }
                 }
@@ -185,6 +198,7 @@ struct DashboardView: View {
                     }
                 }
             }
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("dashboard.section.favorites")
         }
         .setuListRow()
@@ -269,6 +283,7 @@ struct DashboardView: View {
                     }
                 }
             }
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("dashboard.section.reminders")
         }
         .setuListRow()
@@ -320,13 +335,13 @@ struct DashboardView: View {
                     subtitle: "当前剩余 \(points) 积分",
                     systemImage: "bolt.trianglebadge.exclamationmark"
                 ) {
-                    navigation.navigate(to: .images, route: .points)
+                    navigation.navigate(to: .images, route: .pointsLogs)
                 }
             }
         }
     }
 
-    private var draft: AiDrawDraft { AiDrawDraftStore.load() }
+    @State private var draft = AiDrawDraft()
 
     private var greetingCopy: some View {
         VStack(alignment: .leading, spacing: SetuSpacing.sm) {
@@ -400,6 +415,7 @@ struct DashboardView: View {
     }
 
     private func load() async {
+        draft = AiDrawDraftStore.load()
         async let favorites: Void = loadFavorites()
         async let generation: Void = loadGeneration()
         async let recommendation: Void = loadRecommendation()
@@ -418,7 +434,7 @@ struct DashboardView: View {
             favoritesState = .loaded(page.items)
         } catch {
             guard loadID == favoritesLoadID else { return }
-            favoritesState = .failed(UserFacingErrorMapper.map(error).message)
+            favoritesState = .failed(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -433,7 +449,7 @@ struct DashboardView: View {
             generationState = .loaded(active)
         } catch {
             guard loadID == generationLoadID else { return }
-            generationState = .failed(UserFacingErrorMapper.map(error).message)
+            generationState = .failed(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -447,7 +463,7 @@ struct DashboardView: View {
             recommendationState = .loaded(page.list.first)
         } catch {
             guard loadID == recommendationLoadID else { return }
-            recommendationState = .failed(UserFacingErrorMapper.map(error).message)
+            recommendationState = .failed(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -461,7 +477,7 @@ struct DashboardView: View {
             notificationState = .loaded(count)
         } catch {
             guard loadID == notificationLoadID else { return }
-            notificationState = .failed(UserFacingErrorMapper.map(error).message)
+            notificationState = .failed(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -475,7 +491,7 @@ struct DashboardView: View {
             pointsState = .loaded(balance.points)
         } catch {
             guard loadID == pointsLoadID else { return }
-            pointsState = .failed(UserFacingErrorMapper.map(error).message)
+            pointsState = .failed(UserFacingErrorMapper.map(error))
         }
     }
 }
@@ -501,8 +517,9 @@ private struct DashboardFieldLoading: View {
 }
 
 private struct DashboardFieldFailure: View {
+    @State private var isExpanded = false
     let title: String
-    let message: String
+    let message: UserFacingError
     let retryIdentifier: String
     let retry: () -> Void
 
@@ -513,17 +530,20 @@ private struct DashboardFieldFailure: View {
                 .foregroundStyle(SetuColor.danger)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text(message)
-                .font(SetuTypography.body)
-                .foregroundStyle(SetuColor.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Button("重试", action: retry)
-                .buttonStyle(.bordered)
-                .controlSize(.large)
+            SetuErrorRecoveryButton(error: message, retry: retry)
                 .tint(SetuColor.danger)
                 .frame(minHeight: 44)
                 .accessibilityIdentifier(retryIdentifier)
+
+            Text(message.message)
+                .font(SetuTypography.caption)
+                .foregroundStyle(SetuColor.textSecondary)
+                .lineLimit(isExpanded ? nil : 3)
+                .fixedSize(horizontal: false, vertical: true)
+            if message.message.count > 40 {
+                Button(isExpanded ? "收起详情" : "展开详情") { isExpanded.toggle() }
+                    .frame(minHeight: 44)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(SetuSpacing.md)

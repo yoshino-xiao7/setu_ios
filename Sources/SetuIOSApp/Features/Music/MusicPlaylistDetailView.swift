@@ -157,6 +157,7 @@ struct MusicPlaylistDetailView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .setuBackground()
+        .setuFeedbackPresentation($feedback)
         .navigationTitle("歌单详情")
         .toolbar {
             Menu {
@@ -329,7 +330,7 @@ struct MusicPlaylistDetailView: View {
             selectedMode = playlist.playMode ?? "sequence"
             state = .loaded(playlist)
         } catch {
-            state = .failed(UserFacingErrorMapper.map(error).message)
+            state = .failed(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -338,7 +339,7 @@ struct MusicPlaylistDetailView: View {
             try await environment.musicClient.setPlayMode(playlistID: playlistID, playMode: mode)
             feedback = .success("播放模式已更新")
         } catch {
-            feedback = .error(UserFacingErrorMapper.map(error).message)
+            feedback = .error(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -348,7 +349,7 @@ struct MusicPlaylistDetailView: View {
             await load()
             feedback = .success("已移除 \(song.songName)")
         } catch {
-            feedback = .error(UserFacingErrorMapper.map(error).message)
+            feedback = .error(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -371,7 +372,7 @@ struct MusicPlaylistDetailView: View {
             await load()
             finishSelectionMode(feedback: .success("已移除 \(songs.count) 首歌曲"))
         } catch {
-            feedback = .error(UserFacingErrorMapper.map(error).message)
+            feedback = .error(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -431,7 +432,7 @@ struct MusicPlaylistDetailView: View {
             try await environment.musicClient.deletePlaylist(id: playlistID)
             dismiss()
         } catch {
-            feedback = .error(UserFacingErrorMapper.map(error).message)
+            feedback = .error(UserFacingErrorMapper.map(error))
         }
     }
 }
@@ -520,7 +521,7 @@ private struct EditMusicPlaylistSheet: View {
             onSaved()
             dismiss()
         } catch {
-            feedback = .error(UserFacingErrorMapper.map(error).message)
+            feedback = .error(UserFacingErrorMapper.map(error))
         }
     }
 }
@@ -625,7 +626,7 @@ private struct BulkAddPlaylistSongsSheet: View {
         do {
             state = .loaded(try await environment.musicClient.playlists())
         } catch {
-            state = .failed(UserFacingErrorMapper.map(error).message)
+            state = .failed(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -639,7 +640,7 @@ private struct BulkAddPlaylistSongsSheet: View {
             onDone()
             dismiss()
         } catch {
-            feedback = .error(UserFacingErrorMapper.map(error).message)
+            feedback = .error(UserFacingErrorMapper.map(error))
         }
     }
 }

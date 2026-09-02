@@ -5,13 +5,19 @@ struct AiSquareView: View {
     @Environment(RouterPath.self) private var router
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var environment: AppEnvironment
+    @State private var pager = PagingController<AiPublicWork>(pageSize: 16)
+    private var jobs: [AiPublicWork] {
+        get { pager.items }
+        nonmutating set { pager.replaceItems(newValue) }
+    }
+    private var total: Int { pager.total }
+    private var isInitialLoading: Bool { pager.phase == .loadingInitial || (!pager.hasLoadedFirstPage && pager.initialError == nil) }
+    private var isLoadingMore: Bool { pager.phase == .loadingMore }
+    private var initialError: UserFacingError? { pager.initialError }
+    private var loadMoreError: UserFacingError? { pager.loadMoreError }
+    private var loadError: UserFacingError? { pager.loadMoreError ?? pager.initialError }
+
     @State private var category = "GENERAL"
-    @State private var jobs: [AiPublicWork] = []
-    @State private var total = 0
-    @State private var nextPage = 1
-    @State private var isInitialLoading = true
-    @State private var isLoadingMore = false
-    @State private var loadError: String?
     private let pageSize = 16
 
     var body: some View {
@@ -93,7 +99,7 @@ struct AiSquareView: View {
         return .idle
     }
 
-    private var hasMore: Bool { jobs.count < total }
+    private var hasMore: Bool { pager.hasMore }
 
     private var gridColumns: [GridItem] {
         dynamicTypeSize.isAccessibilitySize
@@ -102,45 +108,18 @@ struct AiSquareView: View {
     }
 
     private func loadFirstPage(clearExisting: Bool = false) async {
-        let requestedCategory = category
-        if clearExisting {
-            jobs = []
-            total = 0
-            nextPage = 1
+        let filter = category
+        await pager.loadFirstPage(clearExisting: clearExisting) { page in
+            let result = try await environment.aiGenerationClient.square(category: filter, page: page, pageSize: pageSize)
+            return .init(items: result.list, total: result.total)
         }
-        isInitialLoading = jobs.isEmpty
-        isLoadingMore = false
-        loadError = nil
-        do {
-            let result = try await environment.aiGenerationClient.square(category: requestedCategory, page: 1, pageSize: pageSize)
-            guard requestedCategory == category else { return }
-            jobs = result.list
-            total = result.total
-            nextPage = 2
-        } catch {
-            guard requestedCategory == category else { return }
-            loadError = UserFacingErrorMapper.map(error).message
-        }
-        isInitialLoading = false
     }
 
     private func loadMore() async {
-        guard hasMore, !isLoadingMore, !isInitialLoading else { return }
-        let requestedCategory = category
-        let requestedPage = nextPage
-        isLoadingMore = true
-        loadError = nil
-        defer { isLoadingMore = false }
-        do {
-            let result = try await environment.aiGenerationClient.square(category: requestedCategory, page: requestedPage, pageSize: pageSize)
-            guard requestedCategory == category, requestedPage == nextPage else { return }
-            let existingIDs = Set(jobs.map(\.id))
-            jobs.append(contentsOf: result.list.filter { !existingIDs.contains($0.id) })
-            total = result.total
-            nextPage += 1
-        } catch {
-            guard requestedCategory == category else { return }
-            loadError = UserFacingErrorMapper.map(error).message
+        let filter = category
+        await pager.loadMore { page in
+            let result = try await environment.aiGenerationClient.square(category: filter, page: page, pageSize: pageSize)
+            return .init(items: result.list, total: result.total)
         }
     }
 }

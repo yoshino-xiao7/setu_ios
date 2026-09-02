@@ -132,7 +132,7 @@ struct ImageDeleteRequestDetailView: View {
         do {
             state = .loaded(try await environment.imageDeleteRequestClient.detail(id: requestID))
         } catch {
-            state = .failed(UserFacingErrorMapper.map(error).message)
+            state = .failed(UserFacingErrorMapper.map(error))
         }
     }
 }

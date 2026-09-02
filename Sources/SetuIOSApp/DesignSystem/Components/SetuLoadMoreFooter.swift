@@ -1,9 +1,12 @@
+import SetuIOSCore
 import SwiftUI
 
 enum SetuLoadMoreFooterState: Equatable {
     case idle
     case loading
-    case failed(String)
+    case failed(UserFacingError)
+
+    static func failed(_ message: String) -> Self { .failed(UserFacingError(message: message)) }
     case complete(String)
 }
 
@@ -25,13 +28,13 @@ struct SetuLoadMoreFooter: View {
         case .failed(let message):
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: SetuSpacing.md) {
-                    failureLabel(message)
+                    failureLabel(message.message)
                     Spacer(minLength: SetuSpacing.sm)
-                    retryButton
+                    SetuErrorRecoveryButton(error: message, retry: retry)
                 }
                 VStack(spacing: SetuSpacing.sm) {
-                    failureLabel(message)
-                    retryButton
+                    failureLabel(message.message)
+                    SetuErrorRecoveryButton(error: message, retry: retry)
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 44)
@@ -52,13 +55,4 @@ struct SetuLoadMoreFooter: View {
             .multilineTextAlignment(.leading)
     }
 
-    @ViewBuilder
-    private var retryButton: some View {
-        if let retry {
-            Button("重试加载", action: retry)
-                .buttonStyle(.bordered)
-                .controlSize(.regular)
-                .frame(minHeight: 44)
-        }
-    }
 }

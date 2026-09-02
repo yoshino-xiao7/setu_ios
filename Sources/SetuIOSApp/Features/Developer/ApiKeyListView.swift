@@ -73,6 +73,7 @@ struct ApiKeyListView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .setuBackground()
+        .setuFeedbackPresentation($feedback)
         .navigationTitle("API Keys")
         .sheet(item: $renameTarget) { key in
             ApiKeyRenameSheet(environment: environment, key: key) {
@@ -185,7 +186,7 @@ struct ApiKeyListView: View {
         do {
             state = .loaded(try await environment.apiKeyClient.list())
         } catch {
-            state = .failed(UserFacingErrorMapper.map(error).message)
+            state = .failed(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -201,7 +202,7 @@ struct ApiKeyListView: View {
             await load()
             feedback = .warning("API Key 已创建，请立即复制并妥善保存。")
         } catch {
-            feedback = .error(UserFacingErrorMapper.map(error).message)
+            feedback = .error(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -217,7 +218,7 @@ struct ApiKeyListView: View {
             await load()
             feedback = .success(key.isEnabled ? "API Key 已禁用" : "API Key 已启用")
         } catch {
-            feedback = .error(UserFacingErrorMapper.map(error).message)
+            feedback = .error(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -228,7 +229,7 @@ struct ApiKeyListView: View {
             await load()
             feedback = .success("API Key 已删除")
         } catch {
-            feedback = .error(UserFacingErrorMapper.map(error).message)
+            feedback = .error(UserFacingErrorMapper.map(error))
         }
     }
 }
@@ -349,7 +350,7 @@ private struct ApiKeyRenameSheet: View {
             onSaved()
             dismiss()
         } catch {
-            feedback = .error(UserFacingErrorMapper.map(error).message)
+            feedback = .error(UserFacingErrorMapper.map(error))
         }
     }
 }

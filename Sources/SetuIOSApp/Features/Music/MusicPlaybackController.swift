@@ -73,11 +73,16 @@ enum MusicSleepTimerOption: String, CaseIterable, Identifiable, Sendable {
 /// Result of resolving a fresh playback URL for a track.
 enum MusicURLResolution: Sendable {
     case success(URL, notice: String? = nil)
-    case unavailable(String)
+    case unavailable(UserFacingError)
+
+    static func unavailable(_ message: String) -> Self {
+        .unavailable(UserFacingError(message: message))
+    }
 }
 
 private enum MusicPlaybackPersistence {
     static let legacySnapshotKey = "icu.yukiryou.setu.musicPlaybackSnapshot"
+    static let audioQualityKey = "icu.yukiryou.setu.musicAudioQuality"
 
     static func snapshotKey(userID: Int) -> String {
         "\(legacySnapshotKey).user.\(userID)"
@@ -111,11 +116,15 @@ final class MusicPlaybackController {
     private(set) var isBuffering = false
     private(set) var playbackError: String?
     private(set) var sleepTimerTitle: String?
+    private(set) var audioQuality: MusicAudioQuality
+    private(set) var isChangingQuality = false
 
     /// Resolves a fresh, playable URL for a track. Set once by the app shell so the
     /// controller can advance the queue on its own (end-of-track auto-play, lock-screen
     /// and headphone next/previous). Upstream URLs can expire, so each advance re-resolves.
     @ObservationIgnored var resolveTrackURL: (@MainActor (MusicPlaybackTrack) async -> MusicURLResolution)?
+    /// An explicit quality change must not silently fall back on a failed request.
+    @ObservationIgnored var resolveQualityURL: (@MainActor (MusicPlaybackTrack, MusicAudioQuality) async -> MusicURLResolution)?
     /// Records playback history for tracks that start without a visible view, such as
     /// end-of-track auto-play.
     @ObservationIgnored var recordPlaybackHistory: (@MainActor (MusicPlaybackTrack) async -> Void)?
@@ -128,6 +137,9 @@ final class MusicPlaybackController {
     @ObservationIgnored private var sleepTimerTask: Task<Void, Never>?
     @ObservationIgnored private var feedbackDismissTask: Task<Void, Never>?
     @ObservationIgnored private var resumeTask: Task<Void, Never>?
+    @ObservationIgnored private let persistsPlayback: Bool
+    @ObservationIgnored private let preferences: UserDefaults
+    @ObservationIgnored private var qualityChangeID = UUID()
     @ObservationIgnored private var snapshotUserID: Int?
     @ObservationIgnored private var lastSnapshotWriteDate: Date?
     @ObservationIgnored private var pausesAtEndOfCurrentTrack = false
@@ -136,6 +148,14 @@ final class MusicPlaybackController {
     @ObservationIgnored private var nowPlayingArtwork: MPMediaItemArtwork?
     @ObservationIgnored private var nowPlayingArtworkTrackID: Int?
     #endif
+
+    init(persistsPlayback: Bool = true, preferences: UserDefaults = .standard) {
+        self.persistsPlayback = persistsPlayback
+        self.preferences = preferences
+        audioQuality = persistsPlayback
+            ? preferences.string(forKey: MusicPlaybackPersistence.audioQualityKey).flatMap(MusicAudioQuality.init(rawValue:)) ?? .exhigh
+            : .exhigh
+    }
 
     var durationSeconds: Double {
         currentTrack?.durationSeconds ?? 0
@@ -182,11 +202,13 @@ final class MusicPlaybackController {
     // MARK: - Playback entry points
 
     func setSnapshotUserID(_ userID: Int?) {
+        guard persistsPlayback else { return }
         snapshotUserID = userID
         UserDefaults.standard.removeObject(forKey: MusicPlaybackPersistence.legacySnapshotKey)
     }
 
     func restorePlaybackSnapshotIfNeeded(for userID: Int) {
+        guard persistsPlayback else { return }
         snapshotUserID = userID
         guard currentTrack == nil else { return }
         let key = MusicPlaybackPersistence.snapshotKey(userID: userID)
@@ -242,7 +264,7 @@ final class MusicPlaybackController {
             delay = 3_000_000_000
         case .warning:
             delay = 5_000_000_000
-        case .error:
+        case .error, .failure:
             delay = nil
         }
         guard let delay else { return }
@@ -311,6 +333,7 @@ final class MusicPlaybackController {
     }
 
     private func clearCurrentPlayback(clearPersistedSnapshot: Bool) {
+        cancelPendingQualityChange()
         player?.pause()
         resumeTask?.cancel()
         resumeTask = nil
@@ -347,6 +370,70 @@ final class MusicPlaybackController {
         playMode = mode
         feedback = .info(mode.title)
         persistPlaybackSnapshot()
+    }
+
+    /// Called before a new track resolves or replaces the current item, so a late
+    /// quality response cannot bring back the previous track or a stopped session.
+    func cancelPendingQualityChange() {
+        qualityChangeID = UUID()
+        isChangingQuality = false
+    }
+
+    @discardableResult
+    func setAudioQuality(_ quality: MusicAudioQuality) async -> Bool {
+        guard quality != audioQuality else {
+            cancelPendingQualityChange()
+            return true
+        }
+        let requestID = UUID()
+        qualityChangeID = requestID
+        guard let track = currentTrack else {
+            commitAudioQuality(quality)
+            isChangingQuality = false
+            return true
+        }
+        guard let resolveQualityURL else {
+            isChangingQuality = false
+            feedback = .error("播放器尚未准备好，请稍后重试")
+            return false
+        }
+        isChangingQuality = true
+        defer { if qualityChangeID == requestID { isChangingQuality = false } }
+        let resolution = await resolveQualityURL(track, quality)
+        guard qualityChangeID == requestID, currentTrack?.id == track.id, !Task.isCancelled else { return false }
+        switch resolution {
+        case .success(let url, let notice):
+            // Keep the existing player alive while checking the replacement source.
+            // This also catches an unsupported audio format before replacing playback.
+            let asset = AVURLAsset(url: url)
+            do {
+                guard try await asset.load(.isPlayable) else {
+                    throw MusicQualityError.unplayable
+                }
+            } catch {
+                guard qualityChangeID == requestID, !Task.isCancelled else { return false }
+                feedback = .error("新音质暂时无法播放，已保留原来的播放状态")
+                return false
+            }
+            guard qualityChangeID == requestID, currentTrack?.id == track.id, !Task.isCancelled else { return false }
+            let resumeTime = currentTimeSeconds
+            let shouldPlay = isPlaying
+            commitAudioQuality(quality)
+            load(url: url, track: track, index: currentQueueIndex, notice: notice,
+                 resumeAt: resumeTime, autoplay: shouldPlay, preparedItem: AVPlayerItem(asset: asset))
+            feedback = notice.map(SetuFeedback.warning) ?? .success("已切换为\(quality.title)音质")
+            return true
+        case .unavailable(let reason):
+            feedback = .failure(reason)
+            return false
+        }
+    }
+
+    private func commitAudioQuality(_ quality: MusicAudioQuality) {
+        audioQuality = quality
+        if persistsPlayback {
+            preferences.set(quality.rawValue, forKey: MusicPlaybackPersistence.audioQualityKey)
+        }
     }
 
     func cyclePlayMode() {
@@ -398,7 +485,8 @@ final class MusicPlaybackController {
         case .success(let url, let notice):
             load(url: url, track: track, index: currentQueueIndex, notice: notice)
         case .unavailable(let reason):
-            playbackError = reason
+            playbackError = reason.message
+            feedback = .failure(reason)
             isPlaying = false
             updateNowPlaying()
             persistPlaybackSnapshot()
@@ -499,7 +587,7 @@ final class MusicPlaybackController {
                 seek(to: resumeTime)
             }
         case .unavailable(let reason):
-            playbackError = reason
+            playbackError = reason.message
             isPlaying = false
             feedback = .error(reason)
             updateNowPlaying()
@@ -532,8 +620,13 @@ final class MusicPlaybackController {
                 }
                 return
             case .unavailable(let reason):
-                feedback = .warning("已跳过无法播放的歌曲：\(track.title)")
-                playbackError = reason
+                feedback = .failure(reason)
+                playbackError = reason.message
+                if reason.action == .signIn {
+                    isPlaying = false
+                    updateNowPlaying()
+                    return
+                }
                 currentQueueIndex = index
             }
         }
@@ -587,26 +680,38 @@ final class MusicPlaybackController {
 
     // MARK: - Player item lifecycle
 
-    private func load(url: URL, track: MusicPlaybackTrack, index: Int?, notice: String? = nil) {
+    private func load(url: URL, track: MusicPlaybackTrack, index: Int?, notice: String? = nil,
+                      resumeAt: Double = 0, autoplay: Bool = true, preparedItem: AVPlayerItem? = nil) {
+        cancelPendingQualityChange()
+        player?.pause()
         removeTimeObserver()
         removeItemObservers()
 
-        let item = AVPlayerItem(url: url)
+        let item = preparedItem ?? AVPlayerItem(url: url)
         let nextPlayer = AVPlayer(playerItem: item)
         player = nextPlayer
         currentTrack = track
         currentQueueIndex = index
-        isPlaying = true
-        isBuffering = true
+        isPlaying = autoplay
+        isBuffering = autoplay
         playbackError = nil
-        currentTimeSeconds = 0
+        currentTimeSeconds = resumeAt
         feedback = notice.map(SetuFeedback.warning) ?? .success("正在播放 \(track.title)")
         addTimeObserver()
         addItemObservers(for: item)
         resetNowPlayingArtwork()
-        updateNowPlaying(elapsed: 0)
+        updateNowPlaying(elapsed: resumeAt)
         loadNowPlayingArtwork(for: track)
-        nextPlayer.play()
+        if resumeAt > 0 {
+            nextPlayer.seek(to: CMTime(seconds: resumeAt, preferredTimescale: 600)) { [weak self, weak nextPlayer] finished in
+                Task { @MainActor in
+                    guard finished, let self, let nextPlayer, self.player === nextPlayer else { return }
+                    if self.isPlaying { nextPlayer.play() }
+                }
+            }
+        } else if autoplay {
+            nextPlayer.play()
+        }
         persistPlaybackSnapshot()
     }
 
@@ -650,6 +755,7 @@ final class MusicPlaybackController {
     }
 
     private func persistPlaybackSnapshot(userID: Int? = nil, throttled: Bool = false) {
+        guard persistsPlayback else { return }
         guard let targetUserID = userID ?? snapshotUserID else { return }
         guard let currentTrack else {
             clearPlaybackSnapshot(userID: targetUserID)
@@ -679,6 +785,7 @@ final class MusicPlaybackController {
     }
 
     private func clearPlaybackSnapshot(userID: Int? = nil) {
+        guard persistsPlayback else { return }
         lastSnapshotWriteDate = nil
         guard let targetUserID = userID ?? snapshotUserID else { return }
         UserDefaults.standard.removeObject(forKey: MusicPlaybackPersistence.snapshotKey(userID: targetUserID))
@@ -716,8 +823,8 @@ final class MusicPlaybackController {
             Task { @MainActor in
                 guard let self else { return }
                 let reason = (note.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error)
-                    .map { UserFacingErrorMapper.map($0).message }
-                self.playbackError = reason ?? "播放失败，请重试"
+                    .map { UserFacingErrorMapper.map($0) }
+                self.playbackError = reason?.message ?? "播放失败，请重试"
                 self.isBuffering = false
                 self.isPlaying = false
                 self.updateNowPlaying()
@@ -746,7 +853,7 @@ final class MusicPlaybackController {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.allowAirPlay])
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {
-            feedback = .error("音频播放准备失败：\(UserFacingErrorMapper.map(error).message)")
+            feedback = .failure(UserFacingErrorMapper.map(error))
         }
         #endif
     }
@@ -917,6 +1024,10 @@ final class MusicPlaybackController {
         remoteCommandsConfigured = true
         #endif
     }
+}
+
+private enum MusicQualityError: Error {
+    case unplayable
 }
 
 struct MusicPlaybackTrack: Identifiable, Sendable, Codable {

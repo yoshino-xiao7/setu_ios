@@ -37,9 +37,14 @@ struct SecuritySettingsView: View {
                                     ProgressView()
                                         .tint(.white)
                                     Text("正在保存新密码")
+                                        .fixedSize(horizontal: false, vertical: true)
                                 }
                             } else {
-                                Label("保存新密码", systemImage: "lock.rotation")
+                                HStack(spacing: SetuSpacing.sm) {
+                                    Image(systemName: "lock.rotation").accessibilityHidden(true)
+                                    Text("保存新密码")
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
                             }
                         }
                         .disabled(!canSave || isSaving)
@@ -111,6 +116,7 @@ struct SecuritySettingsView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .setuBackground()
+        .setuFeedbackPresentation($feedback)
         .accessibilityIdentifier("security.page")
         .navigationTitle("账号安全")
         .task { await loadAppleBinding() }
@@ -168,7 +174,7 @@ struct SecuritySettingsView: View {
             feedback = .success("密码已修改，请重新登录")
             await environment.logout()
         } catch {
-            feedback = .error(UserFacingErrorMapper.map(error).message)
+            feedback = .error(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -177,7 +183,7 @@ struct SecuritySettingsView: View {
         do {
             appleBindingState = .loaded(try await environment.appleAuthClient.binding())
         } catch {
-            appleBindingState = .failed(UserFacingErrorMapper.map(error).message)
+            appleBindingState = .failed(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -210,7 +216,7 @@ struct SecuritySettingsView: View {
             appleBindingState = .loaded(try await environment.appleAuthClient.unbind())
             feedback = .success("Apple 绑定已解除")
         } catch {
-            feedback = .error(UserFacingErrorMapper.map(error).message)
+            feedback = .error(UserFacingErrorMapper.map(error))
         }
     }
 }

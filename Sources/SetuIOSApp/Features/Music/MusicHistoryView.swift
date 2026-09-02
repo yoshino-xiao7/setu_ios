@@ -83,6 +83,7 @@ struct MusicHistoryView: View {
         }
         .listStyle(.plain)
         .setuBackground()
+        .setuFeedbackPresentation($feedback)
         .navigationTitle("播放历史")
         .sheet(item: $selectedSong) { song in
             AddSongToPlaylistSheet(environment: environment, song: song) { result in
@@ -268,35 +269,12 @@ struct MusicHistoryView: View {
             await loadFirstPage()
             feedback = .success("播放历史已清空")
         } catch {
-            feedback = .error(UserFacingErrorMapper.map(error).message)
+            feedback = .error(UserFacingErrorMapper.map(error))
         }
     }
 }
 
-private struct MusicHistoryStateSection: View {
-    let title: String
-    let stateTitle: String
-    var message: String?
-    var systemImage: String
-    var isLoading = false
-
-    var body: some View {
-        Section {
-            SetuCard {
-                VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                    SetuSectionHeader(title: title)
-                    SetuEmptyState(
-                        title: stateTitle,
-                        message: message,
-                        systemImage: systemImage,
-                        isLoading: isLoading
-                    )
-                }
-            }
-            .setuListRow()
-        }
-    }
-}
+private typealias MusicHistoryStateSection = SetuStateSection
 
 private struct MusicHistoryIconButton: View {
     let systemImage: String

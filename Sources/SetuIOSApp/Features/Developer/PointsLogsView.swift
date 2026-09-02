@@ -3,23 +3,17 @@ import SwiftUI
 
 struct PointsLogsView: View {
     @Bindable var environment: AppEnvironment
-    @State private var items: [PointsLogItem] = []
-    @State private var total = 0
-    @State private var nextPage = 1
-    @State private var isInitialLoading = true
-    @State private var isLoadingMore = false
-    @State private var loadError: String?
-    private let pageSize = 10
+    @State private var pager = PagingController<PointsLogItem>(pageSize: 10)
 
     var body: some View {
         List {
-            if isInitialLoading {
+            if pager.phase == .loadingInitial {
                 Section {
                     SetuCard {
                         SetuEmptyState(title: "正在加载", systemImage: "list.bullet.rectangle", isLoading: true)
                     }
                 }
-            } else if items.isEmpty, let loadError {
+            } else if pager.items.isEmpty, let loadError = pager.loadMoreError ?? pager.initialError {
                 Section {
                     SetuCard {
                         SetuEmptyState(
@@ -31,7 +25,7 @@ struct PointsLogsView: View {
                         )
                     }
                 }
-            } else if items.isEmpty {
+            } else if pager.items.isEmpty {
                 Section {
                     SetuCard {
                         SetuEmptyState(title: "暂无积分明细", message: "积分获得和消耗记录会显示在这里。", systemImage: "list.bullet.rectangle")
@@ -40,16 +34,16 @@ struct PointsLogsView: View {
             } else {
                 Section {
                     SetuCard {
-                        SetuSectionHeader(title: "积分明细", subtitle: "共 \(total) 条")
+                        SetuSectionHeader(title: "积分明细", subtitle: "共 \(pager.total) 条")
                     }
                 }
                 Section {
-                    ForEach(items) { item in
+                    ForEach(pager.items) { item in
                         SetuCard {
                             PointsLogRow(item: item)
                         }
                         .onAppear {
-                            if item.id == items.last?.id {
+                            if item.id == pager.items.last?.id {
                                 Task { await loadMore() }
                             }
                         }
@@ -70,45 +64,33 @@ struct PointsLogsView: View {
         .refreshable { await loadFirstPage() }
     }
 
-    private var hasMore: Bool { items.count < total }
+    private var hasMore: Bool { pager.hasMore }
+
+    private var loadError: UserFacingError? { pager.loadMoreError ?? pager.initialError }
 
     private var loadMoreFooterState: SetuLoadMoreFooterState {
-        if isLoadingMore { return .loading }
+        if pager.phase == .loadingMore { return .loading }
         if let loadError { return .failed(loadError) }
-        if !hasMore { return .complete("已加载全部 \(total) 条明细") }
+        if !pager.hasMore { return .complete("已加载全部 \(pager.total) 条明细") }
         return .idle
     }
 
     private func loadFirstPage() async {
-        isInitialLoading = items.isEmpty
-        loadError = nil
-        do {
-            let result = try await environment.pointsClient.logs(page: 1, size: pageSize)
-            items = result.items
-            total = result.total
-            nextPage = 2
-        } catch {
-            loadError = UserFacingErrorMapper.map(error).message
-        }
-        isInitialLoading = false
+        await pager.loadFirstPage(
+            { [environment] page in
+                let result = try await environment.pointsClient.logs(page: page, size: 10)
+                return .init(items: result.items, total: result.total)
+            },
+            onError: { UserFacingErrorMapper.map($0).message })
     }
 
     private func loadMore() async {
-        guard hasMore, !isLoadingMore, !isInitialLoading else { return }
-        let requestedPage = nextPage
-        isLoadingMore = true
-        loadError = nil
-        defer { isLoadingMore = false }
-        do {
-            let result = try await environment.pointsClient.logs(page: requestedPage, size: pageSize)
-            guard requestedPage == nextPage else { return }
-            let existingIDs = Set(items.map(\.id))
-            items.append(contentsOf: result.items.filter { !existingIDs.contains($0.id) })
-            total = result.total
-            nextPage += 1
-        } catch {
-            loadError = UserFacingErrorMapper.map(error).message
-        }
+        await pager.loadMore(
+            { [environment] page in
+                let result = try await environment.pointsClient.logs(page: page, size: 10)
+                return .init(items: result.items, total: result.total)
+            },
+            onError: { UserFacingErrorMapper.map($0).message })
     }
 }
 

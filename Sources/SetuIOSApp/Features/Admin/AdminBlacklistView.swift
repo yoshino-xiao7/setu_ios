@@ -403,20 +403,4 @@ private struct TempBlockRow: View {
     }
 }
 
-private struct AdminBlacklistStateSection: View {
-    let title: String
-    let stateTitle: String
-    var message: String?
-    var systemImage: String
-    var isLoading = false
-
-    var body: some View {
-        SetuCard {
-            VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                SetuSectionHeader(title: title)
-                SetuEmptyState(title: stateTitle, message: message, systemImage: systemImage, isLoading: isLoading)
-            }
-        }
-        .setuListRow()
-    }
-}
+private typealias AdminBlacklistStateSection = SetuStateSection

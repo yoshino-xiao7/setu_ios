@@ -83,6 +83,21 @@ final class AuthSessionTests: XCTestCase {
         XCTAssertNil(try keychain.string(for: "signSecret"))
     }
 
+    func testInvalidatedSignedInSessionRetainsReauthenticationIntentUntilExplicitReset() throws {
+        let session = makeSession(keychain: InMemoryKeychain())
+        try session.applyLoginResponse(LoginResponse(
+            token: nil, role: .user, email: "user@example.com", userId: 3,
+            avatarUrl: nil, signSecret: "fixture", expireAt: nil, lastLoginIp: nil
+        ))
+        session.invalidateLocalSession()
+        XCTAssertFalse(session.isSignedIn)
+        XCTAssertTrue(session.requiresReauthentication)
+        session.invalidateLocalSession()
+        XCTAssertTrue(session.requiresReauthentication, "并发 401 不应丢失恢复意图")
+        session.resetLocalSession()
+        XCTAssertFalse(session.requiresReauthentication)
+    }
+
     func testInvalidateLocalSessionClearsSIDCookie() throws {
         let keychain = InMemoryKeychain()
         let session = makeSession(keychain: keychain)
@@ -150,6 +165,7 @@ final class AuthSessionTests: XCTestCase {
 
         await session.login(email: "user@example.com", password: "password", captchaCode: "ABCD", captchaUuid: "uuid")
 
+        XCTAssertFalse(session.requiresReauthentication, "首次登录失败应留在登录页面")
         XCTAssertFalse(session.isSignedIn)
         XCTAssertNil(session.currentUser)
         XCTAssertNil(try keychain.string(for: "signSecret"))
@@ -188,6 +204,7 @@ final class AuthSessionTests: XCTestCase {
 
         XCTAssertTrue(session.isSignedIn)
         XCTAssertEqual(session.currentUser?.nickname, "Yuki")
+        XCTAssertFalse(session.requiresReauthentication)
         XCTAssertEqual(try keychain.string(for: "signSecret"), "secret")
     }
 
@@ -416,7 +433,7 @@ final class APIClientUnauthorizedTests: XCTestCase {
         do {
             let _: EmptyResponse = try await client.get("/user/info")
             XCTFail("Expected HTTP 403")
-        } catch APIError.httpStatus(403, _, _, _) {
+        } catch APIError.httpStatus(403, _, _, _, _) {
             let wasInvalidated = await invalidated.wasInvalidated
             XCTAssertTrue(wasInvalidated)
         }
@@ -455,7 +472,7 @@ final class APIClientUnauthorizedTests: XCTestCase {
         do {
             let _: EmptyResponse = try await client.get("/user/info")
             XCTFail("Expected HTTP 403")
-        } catch APIError.httpStatus(403, _, _, _) {
+        } catch APIError.httpStatus(403, _, _, _, _) {
             let requests = await capturedRequests.requests
             let wasInvalidated = await invalidated.wasInvalidated
             XCTAssertEqual(requests.count, 2)
@@ -553,7 +570,7 @@ final class APIClientUnauthorizedTests: XCTestCase {
                 fileData: Data([1, 2, 3])
             )
             XCTFail("Expected HTTP 403")
-        } catch APIError.httpStatus(403, _, _, _) {
+        } catch APIError.httpStatus(403, _, _, _, _) {
             let requests = await capturedRequests.requests
             let wasInvalidated = await invalidated.wasInvalidated
             XCTAssertEqual(requests.count, 2)
@@ -580,9 +597,29 @@ final class APIClientUnauthorizedTests: XCTestCase {
         do {
             let _: EmptyResponse = try await client.get("/user/info")
             XCTFail("Expected HTTP 401")
-        } catch APIError.httpStatus(401, _, _, _) {
+        } catch APIError.httpStatus(401, _, _, _, _) {
             let wasInvalidated = await invalidated.wasInvalidated
             XCTAssertTrue(wasInvalidated)
+        }
+    }
+
+    func testErrorCodeDecodingPreservesBusinessAndLegacyCodes() async throws {
+        for (body, expected) in [
+            (#"{"code":"IMAGE_FEED_TOKEN_EXPIRED","message":"expired"}"#, "IMAGE_FEED_TOKEN_EXPIRED"),
+            (#"{"code":404,"msg":"legacy"}"#, "404"),
+        ] {
+            let client = APIClient(
+                config: AppConfig(apiBaseURL: URL(string: "https://api.example.com")!, siteBaseURL: URL(string: "https://example.com")!),
+                signer: AuthSigner(keychain: InMemoryKeychain()),
+                session: URLSession(configuration: .mock(statusCode: 404, body: body))
+            )
+            do {
+                let _: EmptyResponse = try await client.get("/mobile/images/feed/consume", signed: false)
+                XCTFail("Expected HTTP error")
+            } catch APIError.httpStatus(404, let message, _, _, let code) {
+                XCTAssertNotNil(message)
+                XCTAssertEqual(code, expected)
+            }
         }
     }
 
@@ -605,7 +642,7 @@ final class APIClientUnauthorizedTests: XCTestCase {
         do {
             let _: EmptyResponse = try await client.post("/auth/passkeys/authentication/finish", signed: false)
             XCTFail("Expected HTTP 401")
-        } catch APIError.httpStatus(401, _, _, _) {
+        } catch APIError.httpStatus(401, _, _, _, _) {
             let wasInvalidated = await invalidated.wasInvalidated
             XCTAssertFalse(wasInvalidated)
         }
@@ -623,7 +660,7 @@ final class APIClientUnauthorizedTests: XCTestCase {
         do {
             let _: EmptyResponse = try await client.get("/user/info", signed: false)
             XCTFail("Expected HTTP 401")
-        } catch APIError.httpStatus(401, let message, let requestID, let traceID) {
+        } catch APIError.httpStatus(401, let message, let requestID, let traceID, _) {
             XCTAssertEqual(message, "Unauthorized")
             XCTAssertNotNil(UUID(uuidString: requestID ?? ""))
             XCTAssertEqual(traceID, "trace-123")
@@ -650,7 +687,7 @@ final class APIClientUnauthorizedTests: XCTestCase {
         do {
             let _: EmptyResponse = try await client.get("/user/info", signed: false)
             XCTFail("Expected HTTP 401")
-        } catch APIError.httpStatus(401, _, _, let traceID) {
+        } catch APIError.httpStatus(401, _, _, let traceID, _) {
             XCTAssertEqual(traceID, "header-trace-456")
         }
     }

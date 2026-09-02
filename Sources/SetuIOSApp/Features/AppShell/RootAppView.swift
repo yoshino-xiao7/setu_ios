@@ -4,17 +4,26 @@ import SwiftUI
 struct RootAppView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var environment: AppEnvironment
     @Bindable var pushNotifications: SystemPushCoordinator
     @State private var navigationCoordinator = AppNavigationCoordinator()
     @State private var loggedOutRouter = RouterPath()
-    @State private var musicPlayer = MusicPlaybackController()
+    @State var musicPlayer = MusicPlaybackController()
     @State private var showingMusicQueueDrawer = false
     @State private var isSessionReady = false
+    @State private var showingReauthentication = false
+    @State private var sessionOwnerID: Int?
 
-    init(environment: AppEnvironment, pushNotifications: SystemPushCoordinator) {
+    init(
+        environment: AppEnvironment,
+        pushNotifications: SystemPushCoordinator,
+        navigationCoordinator: AppNavigationCoordinator? = nil,
+        musicPlayer: MusicPlaybackController? = nil
+    ) {
+        _musicPlayer = State(initialValue: musicPlayer ?? MusicPlaybackController())
+        _navigationCoordinator = State(initialValue: navigationCoordinator ?? AppNavigationCoordinator())
         self.environment = environment
+        _sessionOwnerID = State(initialValue: environment.authSession.currentUser?.id)
         self.pushNotifications = pushNotifications
         SetuAppAppearance.configure()
     }
@@ -22,8 +31,9 @@ struct RootAppView: View {
     var body: some View {
         Group {
             if isSessionReady {
-                if environment.authSession.isSignedIn {
+                if environment.authSession.isSignedIn || environment.authSession.requiresReauthentication {
                     appTabs
+                        .id(sessionOwnerID)
                 } else {
                     NavigationStack(path: Binding(
                         get: { loggedOutRouter.path },
@@ -54,11 +64,12 @@ struct RootAppView: View {
         }
         .task {
             configureMusicPlayerResolver()
-            switchMusicPlaybackUser(from: nil, to: environment.authSession.currentUser?.id)
+            switchMusicPlaybackUser(from: environment.authSession.currentUser?.id, to: environment.authSession.currentUser?.id)
         }
         .onChange(of: environment.authSession.currentUser?.id) { oldUserID, newUserID in
             switchMusicPlaybackUser(from: oldUserID, to: newUserID)
             if newUserID != nil {
+                if !environment.authSession.requiresReauthentication { updateSessionOwner() }
                 Task { await pushNotifications.syncForSignedInUser() }
                 openPendingPushIfPossible()
             }
@@ -77,7 +88,34 @@ struct RootAppView: View {
             }
         }
         .tint(SetuColor.brandPink)
+        .sheet(isPresented: $showingReauthentication) {
+            NavigationStack(path: Binding(get: { loggedOutRouter.path }, set: { loggedOutRouter.path = $0 })) {
+                AccountView(environment: environment, initialAuthPage: .login)
+                    .navigationDestination(for: AppRoute.self) { destination(for: $0) }
+            }
+            .environment(loggedOutRouter)
+        }
+        .onChange(of: environment.authSession.requiresReauthentication) { _, required in
+            if !required, environment.authSession.isSignedIn {
+                showingReauthentication = false
+                updateSessionOwner()
+            }
+        }
         .environment(pushNotifications)
+    }
+
+    private func beginReauthentication() {
+        environment.authSession.invalidateLocalSession()
+        loggedOutRouter.reset()
+        showingReauthentication = true
+    }
+
+    private func updateSessionOwner() {
+        let userID = environment.authSession.currentUser?.id
+        if let previous = sessionOwnerID, previous != userID {
+            navigationCoordinator = AppNavigationCoordinator()
+        }
+        sessionOwnerID = userID
     }
 
     private func switchMusicPlaybackUser(from oldUserID: Int?, to newUserID: Int?) {
@@ -103,7 +141,11 @@ struct RootAppView: View {
     /// end-of-track auto-play and lock-screen/headphone skip work without a visible view.
     private func configureMusicPlayerResolver() {
         musicPlayer.resolveTrackURL = { track in
-            await resolvePlaybackURL(for: track)
+            musicPlayer.cancelPendingQualityChange()
+            return await resolvePlaybackURL(for: track, quality: musicPlayer.audioQuality, allowsFallback: true)
+        }
+        musicPlayer.resolveQualityURL = { track, quality in
+            await resolvePlaybackURL(for: track, quality: quality, allowsFallback: false)
         }
         musicPlayer.recordPlaybackHistory = { track in
             try? await environment.musicClient.addHistory(
@@ -119,26 +161,32 @@ struct RootAppView: View {
         }
     }
 
-    private func resolvePlaybackURL(for track: MusicPlaybackTrack) async -> MusicURLResolution {
-        var highQualityFailure: String?
+    private func resolvePlaybackURL(for track: MusicPlaybackTrack, quality: MusicAudioQuality,
+                                    allowsFallback: Bool) async -> MusicURLResolution {
+        let failure: UserFacingError
         do {
-            let highQuality = try await environment.musicClient.url(songID: track.id, level: "exhigh")
-            if let url = playableURL(from: highQuality) {
-                return .success(url)
+            let response = try await environment.musicClient.url(songID: track.id, level: quality.rawValue)
+            if let url = playableURL(from: response) {
+                let actual = response.data?.first?.level.flatMap(MusicAudioQuality.init(rawValue:))
+                let notice = actual.flatMap { $0 != quality ? "音源返回\($0.title)音质" : nil }
+                return .success(url, notice: notice)
             }
-            highQualityFailure = unavailableReason(from: highQuality)
+            failure = UserFacingError(message: unavailableReason(from: response))
         } catch {
-            highQualityFailure = UserFacingErrorMapper.map(error).message
+            let mapped = UserFacingErrorMapper.map(error)
+            if mapped.action == .signIn { return .unavailable(mapped) }
+            failure = mapped
         }
-
+        guard allowsFallback, quality != .standard else { return .unavailable(failure) }
         do {
             let standard = try await environment.musicClient.url(songID: track.id, level: "standard")
             if let url = playableURL(from: standard) {
-                return .success(url, notice: "已切换标准音质")
+                return .success(url, notice: "\(quality.title)音质不可用，本曲使用标准音质")
             }
             return .unavailable(unavailableReason(from: standard))
         } catch {
-            return .unavailable(highQualityFailure ?? UserFacingErrorMapper.map(error).message)
+            let mapped = UserFacingErrorMapper.map(error)
+            return .unavailable(mapped.action == .signIn ? mapped : failure)
         }
     }
 
@@ -167,22 +215,6 @@ struct RootAppView: View {
                 }
             }
             .background(SetuColor.pageGradient.ignoresSafeArea())
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                if musicPlayer.currentTrack != nil {
-                    Color.clear
-                        .frame(height: dynamicTypeSize.isAccessibilitySize ? 144 : 88)
-                        .allowsHitTesting(false)
-                }
-            }
-
-            if musicPlayer.currentTrack != nil {
-                MusicMiniPlayerBar(environment: environment, player: musicPlayer) {
-                    showingMusicQueueDrawer = true
-                }
-                .padding(.bottom, 64)
-                .zIndex(1)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
 
             if showingMusicQueueDrawer {
                 Color.black.opacity(0.28)
@@ -216,9 +248,30 @@ struct RootAppView: View {
             content(for: tab)
                 .navigationDestination(for: AppRoute.self) { route in
                     destination(for: route)
+                        .safeAreaInset(edge: .bottom, spacing: 0) { musicPlayerInset }
                 }
+                .safeAreaInset(edge: .bottom, spacing: 0) { musicPlayerInset }
         }
         .environment(navigationCoordinator.router(for: tab))
+        .environment(\.setuRecoveryActions, SetuRecoveryActions(
+            signIn: beginReauthentication,
+            goBack: {
+                let router = navigationCoordinator.router(for: tab)
+                if !router.path.isEmpty { router.path.removeLast() }
+            },
+            viewPoints: { navigationCoordinator.navigate(to: .images, route: .pointsLogs) }
+        ))
+    }
+
+    @ViewBuilder
+    private var musicPlayerInset: some View {
+        if musicPlayer.currentTrack != nil {
+            MusicMiniPlayerBar(environment: environment, player: musicPlayer) {
+                showingMusicQueueDrawer = true
+            }
+            .padding(.bottom, SetuSpacing.xl)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
     }
 
     @ViewBuilder
@@ -227,9 +280,9 @@ struct RootAppView: View {
         case .home:
             DashboardView(environment: environment, player: musicPlayer)
         case .ai:
-            AiHubView(environment: environment)
+            AiDrawView(environment: environment)
         case .images:
-            ImageHubView(environment: environment)
+            RandomImageSwipeView(environment: environment)
         case .music:
             MusicHomeView(environment: environment, player: musicPlayer)
         case .square:
@@ -237,127 +290,16 @@ struct RootAppView: View {
         }
     }
 
+    /// 聚合各 feature 域的 destination 解析器（AppDestination+*.swift）。
+    /// 未匹配的域渲染 EmptyView，ZStack 中恰好产生一个有效子视图。
     @ViewBuilder
-    private func destination(for route: AppRoute) -> some View {
-        switch route {
-        case .account:
-            AccountView(environment: environment)
-        case .authRegister:
-            AccountView(environment: environment, initialAuthPage: .register)
-        case .authRecovery:
-            AccountView(environment: environment, initialAuthPage: .recovery)
-        case .profile:
-            ProfileView(environment: environment)
-        case .docs:
-            StaticInfoView(environment: environment, kind: .docs)
-        case .about:
-            StaticInfoView(environment: environment, kind: .about)
-        case .privacy:
-            StaticInfoView(environment: environment, kind: .privacy)
-        case .terms:
-            StaticInfoView(environment: environment, kind: .terms)
-        case .passkeys:
-            PasskeyListView(environment: environment)
-        case .points:
-            PointsCallView(environment: environment)
-        case .pointsLogs:
-            PointsLogsView(environment: environment)
-        case .imageSwipe:
-            RandomImageSwipeView(environment: environment)
-        case .notifications:
-            NotificationsView(environment: environment)
-        case .favorites:
-            FavoriteListView(environment: environment)
-        case .imageDeleteRequests:
-            ImageDeleteRequestsView(environment: environment)
-        case .imageDeleteRequestDetail(let id):
-            ImageDeleteRequestDetailView(environment: environment, requestID: id)
-        case .qqBinding:
-            QqBindingView(environment: environment)
-        case .security:
-            SecuritySettingsView(environment: environment)
-        case .collections:
-            CollectionListView(environment: environment)
-        case .collectionDetail(let id):
-            CollectionDetailView(environment: environment, collectionID: id)
-        case .squareHub:
-            SquareHubView(environment: environment)
-        case .collectionSquare:
-            CollectionSquareView(environment: environment)
-        case .publicCollectionDetail(let id):
-            PublicCollectionDetailView(environment: environment, collectionID: id)
-        case .publicUserProfile(let userID):
-            PublicUserProfileView(environment: environment, userID: userID)
-        case .galleryUploads:
-            GalleryUploadBatchesView(environment: environment)
-        case .galleryUploadDetail(let id):
-            GalleryUploadDetailView(environment: environment, batchID: id)
-        case .aiDraw:
-            AiDrawView(environment: environment)
-        case .aiAssets:
-            AiAssetBrowserView(environment: environment)
-        case .aiHistory:
-            AiHistoryView(environment: environment)
-        case .aiDeleteRequests:
-            AiDeleteRequestsView(environment: environment)
-        case .aiGenerationDetail(let id):
-            AiGenerationDetailView(environment: environment, jobID: id)
-        case .publicAiWork(let work):
-            PublicAiWorkDetailView(environment: environment, work: work)
-        case .aiSquare:
-            AiSquareView(environment: environment)
-        case .musicHome:
-            MusicHomeView(environment: environment, player: musicPlayer)
-        case .musicSearch(let initialQuery):
-            MusicSearchView(environment: environment, player: musicPlayer, initialQuery: initialQuery)
-        case .musicHistory:
-            MusicHistoryView(environment: environment, player: musicPlayer)
-        case .playlists:
-            MusicPlaylistsView(environment: environment, player: musicPlayer)
-        case .playlistDetail(let id):
-            MusicPlaylistDetailView(environment: environment, player: musicPlayer, playlistID: id)
-        case .admin:
-            AdminOverviewView(environment: environment)
-        case .adminUsers:
-            AdminUsersView(environment: environment)
-        case .adminUserDetail(let id):
-            AdminUserDetailView(environment: environment, userID: id)
-        case .adminBlacklist:
-            AdminBlacklistView(environment: environment)
-        case .adminSystemStatus:
-            SystemStatusView(environment: environment, title: "系统监控")
-        case .adminMusicTokens:
-            AdminMusicTokensView(environment: environment)
-        case .adminImageInfo:
-            AdminImageInfoView(environment: environment)
-        case .adminImageDetail(let pid, let p):
-            AdminImageInfoView(environment: environment, initialPID: pid, initialPage: p)
-        case .adminImageDeleteRequests:
-            AdminImageDeleteRequestsView(environment: environment)
-        case .adminImageDeleteRequestDetail(let id):
-            AdminImageDeleteRequestDetailView(environment: environment, requestID: id)
-        case .adminImageAudit:
-            AdminImageAuditView(environment: environment)
-        case .adminGallerySubmissions:
-            AdminGallerySubmissionsView(environment: environment)
-        case .adminGallerySubmissionDetail(let id):
-            AdminGallerySubmissionDetailView(environment: environment, batchID: id)
-        case .adminOperationLogs:
-            AdminOperationLogsView(environment: environment)
-        case .adminOperationLogDetail(let id):
-            AdminOperationLogDetailView(environment: environment, logID: id)
-        case .adminPixivCrawl:
-            AdminPixivCrawlView(environment: environment)
-        case .adminPixivTask(let id):
-            AdminPixivTaskDetailView(environment: environment, taskID: id)
-        case .adminAiGenerations:
-            AdminAiGenerationsView(environment: environment)
-        case .adminAiWorkers:
-            AdminAiWorkersView(environment: environment)
-        case .adminAiReviews:
-            AdminAiReviewsView(environment: environment)
-        case .adminAiDeleteRequests:
-            AdminAiDeleteRequestsView(environment: environment)
+    func destination(for route: AppRoute) -> some View {
+        ZStack {
+            accountDestination(for: route)
+            contentDestination(for: route)
+            aiDestination(for: route)
+            musicDestination(for: route)
+            adminDestination(for: route)
         }
     }
 
@@ -366,8 +308,10 @@ struct RootAppView: View {
             isSessionReady = true
             return
         }
-        _ = await environment.authSession.confirmAuthenticatedSession()
+        // 乐观恢复：本地已有会话（Keychain 还原）就立即进入主界面，
+        // 后台再确认；仅后端明确拒绝（401/403）才清除会话，弱网不踢人。
         isSessionReady = true
+        await environment.authSession.confirmSession()
     }
 
     private func openPendingPushIfPossible() {

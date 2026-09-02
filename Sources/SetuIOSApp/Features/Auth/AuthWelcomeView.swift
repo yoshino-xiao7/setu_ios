@@ -1,7 +1,11 @@
 import AuthenticationServices
 import SwiftUI
+import SetuIOSCore
 
 struct AuthWelcomeView: View {
+    @Bindable var environment: AppEnvironment
+    @State private var dailyExample: SetuImageItem?
+    @State private var preview: UserImagePreviewItem?
     let isAppleLoading: Bool
     let sessionFeedback: SetuFeedback?
     let onAppleRequest: (ASAuthorizationAppleIDRequest) -> Void
@@ -9,17 +13,15 @@ struct AuthWelcomeView: View {
     let onEmailLogin: () -> Void
     let onRegister: () -> Void
     let onPasskey: () -> Void
-    let onPreview: () -> Void
     let onPrivacy: () -> Void
     let onTerms: () -> Void
 
     var body: some View {
-        VStack(spacing: SetuSpacing.xxl) {
-            Spacer(minLength: SetuSpacing.xxl)
+        VStack(spacing: SetuSpacing.lg) {
 
             VStack(spacing: SetuSpacing.lg) {
                 Image(systemName: "sparkles.rectangle.stack.fill")
-                    .font(.system(size: 54, weight: .semibold))
+                    .font(.system(size: 32, weight: .semibold))
                     .symbolRenderingMode(.palette)
                     .foregroundStyle(SetuColor.brandInk, SetuColor.brandSoft)
                     .accessibilityHidden(true)
@@ -38,6 +40,13 @@ struct AuthWelcomeView: View {
                         .multilineTextAlignment(.center)
                         .accessibilityIdentifier("auth.welcome.subtitle")
                 }
+            }
+
+            if let dailyExample {
+                DailyExampleCard(item: dailyExample) {
+                    preview = UserImagePreviewItem(image: dailyExample)
+                }
+                .frame(maxWidth: 520)
             }
 
             if let sessionFeedback {
@@ -82,15 +91,6 @@ struct AuthWelcomeView: View {
             .frame(maxWidth: 520)
 
             VStack(spacing: SetuSpacing.md) {
-                Button(action: onPreview) {
-                    Text("先看看能做什么")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(SetuColor.textPrimary)
-                        .frame(minWidth: 160, minHeight: 44)
-                        .contentShape(Rectangle())
-                }
-                .accessibilityIdentifier("auth.welcome.preview")
-
                 Text("继续即表示你同意以下内容")
                     .font(.footnote)
                     .foregroundStyle(SetuColor.textSecondary)
@@ -120,7 +120,9 @@ struct AuthWelcomeView: View {
 
             Spacer(minLength: SetuSpacing.xl)
         }
-        .frame(maxWidth: .infinity, minHeight: 620)
+        .frame(maxWidth: .infinity)
+        .task { dailyExample = try? await environment.publicBlogClient.dailySetu() }
+        .sheet(item: $preview) { UserImagePreviewSheet(item: $0) }
     }
 }
 
@@ -166,6 +168,7 @@ struct SetuAppleSignInButton: View {
 
 #Preview("欢迎页 · 浅色") {
     AuthWelcomeView(
+        environment: SetuPreviewEnvironment.make(),
         isAppleLoading: false,
         sessionFeedback: nil,
         onAppleRequest: { _ in },
@@ -173,7 +176,6 @@ struct SetuAppleSignInButton: View {
         onEmailLogin: {},
         onRegister: {},
         onPasskey: {},
-        onPreview: {},
         onPrivacy: {},
         onTerms: {}
     )
@@ -184,6 +186,7 @@ struct SetuAppleSignInButton: View {
 
 #Preview("欢迎页 · 深色 · 大字") {
     AuthWelcomeView(
+        environment: SetuPreviewEnvironment.make(),
         isAppleLoading: false,
         sessionFeedback: .error("登录已过期，请重新登录，完成后会返回之前的页面。"),
         onAppleRequest: { _ in },
@@ -191,7 +194,6 @@ struct SetuAppleSignInButton: View {
         onEmailLogin: {},
         onRegister: {},
         onPasskey: {},
-        onPreview: {},
         onPrivacy: {},
         onTerms: {}
     )

@@ -1,158 +1,6 @@
 import SetuIOSCore
 import SwiftUI
 
-struct AiHubView: View {
-    @Environment(RouterPath.self) private var router
-    @Bindable var environment: AppEnvironment
-
-    var body: some View {
-        List {
-            Section {
-                SetuHeroCard(title: "AI 绘画", subtitle: "描述想画的画面，选择画幅与风格，开始创作。", systemImage: "paintbrush.pointed") {
-                    router.navigate(to: .aiDraw)
-                }
-            }
-            .setuListRow()
-
-            Section {
-                SetuCard {
-                    VStack(spacing: SetuSpacing.lg) {
-                        SetuSectionHeader(title: "我的创作")
-                        HubNavigationRow(title: "我的 AI 作品", subtitle: "查看创作进度、作品与再次创作", systemImage: "clock.arrow.circlepath") {
-                            router.navigate(to: .aiHistory)
-                        }
-                        HubNavigationRow(title: "我的删除记录", subtitle: "查看已提交的 AI 作品删除申请", systemImage: "xmark.bin") {
-                            router.navigate(to: .aiDeleteRequests)
-                        }
-                    }
-                }
-            }
-            .setuListRow()
-
-            Section {
-                SetuCard {
-                    VStack(spacing: SetuSpacing.lg) {
-                        SetuSectionHeader(title: "公开内容")
-                        HubNavigationRow(title: "AI 绘画广场", subtitle: "浏览公开的 AI 作品", systemImage: "sparkles.rectangle.stack") {
-                            router.navigate(to: .aiSquare)
-                        }
-                    }
-                }
-            }
-            .setuListRow()
-        }
-        .listStyle(.plain)
-        .setuBackground()
-        .navigationTitle("")
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
-        .toolbar {
-            #if os(iOS)
-            ToolbarItem(placement: .topBarLeading) {
-                aiToolbarLogo
-            }
-            #else
-            ToolbarItem(placement: .automatic) {
-                aiToolbarLogo
-            }
-            #endif
-        }
-    }
-
-    private var aiToolbarLogo: some View {
-        SetuToolbarLogo(assetName: "AiDrawLogo", accessibilityLabel: "扣扣绘画")
-    }
-}
-
-struct ImageHubView: View {
-    @Environment(RouterPath.self) private var router
-    @Bindable var environment: AppEnvironment
-    @State private var pointsState: LoadState<PointsBalance> = .idle
-
-    private let costPerCall = 20
-
-    var body: some View {
-        List {
-            Section {
-                SetuHeroCard(title: "随机图片", subtitle: "免费浏览预览，喜欢时再确认解锁高清图。", systemImage: "photo.on.rectangle.angled") {
-                    router.navigate(to: .imageSwipe)
-                }
-            }
-            .setuListRow()
-
-            Section {
-                SetuCard {
-                    VStack(alignment: .leading, spacing: SetuSpacing.lg) {
-                        SetuSectionHeader(title: "随机刷图")
-                        ImageUsageOverviewRow(pointsState: pointsState, costPerCall: costPerCall) {
-                            Task { await loadPoints() }
-                        }
-                        SetuPill(text: "预览免费 · 高清图 20 积分", systemImage: "hand.tap", tone: .brand)
-                        Text("滑动和停留都不会扣分，只有你确认查看高清图时才会消费积分。")
-                            .font(SetuTypography.caption)
-                            .foregroundStyle(SetuColor.textSecondary)
-                    }
-                }
-            }
-            .setuListRow()
-
-            Section {
-                SetuCard {
-                    VStack(spacing: SetuSpacing.lg) {
-                        SetuSectionHeader(title: "图片工具")
-                        HubNavigationRow(title: "高级参数与批量获取", subtitle: "需要批量拉取或传统尺寸参数时使用", systemImage: "bolt.circle") {
-                            router.navigate(to: .points)
-                        }
-                        HubNavigationRow(title: "积分明细", subtitle: "查看积分获得和消耗记录", systemImage: "list.bullet.rectangle") {
-                            router.navigate(to: .pointsLogs)
-                        }
-                        HubNavigationRow(title: "图库投稿", subtitle: "上传图片并查看审核进度", systemImage: "square.and.arrow.up") {
-                            router.navigate(to: .galleryUploads)
-                        }
-                        HubNavigationRow(title: "我的删除申请", subtitle: "查看图片删除申请状态", systemImage: "trash") {
-                            router.navigate(to: .imageDeleteRequests)
-                        }
-                    }
-                }
-            }
-            .setuListRow()
-        }
-        .listStyle(.plain)
-        .setuBackground()
-        .navigationTitle("")
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
-        .toolbar {
-            #if os(iOS)
-            ToolbarItem(placement: .topBarLeading) {
-                imageToolbarLogo
-            }
-            #else
-            ToolbarItem(placement: .automatic) {
-                imageToolbarLogo
-            }
-            #endif
-        }
-        .task { await loadPoints() }
-        .refreshable { await loadPoints() }
-    }
-
-    private var imageToolbarLogo: some View {
-        SetuToolbarLogo(assetName: "ImageHomeLogo", accessibilityLabel: "扣扣图片")
-    }
-
-    private func loadPoints() async {
-        pointsState = .loading
-        do {
-            pointsState = .loaded(try await environment.pointsClient.balance())
-        } catch {
-            pointsState = .failed(UserFacingErrorMapper.map(error).message)
-        }
-    }
-}
-
 struct SquareHubView: View {
     @Environment(RouterPath.self) private var router
     @Bindable var environment: AppEnvironment
@@ -198,20 +46,7 @@ struct SquareHubView: View {
                 }
             )
 
-            Section {
-                SetuCard {
-                    VStack(spacing: SetuSpacing.lg) {
-                        SetuSectionHeader(title: "内容广场")
-                        HubNavigationRow(title: "收藏夹广场", subtitle: "查看公开收藏夹和图片集合", systemImage: "rectangle.stack") {
-                            router.navigate(to: .collectionSquare)
-                        }
-                        HubNavigationRow(title: "AI 绘画广场", subtitle: "查看公开 AI 绘画作品", systemImage: "sparkles") {
-                            router.navigate(to: .aiSquare)
-                        }
-                    }
-                }
-            }
-            .setuListRow()
+
 
             Section {
                 SetuCard {
@@ -220,7 +55,7 @@ struct SquareHubView: View {
                         HubNavigationRow(title: "我的收藏夹", subtitle: "管理自己的图片收藏", systemImage: "heart.rectangle") {
                             router.navigate(to: .collections)
                         }
-                        HubNavigationRow(title: "我的收藏", subtitle: "查看默认收藏图片", systemImage: "heart.fill") {
+                        HubNavigationRow(title: "默认收藏", subtitle: "查看默认收藏图片", systemImage: "heart.fill") {
                             router.navigate(to: .favorites)
                         }
                     }
@@ -230,7 +65,7 @@ struct SquareHubView: View {
         }
         .listStyle(.plain)
         .setuBackground()
-        .navigationTitle("")
+        .navigationTitle("广场")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -265,7 +100,7 @@ struct SquareHubView: View {
             let page = try await environment.collectionClient.square(page: 1, size: 6, sort: "hot")
             collectionPreviewState = .loaded(page.list)
         } catch {
-            collectionPreviewState = .failed(UserFacingErrorMapper.map(error).message)
+            collectionPreviewState = .failed(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -275,7 +110,7 @@ struct SquareHubView: View {
             let page = try await environment.aiGenerationClient.square(category: "GENERAL", page: 1, pageSize: 6)
             aiPreviewState = .loaded(page.list)
         } catch {
-            aiPreviewState = .failed(UserFacingErrorMapper.map(error).message)
+            aiPreviewState = .failed(UserFacingErrorMapper.map(error))
         }
     }
 }
@@ -368,51 +203,6 @@ private struct SquareLandingHeader: View {
         }
         .buttonStyle(.borderedProminent)
         .tint(.white)
-    }
-}
-
-private struct ImageUsageOverviewRow: View {
-    let pointsState: LoadState<PointsBalance>
-    let costPerCall: Int
-    let onRetry: () -> Void
-
-    var body: some View {
-        SetuStateView(
-            state: pointsState,
-            loadingTitle: "正在加载积分",
-            loadingImage: "bolt.circle",
-            failureTitle: "积分加载失败",
-            failureImage: "exclamationmark.triangle",
-            failureActionTitle: "重试",
-            failureAction: onRetry,
-            isEmpty: { _ in false },
-            emptyContent: { EmptyView() }
-        ) { balance in
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Label("\(balance.points)", systemImage: "bolt.circle.fill")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(SetuColor.brandInk)
-                    Text("当前积分")
-                        .font(.footnote)
-                        .foregroundStyle(SetuColor.textSecondary)
-                    Spacer()
-                    SetuPill(text: "高清图 \(costPerCall)", tone: .brand)
-                }
-
-                ProgressView(value: min(Double(balance.points) / Double(max(costPerCall * 10, 1)), 1))
-                    .tint(SetuColor.brandPink)
-
-                Text(
-                    balance.points >= costPerCall
-                        ? "预览免费，查看高清图时才会扣除 \(costPerCall) 积分。"
-                        : "仍可免费浏览预览；查看高清图需要 \(costPerCall) 积分。"
-                )
-                    .font(.footnote)
-                    .foregroundStyle(SetuColor.textSecondary)
-            }
-            .padding(.vertical, 3)
-        }
     }
 }
 

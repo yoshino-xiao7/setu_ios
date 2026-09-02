@@ -36,6 +36,16 @@ final class ProductAccessibilityUITests: XCTestCase {
 
     private let loggedInRoutes = [
         LoggedInRoute(
+            title: "图片 Tab", launchArgument: "-ui-testing-root-images",
+            rootIdentifier: "image.swipe.page", readyIdentifier: "image.unlock",
+            landmarks: [], forwardScrollMode: .incremental
+        ),
+        LoggedInRoute(
+            title: "AI 绘画 Tab", launchArgument: "-ui-testing-root-ai",
+            rootIdentifier: "ai.draw.page", readyIdentifier: "ai.draw.prompt",
+            landmarks: [], forwardScrollMode: .incremental
+        ),
+        LoggedInRoute(
             title: "首页",
             launchArgument: "-ui-testing-dashboard",
             rootIdentifier: "dashboard.page",
@@ -63,6 +73,31 @@ final class ProductAccessibilityUITests: XCTestCase {
             forwardScrollMode: .incremental
         ),
     ]
+
+    func testTabRootsAndKeyboardAreDirectlyReachable() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing-root-images", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"]
+        app.launch()
+        defer { app.terminate() }
+        XCTAssertTrue(app.buttons["image.unlock"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.buttons["image.unlock"].isHittable)
+        app.tabBars.buttons["AI 绘画"].tap()
+        let prompt = app.textFields["ai.draw.prompt"].firstMatch
+        XCTAssertTrue(prompt.waitForExistence(timeout: 8))
+        XCTAssertTrue(prompt.isHittable)
+        XCTAssertTrue(app.buttons["ai.draw.generate"].isHittable)
+        prompt.tap()
+        let done = app.buttons["ai.draw.keyboard.done"]
+        XCTAssertTrue(done.waitForExistence(timeout: 5))
+        done.tap()
+        XCTAssertFalse(app.keyboards.firstMatch.exists)
+        XCTAssertTrue(app.buttons["ai.draw.generate"].isHittable)
+        app.tabBars.buttons["首页"].tap()
+        let bell = app.buttons["dashboard.notifications"]
+        XCTAssertTrue(bell.waitForExistence(timeout: 8))
+        bell.tap()
+        XCTAssertTrue(anyElement(withIdentifier: "notifications.page", in: app).waitForExistence(timeout: 8))
+    }
 
     func testLoggedInRoutesPassLightDefaultAccessibilityAudit() throws {
         try assertLoggedInRouteMatrix(extraLaunchArguments: [
@@ -109,7 +144,7 @@ final class ProductAccessibilityUITests: XCTestCase {
                 in: app,
                 pageRoot: root,
                 forwardScrollMode: .semantic,
-                maximumSwipes: 16
+                maximumSwipes: 3
             )
             XCTAssertFalse(
                 app.staticTexts[check.falseHealthyText].exists,
@@ -314,25 +349,27 @@ final class ProductAccessibilityUITests: XCTestCase {
         let favorite = app.buttons["image.favorite"]
         XCTAssertTrue(favorite.waitForExistence(timeout: 8))
         let favoriteReady = expectation(
-            for: NSPredicate(format: "label == %@ AND isEnabled == true", "喜欢"),
+            for: NSPredicate(format: "label == %@ AND isEnabled == true", "收藏"),
             evaluatedWith: favorite
         )
         XCTAssertEqual(XCTWaiter.wait(for: [favoriteReady], timeout: 8), .completed)
         XCTAssertTrue(favorite.isHittable)
-        XCTAssertTrue(app.buttons["收藏夹"].isHittable)
+        XCTAssertTrue(app.buttons["image.share"].isHittable)
         XCTAssertTrue(app.buttons["下一张"].isHittable)
 
         let parameters = app.buttons["调整找图设置"]
         XCTAssertTrue(parameters.isHittable)
         parameters.tap()
-        let keyword = app.textFields["关键词"]
+        let keyword = app.textFields["image.filter.keyword"]
         XCTAssertTrue(keyword.waitForExistence(timeout: 4))
         keyword.tap()
         keyword.typeText("cancelled-filter")
         app.buttons["取消"].tap()
+        let dismissed = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: keyword)
+        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 5), .completed)
 
         parameters.tap()
-        let reopenedKeyword = app.textFields["关键词"]
+        let reopenedKeyword = app.textFields["image.filter.keyword"]
         XCTAssertTrue(reopenedKeyword.waitForExistence(timeout: 4))
         XCTAssertFalse(
             String(describing: reopenedKeyword.value).contains("cancelled-filter"),
@@ -388,7 +425,7 @@ final class ProductAccessibilityUITests: XCTestCase {
         app.launch()
 
         let likeButton = app.buttons["ai.public.like"]
-        XCTAssertTrue(likeButton.waitForExistence(timeout: 8))
+        XCTAssertTrue(app.navigationBars["公开作品"].waitForExistence(timeout: 8))
         scrollUntilHittable(likeButton, in: app)
 
         let favoriteButton = app.buttons["ai.public.favorite"]
@@ -445,10 +482,10 @@ final class ProductAccessibilityUITests: XCTestCase {
 
                 let root = anyElement(withIdentifier: route.rootIdentifier, in: app)
                 XCTAssertTrue(root.waitForExistence(timeout: 8), "未显示\(route.title)根页面")
-                let readySignal = anyElement(withIdentifier: route.readyIdentifier, in: app)
-                XCTAssertTrue(readySignal.waitForExistence(timeout: 8), "\(route.title)离线数据未加载完成")
                 try performVisibleViewportAccessibilityAudit(in: app)
 
+                // List may not create an offscreen row until scrolling, especially at AX5.
+                // Verify loaded content by reaching the ready landmark, not by requiring it in the initial tree.
                 let orderedLandmarks = [Landmark(identifier: route.readyIdentifier)] + route.landmarks
                 for landmark in orderedLandmarks {
                     scrollUntilVisible(
@@ -456,7 +493,7 @@ final class ProductAccessibilityUITests: XCTestCase {
                         in: app,
                         pageRoot: root,
                         forwardScrollMode: route.forwardScrollMode,
-                        maximumSwipes: 16
+                        maximumSwipes: 32
                     )
                     try performVisibleViewportAccessibilityAudit(in: app)
                 }

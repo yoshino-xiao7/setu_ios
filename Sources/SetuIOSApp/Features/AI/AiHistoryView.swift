@@ -6,16 +6,23 @@ import UIKit
 #endif
 
 struct AiHistoryView: View {
+    @Environment(AppNavigationCoordinator.self) private var navigation
     @Environment(RouterPath.self) private var router
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var environment: AppEnvironment
+    @State private var pager = PagingController<AiGenerationJob>(pageSize: 12)
+    private var jobs: [AiGenerationJob] {
+        get { pager.items }
+        nonmutating set { pager.replaceItems(newValue) }
+    }
+    private var total: Int { pager.total }
+    private var isInitialLoading: Bool { pager.phase == .loadingInitial || (!pager.hasLoadedFirstPage && pager.initialError == nil) }
+    private var isLoadingMore: Bool { pager.phase == .loadingMore }
+    private var initialError: UserFacingError? { pager.initialError }
+    private var loadMoreError: UserFacingError? { pager.loadMoreError }
+    private var loadError: UserFacingError? { pager.loadMoreError ?? pager.initialError }
+
     @State private var statusFilter = ""
-    @State private var jobs: [AiGenerationJob] = []
-    @State private var total = 0
-    @State private var nextPage = 1
-    @State private var isInitialLoading = true
-    @State private var isLoadingMore = false
-    @State private var loadError: String?
     @State private var feedback: SetuFeedback?
     @State private var showingDeleteRequests = false
     @State private var previewSelection: AiHistoryPreviewSelection?
@@ -97,6 +104,7 @@ struct AiHistoryView: View {
             .padding(.vertical, SetuSpacing.md)
         }
         .setuBackground()
+        .setuFeedbackPresentation($feedback)
         .navigationTitle("AI 绘画历史")
         .toolbar {
             Button {
@@ -158,7 +166,7 @@ struct AiHistoryView: View {
         return .idle
     }
 
-    private var hasMore: Bool { jobs.count < total }
+    private var hasMore: Bool { pager.hasMore }
 
     private var gridColumns: [GridItem] {
         dynamicTypeSize.isAccessibilitySize
@@ -167,52 +175,24 @@ struct AiHistoryView: View {
     }
 
     private func loadFirstPage(clearExisting: Bool = false) async {
-        let requestedFilter = statusFilter
-        if clearExisting {
-            jobs = []
-            total = 0
-            nextPage = 1
+        let filter = statusFilter
+        await pager.loadFirstPage(clearExisting: clearExisting) { page in
+            let result = try await environment.aiGenerationClient.listMine(status: filter, page: page, pageSize: pageSize)
+            return .init(items: result.list, total: result.total)
         }
-        isInitialLoading = jobs.isEmpty
-        isLoadingMore = false
-        loadError = nil
-        feedback = nil
-        do {
-            let result = try await environment.aiGenerationClient.listMine(status: requestedFilter, page: 1, pageSize: pageSize)
-            guard requestedFilter == statusFilter else { return }
-            jobs = result.list
-            total = result.total
-            nextPage = 2
-        } catch {
-            guard requestedFilter == statusFilter else { return }
-            loadError = UserFacingErrorMapper.map(error).message
-        }
-        isInitialLoading = false
     }
 
     private func loadMore() async {
-        guard hasMore, !isLoadingMore, !isInitialLoading else { return }
-        let requestedFilter = statusFilter
-        let requestedPage = nextPage
-        isLoadingMore = true
-        loadError = nil
-        defer { isLoadingMore = false }
-        do {
-            let result = try await environment.aiGenerationClient.listMine(status: requestedFilter, page: requestedPage, pageSize: pageSize)
-            guard requestedFilter == statusFilter, requestedPage == nextPage else { return }
-            let existingIDs = Set(jobs.map(\.id))
-            jobs.append(contentsOf: result.list.filter { !existingIDs.contains($0.id) })
-            total = result.total
-            nextPage += 1
-        } catch {
-            guard requestedFilter == statusFilter else { return }
-            loadError = UserFacingErrorMapper.map(error).message
+        let filter = statusFilter
+        await pager.loadMore { page in
+            let result = try await environment.aiGenerationClient.listMine(status: filter, page: page, pageSize: pageSize)
+            return .init(items: result.list, total: result.total)
         }
     }
 
     private func reuse(_ job: AiGenerationJob) {
         AiDrawDraftStore.applyHistoryJob(job)
-        router.navigate(to: .aiDraw)
+        navigation.navigate(to: .ai, reset: true)
     }
 
     private func copyPrompt(_ job: AiGenerationJob) {
@@ -493,8 +473,8 @@ struct AiGenerationImagePreviewSheet: View {
             imageState = .loaded(result.url)
             localFeedback = .info("图片链接将在 \(result.expiresInSeconds) 秒后失效")
         } catch {
-            imageState = .failed(UserFacingErrorMapper.map(error).message)
-            localFeedback = .error(UserFacingErrorMapper.map(error).message)
+            imageState = .failed(UserFacingErrorMapper.map(error))
+            localFeedback = .error(UserFacingErrorMapper.map(error))
         }
     }
 

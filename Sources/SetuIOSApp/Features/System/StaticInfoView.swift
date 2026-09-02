@@ -151,24 +151,27 @@ struct StaticInfoView: View {
                     }
                 )
 
-                if case .failed(let message) = dailyFavoriteState {
-                    VStack(alignment: .leading, spacing: SetuSpacing.sm) {
-                        SetuFeedbackBanner(feedback: .error(message))
-                        Button("重试收藏状态") {
-                            Task { await loadDailyFavoriteStatus(for: item) }
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.large)
-                        .frame(minHeight: 44)
-                        .accessibilityIdentifier("daily.favorite.retry")
-                    }
-                    .accessibilityIdentifier("daily.favorite.failed")
-                }
+
             }
+
 
             if let dailyFeedback {
                 SetuFeedbackBanner(feedback: dailyFeedback)
             }
+        }
+        if case .loaded(let item) = dailyState, case .failed(let message) = dailyFavoriteState {
+            SetuCard {
+                Button("重试收藏状态") {
+                    Task { await loadDailyFavoriteStatus(for: item) }
+                }
+                .buttonStyle(.bordered)
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("daily.favorite.retry")
+                SetuFeedbackBanner(feedback: .error(message))
+            }
+            .setuListRow()
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("daily.favorite.failed")
         }
     }
 
@@ -242,7 +245,7 @@ struct StaticInfoView: View {
             dailyState = .loaded(item)
             await loadDailyFavoriteStatus(for: item)
         } catch {
-            dailyState = .failed(UserFacingErrorMapper.map(error).message)
+            dailyState = .failed(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -253,7 +256,7 @@ struct StaticInfoView: View {
                 try await environment.favoriteClient.exists(pid: item.pid, p: item.page)
             )
         } catch {
-            dailyFavoriteState = .failed(UserFacingErrorMapper.map(error).message)
+            dailyFavoriteState = .failed(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -273,7 +276,7 @@ struct StaticInfoView: View {
                 dailyFeedback = .success("已加入默认收藏夹")
             }
         } catch {
-            dailyFeedback = .error(UserFacingErrorMapper.map(error).message)
+            dailyFeedback = .error(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -305,15 +308,7 @@ private struct DailySetuExampleCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: SetuSpacing.md) {
-            SetuRemoteImage(
-                urlString: item.previewURLString,
-                accessibilityLabel: "每日图片：\(item.title)，作者 \(item.author)",
-                width: nil,
-                height: 220,
-                cornerRadius: SetuRadius.md,
-                contentMode: .fill
-            )
-            .frame(maxWidth: .infinity)
+            DailyExampleCard(item: item, height: 220, onPreview: onOpenOriginal)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.title)

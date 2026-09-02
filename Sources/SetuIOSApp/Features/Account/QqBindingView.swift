@@ -100,6 +100,7 @@ struct QqBindingView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .setuBackground()
+        .setuFeedbackPresentation($feedback)
         .navigationTitle("QQ 绑定")
         .task { await load() }
         .refreshable { await load() }
@@ -125,7 +126,7 @@ struct QqBindingView: View {
             qqNumber = binding.qqNumber ?? qqNumber
             state = .loaded(binding)
         } catch {
-            state = .failed(UserFacingErrorMapper.map(error).message)
+            state = .failed(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -140,7 +141,7 @@ struct QqBindingView: View {
                 feedback = .info("验证码已发送")
             }
         } catch {
-            feedback = .error(UserFacingErrorMapper.map(error).message)
+            feedback = .error(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -154,7 +155,7 @@ struct QqBindingView: View {
             feedback = .success("QQ 绑定已保存")
             state = .loaded(binding)
         } catch {
-            feedback = .error(UserFacingErrorMapper.map(error).message)
+            feedback = .error(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -164,7 +165,7 @@ struct QqBindingView: View {
             feedback = .success("QQ 通知已停用")
             state = .loaded(binding)
         } catch {
-            feedback = .error(UserFacingErrorMapper.map(error).message)
+            feedback = .error(UserFacingErrorMapper.map(error))
         }
     }
 }

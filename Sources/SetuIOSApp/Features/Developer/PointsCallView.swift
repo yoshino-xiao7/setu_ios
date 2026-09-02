@@ -2,6 +2,7 @@ import SetuIOSCore
 import SwiftUI
 
 struct PointsCallView: View {
+    @Environment(\.setuRecoveryActions) private var recovery
     @Environment(RouterPath.self) private var router
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var environment: AppEnvironment
@@ -44,6 +45,7 @@ struct PointsCallView: View {
         }
         .listStyle(.plain)
         .setuBackground()
+        .setuFeedbackPresentation($feedback)
         .accessibilityIdentifier("points.page")
         .navigationTitle("按条件找图")
         .toolbar {
@@ -254,7 +256,7 @@ struct PointsCallView: View {
         do {
             pointsState = .loaded(try await environment.pointsClient.balance())
         } catch {
-            pointsState = .failed(UserFacingErrorMapper.map(error).message)
+            pointsState = .failed(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -297,11 +299,13 @@ struct PointsCallView: View {
     private func handleErrorAction(_ action: UserFacingErrorAction) {
         switch action {
         case .retry:
-            Task { await callSetu() }
+            Task { await loadPoints() }
+            userFacingError = nil
+            feedback = .info("请确认积分与已有结果，再点击找图按钮。")
         case .refresh:
             Task { await loadPoints() }
         case .signIn:
-            environment.authSession.invalidateLocalSession()
+            recovery.signIn?()
         case .goBack:
             if !router.path.isEmpty {
                 router.path.removeLast()
@@ -333,7 +337,7 @@ struct PointsCallView: View {
                             let isFavorited = try await client.exists(pid: item.pid, p: item.page)
                             return (item.id, .loaded(isFavorited))
                         } catch {
-                            return (item.id, .failed(UserFacingErrorMapper.map(error).message))
+                            return (item.id, .failed(UserFacingErrorMapper.map(error)))
                         }
                     }
                 }
@@ -359,14 +363,14 @@ struct PointsCallView: View {
         } catch {
             guard loadID == favoriteStatusLoadID,
                   results.contains(where: { $0.id == item.id }) else { return }
-            favoriteStates[item.id] = .failed(UserFacingErrorMapper.map(error).message)
+            favoriteStates[item.id] = .failed(UserFacingErrorMapper.map(error))
         }
     }
 }
 
 private enum PointsFavoriteStatusResult: Sendable {
     case loaded(Bool)
-    case failed(String)
+    case failed(UserFacingError)
 
     var loadState: LoadState<Bool> {
         switch self {
@@ -377,6 +381,7 @@ private enum PointsFavoriteStatusResult: Sendable {
 }
 
 private struct PointsResultRow: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let item: SetuImageItem
     let favoriteState: LoadState<Bool>
     let onPreview: () -> Void
@@ -385,7 +390,11 @@ private struct PointsResultRow: View {
     let onDeleteRequest: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        let layout =
+            dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+            : AnyLayout(HStackLayout(spacing: 12))
+        return layout {
             SetuRemoteImage(
                 urlString: item.previewURLString,
                 accessibilityLabel: "图片：\(item.title)",
@@ -400,19 +409,8 @@ private struct PointsResultRow: View {
                 Text(item.author)
                     .font(.footnote)
                     .foregroundStyle(SetuColor.textSecondary)
-                HStack(spacing: 10) {
-                    Label("\(item.width) × \(item.height)", systemImage: "rectangle")
-                    if item.r18 == 1 {
-                        SetuPill(text: "成人内容", tone: .danger)
-                    }
-                    if case .loaded(true) = favoriteState {
-                        Label("已收藏", systemImage: "heart.fill")
-                    } else if case .loading = favoriteState {
-                        Label("正在确认收藏", systemImage: "clock")
-                    } else if case .failed = favoriteState {
-                        Label("收藏状态未知", systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(SetuColor.warning)
-                    }
+                ViewThatFits(in: .horizontal) {
+                    metadata
                 }
                 .font(.caption)
                 .foregroundStyle(SetuColor.textSecondary)
@@ -420,34 +418,59 @@ private struct PointsResultRow: View {
                 if case .failed = favoriteState {
                     Button("重试收藏状态", action: onRetryFavoriteStatus)
                         .buttonStyle(.bordered)
-                        .controlSize(.small)
                         .frame(minHeight: 44)
                         .accessibilityIdentifier("points.favorite.retry.\(item.id)")
                 }
             }
             Spacer()
-            Menu {
-                Button(action: onFavorite) {
-                    Label(favoriteActionTitle, systemImage: favoriteActionSystemImage)
-                }
-                .disabled(!favoriteActionIsAvailable)
-                Button(action: onDeleteRequest) {
-                    Label("申请删除", systemImage: "trash")
-                }
-                Button(action: onPreview) {
-                    Label("预览、保存与分享", systemImage: "eye")
-                }
-            } label: {
-                Image(systemName: "ellipsis.circle")
-                    .font(.title3)
-                    .foregroundStyle(SetuColor.brandInk)
-                    .frame(width: 44, height: 44)
-            }
-            .buttonStyle(.borderless)
-            .accessibilityLabel("更多图片操作")
+            actionsMenu
         }
         .padding(.vertical, 4)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("points.result.\(item.id)")
+    }
+
+    private var metadata: some View {
+        let layout =
+            dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 10))
+            : AnyLayout(HStackLayout(spacing: 10))
+        return layout {
+            Label("\(item.width) × \(item.height)", systemImage: "rectangle")
+            if item.r18 == 1 {
+                SetuPill(text: "成人内容", tone: .danger)
+            }
+            if case .loaded(true) = favoriteState {
+                Label("已收藏", systemImage: "heart.fill")
+            } else if case .loading = favoriteState {
+                Label("正在确认收藏", systemImage: "clock")
+            } else if case .failed = favoriteState {
+                Label("收藏状态未知", systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(SetuColor.warning)
+            }
+        }
+    }
+
+    private var actionsMenu: some View {
+        Menu {
+            Button(action: onFavorite) {
+                Label(favoriteActionTitle, systemImage: favoriteActionSystemImage)
+            }
+            .disabled(!favoriteActionIsAvailable)
+            Button(action: onDeleteRequest) {
+                Label("申请删除", systemImage: "trash")
+            }
+            Button(action: onPreview) {
+                Label("预览、保存与分享", systemImage: "eye")
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .font(.title3)
+                .foregroundStyle(SetuColor.brandInk)
+                .frame(width: 44, height: 44)
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel("更多图片操作")
     }
 
     private var favoriteActionTitle: String {
@@ -537,7 +560,7 @@ private struct PointsFavoriteSheet: View {
             state = .loaded(collections)
             selectedID = collections.first(where: { $0.isDefault })?.id ?? collections.first?.id
         } catch {
-            state = .failed(UserFacingErrorMapper.map(error).message)
+            state = .failed(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -557,7 +580,7 @@ private struct PointsFavoriteSheet: View {
             )
             dismiss()
         } catch {
-            feedback = .error(UserFacingErrorMapper.map(error).message)
+            feedback = .error(UserFacingErrorMapper.map(error))
         }
         saving = false
     }
@@ -632,7 +655,7 @@ private struct PointsDeleteRequestSheet: View {
             onDone(.success("申请已提交，请在我的删除申请中查看进度"))
             dismiss()
         } catch {
-            feedback = .error(UserFacingErrorMapper.map(error).message)
+            feedback = .error(UserFacingErrorMapper.map(error))
         }
         submitting = false
     }

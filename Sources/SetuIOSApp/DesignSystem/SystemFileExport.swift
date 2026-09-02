@@ -12,7 +12,7 @@ struct SystemFileSharePayload: Identifiable {
 enum SystemFileShareResult {
     case completed
     case cancelled
-    case failed(String)
+    case failed(UserFacingError)
 }
 
 #if os(iOS)
@@ -24,7 +24,7 @@ struct SystemFileShareSheet: UIViewControllerRepresentable {
         let controller = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
         controller.completionWithItemsHandler = { _, completed, _, error in
             if let error {
-                onComplete(.failed(UserFacingErrorMapper.map(error).message))
+                onComplete(.failed(UserFacingErrorMapper.map(error)))
             } else {
                 onComplete(completed ? .completed : .cancelled)
             }

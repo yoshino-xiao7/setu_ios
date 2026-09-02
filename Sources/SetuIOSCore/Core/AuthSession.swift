@@ -10,6 +10,7 @@ public final class AuthSession {
 
     public var currentUser: CurrentUser?
     public var expireAt: Date?
+    public private(set) var requiresReauthentication = false
     public var isRefreshing = false
     public var lastError: String?
 
@@ -110,24 +111,51 @@ public final class AuthSession {
     }
 
     public func acceptLoginResponse(_ response: LoginResponse, fallbackEmail: String? = nil) async throws {
+        let wasReauthenticating = requiresReauthentication
         try applyLoginResponse(response, fallbackEmail: fallbackEmail)
-        guard await confirmAuthenticatedSession() else {
+        let outcome = await confirmSession()
+        if outcome == .invalidated {
+            requiresReauthentication = wasReauthenticating
             throw AuthSessionError.sessionConfirmationFailed
         }
+        requiresReauthentication = false
     }
 
+    /// 会话确认结果。
+    public enum SessionConfirmationOutcome: Equatable, Sendable {
+        /// `/user/info` 成功，会话有效。
+        case confirmed
+        /// 网络等原因暂时无法确认——会话保留，等待后续请求自然重试。
+        case retainedUnverified
+        /// 后端明确拒绝（401/403）——本地会话已清除。
+        case invalidated
+    }
+
+    /// 向服务端确认会话。只有后端明确拒绝（401/403）才清除本地会话；
+    /// 弱网/超时/5xx 一律保留会话（乐观恢复），避免弱网把已登录用户踢回登录页。
     @discardableResult
-    public func confirmAuthenticatedSession() async -> Bool {
+    public func confirmSession() async -> SessionConfirmationOutcome {
         do {
             let profile: UserProfile = try await apiClient.get("/user/info")
             try applyUserProfile(profile)
             lastError = nil
-            return true
+            return .confirmed
         } catch {
-            clearLocalSession()
-            lastError = "登录会话确认失败，请重新登录"
+            if Self.isDefinitiveSessionRejection(error) {
+                invalidateLocalSession()
+                return .invalidated
+            }
+            lastError = Self.userFacingMessage(for: error)
+            return .retainedUnverified
+        }
+    }
+
+    private static func isDefinitiveSessionRejection(_ error: Error) -> Bool {
+        guard let apiError = error as? APIError,
+              case .httpStatus(let status, _, _, _, _) = apiError else {
             return false
         }
+        return status == 401 || status == 403
     }
 
     public func applyUserProfile(_ profile: UserProfile) throws {
@@ -158,16 +186,20 @@ public final class AuthSession {
     }
 
     public func logout() async {
+        requiresReauthentication = false
         _ = try? await apiClient.post("/auth/logout", signed: true) as EmptyResponse
         clearLocalSession()
+        requiresReauthentication = false
     }
 
     public func invalidateLocalSession(message: String = "登录已过期，请重新登录") {
+        requiresReauthentication = requiresReauthentication || currentUser != nil
         clearLocalSession()
         lastError = message
     }
 
     public func resetLocalSession() {
+        requiresReauthentication = false
         clearLocalSession()
         lastError = nil
     }
@@ -230,49 +262,29 @@ public final class AuthSession {
         expireAt = nil
     }
 
+    /// 会话确认场景的用户可读错误文案。
+    /// 通用状态码语义统一来自 UserFacingErrorMapper（唯一实现），
+    /// 此处只保留登录上下文的必要覆盖：401 是凭据错误、400/409 可透出
+    /// 经过脱敏的服务端提示。
     private static func userFacingMessage(for error: Error) -> String {
         if error is AuthSessionError {
             return "登录会话确认失败，请重新登录"
         }
-        if let urlError = error as? URLError {
-            switch urlError.code {
-            case .notConnectedToInternet, .networkConnectionLost:
-                return "网络似乎断开了，请检查连接后重试"
-            case .timedOut:
-                return "连接超时，请稍后重试"
-            default:
-                return "暂时无法连接服务，请稍后重试"
-            }
-        }
 
-        guard let apiError = error as? APIError else {
-            return "操作没有完成，请稍后重试"
-        }
+        let mapped = UserFacingErrorMapper.map(error)
 
-        switch apiError {
-        case .invalidURL, .invalidResponse:
-            return "服务响应异常，请稍后重试"
-        case .httpStatus(let status, let message, _, _):
+        if let apiError = error as? APIError, case .httpStatus(let status, let message, _, _, _) = apiError {
             let safeMessage = sanitizedServerMessage(message)
             switch status {
-            case 400:
-                return safeMessage ?? "请检查填写内容后重试"
+            case 400, 409:
+                return safeMessage ?? mapped.message
             case 401:
                 return "邮箱、密码或验证码不正确，请重新输入"
-            case 403:
-                return "当前账号无法执行此操作"
-            case 404:
-                return "请求的内容不存在或已被移除"
-            case 409:
-                return safeMessage ?? "当前状态已发生变化，请刷新后继续"
-            case 429:
-                return "操作有点频繁，请稍后再试"
-            case 500...599:
-                return "服务暂时开小差，请稍后重试"
             default:
-                return safeMessage ?? "操作没有完成，请稍后重试"
+                break
             }
         }
+        return mapped.message
     }
 
     private static func sanitizedServerMessage(_ message: String?) -> String? {

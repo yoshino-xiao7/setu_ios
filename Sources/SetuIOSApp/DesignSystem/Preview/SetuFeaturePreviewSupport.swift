@@ -26,9 +26,10 @@ struct SetuFeaturePreviewHost<Content: View>: View {
         let previewDraft: AiDrawDraft = draftState == .fixture
             ? SetuPreviewFixtures.aiDrawDraft
             : AiDrawDraft()
+        AiAssetBrowserCacheStore.activatePreviewStorage()
         AiDrawDraftStore.activatePreviewStorage(with: previewDraft)
         let environment = SetuPreviewEnvironment.make()
-        let player = MusicPlaybackController()
+        let player = MusicPlaybackController(persistsPlayback: false)
         if playerState == .listening {
             player.configurePreview(
                 songs: SetuPreviewAPI.musicSongs,
@@ -52,6 +53,57 @@ struct SetuFeaturePreviewHost<Content: View>: View {
         .environment(pushNotifications)
         .tint(SetuColor.brandPink)
     }
+}
+
+@MainActor
+struct SetuRootUITestScenario: View {
+    @State private var context: SetuRootUITestContext?
+
+    var body: some View {
+        Group {
+            if let context {
+                RootAppView(
+                    environment: context.environment, pushNotifications: context.push,
+                    navigationCoordinator: context.navigation, musicPlayer: context.player
+                )
+            } else {
+                ProgressView()
+                    .task {
+                        // Own the fixtures for the lifetime of this screen, including sheet presentations.
+                        if context == nil { context = SetuRootUITestContext() }
+                    }
+            }
+        }
+    }
+}
+
+@MainActor
+private struct SetuRootUITestContext {
+    let environment: AppEnvironment
+    let push: SystemPushCoordinator
+    let navigation: AppNavigationCoordinator
+    let player: MusicPlaybackController
+
+    init() {
+        AiAssetBrowserCacheStore.activatePreviewStorage()
+        AiDrawDraftStore.activatePreviewStorage(with: SetuPreviewFixtures.aiDrawDraft)
+        let environment = SetuPreviewEnvironment.make()
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-welcome-fixture") {
+            environment.authSession.resetLocalSession()
+        }
+        self.environment = environment
+        push = SystemPushCoordinator(environment: environment)
+        navigation = AppNavigationCoordinator()
+        player = MusicPlaybackController(persistsPlayback: false)
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-player") {
+            player.configurePreview(songs: SetuPreviewAPI.musicSongs)
+        }
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-images") { navigation.selectedTab = .images }
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-ai") { navigation.selectedTab = .ai }
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-music") { navigation.selectedTab = .music }
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-favorites") { navigation.navigate(to: .images, route: .favorites) }
+    }
+
 }
 
 enum SetuPreviewPlayerState: Equatable {
@@ -232,7 +284,7 @@ struct SetuSquareHubUITestScenario: View {
 struct SetuAiHubUITestScenario: View {
     var body: some View {
         SetuFeaturePreviewHost { environment, _ in
-            AiHubView(environment: environment)
+            AiDrawView(environment: environment)
         }
     }
 }
@@ -241,7 +293,7 @@ struct SetuAiHubUITestScenario: View {
 struct SetuImageHubUITestScenario: View {
     var body: some View {
         SetuFeaturePreviewHost { environment, _ in
-            ImageHubView(environment: environment)
+            RandomImageSwipeView(environment: environment)
         }
     }
 }
@@ -273,7 +325,7 @@ private struct SetuNotificationPermissionUITestHarness: View {
 }
 
 @MainActor
-private enum SetuPreviewEnvironment {
+enum SetuPreviewEnvironment {
     static func make() -> AppEnvironment {
         let keychain = SetuPreviewKeychain()
         let config = AppConfig(
@@ -285,15 +337,28 @@ private enum SetuPreviewEnvironment {
         sessionConfiguration.protocolClasses = [SetuPreviewURLProtocol.self]
         sessionConfiguration.urlCache = nil
         sessionConfiguration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        let invalidation = SessionInvalidationNotifier()
         let apiClient = APIClient(
             config: config,
             signer: signer,
-            session: URLSession(configuration: sessionConfiguration)
+            session: URLSession(configuration: sessionConfiguration),
+            sessionInvalidationNotifier: invalidation
         )
         let authSession = AuthSession(apiClient: apiClient, keychain: keychain)
+        invalidation.setHandler { [weak authSession] in await authSession?.invalidateLocalSession() }
         try? signer.persistSignSecret("preview-only-signing-secret")
         if let profile = previewProfile() {
             try? authSession.applyUserProfile(profile)
+        }
+        let publicClient: PublicBlogClient
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-public-example-live") {
+            publicClient = PublicBlogClient(apiClient: APIClient(
+                config: .production,
+                signer: AuthSigner(keychain: SetuPreviewKeychain()),
+                session: URLSession(configuration: .ephemeral)
+            ))
+        } else {
+            publicClient = PublicBlogClient(apiClient: apiClient)
         }
 
         return AppEnvironment(
@@ -301,7 +366,7 @@ private enum SetuPreviewEnvironment {
             keychain: keychain,
             apiClient: apiClient,
             mobileAppClient: MobileAppClient(apiClient: apiClient),
-            publicBlogClient: PublicBlogClient(apiClient: apiClient),
+            publicBlogClient: publicClient,
             dashboardClient: DashboardClient(apiClient: apiClient),
             apiKeyClient: ApiKeyClient(apiClient: apiClient),
             pointsClient: PointsClient(apiClient: apiClient),
@@ -422,7 +487,13 @@ private enum SetuPreviewAPI {
         ),
     ]
 
+    private static let stateLock = NSLock()
+    private static var favoriteKeys: Set<String> = []
+    private static var loggedInAfterExpiry = false
+
     static func fixture(for request: URLRequest) -> Fixture {
+        stateLock.lock()
+        defer { stateLock.unlock() }
         guard let path = request.url?.path else {
             return json("{\"message\":\"无效的预览请求\"}", statusCode: 400)
         }
@@ -493,7 +564,46 @@ private enum SetuPreviewAPI {
             return json("{\"message\":\"Not Found\"}", statusCode: 404)
         }
 
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-feed-failure"), path == "/mobile/images/feed" {
+            return json("{\"message\":\"模拟网络故障\"}", statusCode: 503)
+        }
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-welcome-failure"), path == "/blog/setu" {
+            return json("{\"message\":\"模拟公开图片不可用\"}", statusCode: 503)
+        }
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-translate-401"),
+           !loggedInAfterExpiry, path == "/ai/prompt/translate" {
+            return json("{\"message\":\"登录已过期\"}", statusCode: 401)
+        }
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-401"),
+           !loggedInAfterExpiry,
+           path == "/user/info" || path == "/ai/status" || path == "/mobile/images/feed" || path == "/favorite/list" || path.hasPrefix("/user/music/") {
+            return json("{\"message\":\"登录已过期\"}", statusCode: 401)
+        }
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-feed-expiry"), path == "/mobile/images/feed/consume" {
+            return json("{\"code\":\"IMAGE_FEED_TOKEN_EXPIRED\",\"message\":\"预览过期\"}", statusCode: 404)
+        }
+        if path.hasPrefix("/favorite/"), request.httpMethod == "POST" || request.httpMethod == "DELETE" {
+            if request.httpMethod == "POST" { favoriteKeys.insert(path) } else { favoriteKeys.remove(path) }
+            return json("\"ok\"")
+        }
         switch path {
+        case "/auth/captcha":
+            return json("{\"uuid\":\"fixture-captcha\",\"img\":\"\"}")
+        case "/auth/login":
+            loggedInAfterExpiry = true
+            return json("{\"role\":0,\"email\":\"preview@xueliang.local\",\"userId\":42,\"signSecret\":\"fixture\",\"expireAt\":4102444800000}")
+        case "/user/info":
+            return json("{\"id\":42,\"email\":\"preview@xueliang.local\",\"nickname\":\"小雪\",\"role\":0,\"createdAt\":\"2026-09-02T10:00:00\"}")
+        case "/collections/mine":
+            return json("[{\"id\":1,\"userId\":42,\"name\":\"默认收藏\",\"visibility\":\"PRIVATE\",\"isDefault\":true},{\"id\":2,\"userId\":42,\"name\":\"灵感\",\"visibility\":\"PRIVATE\",\"isDefault\":false}]")
+        case "/notifications/unread-count" where ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("-ui-testing-root") }):
+            return json("{\"count\":0}")
+        case "/ai/prompt/translate":
+            return json("{\"status\":\"COMPLETED\",\"positive\":\"silver hair, rainy street\",\"negative\":\"blur\"}")
+        case "/ai/generations" where request.httpMethod == "POST":
+            return json(aiJob(id: 501, prompt: "银发少女站在雨夜街角，霓虹灯倒映在路面，电影感柔光", status: "COMPLETED", reviewStatus: "PENDING", category: nil, createdAt: "2026-09-02T10:00:00+08:00"))
+        case "/ai/generations/501":
+            return json(aiJob(id: 501, prompt: "银发少女站在雨夜街角，霓虹灯倒映在路面，电影感柔光", status: "COMPLETED", reviewStatus: "PENDING", category: nil, createdAt: "2026-09-02T10:00:00+08:00"))
         case "/usage/overview":
             return json("""
             {"totalCalls":128,"todayCalls":4,"lastCalledAt":"2026-07-10T10:20:00+08:00"}
@@ -542,7 +652,7 @@ private enum SetuPreviewAPI {
         case "/mobile/images/feed":
             return json(imageFeed)
         case let value where value.hasPrefix("/favorite/exists/"):
-            return json("false")
+            return json(favoriteKeys.contains(value.replacingOccurrences(of: "/favorite/exists/", with: "/favorite/")) ? "true" : "false")
         case "/square/collections":
             return json(collectionSquarePage)
         case let value where value.hasPrefix("/square/users/"):
@@ -551,6 +661,8 @@ private enum SetuPreviewAPI {
             """)
         case "/user/music/search/hot":
             return json(musicHotSearch)
+        case "/user/music/url" where ProcessInfo.processInfo.arguments.contains("-ui-testing-quality-unavailable"):
+            return json("{\"message\":\"该音质暂不可用\"}", statusCode: 503)
         case "/user/music/personalized":
             return json(musicRecommendedPlaylists)
         case "/user/music/personalized/newsong":

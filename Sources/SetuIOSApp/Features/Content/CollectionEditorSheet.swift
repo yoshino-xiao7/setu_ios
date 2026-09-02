@@ -72,6 +72,7 @@ struct CollectionEditorSheet: View {
             }
             .listStyle(.plain)
             .setuBackground()
+        .setuFeedbackPresentation($feedback)
             .navigationTitle(title)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -138,7 +139,7 @@ struct CollectionEditorSheet: View {
             onSaved()
             dismiss()
         } catch {
-            feedback = .error(UserFacingErrorMapper.map(error).message)
+            feedback = .error(UserFacingErrorMapper.map(error))
         }
     }
 }

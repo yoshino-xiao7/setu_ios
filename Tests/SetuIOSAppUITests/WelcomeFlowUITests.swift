@@ -12,7 +12,7 @@ final class WelcomeFlowUITests: XCTestCase {
         XCTAssertTrue(app.buttons["auth.welcome.apple"].isHittable)
         XCTAssertTrue(app.buttons["auth.welcome.email"].isHittable)
         XCTAssertTrue(app.buttons["auth.welcome.register"].isHittable)
-        XCTAssertTrue(app.buttons["auth.welcome.preview"].exists)
+        XCTAssertFalse(app.buttons["auth.welcome.preview"].exists)
         XCTAssertTrue(app.buttons["auth.welcome.privacy"].exists)
         XCTAssertTrue(app.buttons["auth.welcome.terms"].exists)
         XCTAssertFalse(app.staticTexts["雪凉云 API"].exists)

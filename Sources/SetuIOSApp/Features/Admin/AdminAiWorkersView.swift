@@ -285,23 +285,7 @@ private struct AiWorkerSnapshot: Sendable {
     }
 }
 
-private struct AdminWorkerStateSection: View {
-    let title: String
-    let stateTitle: String
-    var message: String?
-    var systemImage: String
-    var isLoading = false
-
-    var body: some View {
-        SetuCard {
-            VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                SetuSectionHeader(title: title)
-                SetuEmptyState(title: stateTitle, message: message, systemImage: systemImage, isLoading: isLoading)
-            }
-        }
-        .setuListRow()
-    }
-}
+private typealias AdminWorkerStateSection = SetuStateSection
 
 private struct AdminWorkerMetadataRow<Value: View>: View {
     let title: String

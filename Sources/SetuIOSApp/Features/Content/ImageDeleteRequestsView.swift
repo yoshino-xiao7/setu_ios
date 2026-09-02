@@ -4,13 +4,18 @@ import SwiftUI
 struct ImageDeleteRequestsView: View {
     @Environment(RouterPath.self) private var router
     @Bindable var environment: AppEnvironment
-    @State private var requests: [ImageDeleteRequestItem] = []
-    @State private var total = 0
-    @State private var nextPage = 1
-    @State private var isInitialLoading = true
-    @State private var isLoadingMore = false
-    @State private var loadError: String?
-    @State private var loadRevision = 0
+    @State private var pager = PagingController<ImageDeleteRequestItem>(pageSize: 10)
+    private var requests: [ImageDeleteRequestItem] {
+        get { pager.items }
+        nonmutating set { pager.replaceItems(newValue) }
+    }
+    private var total: Int { pager.total }
+    private var isInitialLoading: Bool { pager.phase == .loadingInitial || (!pager.hasLoadedFirstPage && pager.initialError == nil) }
+    private var isLoadingMore: Bool { pager.phase == .loadingMore }
+    private var initialError: UserFacingError? { pager.initialError }
+    private var loadMoreError: UserFacingError? { pager.loadMoreError }
+    private var loadError: UserFacingError? { pager.loadMoreError ?? pager.initialError }
+
     private let pageSize = 10
 
     var body: some View {
@@ -84,78 +89,21 @@ struct ImageDeleteRequestsView: View {
     }
 
     private func loadFirstPage() async {
-        loadRevision += 1
-        let revision = loadRevision
-        isInitialLoading = requests.isEmpty
-        isLoadingMore = false
-        loadError = nil
-        do {
-            let result = try await environment.imageDeleteRequestClient.listMine(page: 1, pageSize: pageSize)
-            guard revision == loadRevision else { return }
-            requests = result.list
-            total = result.total
-            nextPage = 2
-        } catch {
-            guard revision == loadRevision else { return }
-            loadError = UserFacingErrorMapper.map(error).message
+        await pager.loadFirstPage(clearExisting: false) { page in
+            let result = try await environment.imageDeleteRequestClient.listMine(page: page, pageSize: pageSize)
+            return .init(items: result.list, total: result.total)
         }
-        guard revision == loadRevision else { return }
-        isInitialLoading = false
     }
 
     private func loadMore() async {
-        guard hasMore, !isLoadingMore, !isInitialLoading else { return }
-        let revision = loadRevision
-        let requestedPage = nextPage
-        isLoadingMore = true
-        loadError = nil
-        defer {
-            if revision == loadRevision {
-                isLoadingMore = false
-            }
-        }
-        do {
-            let result = try await environment.imageDeleteRequestClient.listMine(page: requestedPage, pageSize: pageSize)
-            guard revision == loadRevision, requestedPage == nextPage else { return }
-            let existingIDs = Set(requests.map(\.id))
-            requests.append(contentsOf: result.list.filter { !existingIDs.contains($0.id) })
-            total = result.total
-            nextPage += 1
-        } catch {
-            guard revision == loadRevision else { return }
-            loadError = UserFacingErrorMapper.map(error).message
+        await pager.loadMore { page in
+            let result = try await environment.imageDeleteRequestClient.listMine(page: page, pageSize: pageSize)
+            return .init(items: result.list, total: result.total)
         }
     }
 }
 
-struct ImageDeleteStateSection: View {
-    let title: String
-    let stateTitle: String
-    var message: String?
-    var systemImage: String
-    var isLoading = false
-    var actionTitle: String?
-    var action: (() -> Void)?
-
-    var body: some View {
-        Section {
-            SetuCard {
-                VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                    SetuSectionHeader(title: title)
-                    SetuEmptyState(
-                        title: stateTitle,
-                        message: message,
-                        systemImage: systemImage,
-                        isLoading: isLoading,
-                        actionTitle: actionTitle,
-                        action: action
-                    )
-                }
-            }
-            .setuListRow()
-        }
-    }
-}
+typealias ImageDeleteStateSection = SetuStateSection
 
 struct ImageDeleteRequestRow: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize

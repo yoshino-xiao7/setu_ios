@@ -39,6 +39,7 @@ struct SetuPill: View {
     var body: some View {
         Label {
             Text(text)
+                .fixedSize(horizontal: false, vertical: true)
         } icon: {
             if let systemImage {
                 Image(systemName: systemImage)

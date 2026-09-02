@@ -1,14 +1,24 @@
 import Foundation
-import SetuIOSCore
 
-struct UserFacingError: Equatable {
-    let title: String
-    let message: String
-    let action: UserFacingErrorAction?
-    let diagnosticCode: String?
+public struct UserFacingError: Error, Hashable, Sendable {
+    public let title: String
+    public let message: String
+    public let action: UserFacingErrorAction?
+    public let diagnosticCode: String?
+
+    public init(message: String) {
+        self.init(title: "加载失败", message: message, action: .retry, diagnosticCode: nil)
+    }
+
+    public init(title: String, message: String, action: UserFacingErrorAction?, diagnosticCode: String?) {
+        self.title = title
+        self.message = message
+        self.action = action
+        self.diagnosticCode = diagnosticCode
+    }
 }
 
-enum UserFacingErrorAction: Equatable {
+public enum UserFacingErrorAction: Hashable, Sendable {
     case retry
     case signIn
     case goBack
@@ -17,7 +27,7 @@ enum UserFacingErrorAction: Equatable {
     case wait
     case viewPoints
 
-    var buttonTitle: String {
+    public var buttonTitle: String {
         switch self {
         case .retry: "重试"
         case .signIn: "重新登录"
@@ -30,8 +40,8 @@ enum UserFacingErrorAction: Equatable {
     }
 }
 
-enum UserFacingErrorMapper {
-    static func map(_ error: Error) -> UserFacingError {
+public enum UserFacingErrorMapper {
+    public static func map(_ error: Error) -> UserFacingError {
         if let urlError = error as? URLError {
             return map(urlError)
         }
@@ -95,7 +105,7 @@ enum UserFacingErrorMapper {
                 action: .retry,
                 diagnosticCode: nil
             )
-        case .httpStatus(let status, let backendMessage, let requestID, let traceID):
+        case .httpStatus(let status, let backendMessage, let requestID, let traceID, _):
             let diagnosticCode = diagnosticCode(requestID: requestID, traceID: traceID)
             if [400, 409, 422].contains(status), isPointsError(backendMessage) {
                 return UserFacingError(

@@ -132,7 +132,7 @@ struct SystemStatusView: View {
             state = .loaded(try await SystemStatusSnapshot(overview: overview, imageCount: imageCount))
             lastUpdatedAt = Date()
         } catch {
-            state = .failed(UserFacingErrorMapper.map(error).message)
+            state = .failed(UserFacingErrorMapper.map(error))
         }
     }
 

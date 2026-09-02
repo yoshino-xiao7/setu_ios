@@ -5,14 +5,19 @@ struct AiDeleteRequestsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var environment: AppEnvironment
+    @State private var pager = PagingController<AiGenerationDeleteRequest>(pageSize: 20)
+    private var requests: [AiGenerationDeleteRequest] {
+        get { pager.items }
+        nonmutating set { pager.replaceItems(newValue) }
+    }
+    private var total: Int { pager.total }
+    private var isInitialLoading: Bool { pager.phase == .loadingInitial || (!pager.hasLoadedFirstPage && pager.initialError == nil) }
+    private var isLoadingMore: Bool { pager.phase == .loadingMore }
+    private var initialError: UserFacingError? { pager.initialError }
+    private var loadMoreError: UserFacingError? { pager.loadMoreError }
+    private var loadError: UserFacingError? { pager.loadMoreError ?? pager.initialError }
+
     var showsCloseButton = false
-    @State private var requests: [AiGenerationDeleteRequest] = []
-    @State private var total = 0
-    @State private var nextPage = 1
-    @State private var isInitialLoading = true
-    @State private var isLoadingMore = false
-    @State private var loadError: String?
-    @State private var loadRevision = 0
     @State private var statusFilter = "ALL"
     private let pageSize = 20
 
@@ -140,93 +145,23 @@ struct AiDeleteRequestsView: View {
     }
 
     private func loadFirstPage(clearExisting: Bool = false) async {
-        loadRevision += 1
-        let revision = loadRevision
-        let requestedFilter = statusFilter
-        if clearExisting {
-            requests = []
-            total = 0
-            nextPage = 1
+        let filter = statusFilter
+        await pager.loadFirstPage(clearExisting: clearExisting) { page in
+            let result = try await environment.aiGenerationClient.deleteRequests(status: filter, page: page, pageSize: pageSize)
+            return .init(items: result.list, total: result.total)
         }
-        isInitialLoading = requests.isEmpty
-        isLoadingMore = false
-        loadError = nil
-        do {
-            let result = try await environment.aiGenerationClient.deleteRequests(
-                status: requestedFilter,
-                page: 1,
-                pageSize: pageSize
-            )
-            guard revision == loadRevision, requestedFilter == statusFilter else { return }
-            requests = result.list
-            total = result.total
-            nextPage = 2
-        } catch {
-            guard revision == loadRevision, requestedFilter == statusFilter else { return }
-            loadError = UserFacingErrorMapper.map(error).message
-        }
-        guard revision == loadRevision, requestedFilter == statusFilter else { return }
-        isInitialLoading = false
     }
 
     private func loadMore() async {
-        guard hasMore, !isLoadingMore, !isInitialLoading else { return }
-        let revision = loadRevision
-        let requestedFilter = statusFilter
-        let requestedPage = nextPage
-        isLoadingMore = true
-        loadError = nil
-        defer {
-            if revision == loadRevision {
-                isLoadingMore = false
-            }
-        }
-        do {
-            let result = try await environment.aiGenerationClient.deleteRequests(
-                status: requestedFilter,
-                page: requestedPage,
-                pageSize: pageSize
-            )
-            guard revision == loadRevision, requestedFilter == statusFilter, requestedPage == nextPage else { return }
-            let existingIDs = Set(requests.map(\.id))
-            requests.append(contentsOf: result.list.filter { !existingIDs.contains($0.id) })
-            total = result.total
-            nextPage += 1
-        } catch {
-            guard revision == loadRevision, requestedFilter == statusFilter else { return }
-            loadError = UserFacingErrorMapper.map(error).message
+        let filter = statusFilter
+        await pager.loadMore { page in
+            let result = try await environment.aiGenerationClient.deleteRequests(status: filter, page: page, pageSize: pageSize)
+            return .init(items: result.list, total: result.total)
         }
     }
 }
 
-private struct AiDeleteRequestStateSection: View {
-    let title: String
-    let stateTitle: String
-    var message: String?
-    var systemImage: String
-    var isLoading = false
-    var actionTitle: String?
-    var action: (() -> Void)?
-
-    var body: some View {
-        Section {
-            SetuCard {
-                VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                    SetuSectionHeader(title: title)
-                    SetuEmptyState(
-                        title: stateTitle,
-                        message: message,
-                        systemImage: systemImage,
-                        isLoading: isLoading,
-                        actionTitle: actionTitle,
-                        action: action
-                    )
-                }
-            }
-            .setuListRow()
-        }
-    }
-}
+private typealias AiDeleteRequestStateSection = SetuStateSection
 
 private struct UserAiDeleteRequestRow: View {
     let request: AiGenerationDeleteRequest

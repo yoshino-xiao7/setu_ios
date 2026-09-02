@@ -1,3 +1,4 @@
+import SetuIOSCore
 import SwiftUI
 
 #if os(iOS)
@@ -7,11 +8,22 @@ import UIKit
 enum SetuFeedback: Hashable {
     case success(String)
     case error(String)
+    case failure(UserFacingError)
     case info(String)
     case warning(String)
 
+    static func warning(_ error: UserFacingError) -> Self { .failure(error) }
+
+    static func error(_ error: UserFacingError) -> Self { .failure(error) }
+
+    var userFacingError: UserFacingError? {
+        if case .failure(let error) = self { return error }
+        return nil
+    }
+
     var message: String {
         switch self {
+        case .failure(let error): error.message
         case .success(let message), .error(let message), .info(let message), .warning(let message):
             message
         }
@@ -20,7 +32,7 @@ enum SetuFeedback: Hashable {
     var systemImage: String {
         switch self {
         case .success: "checkmark.circle.fill"
-        case .error: "exclamationmark.triangle.fill"
+        case .error, .failure: "exclamationmark.triangle.fill"
         case .info: "info.circle.fill"
         case .warning: "exclamationmark.circle.fill"
         }
@@ -29,7 +41,7 @@ enum SetuFeedback: Hashable {
     var tone: SetuPillTone {
         switch self {
         case .success: .success
-        case .error: .danger
+        case .error, .failure: .danger
         case .info: .info
         case .warning: .warning
         }
@@ -58,7 +70,7 @@ struct SetuFeedbackBanner: View {
         error: UserFacingError,
         onAction: ((UserFacingErrorAction) -> Void)? = nil
     ) {
-        feedback = .error(error.message)
+        feedback = .failure(error)
         title = error.title
         if let errorAction = error.action, let onAction {
             actionTitle = errorAction.buttonTitle
@@ -71,19 +83,28 @@ struct SetuFeedbackBanner: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: SetuSpacing.sm) {
-            Label(title ?? feedback.message, systemImage: feedback.systemImage)
-                .font(SetuTypography.body.weight(title == nil ? .regular : .semibold))
-                .foregroundStyle(feedback.tone.foreground)
-                .multilineTextAlignment(.leading)
+            HStack(alignment: .firstTextBaseline, spacing: SetuSpacing.sm) {
+                Image(systemName: feedback.systemImage)
+                    .accessibilityHidden(true)
+                Text(title ?? feedback.userFacingError?.title ?? feedback.message)
+                    .font(SetuTypography.body.weight(title == nil ? .regular : .semibold))
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .foregroundStyle(feedback.tone.foreground)
 
-            if title != nil {
+            if title != nil || feedback.userFacingError != nil {
                 Text(feedback.message)
                     .font(SetuTypography.body)
                     .foregroundStyle(feedback.tone.foreground)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            if let actionTitle, let action {
+            if let error = feedback.userFacingError, action == nil {
+                SetuErrorRecoveryButton(error: error)
+            } else if let actionTitle, let action {
                 Button(actionTitle, action: action)
                     .buttonStyle(.bordered)
                     .controlSize(.large)
@@ -101,7 +122,7 @@ struct SetuFeedbackBanner: View {
                 RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous)
                     .stroke(feedback.tone.foreground.opacity(0.22), lineWidth: 1)
             }
-            .accessibilityElement(children: action == nil ? .combine : .contain)
+            .accessibilityElement(children: action == nil && feedback.userFacingError == nil ? .combine : .contain)
             .task(id: feedback) {
                 #if os(iOS)
                 UIAccessibility.post(notification: .announcement, argument: announcementMessage)

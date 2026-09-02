@@ -66,7 +66,7 @@ struct MvPlaybackView: View {
             placeholder(message: "正在准备 MV", isLoading: true)
         case .failed(let message):
             VStack(spacing: SetuSpacing.md) {
-                placeholder(message: message, isLoading: false)
+                SetuFeedbackBanner(error: message)
                 Button("重试") {
                     Task { await loadURL() }
                 }
@@ -167,7 +167,7 @@ struct MvPlaybackView: View {
             urlState = .loaded(response.data)
             configurePlayer(with: response.data)
         } catch {
-            urlState = .failed(UserFacingErrorMapper.map(error).message)
+            urlState = .failed(UserFacingErrorMapper.map(error))
         }
     }
 

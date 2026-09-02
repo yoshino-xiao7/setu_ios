@@ -1,8 +1,21 @@
 import Foundation
 import XCTest
 @testable import SetuIOSCore
+@testable import SetuIOSApp
 
 final class MusicClientTests: XCTestCase {
+    func testEveryAudioQualityIsSentToPlaybackEndpoint() async throws {
+        for quality in MusicAudioQuality.allCases {
+            let session = URLSession(configuration: .musicClientMock { request in
+                let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems
+                XCTAssertEqual(request.url?.path, "/user/music/url")
+                XCTAssertEqual(query?.first(where: { $0.name == "level" })?.value, quality.rawValue)
+                return "{\"data\":[]}"
+            })
+            _ = try await MusicClient(apiClient: makeAPIClient(session: session)).url(songID: 7, level: quality.rawValue)
+        }
+    }
+
     override func tearDown() {
         super.tearDown()
         MusicClientMockURLProtocol.handler = nil
@@ -353,5 +366,136 @@ private extension URLSessionConfiguration {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [MusicClientMockURLProtocol.self]
         return configuration
+    }
+}
+
+@MainActor
+final class MusicQualitySelectionTests: XCTestCase {
+    private func makeSilentWave() throws -> URL {
+        // A real local audio source exercises AVFoundation validation without network or sound.
+        let sampleBytes = 8_000 * 2 * 100
+        var data = Data("RIFF".utf8)
+        func append<T: FixedWidthInteger>(_ value: T) {
+            var value = value.littleEndian
+            withUnsafeBytes(of: &value) { data.append(contentsOf: $0) }
+        }
+        append(UInt32(36 + sampleBytes))
+        data.append(Data("WAVEfmt ".utf8))
+        append(UInt32(16))
+        append(UInt16(1))
+        append(UInt16(1))
+        append(UInt32(8_000))
+        append(UInt32(16_000))
+        append(UInt16(2))
+        append(UInt16(16))
+        data.append(Data("data".utf8))
+        append(UInt32(sampleBytes))
+        data.append(Data(repeating: 0, count: sampleBytes))
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("setu-quality-\(UUID().uuidString).wav")
+        try data.write(to: url)
+        return url
+    }
+
+    private func makePlayer() throws -> MusicPlaybackController {
+        let songs = try JSONDecoder().decode([MusicSong].self, from: Data(#"[{"id":7,"name":"音质测试","artists":[],"album":{"id":1,"name":"测试"},"duration":180000}]"#.utf8))
+        let player = MusicPlaybackController(persistsPlayback: false)
+        player.configurePreview(songs: songs)
+        return player
+    }
+
+    func testPreferenceSurvivesControllerRecreationWithoutPlayback() async throws {
+        let suite = "setu-quality-test-\(UUID().uuidString)"
+        let preferences = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { preferences.removePersistentDomain(forName: suite) }
+        let player = MusicPlaybackController(preferences: preferences)
+        XCTAssertEqual(player.audioQuality, .exhigh)
+        let changed = await player.setAudioQuality(.hires)
+        XCTAssertTrue(changed)
+        XCTAssertEqual(MusicPlaybackController(preferences: preferences).audioQuality, .hires)
+    }
+
+    func testUnavailableQualityKeepsPreferenceTrackPositionAndPause() async throws {
+        let player = try makePlayer()
+        let originalTime = player.currentTimeSeconds
+        player.resolveQualityURL = { track, quality in
+            XCTAssertEqual(track.id, 7)
+            XCTAssertEqual(quality, .lossless)
+            return .unavailable(UserFacingError(message: "该音质暂不可用"))
+        }
+        let changed = await player.setAudioQuality(.lossless)
+        XCTAssertFalse(changed)
+        XCTAssertEqual(player.audioQuality, .exhigh)
+        XCTAssertEqual(player.currentTrack?.id, 7)
+        XCTAssertEqual(player.currentTimeSeconds, originalTime)
+        XCTAssertFalse(player.isPlaying)
+        XCTAssertFalse(player.isChangingQuality)
+        guard case .failure(let error) = player.feedback else { return XCTFail("Expected recoverable failure") }
+        XCTAssertEqual(error.action, .retry)
+    }
+
+    func testSuccessfulQualityChangeRetainsPausedPositionAndQueue() async throws {
+        let player = try makePlayer()
+        let audioURL = try makeSilentWave()
+        defer { player.stop(); try? FileManager.default.removeItem(at: audioURL) }
+        let originalTime = player.currentTimeSeconds
+        let originalQueue = player.queueTracks
+        player.resolveQualityURL = { _, quality in
+            XCTAssertEqual(quality, .higher)
+            return .success(audioURL)
+        }
+        let changed = await player.setAudioQuality(.higher)
+        XCTAssertTrue(changed)
+        XCTAssertEqual(player.audioQuality, .higher)
+        XCTAssertEqual(player.currentTimeSeconds, originalTime)
+        XCTAssertEqual(player.queueTracks.map(\.id), originalQueue.map(\.id))
+        XCTAssertFalse(player.isPlaying, "Changing quality must not start a paused track")
+        XCTAssertFalse(player.isChangingQuality)
+    }
+
+    func testUnplayableReplacementKeepsExistingTrackAndPreference() async throws {
+        let player = try makePlayer()
+        let time = player.currentTimeSeconds
+        player.resolveQualityURL = { _, _ in
+            .success(URL(fileURLWithPath: "/tmp/setu-quality-missing-\(UUID().uuidString).m4a"))
+        }
+        let changed = await player.setAudioQuality(.hires)
+        XCTAssertFalse(changed)
+        XCTAssertEqual(player.audioQuality, .exhigh)
+        XCTAssertEqual(player.currentTrack?.id, 7)
+        XCTAssertEqual(player.currentTimeSeconds, time)
+        XCTAssertFalse(player.isPlaying)
+    }
+
+    func testLateQualityResponseCannotRestoreStoppedPlayback() async throws {
+        let player = try makePlayer()
+        var response: CheckedContinuation<MusicURLResolution, Never>?
+        player.resolveQualityURL = { _, _ in
+            await withCheckedContinuation { response = $0 }
+        }
+        let change = Task { await player.setAudioQuality(.hires) }
+        while response == nil { await Task.yield() }
+        player.stop()
+        response?.resume(returning: .success(URL(fileURLWithPath: "/tmp/setu-quality-test-unused-audio.m4a")))
+        let changed = await change.value
+        XCTAssertFalse(changed)
+        XCTAssertNil(player.currentTrack)
+        XCTAssertEqual(player.audioQuality, .exhigh)
+        XCTAssertFalse(player.isChangingQuality)
+    }
+
+    func testNewTrackResolutionCancelsPendingQualityChange() async throws {
+        let player = try makePlayer()
+        var response: CheckedContinuation<MusicURLResolution, Never>?
+        player.resolveQualityURL = { _, _ in
+            await withCheckedContinuation { response = $0 }
+        }
+        let change = Task { await player.setAudioQuality(.lossless) }
+        while response == nil { await Task.yield() }
+        player.cancelPendingQualityChange()
+        response?.resume(returning: .success(URL(fileURLWithPath: "/tmp/setu-quality-test-unused-audio.m4a")))
+        let changed = await change.value
+        XCTAssertFalse(changed)
+        XCTAssertEqual(player.audioQuality, .exhigh)
+        XCTAssertEqual(player.currentTrack?.id, 7)
     }
 }

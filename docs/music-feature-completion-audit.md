@@ -1,6 +1,6 @@
 # 音乐功能优化完成度审计
 
-更新时间：2026-07-08
+更新时间：2026-09-02
 
 对应计划：`docs/music-feature-implementation-plan.md`
 
@@ -33,7 +33,7 @@
 
 | 要求 | 当前证据 | 状态 |
 | --- | --- | --- |
-| `exhigh -> standard` 回退 | `RootAppView.resolvePlaybackURL(for:)` 先请求 `exhigh`，失败后请求 `standard`，成功提示「已切换标准音质」 | 已完成 |
+| 音质偏好与回退 | 音乐首页和展开播放器提供标准、较高、极高、无损、Hi-Res；默认保留 `exhigh`，偏好持久化。切歌/自动下一首/恢复播放优先请求所选音质，不可用时回退标准并提示；手动切换失败保留旧音质与播放 | 已完成 |
 | 自动连播补历史 | `MusicPlaybackController.advance(by:isAuto:)` 成功自动切歌后调用 `recordPlaybackHistory`；`RootAppView` 接入 `MusicClient.addHistory(_:)` | 需真机/集成环境确认后端记录 |
 | 睡眠定时 | `MusicSleepTimerOption` 支持 15/30/60 分钟与播完本曲；`fadeOutAndPauseForSleepTimer()` 渐弱暂停 | 需真机确认后台与熄屏行为 |
 | 队列管理 | `MusicQueueManagerSheet` 支持拖拽排序、滑动移除、清空待播、下一首播放 | 已完成 |
@@ -50,5 +50,13 @@
 
 ## 剩余验收
 
-真机验收项目记录在 `docs/music-manual-verification-checklist.md`。完成这些硬件/后台相关验证后，音乐优化目标可以关闭。
+### 2026-09-02 音质选择补充
 
+- 菜单标为「优先音质」，服务端返回其他档位时提示实际返回值，不保证每首歌提供所有档位。
+- 手动切换先验证新音源可播放，再替换播放器，保留队列、进度和播放/暂停状态；失败以及切歌/停止后的迟到响应不替换旧播放。
+- `swift test`：120 项通过，新增覆盖五档请求参数、偏好恢复、本地音频切换、不可播放音源、接口失败及迟到响应。
+- iPhone SE 两项定向 UI 用例通过（五档菜单、页面间偏好保留、失败提示、暂停状态、最大字号入口）。截图复查后调整了最大字号播放器顶部布局；复测按用户要求中止，后续只做真机运行，不再启动本机模拟器。
+- 包含最终布局修正的 Debug 真机版本 1.1 (4) 构建和签名验证通过，已安装到已连接的 iPhone 17。
+- 自动化音频验证使用本地静音 WAV；线上各档音源、耳听音质、后台与锁屏连续播放仍需真机验收。
+
+真机验收项目记录在 `docs/music-manual-verification-checklist.md`。完成这些硬件/后台相关验证后，音乐优化目标可以关闭。

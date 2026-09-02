@@ -7,14 +7,15 @@ struct PublicCollectionDetailView: View {
     @Bindable var environment: AppEnvironment
     let collectionID: Int
 
+    @State private var pager = PagingController<CollectionItem>(pageSize: 24)
+    @State private var infoRevision = UUID()
+    private var items: [CollectionItem] { pager.items }
+    private var total: Int { pager.total }
+    private var isInitialLoading: Bool { pager.phase == .loadingInitial || (!pager.hasLoadedFirstPage && pager.initialError == nil) }
+    private var isLoadingMore: Bool { pager.phase == .loadingMore }
+    private var initialError: UserFacingError? { pager.initialError }
+    private var loadMoreError: UserFacingError? { pager.loadMoreError }
     @State private var infoState: LoadState<CollectionInfo> = .idle
-    @State private var items: [CollectionItem] = []
-    @State private var total = 0
-    @State private var nextPage = 1
-    @State private var isInitialLoading = true
-    @State private var isLoadingMore = false
-    @State private var initialError: String?
-    @State private var loadMoreError: String?
     @State private var feedback: SetuFeedback?
     @State private var previewItem: UserImagePreviewItem?
     private let pageSize = 24
@@ -85,6 +86,7 @@ struct PublicCollectionDetailView: View {
             .padding(.vertical, SetuSpacing.md)
         }
         .setuBackground()
+        .setuFeedbackPresentation($feedback)
         .navigationTitle(title)
         .sheet(item: $previewItem) { item in
             UserImagePreviewSheet(item: item)
@@ -119,7 +121,7 @@ struct PublicCollectionDetailView: View {
         return [GridItem(.adaptive(minimum: 156), spacing: SetuSpacing.md)]
     }
 
-    private var hasMore: Bool { items.count < total }
+    private var hasMore: Bool { pager.hasMore }
 
     private var loadMoreFooterState: SetuLoadMoreFooterState {
         if isLoadingMore { return .loading }
@@ -244,50 +246,26 @@ struct PublicCollectionDetailView: View {
     }
 
     private func loadFirstPage() async {
-        isInitialLoading = items.isEmpty
-        initialError = nil
-        loadMoreError = nil
-        if case .loaded = infoState {
-            // Keep the current header visible while refreshing.
-        } else {
-            infoState = .loading
+        let revision = UUID()
+        infoRevision = revision
+        if case .loaded = infoState {} else { infoState = .loading }
+        async let page: Void = pager.loadFirstPage { page in
+            let result = try await environment.collectionClient.items(collectionID: collectionID, page: page, size: pageSize)
+            return .init(items: result.items, total: result.total)
         }
         do {
-            async let infoRequest = environment.collectionClient.squareDetail(id: collectionID)
-            async let itemsRequest = environment.collectionClient.items(collectionID: collectionID, page: 1, size: pageSize)
-            let (info, result) = try await (infoRequest, itemsRequest)
-            infoState = .loaded(info)
-            items = result.items
-            total = result.total
-            nextPage = 2
+            let info = try await environment.collectionClient.squareDetail(id: collectionID)
+            if revision == infoRevision { infoState = .loaded(info) }
         } catch {
-            if case .loading = infoState {
-                infoState = .failed("暂时无法加载公开收藏夹，请稍后重试。")
-            }
-            initialError = "暂时无法加载图片，请检查网络后重试。"
+            if revision == infoRevision { infoState = .failed(UserFacingErrorMapper.map(error)) }
         }
-        isInitialLoading = false
+        await page
     }
 
     private func loadMore() async {
-        guard hasMore, !isLoadingMore, !isInitialLoading else { return }
-        let requestedPage = nextPage
-        isLoadingMore = true
-        loadMoreError = nil
-        defer { isLoadingMore = false }
-        do {
-            let result = try await environment.collectionClient.items(
-                collectionID: collectionID,
-                page: requestedPage,
-                size: pageSize
-            )
-            guard requestedPage == nextPage else { return }
-            let existingIDs = Set(items.map(\.id))
-            items.append(contentsOf: result.items.filter { !existingIDs.contains($0.id) })
-            total = result.total
-            nextPage += 1
-        } catch {
-            loadMoreError = "更多图片加载失败"
+        await pager.loadMore { page in
+            let result = try await environment.collectionClient.items(collectionID: collectionID, page: page, size: pageSize)
+            return .init(items: result.items, total: result.total)
         }
     }
 
@@ -299,7 +277,7 @@ struct PublicCollectionDetailView: View {
             await loadFirstPage()
             feedback = .success(shouldLike ? "已点赞" : "已取消点赞")
         } catch {
-            feedback = .error(UserFacingErrorMapper.map(error).message)
+            feedback = .error(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -311,7 +289,7 @@ struct PublicCollectionDetailView: View {
             await loadFirstPage()
             feedback = .success(shouldFavorite ? "已收藏" : "已取消收藏")
         } catch {
-            feedback = .error(UserFacingErrorMapper.map(error).message)
+            feedback = .error(UserFacingErrorMapper.map(error))
         }
     }
 }

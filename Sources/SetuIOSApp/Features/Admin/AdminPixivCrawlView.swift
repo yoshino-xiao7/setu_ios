@@ -52,7 +52,7 @@ struct AdminPixivCrawlView: View {
             case .idle, .loading:
                     SetuEmptyState(title: "正在检查服务", systemImage: "pulse", isLoading: true)
             case .failed(let message):
-                Label(message, systemImage: "xmark.circle")
+                SetuFeedbackBanner(error: message)
                         .font(SetuTypography.caption)
                         .foregroundStyle(SetuColor.danger)
             case .loaded(let health):
@@ -435,23 +435,7 @@ private struct PixivTaskRow: View {
     }
 }
 
-private struct AdminPixivStateSection: View {
-    let title: String
-    let stateTitle: String
-    var message: String?
-    var systemImage: String
-    var isLoading = false
-
-    var body: some View {
-        SetuCard {
-            VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                SetuSectionHeader(title: title)
-                SetuEmptyState(title: stateTitle, message: message, systemImage: systemImage, isLoading: isLoading)
-            }
-        }
-        .setuListRow()
-    }
-}
+private typealias AdminPixivStateSection = SetuStateSection
 
 private struct AdminPixivMetadataRow<Value: View>: View {
     let title: String

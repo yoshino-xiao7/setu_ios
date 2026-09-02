@@ -8,6 +8,7 @@ struct SetuEmptyState: View {
     var isLoading = false
     var actionTitle: String?
     var action: (() -> Void)?
+    var userFacingError: UserFacingError?
 
     var body: some View {
         VStack(spacing: SetuSpacing.md) {
@@ -30,15 +31,19 @@ struct SetuEmptyState: View {
                 Text(title)
                     .font(SetuTypography.headline)
                     .foregroundStyle(SetuColor.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
                 if let message {
                     Text(message)
                         .font(SetuTypography.caption)
                         .foregroundStyle(SetuColor.textSecondary)
                         .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
 
-            if let actionTitle, let action {
+            if let userFacingError {
+                SetuErrorRecoveryButton(error: userFacingError, retry: action)
+            } else if let actionTitle, let action {
                 Button(actionTitle, action: action)
                     .buttonStyle(.bordered)
                     .tint(SetuColor.brandPink)
@@ -47,7 +52,25 @@ struct SetuEmptyState: View {
         }
         .frame(maxWidth: .infinity)
         .padding(SetuSpacing.xl)
-        .accessibilityElement(children: action == nil ? .combine : .contain)
+        .accessibilityElement(children: action == nil && userFacingError == nil ? .combine : .contain)
+    }
+}
+
+extension SetuEmptyState {
+    init(error: UserFacingError, retry: (() -> Void)? = nil) {
+        self.init(title: error.title, message: error.message, systemImage: "exclamationmark.triangle", action: retry, userFacingError: error)
+    }
+
+    init(title: String, message: UserFacingError?, systemImage: String = "sparkles", isLoading: Bool = false, actionTitle: String? = nil, action: (() -> Void)? = nil) {
+        if let message {
+            self.init(error: message, retry: action)
+        } else {
+            self.init(title: title, systemImage: systemImage, isLoading: isLoading, actionTitle: actionTitle, action: action)
+        }
+    }
+
+    init(title: String, message: UserFacingError, systemImage: String = "sparkles", isLoading: Bool = false, actionTitle: String? = nil, action: (() -> Void)? = nil) {
+        self.init(error: message, retry: action)
     }
 }
 

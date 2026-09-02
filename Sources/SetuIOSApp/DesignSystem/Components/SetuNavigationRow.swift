@@ -37,7 +37,7 @@ struct SetuNavigationRow: View {
                     if let subtitle {
                         Text(subtitle)
                             .font(SetuTypography.caption)
-                            .foregroundStyle(SetuColor.textPrimary)
+                            .foregroundStyle(SetuColor.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }

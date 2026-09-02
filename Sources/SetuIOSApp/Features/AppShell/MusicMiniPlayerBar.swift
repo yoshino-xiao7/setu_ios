@@ -1,6 +1,58 @@
 import SetuIOSCore
 import SwiftUI
 
+struct MusicQualityMenu: View {
+    @Bindable var player: MusicPlaybackController
+    @State private var notice: String?
+
+    var body: some View {
+        Menu {
+            Picker("优先音质", selection: Binding(
+                get: { player.audioQuality },
+                set: { quality in
+                    Task {
+                        _ = await player.setAudioQuality(quality)
+                        switch player.feedback {
+                        case .failure(let error): notice = "\(error.title)\n\(error.message)"
+                        case .error(let message), .warning(let message): notice = message
+                        default: break
+                        }
+                    }
+                }
+            )) {
+                ForEach(MusicAudioQuality.allCases) { quality in
+                    Text(quality.title).tag(quality)
+                }
+            }
+        } label: {
+            HStack(spacing: SetuSpacing.xs) {
+                if player.isChangingQuality {
+                    ProgressView()
+                } else {
+                    Image(systemName: "waveform")
+                        .accessibilityHidden(true)
+                }
+                Text(player.audioQuality.title)
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+            }
+            .fixedSize(horizontal: true, vertical: false)
+            .frame(minHeight: 44)
+        }
+        .disabled(player.isChangingQuality)
+        .accessibilityLabel("优先音质：\(player.audioQuality.title)")
+        .accessibilityHint("选择音质，实际可用音质取决于音源")
+        .accessibilityIdentifier("music.quality")
+        .alert("音质提示", isPresented: Binding(
+            get: { notice != nil }, set: { if !$0 { notice = nil } }
+        )) {
+            Button("好") { notice = nil }
+        } message: {
+            Text(notice ?? "")
+        }
+    }
+}
+
 #if os(iOS)
 import CoreImage
 import UIKit
@@ -25,6 +77,8 @@ struct MusicMiniPlayerBar: View {
                     expandedBar(for: track)
                 }
             }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("music.mini-player")
             .frame(maxWidth: .infinity, alignment: isCollapsed ? .trailing : .center)
             .padding(.horizontal, isCollapsed ? 0 : SetuSpacing.md)
             .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.86), value: isCollapsed)
@@ -85,7 +139,7 @@ struct MusicMiniPlayerBar: View {
             isCollapsed = true
         } label: {
             Image(systemName: "chevron.right")
-                .font(.caption.weight(.bold))
+                .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(SetuColor.textSecondary)
                 .frame(width: 44, height: 44)
         }
@@ -140,12 +194,12 @@ struct MusicMiniPlayerBar: View {
         } label: {
             VStack(spacing: 2) {
                 Image(systemName: "list.bullet")
-                    .font(.subheadline.weight(.semibold))
+                    .font(.system(size: 17, weight: .semibold))
                 Text("\(player.queueTracks.count)")
                     .font(.caption2.monospacedDigit().weight(.semibold))
             }
             .foregroundStyle(SetuColor.brandInk)
-            .frame(width: 48, height: 48)
+            .frame(minWidth: 48, minHeight: 48)
             .background(SetuColor.surfaceMuted, in: Circle())
         }
         .setuButtonFeedback(cornerRadius: 24)
@@ -223,7 +277,7 @@ private struct MiniPlayerCircularPlayButton: View {
                     .fill(SetuColor.heroGradient)
                     .padding(6)
                 Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                    .font(.subheadline.weight(.bold))
+                    .font(.system(size: 17, weight: .bold))
                     .foregroundStyle(.white)
                     .padding(.leading, isPlaying ? 0 : 2)
             }
@@ -475,6 +529,7 @@ private enum NowPlayingPage: String, CaseIterable, Identifiable {
 }
 
 private struct MusicNowPlayingDetailView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dismiss) private var dismiss
 
@@ -547,6 +602,7 @@ private struct MusicNowPlayingDetailView: View {
                     }
                     .padding(SetuSpacing.md)
                     .setuBackground()
+        .setuFeedbackPresentation($feedback)
                     .navigationTitle("MV")
                     .musicInlineNavigationTitle()
                     .toolbar {
@@ -596,23 +652,26 @@ private struct MusicNowPlayingDetailView: View {
 
             Spacer()
 
-            VStack(spacing: 2) {
-                Text("正在播放")
-                    .font(.caption2)
-                    .foregroundStyle(SetuColor.textTertiary)
-                Text(queueCaption)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(SetuColor.textSecondary)
-                    .lineLimit(1)
+            if !dynamicTypeSize.isAccessibilitySize {
+                VStack(spacing: 2) {
+                    Text("正在播放")
+                        .font(.caption2)
+                        .foregroundStyle(SetuColor.textTertiary)
+                    Text(queueCaption)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(SetuColor.textSecondary)
+                        .lineLimit(1)
+                }
             }
 
             Spacer()
 
-            if let timerTitle = player.sleepTimerTitle {
-                SetuPill(text: timerTitle, systemImage: "moon.zzz.fill", tone: .info)
-                    .accessibilityLabel("睡眠定时：\(timerTitle)")
-            } else {
-                Color.clear.frame(width: 44, height: 44)
+            VStack(alignment: .trailing, spacing: SetuSpacing.xs) {
+                MusicQualityMenu(player: player)
+                if let timerTitle = player.sleepTimerTitle {
+                    SetuPill(text: timerTitle, systemImage: "moon.zzz.fill", tone: .info)
+                        .accessibilityLabel("睡眠定时：\(timerTitle)")
+                }
             }
         }
         .padding(.horizontal, SetuSpacing.lg)
@@ -1031,7 +1090,7 @@ private struct MusicNowPlayingDetailView: View {
         do {
             lyricState = .loaded(try await environment.musicClient.lyric(songID: songID))
         } catch {
-            lyricState = .failed(UserFacingErrorMapper.map(error).message)
+            lyricState = .failed(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -1225,7 +1284,7 @@ private struct AddPlaybackTrackToPlaylistSheet: View {
         do {
             state = .loaded(try await environment.musicClient.playlists())
         } catch {
-            state = .failed(UserFacingErrorMapper.map(error).message)
+            state = .failed(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -1246,7 +1305,7 @@ private struct AddPlaybackTrackToPlaylistSheet: View {
             onFeedback(.success("已加入 \(playlist.name)"))
             dismiss()
         } catch {
-            feedback = .error(UserFacingErrorMapper.map(error).message)
+            feedback = .error(UserFacingErrorMapper.map(error))
         }
     }
 }

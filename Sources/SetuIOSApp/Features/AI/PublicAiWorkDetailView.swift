@@ -48,6 +48,7 @@ struct PublicAiWorkDetailView: View {
         }
         .listStyle(.plain)
         .setuBackground()
+        .setuFeedbackPresentation($feedback)
         .navigationTitle("公开作品")
         .safeAreaInset(edge: .bottom, spacing: 0) {
             SetuBottomCTA {
@@ -168,10 +169,12 @@ struct PublicAiWorkDetailView: View {
         Button {
             Task { await setLiked(!work.likedByMe) }
         } label: {
-            Label(
-                "喜欢 \(work.likeCount)",
-                systemImage: work.likedByMe ? "heart.fill" : "heart"
-            )
+            HStack {
+                Image(systemName: work.likedByMe ? "heart.fill" : "heart")
+                    .accessibilityHidden(true)
+                Text("喜欢 \(work.likeCount)")
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             .frame(maxWidth: .infinity, minHeight: 44)
         }
         .buttonStyle(.bordered)
@@ -183,10 +186,12 @@ struct PublicAiWorkDetailView: View {
         Button {
             Task { await setFavorited(!work.favoritedByMe) }
         } label: {
-            Label(
-                "收藏 \(work.favoriteCount)",
-                systemImage: work.favoritedByMe ? "bookmark.fill" : "bookmark"
-            )
+            HStack {
+                Image(systemName: work.favoritedByMe ? "bookmark.fill" : "bookmark")
+                    .accessibilityHidden(true)
+                Text("收藏 \(work.favoriteCount)")
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             .frame(maxWidth: .infinity, minHeight: 44)
         }
         .buttonStyle(.bordered)
@@ -353,7 +358,7 @@ struct PublicAiWorkDetailView: View {
             feedback = nil
             feedbackAllowsRefresh = false
         } catch {
-            feedback = .error(UserFacingErrorMapper.map(error).message)
+            feedback = .error(UserFacingErrorMapper.map(error))
             feedbackAllowsRefresh = false
         }
     }
@@ -369,7 +374,7 @@ struct PublicAiWorkDetailView: View {
             feedback = nil
             feedbackAllowsRefresh = false
         } catch {
-            feedback = .error(UserFacingErrorMapper.map(error).message)
+            feedback = .error(UserFacingErrorMapper.map(error))
             feedbackAllowsRefresh = false
         }
     }
@@ -383,7 +388,7 @@ enum PublicAiWorkRefreshPolicy {
 
     static func resolve(_ error: Error, hasVerifiedServerCopy: Bool) -> Decision {
         guard hasVerifiedServerCopy,
-              case APIError.httpStatus(let status, _, _, _) = error,
+              case APIError.httpStatus(let status, _, _, _, _) = error,
               status == 403 || status == 404 else {
             return .keepSnapshot
         }

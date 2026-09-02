@@ -5,13 +5,18 @@ struct CollectionSquareView: View {
     @Environment(RouterPath.self) private var router
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var environment: AppEnvironment
-    @State private var collections: [CollectionInfo] = []
-    @State private var total = 0
-    @State private var nextPage = 1
-    @State private var isInitialLoading = true
-    @State private var isLoadingMore = false
-    @State private var initialError: String?
-    @State private var loadMoreError: String?
+    @State private var pager = PagingController<CollectionInfo>(pageSize: 20)
+    private var collections: [CollectionInfo] {
+        get { pager.items }
+        nonmutating set { pager.replaceItems(newValue) }
+    }
+    private var total: Int { pager.total }
+    private var isInitialLoading: Bool { pager.phase == .loadingInitial || (!pager.hasLoadedFirstPage && pager.initialError == nil) }
+    private var isLoadingMore: Bool { pager.phase == .loadingMore }
+    private var initialError: UserFacingError? { pager.initialError }
+    private var loadMoreError: UserFacingError? { pager.loadMoreError }
+    private var loadError: UserFacingError? { pager.loadMoreError ?? pager.initialError }
+
     @State private var sort = "hot"
     @State private var searchText = ""
     @State private var keyword = ""
@@ -77,6 +82,7 @@ struct CollectionSquareView: View {
             .padding(.vertical, SetuSpacing.md)
         }
         .setuBackground()
+        .setuFeedbackPresentation($feedback)
         .accessibilityIdentifier("collections.square.page")
         .navigationTitle("收藏夹广场")
         .searchable(text: $searchText, prompt: "搜索收藏夹")
@@ -138,7 +144,7 @@ struct CollectionSquareView: View {
         return [GridItem(.adaptive(minimum: 156), spacing: SetuSpacing.md)]
     }
 
-    private var hasMore: Bool { collections.count < total }
+    private var hasMore: Bool { pager.hasMore }
 
     private var loadMoreFooterState: SetuLoadMoreFooterState {
         if isLoadingMore { return .loading }
@@ -148,57 +154,20 @@ struct CollectionSquareView: View {
     }
 
     private func loadFirstPage(clearExisting: Bool = false) async {
-        let requestedSort = sort
+        let filter = sort
         let requestedKeyword = keyword
-        if clearExisting {
-            collections = []
-            total = 0
-            nextPage = 1
+        await pager.loadFirstPage(clearExisting: clearExisting) { page in
+            let result = try await environment.collectionClient.square(page: page, size: pageSize, sort: filter, keyword: requestedKeyword)
+            return .init(items: result.list, total: result.total)
         }
-        isInitialLoading = collections.isEmpty
-        initialError = nil
-        loadMoreError = nil
-        do {
-            let result = try await environment.collectionClient.square(
-                page: 1,
-                size: pageSize,
-                sort: requestedSort,
-                keyword: requestedKeyword
-            )
-            guard requestedSort == sort, requestedKeyword == keyword else { return }
-            collections = result.list
-            total = result.total
-            nextPage = 2
-        } catch {
-            guard requestedSort == sort, requestedKeyword == keyword else { return }
-            initialError = "暂时无法加载收藏夹，请检查网络后重试。"
-        }
-        isInitialLoading = false
     }
 
     private func loadMore() async {
-        guard hasMore, !isLoadingMore, !isInitialLoading else { return }
-        let requestedSort = sort
+        let filter = sort
         let requestedKeyword = keyword
-        let requestedPage = nextPage
-        isLoadingMore = true
-        loadMoreError = nil
-        defer { isLoadingMore = false }
-        do {
-            let result = try await environment.collectionClient.square(
-                page: requestedPage,
-                size: pageSize,
-                sort: requestedSort,
-                keyword: requestedKeyword
-            )
-            guard requestedSort == sort, requestedKeyword == keyword, requestedPage == nextPage else { return }
-            let existingIDs = Set(collections.map(\.id))
-            collections.append(contentsOf: result.list.filter { !existingIDs.contains($0.id) })
-            total = result.total
-            nextPage += 1
-        } catch {
-            guard requestedSort == sort, requestedKeyword == keyword else { return }
-            loadMoreError = "更多收藏夹加载失败"
+        await pager.loadMore { page in
+            let result = try await environment.collectionClient.square(page: page, size: pageSize, sort: filter, keyword: requestedKeyword)
+            return .init(items: result.list, total: result.total)
         }
     }
 
@@ -218,7 +187,7 @@ struct CollectionSquareView: View {
                 ? .success(successMessage)
                 : .warning("\(successMessage)，最新状态稍后刷新")
         } catch {
-            feedback = .error(UserFacingErrorMapper.map(error).message)
+            feedback = .error(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -233,7 +202,7 @@ struct CollectionSquareView: View {
                 ? .success(successMessage)
                 : .warning("\(successMessage)，最新状态稍后刷新")
         } catch {
-            feedback = .error(UserFacingErrorMapper.map(error).message)
+            feedback = .error(UserFacingErrorMapper.map(error))
         }
     }
 

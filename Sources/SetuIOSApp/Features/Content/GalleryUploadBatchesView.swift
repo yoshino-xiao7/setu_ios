@@ -17,13 +17,18 @@ struct GalleryUploadBatchesView: View {
     @Environment(RouterPath.self) private var router
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var environment: AppEnvironment
-    @State private var batches: [GalleryUploadBatchSummary] = []
-    @State private var total = 0
-    @State private var nextPage = 1
-    @State private var isInitialLoading = true
-    @State private var isLoadingMore = false
-    @State private var loadError: String?
-    @State private var loadRevision = 0
+    @State private var pager = PagingController<GalleryUploadBatchSummary>(pageSize: 10)
+    private var batches: [GalleryUploadBatchSummary] {
+        get { pager.items }
+        nonmutating set { pager.replaceItems(newValue) }
+    }
+    private var total: Int { pager.total }
+    private var isInitialLoading: Bool { pager.phase == .loadingInitial || (!pager.hasLoadedFirstPage && pager.initialError == nil) }
+    private var isLoadingMore: Bool { pager.phase == .loadingMore }
+    private var initialError: UserFacingError? { pager.initialError }
+    private var loadMoreError: UserFacingError? { pager.loadMoreError }
+    private var loadError: UserFacingError? { pager.loadMoreError ?? pager.initialError }
+
     @State private var statusFilter = "ALL"
     @State private var pickedItems: [PhotosPickerItem] = []
     @State private var uploadItems: [LocalGalleryUploadItem] = []
@@ -485,56 +490,18 @@ struct GalleryUploadBatchesView: View {
     }
 
     private func loadFirstPage(clearExisting: Bool = false) async {
-        loadRevision += 1
-        let revision = loadRevision
-        let requestedFilter = statusFilter
-        if clearExisting {
-            batches = []
-            total = 0
-            nextPage = 1
+        let filter = statusFilter
+        await pager.loadFirstPage(clearExisting: clearExisting) { page in
+            let result = try await environment.galleryUploadClient.listMine(status: filter == "ALL" ? nil : filter, page: page, pageSize: pageSize)
+            return .init(items: result.list, total: result.total)
         }
-        isInitialLoading = batches.isEmpty
-        isLoadingMore = false
-        loadError = nil
-        actionFeedback = nil
-        do {
-            let status = requestedFilter == "ALL" ? nil : requestedFilter
-            let result = try await environment.galleryUploadClient.listMine(status: status, page: 1, pageSize: pageSize)
-            guard revision == loadRevision, requestedFilter == statusFilter else { return }
-            batches = result.list
-            total = result.total
-            nextPage = 2
-        } catch {
-            guard revision == loadRevision, requestedFilter == statusFilter else { return }
-            loadError = UserFacingErrorMapper.map(error).message
-        }
-        guard revision == loadRevision, requestedFilter == statusFilter else { return }
-        isInitialLoading = false
     }
 
     private func loadMore() async {
-        guard hasMore, !isLoadingMore, !isInitialLoading else { return }
-        let revision = loadRevision
-        let requestedFilter = statusFilter
-        let requestedPage = nextPage
-        isLoadingMore = true
-        loadError = nil
-        defer {
-            if revision == loadRevision {
-                isLoadingMore = false
-            }
-        }
-        do {
-            let status = requestedFilter == "ALL" ? nil : requestedFilter
-            let result = try await environment.galleryUploadClient.listMine(status: status, page: requestedPage, pageSize: pageSize)
-            guard revision == loadRevision, requestedFilter == statusFilter, requestedPage == nextPage else { return }
-            let existingIDs = Set(batches.map(\.id))
-            batches.append(contentsOf: result.list.filter { !existingIDs.contains($0.id) })
-            total = result.total
-            nextPage += 1
-        } catch {
-            guard revision == loadRevision, requestedFilter == statusFilter else { return }
-            loadError = UserFacingErrorMapper.map(error).message
+        let filter = statusFilter
+        await pager.loadMore { page in
+            let result = try await environment.galleryUploadClient.listMine(status: filter == "ALL" ? nil : filter, page: page, pageSize: pageSize)
+            return .init(items: result.list, total: result.total)
         }
     }
 
@@ -548,7 +515,7 @@ struct GalleryUploadBatchesView: View {
             await loadFirstPage()
             actionFeedback = .success("已取消投稿")
         } catch {
-            actionFeedback = .error(UserFacingErrorMapper.map(error).message)
+            actionFeedback = .error(UserFacingErrorMapper.map(error))
         }
         cancellationCandidate = nil
     }
@@ -730,7 +697,7 @@ struct GalleryUploadBatchesView: View {
             uploadFeedback = .success("已提交审核。预计先由审核人员检查图片内容、顺序与作品信息，通过后再发布到图库；结果会在投稿记录和通知中更新。")
             await loadFirstPage()
         } catch {
-            uploadFeedback = .error(UserFacingErrorMapper.map(error).message)
+            uploadFeedback = .error(UserFacingErrorMapper.map(error))
         }
         isUploading = false
     }

@@ -116,7 +116,7 @@ struct CollectionListView: View {
         do {
             state = .loaded(try await environment.collectionClient.listMine())
         } catch {
-            state = .failed(UserFacingErrorMapper.map(error).message)
+            state = .failed(UserFacingErrorMapper.map(error))
         }
     }
 }

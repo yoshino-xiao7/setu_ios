@@ -78,7 +78,7 @@ public final class AppEnvironment {
     }
 
     public static func live() -> AppEnvironment {
-        let config = AppConfig.production
+        let config = AppConfig.resolved()
         let keychain = KeychainStore(service: "com.xueliang.setu-ios")
         let signer = AuthSigner(keychain: keychain)
         let sessionInvalidationNotifier = SessionInvalidationNotifier()

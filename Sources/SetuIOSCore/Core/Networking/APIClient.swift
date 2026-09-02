@@ -279,6 +279,10 @@ public struct APIClient: Sendable {
             return false
         }
         let payload = try? decoder.decode(APIErrorPayload.self, from: data)
+        // 优先使用后端结构化错误码（error 字段，SIGNATURE_* 前缀），关键词匹配仅为旧版回退
+        if let errorCode = payload?.error, errorCode.hasPrefix("SIGNATURE") {
+            return true
+        }
         let message = (payload?.message ?? payload?.msg ?? String(data: data, encoding: .utf8) ?? "").lowercased()
         return message.contains("签名")
             || message.contains("signature")
@@ -299,7 +303,7 @@ public struct APIClient: Sendable {
             ?? payload?.traceId
             ?? payload?.traceID
             ?? payload?.trace_id
-        return .httpStatus(response.statusCode, message: message, requestID: requestID, traceID: traceID)
+        return .httpStatus(response.statusCode, message: message, requestID: requestID, traceID: traceID, code: payload?.code?.value)
     }
 }
 
@@ -346,7 +350,7 @@ public struct EmptyResponse: Codable, Sendable {
 public enum APIError: Error, LocalizedError {
     case invalidURL(String)
     case invalidResponse
-    case httpStatus(Int, message: String? = nil, requestID: String? = nil, traceID: String? = nil)
+    case httpStatus(Int, message: String? = nil, requestID: String? = nil, traceID: String? = nil, code: String? = nil)
 
     public var errorDescription: String? {
         switch self {
@@ -354,7 +358,7 @@ public enum APIError: Error, LocalizedError {
             return "无效接口路径：\(path)"
         case .invalidResponse:
             return "服务器响应无效"
-        case .httpStatus(let status, let message, let requestID, let traceID):
+        case .httpStatus(let status, let message, let requestID, let traceID, _):
             var parts = ["请求失败：HTTP \(status)"]
             if let message, !message.isEmpty {
                 parts.append(message)
@@ -370,9 +374,26 @@ public enum APIError: Error, LocalizedError {
     }
 }
 
+private struct APIBackendErrorCode: Decodable {
+    let value: String?
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let text = try? container.decode(String.self) {
+            value = text
+        } else if let number = try? container.decode(Int.self) {
+            value = String(number)
+        } else {
+            value = nil
+        }
+    }
+}
+
 private struct APIErrorPayload: Decodable {
+    let code: APIBackendErrorCode?
     let message: String?
     let msg: String?
+    let error: String?
     let traceId: String?
     let traceID: String?
     let trace_id: String?

@@ -75,6 +75,7 @@ struct GalleryUploadDetailView: View {
         }
         .listStyle(.plain)
         .setuBackground()
+        .setuFeedbackPresentation($feedback)
         .navigationTitle("投稿详情")
         .toolbar {
             if case .loaded(let batch) = state, canCancel(batch) {
@@ -102,7 +103,7 @@ struct GalleryUploadDetailView: View {
         do {
             state = .loaded(try await environment.galleryUploadClient.detail(batchID: batchID))
         } catch {
-            state = .failed(UserFacingErrorMapper.map(error).message)
+            state = .failed(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -116,7 +117,7 @@ struct GalleryUploadDetailView: View {
             await load()
             feedback = .success("投稿已取消")
         } catch {
-            feedback = .error(UserFacingErrorMapper.map(error).message)
+            feedback = .error(UserFacingErrorMapper.map(error))
         }
     }
 

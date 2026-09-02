@@ -114,6 +114,7 @@ struct PasskeyListView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .setuBackground()
+        .setuFeedbackPresentation($feedback)
         .navigationTitle("通行密钥")
         .sheet(item: $renameTarget) { item in
             PasskeyRenameSheet(environment: environment, item: item) {
@@ -148,7 +149,7 @@ struct PasskeyListView: View {
         do {
             state = .loaded(try await environment.passkeyClient.list())
         } catch {
-            state = .failed(UserFacingErrorMapper.map(error).message)
+            state = .failed(UserFacingErrorMapper.map(error))
         }
     }
 

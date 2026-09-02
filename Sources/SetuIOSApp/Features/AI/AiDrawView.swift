@@ -2,12 +2,15 @@ import SetuIOSCore
 import SwiftUI
 
 struct AiDrawView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.setuRecoveryActions) private var recovery
     @Environment(RouterPath.self) private var router
     @Environment(SystemPushCoordinator.self) private var pushNotifications
     @Bindable var environment: AppEnvironment
     @AppStorage("setu_has_explained_generation_notifications") private var hasExplainedGenerationNotifications = false
     @State private var statusState: LoadState<AiServiceStatusResponse> = .idle
     @State private var capabilityState: LoadState<AiCapabilityResponse> = .idle
+    @FocusState private var promptFocused: Bool
     @State private var promptCn = ""
     @State private var styleTags = ""
     @State private var positivePrompt = ""
@@ -34,7 +37,6 @@ struct AiDrawView: View {
     @State private var draftLoaded = false
     @State private var isApplyingDraft = false
     @State private var loadedDraftUpdatedAt: Date?
-    @State private var isNavigatingToAssetBrowser = false
     @State private var enabledStylePresetNames: [String] = []
     @State private var showingGenerationNotificationPrompt = false
     @State private var pendingGenerationID: Int?
@@ -54,7 +56,13 @@ struct AiDrawView: View {
         }
         .listStyle(.plain)
         .setuBackground()
+        .setuFeedbackPresentation($feedback)
+        .setuRefreshAfterLogin(environment.authSession) { Task { await loadMetadata() } }
+        .setuRetry { Task { await loadMetadata() } }
         .navigationTitle("AI 绘画")
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("ai.draw.page")
+        .scrollDismissesKeyboard(.interactively)
         .onAppear {
             applyDraftIfNeeded()
             refreshEnabledStylePresets()
@@ -80,6 +88,13 @@ struct AiDrawView: View {
         .onChange(of: negativePrompt) { saveDraft() }
         .onChange(of: styleNotes) { saveDraft() }
         .toolbar {
+            #if os(iOS)
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("完成") { promptFocused = false }
+                    .accessibilityIdentifier("ai.draw.keyboard.done")
+            }
+            #endif
             ToolbarItemGroup(placement: .primaryAction) {
                 Button {
                     router.navigate(to: .aiHistory)
@@ -139,9 +154,7 @@ struct AiDrawView: View {
         case .failed(let text):
             Section {
                 SetuCard {
-                    SetuEmptyState(title: "暂时无法开始创作", message: text, systemImage: "exclamationmark.triangle")
-                    Button("重试") { Task { await loadMetadata() } }
-                        .buttonStyle(.bordered)
+                    SetuEmptyState(error: text, retry: { Task { await loadMetadata() } })
                 }
             }
             .setuListRow()
@@ -178,7 +191,8 @@ struct AiDrawView: View {
                 VStack(alignment: .leading, spacing: SetuSpacing.md) {
                     SetuSectionHeader(title: "想画什么？", subtitle: "用自然语言描述场景、人物、氛围和光线")
                     TextField("例如：银发少女站在雨夜街角，霓虹灯倒映在路面，电影感光影", text: $promptCn, axis: .vertical)
-                        .lineLimit(6...12)
+                        .lineLimit(3...6)
+                        .focused($promptFocused)
                         .textFieldStyle(.roundedBorder)
                         .accessibilityLabel("画面描述")
                         .accessibilityIdentifier("ai.draw.prompt")
@@ -217,8 +231,7 @@ struct AiDrawView: View {
                     }
                     .pickerStyle(.segmented)
                     .accessibilityIdentifier("ai.draw.generationMode")
-                    SetuNavigationRow(title: "选择风格与角色", subtitle: "浏览风格、角色和画面预设", systemImage: "photo.stack") {
-                        isNavigatingToAssetBrowser = true
+                    SetuNavigationRow(title: "选择风格与角色", subtitle: selectedAssetSummary, systemImage: "photo.stack") {
                         saveDraft()
                         router.navigate(to: .aiAssets)
                     }
@@ -241,6 +254,22 @@ struct AiDrawView: View {
             }
         }
         .setuListRow()
+    }
+
+    private var selectedAssetSummary: String {
+        var names = enabledStylePresetNames
+        if case .loaded(let capabilities) = capabilityState {
+            var selections = [(selectedCharacter, selectedLora)]
+            if generationMode == "DUAL" { selections.append((selectedSecondCharacter, selectedSecondLora)) }
+            for (character, lora) in selections {
+                if !character.isEmpty {
+                    names.append(capabilities.characters.first { $0.name == character }?.displayName ?? character)
+                } else if !lora.isEmpty {
+                    names.append(capabilities.loras.first { $0.name == lora }?.displayName ?? lora)
+                }
+            }
+        }
+        return names.isEmpty ? "浏览风格、角色和画面预设" : names.joined(separator: "、")
     }
 
     private var advancedSettingsSection: some View {
@@ -375,10 +404,19 @@ struct AiDrawView: View {
                         ProgressView().tint(.white)
                         Text(isTranslating ? "正在理解画面" : "正在创建作品")
                     }
+                } else if dynamicTypeSize.isAccessibilitySize {
+                    VStack(spacing: SetuSpacing.xs) {
+                        Text("开始生成")
+                        Text("预计 \(estimatedPointsCost) 积分")
+                            .font(.footnote)
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.vertical, SetuSpacing.sm)
                 } else {
                     Label("开始生成 · 预计 \(estimatedPointsCost) 积分", systemImage: "sparkles")
                 }
             }
+            .accessibilityIdentifier("ai.draw.generate")
             .disabled(!hasDrawablePrompt || isSubmitting || isTranslating || !serviceReady)
         }
     }
@@ -417,12 +455,12 @@ struct AiDrawView: View {
         do {
             statusState = .loaded(try await status)
         } catch {
-            statusState = .failed(UserFacingErrorMapper.map(error).message)
+            statusState = .failed(UserFacingErrorMapper.map(error))
         }
         do {
             capabilityState = .loaded(try await capabilities)
         } catch {
-            capabilityState = .failed(UserFacingErrorMapper.map(error).message)
+            capabilityState = .failed(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -487,7 +525,8 @@ struct AiDrawView: View {
             saveDraft()
             return true
         } catch {
-            feedback = .error("暂时无法理解画面，请稍后重试，或在高级设置中补充画面细节。")
+            feedback = nil
+            userFacingError = UserFacingErrorMapper.map(error)
             return false
         }
     }
@@ -577,11 +616,11 @@ struct AiDrawView: View {
     private func handleErrorAction(_ action: UserFacingErrorAction) {
         switch action {
         case .retry:
-            Task { await submit() }
+            Task { await loadMetadata() }
         case .refresh:
             Task { await loadMetadata() }
         case .signIn:
-            environment.authSession.invalidateLocalSession()
+            recovery.signIn?()
         case .goBack:
             userFacingError = nil
             if !router.path.isEmpty {
@@ -671,7 +710,7 @@ struct AiDrawView: View {
             return status.userFacingUnavailableMessage
         }
         if case .failed(let message) = statusState {
-            return message
+            return message.message
         }
         return "AI 服务状态加载中"
     }

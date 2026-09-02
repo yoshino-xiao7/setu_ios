@@ -2,6 +2,7 @@ import SetuIOSCore
 import SwiftUI
 
 struct AiAssetBrowserView: View {
+    @Environment(\.dismiss) private var dismiss
     @Bindable var environment: AppEnvironment
     @State private var state: LoadState<AiCapabilityResponse> = .idle
     @State private var activeKind: AiAssetKind = .lora
@@ -167,6 +168,15 @@ struct AiAssetBrowserView: View {
         .listStyle(.plain)
         .setuBackground()
         .navigationTitle("风格与角色")
+        .setuFeedbackPresentation($feedback)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            SetuBottomCTA {
+                Button("应用并返回（已选 \(selectedAssetCount) 项）") { dismiss() }
+                    .buttonStyle(.borderedProminent)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .accessibilityIdentifier("ai.assets.apply")
+            }
+        }
         .onAppear { restoreCacheIfNeeded() }
         .onChange(of: searchText) { saveCache() }
         .onChange(of: categoryFilter) { saveCache() }
@@ -180,6 +190,13 @@ struct AiAssetBrowserView: View {
                 applyToDrawDraft(asset)
             }
         }
+    }
+
+    private var selectedAssetCount: Int {
+        let primary = currentDraft.characterId.isEmpty && currentDraft.loraName.isEmpty ? 0 : 1
+        let secondary = currentDraft.generationMode == "DUAL"
+            && (!currentDraft.secondCharacterId.isEmpty || !currentDraft.secondLoraName.isEmpty) ? 1 : 0
+        return selectedStyles.filter(\.isEnabled).count + primary + secondary
     }
 
     private var allowsTargetSelection: Bool {
@@ -234,7 +251,7 @@ struct AiAssetBrowserView: View {
         do {
             state = .loaded(try await environment.aiGenerationClient.capabilities())
         } catch {
-            state = .failed(UserFacingErrorMapper.map(error).message)
+            state = .failed(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -679,9 +696,18 @@ private struct AiAssetBrowserCache: Codable {
 }
 
 enum AiAssetBrowserCacheStore {
+    #if DEBUG
+    private static var previewCache: AiAssetBrowserCache?
+
+    static func activatePreviewStorage() { previewCache = AiAssetBrowserCache() }
+    #endif
+
     private static let key = "icu.yukiryou.setu.aiAssetBrowserCache"
 
     fileprivate static func load() -> AiAssetBrowserCache {
+        #if DEBUG
+        if let previewCache { return previewCache }
+        #endif
         guard let data = UserDefaults.standard.data(forKey: key),
               let cache = try? JSONDecoder().decode(AiAssetBrowserCache.self, from: data) else {
             return AiAssetBrowserCache()
@@ -690,6 +716,12 @@ enum AiAssetBrowserCacheStore {
     }
 
     fileprivate static func save(_ cache: AiAssetBrowserCache) {
+        #if DEBUG
+        if previewCache != nil {
+            previewCache = cache
+            return
+        }
+        #endif
         guard let data = try? JSONEncoder().encode(cache) else { return }
         UserDefaults.standard.set(data, forKey: key)
     }

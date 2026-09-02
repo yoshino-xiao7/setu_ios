@@ -6,18 +6,24 @@ struct NotificationsView: View {
     @Environment(RouterPath.self) private var router
     @Environment(SystemPushCoordinator.self) private var pushNotifications
     @Bindable var environment: AppEnvironment
-    @State private var notifications: [UserNotification] = []
+    @State private var pager = PagingController<UserNotification>(pageSize: 20)
+    private var notifications: [UserNotification] {
+        get { pager.items }
+        nonmutating set { pager.replaceItems(newValue) }
+    }
+    private var total: Int {
+        get { pager.total }
+        nonmutating set { pager.replaceItems(pager.items, total: newValue) }
+    }
+    private var hasLoadedFirstPage: Bool { pager.hasLoadedFirstPage }
+    private var isLoadingFirstPage: Bool { pager.phase == .loadingInitial }
+    private var isLoadingMore: Bool { pager.phase == .loadingMore }
+    private var firstPageError: UserFacingError? { pager.initialError }
+    private var loadMoreError: UserFacingError? { pager.loadMoreError }
     @State private var unreadOnly = false
     @State private var unreadCount: Int?
     @State private var unreadCountPhase: NotificationUnreadCountPhase = .unknown
     @State private var unreadCountError: String?
-    @State private var total = 0
-    @State private var nextPage = 1
-    @State private var hasLoadedFirstPage = false
-    @State private var isLoadingFirstPage = false
-    @State private var isLoadingMore = false
-    @State private var firstPageError: String?
-    @State private var loadMoreError: String?
     @State private var listGeneration = 0
     @State private var countGeneration = 0
     @State private var optimisticReadIDs: Set<Int> = []
@@ -32,36 +38,37 @@ struct NotificationsView: View {
 
     var body: some View {
         List {
-            notificationPermissionSection
-
             Section {
                 SetuCard {
-                    Toggle("仅看未读", isOn: $unreadOnly)
-                        .tint(SetuColor.brandPink)
-                        .disabled(isMarkingAllRead)
-                        .accessibilityIdentifier("notifications.filter.unread-only")
-                        .onChange(of: unreadOnly) { _, newValue in
-                            Task { await loadFirstPage(for: newValue, clearExisting: true) }
-                        }
-                    if let unreadStatusText {
-                        SetuPill(
-                            text: unreadStatusText,
-                            systemImage: "bell.badge",
-                            tone: unreadCountPhase == .loaded ? .brand : .warning
-                        )
-                        .accessibilityIdentifier("notifications.unread-count")
-                    }
-                    if let unreadCountError {
-                        VStack(alignment: .leading, spacing: SetuSpacing.sm) {
-                            Text(unreadCountError)
-                                .font(SetuTypography.caption)
-                                .foregroundStyle(SetuColor.warning)
-                            Button("重新同步未读数量") {
-                                Task { await loadFirstPage(for: unreadOnly, clearExisting: false) }
+                    VStack(alignment: .leading, spacing: SetuSpacing.sm) {
+                        Toggle("仅看未读", isOn: $unreadOnly)
+                            .tint(SetuColor.brandPink)
+                            .disabled(isMarkingAllRead)
+                            .accessibilityIdentifier("notifications.filter.unread-only")
+                            .onChange(of: unreadOnly) { _, newValue in
+                                Task { await loadFirstPage(for: newValue, clearExisting: true) }
                             }
-                            .buttonStyle(.bordered)
-                            .frame(minHeight: 44)
-                            .accessibilityIdentifier("notifications.retry.unread-count")
+                        if let unreadStatusText {
+                            SetuPill(
+                                text: unreadStatusText,
+                                systemImage: "bell.badge",
+                                tone: unreadCountPhase == .loaded ? .brand : .warning
+                            )
+                            .accessibilityIdentifier("notifications.unread-count")
+                        }
+                        if let unreadCountError {
+                            VStack(alignment: .leading, spacing: SetuSpacing.sm) {
+                                Text(unreadCountError)
+                                    .font(SetuTypography.caption)
+                                    .foregroundStyle(SetuColor.warning)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Button("重新同步未读数量") {
+                                    Task { await loadFirstPage(for: unreadOnly, clearExisting: false) }
+                                }
+                                .buttonStyle(.bordered)
+                                .frame(minHeight: 44)
+                                .accessibilityIdentifier("notifications.retry.unread-count")
+                            }
                         }
                     }
                 }
@@ -144,9 +151,11 @@ struct NotificationsView: View {
                     Text("共 \(total) 条")
                 }
             }
+            notificationPermissionSection
         }
         .listStyle(.plain)
         .setuBackground()
+        .setuFeedbackPresentation($feedback)
         .accessibilityIdentifier("notifications.page")
         .navigationTitle(navigationTitle)
         .toolbar {
@@ -218,7 +227,7 @@ struct NotificationsView: View {
         return .idle
     }
 
-    private var hasMore: Bool { notifications.count < total }
+    private var hasMore: Bool { pager.hasMore }
 
     private var isInitialLoading: Bool {
         !hasLoadedFirstPage && isLoadingFirstPage
@@ -272,125 +281,58 @@ struct NotificationsView: View {
 
     private func loadFirstPage(for requestedUnreadOnly: Bool, clearExisting: Bool) async {
         guard requestedUnreadOnly == unreadOnly else { return }
-
         listGeneration += 1
         countGeneration += 1
-        let requestedListGeneration = listGeneration
-        let requestedCountGeneration = countGeneration
-
-        if clearExisting {
-            notifications = []
-            total = 0
-            nextPage = 1
-            hasLoadedFirstPage = false
-        }
-        isLoadingFirstPage = true
-        isLoadingMore = false
-        firstPageError = nil
-        loadMoreError = nil
+        let listRevision = listGeneration
+        let countRevision = countGeneration
         unreadCountPhase = .loading
         unreadCountError = nil
 
+        async let page: Void = pager.loadFirstPage(clearExisting: clearExisting) { page in
+            let result = try await environment.notificationClient.list(page: page, pageSize: pageSize, unreadOnly: requestedUnreadOnly)
+            guard listRevision == listGeneration, requestedUnreadOnly == unreadOnly else { throw CancellationError() }
+            latestFirstPageServerUnreadIDs = Set(result.list.lazy.filter { !$0.read }.map(\.id))
+            reconcileConfirmedReadIDs(from: result.list)
+            if requestedUnreadOnly, countRevision == countGeneration {
+                commitUnreadCount(.success(result.total))
+            }
+            return .init(
+                items: result.list.filter { !requestedUnreadOnly || !isEffectivelyRead($0) },
+                total: clampedUnreadTotal(adjustedTotal(result.total, pageItems: result.list, unreadOnly: requestedUnreadOnly), unreadOnly: requestedUnreadOnly)
+            )
+        }
         if requestedUnreadOnly {
-            let pageOutcome = await fetchPageOutcome(page: 1, unreadOnly: true)
-            guard requestedListGeneration == listGeneration,
-                  requestedUnreadOnly == unreadOnly else { return }
-            isLoadingFirstPage = false
-
-            switch pageOutcome {
-            case .success(let page):
-                commitFirstPage(page, unreadOnly: true)
-                hasLoadedFirstPage = true
-                guard requestedCountGeneration == countGeneration else { return }
-                commitUnreadCount(.success(page.total))
-            case .failure(let message):
-                firstPageError = message
+            await page
+            guard listRevision == listGeneration else { return }
+            if pager.initialError != nil {
                 unreadCountPhase = unreadCount == nil ? .unknown : .failed
                 unreadCountError = "未读数量暂未同步"
             }
-            return
+        } else {
+            async let count = fetchUnreadCountOutcome()
+            await page
+            let outcome = await count
+            guard countRevision == countGeneration, requestedUnreadOnly == unreadOnly else { return }
+            commitUnreadCount(outcome)
         }
-
-        async let pageOutcome = fetchPageOutcome(page: 1, unreadOnly: false)
-        async let countOutcome = fetchUnreadCountOutcome()
-
-        let resolvedPage = await pageOutcome
-        if requestedListGeneration == listGeneration, requestedUnreadOnly == unreadOnly {
-            isLoadingFirstPage = false
-            switch resolvedPage {
-            case .success(let page):
-                commitFirstPage(page, unreadOnly: false)
-                hasLoadedFirstPage = true
-            case .failure(let message):
-                firstPageError = message
-            }
-        }
-
-        let resolvedCount = await countOutcome
-        guard requestedCountGeneration == countGeneration,
-              requestedUnreadOnly == unreadOnly else { return }
-        commitUnreadCount(resolvedCount)
     }
 
     private func loadMore() async {
-        guard hasMore, !isLoadingMore, !isLoadingFirstPage else { return }
-        let requestedGeneration = listGeneration
-        let requestedUnreadOnly = unreadOnly
-        let requestedPage = nextPage
-        isLoadingMore = true
-        loadMoreError = nil
-        defer {
-            if requestedGeneration == listGeneration {
-                isLoadingMore = false
-            }
-        }
-
-        let outcome = await fetchPageOutcome(page: requestedPage, unreadOnly: requestedUnreadOnly)
-        guard requestedGeneration == listGeneration,
-              requestedUnreadOnly == unreadOnly,
-              requestedPage == nextPage else { return }
-
-        switch outcome {
-        case .success(let page):
-            reconcileConfirmedReadIDs(from: page.list)
-            let existingIDs = Set(notifications.map(\.id))
-            let incoming = page.list.filter { notification in
-                !existingIDs.contains(notification.id)
-                    && (!requestedUnreadOnly || !isEffectivelyRead(notification))
-            }
-            notifications.append(contentsOf: incoming)
-            total = clampedUnreadTotal(
-                adjustedTotal(page.total, pageItems: page.list, unreadOnly: requestedUnreadOnly),
-                unreadOnly: requestedUnreadOnly
+        let revision = listGeneration
+        let filter = unreadOnly
+        await pager.loadMore { page in
+            let result = try await environment.notificationClient.list(page: page, pageSize: pageSize, unreadOnly: filter)
+            guard revision == listGeneration, filter == unreadOnly else { throw CancellationError() }
+            reconcileConfirmedReadIDs(from: result.list)
+            if filter { commitUnreadCount(.success(result.total)) }
+            return .init(
+                items: result.list.filter { !filter || !isEffectivelyRead($0) },
+                total: clampedUnreadTotal(adjustedTotal(result.total, pageItems: result.list, unreadOnly: filter), unreadOnly: filter)
             )
-            nextPage = requestedPage + 1
-            if page.list.isEmpty {
-                total = notifications.count
-            }
-            if requestedUnreadOnly {
-                commitUnreadCount(.success(page.total))
-            }
-        case .failure(let message):
-            loadMoreError = message
         }
     }
 
-    private func fetchPageOutcome(
-        page: Int,
-        unreadOnly: Bool
-    ) async -> NotificationFetchOutcome<UserNotificationPage> {
-        do {
-            return .success(
-                try await environment.notificationClient.list(
-                    page: page,
-                    pageSize: pageSize,
-                    unreadOnly: unreadOnly
-                )
-            )
-        } catch {
-            return .failure(UserFacingErrorMapper.map(error).message)
-        }
-    }
+
 
     private func fetchUnreadCountOutcome() async -> NotificationFetchOutcome<Int> {
         do {
@@ -400,18 +342,7 @@ struct NotificationsView: View {
         }
     }
 
-    private func commitFirstPage(_ page: UserNotificationPage, unreadOnly: Bool) {
-        latestFirstPageServerUnreadIDs = Set(page.list.lazy.filter { !$0.read }.map(\.id))
-        reconcileConfirmedReadIDs(from: page.list)
-        notifications = page.list.filter { notification in
-            !unreadOnly || !isEffectivelyRead(notification)
-        }
-        total = clampedUnreadTotal(
-            adjustedTotal(page.total, pageItems: page.list, unreadOnly: unreadOnly),
-            unreadOnly: unreadOnly
-        )
-        nextPage = page.page + 1
-    }
+
 
     private func reconcileConfirmedReadIDs(from pageItems: [UserNotification]) {
         let confirmedReadIDs = Set(pageItems.lazy.filter(\.read).map(\.id))
@@ -528,7 +459,7 @@ struct NotificationsView: View {
             unreadCountError = nil
             return true
         } catch {
-            feedback = .error(UserFacingErrorMapper.map(error).message)
+            feedback = .error(UserFacingErrorMapper.map(error))
             return false
         }
     }
@@ -620,7 +551,7 @@ struct NotificationsView: View {
             if unreadOnly {
                 notifications = []
                 total = 0
-                nextPage = 1
+                pager.invalidate(clearExisting: true)
             }
             unreadCount = 0
             unreadCountPhase = .loaded
@@ -631,15 +562,14 @@ struct NotificationsView: View {
                 await loadFirstPage(for: filterAtCommit, clearExisting: false)
             }
         } catch {
-            feedback = .error(UserFacingErrorMapper.map(error).message)
+            feedback = .error(UserFacingErrorMapper.map(error))
         }
     }
 
     private func invalidateNotificationRequests() {
         listGeneration += 1
         countGeneration += 1
-        isLoadingFirstPage = false
-        isLoadingMore = false
+        pager.invalidate()
     }
 }
 
@@ -746,6 +676,7 @@ private struct NotificationRow: View {
                     Text(notification.title)
                         .font(.headline)
                         .foregroundStyle(SetuColor.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
                     Spacer()
                     if !isRead {
                         Circle()
@@ -760,6 +691,7 @@ private struct NotificationRow: View {
                 Text(notification.content)
                     .font(.footnote)
                     .foregroundStyle(SetuColor.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(SetuDateFormatter.string(from: notification.createdAt))
                     .font(.caption)
                     .foregroundStyle(SetuColor.textTertiary)

@@ -63,7 +63,7 @@ struct PublicUserProfileView: View {
                 aiWorks: aiWorks.list
             ))
         } catch {
-            state = .failed(UserFacingErrorMapper.map(error).message)
+            state = .failed(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -188,34 +188,7 @@ private struct PublicUserProfileContent {
     let aiWorks: [AiPublicWork]
 }
 
-private struct PublicUserStateSection: View {
-    let title: String
-    let stateTitle: String
-    var message: String?
-    var systemImage: String
-    var isLoading = false
-    var actionTitle: String?
-    var action: (() -> Void)?
-
-    var body: some View {
-        Section {
-            SetuCard {
-                VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                    SetuSectionHeader(title: title)
-                    SetuEmptyState(
-                        title: stateTitle,
-                        message: message,
-                        systemImage: systemImage,
-                        isLoading: isLoading,
-                        actionTitle: actionTitle,
-                        action: action
-                    )
-                }
-            }
-            .setuListRow()
-        }
-    }
-}
+private typealias PublicUserStateSection = SetuStateSection
 
 private struct PublicUserCollectionRow: View {
     let collection: CollectionInfo

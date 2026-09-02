@@ -80,6 +80,7 @@ struct MusicPlaylistsView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .setuBackground()
+        .setuFeedbackPresentation($feedback)
         .navigationTitle("我的歌单")
         .toolbar {
             Button {
@@ -134,7 +135,7 @@ struct MusicPlaylistsView: View {
         do {
             state = .loaded(try await environment.musicClient.playlists())
         } catch {
-            state = .failed(UserFacingErrorMapper.map(error).message)
+            state = .failed(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -145,7 +146,7 @@ struct MusicPlaylistsView: View {
             await load()
             feedback = .success("已删除《\(playlist.name)》")
         } catch {
-            feedback = .error(UserFacingErrorMapper.map(error).message)
+            feedback = .error(UserFacingErrorMapper.map(error))
         }
     }
 }
@@ -260,7 +261,7 @@ private struct CreatePlaylistSheet: View {
             onCreated()
             dismiss()
         } catch {
-            feedback = .error(UserFacingErrorMapper.map(error).message)
+            feedback = .error(UserFacingErrorMapper.map(error))
         }
     }
 }

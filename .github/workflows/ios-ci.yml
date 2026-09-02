@@ -1,0 +1,26 @@
+name: iOS CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  unit-tests:
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run SetuIOSCore unit tests (swift test)
+        run: swift test
+
+      - name: Regenerate project check (XcodeGen drift guard)
+        run: |
+          brew install xcodegen
+          xcodegen generate
+          git diff --exit-code SetuIOSApp.xcodeproj/project.pbxproj \
+            || (echo "::error::project.pbxproj 与 project.yml 不一致，请运行 xcodegen generate 后提交" && exit 1)

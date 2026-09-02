@@ -110,6 +110,7 @@ struct ProfileView: View {
         }
         .listStyle(.plain)
         .setuBackground()
+        .setuFeedbackPresentation($feedback)
         .navigationTitle("个人中心")
         .onChange(of: selectedAvatarItem) {
             Task { await uploadSelectedAvatar() }
@@ -143,7 +144,7 @@ struct ProfileView: View {
             nickname = profile.nickname ?? ""
             state = .loaded(profile)
         } catch {
-            state = .failed(UserFacingErrorMapper.map(error).message)
+            state = .failed(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -155,7 +156,7 @@ struct ProfileView: View {
             await load()
             feedback = .success("昵称已更新")
         } catch {
-            feedback = .error(UserFacingErrorMapper.map(error).message)
+            feedback = .error(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -184,7 +185,7 @@ struct ProfileView: View {
             await load()
             feedback = .success("头像已更新")
         } catch {
-            feedback = .error(UserFacingErrorMapper.map(error).message)
+            feedback = .error(UserFacingErrorMapper.map(error))
         }
     }
 }

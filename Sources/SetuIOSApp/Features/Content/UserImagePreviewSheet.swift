@@ -128,7 +128,7 @@ struct UserImagePreviewSheet: View {
                     case .cancelled:
                         exportState = .message("已取消分享", .muted)
                     case .failed(let message):
-                        exportState = .message(message, .danger)
+                        exportState = .message(message.message, .danger)
                     }
                 }
             }
@@ -318,7 +318,7 @@ private struct ImageSharePayload: Identifiable {
 private enum ActivityResult {
     case completed
     case cancelled
-    case failed(String)
+    case failed(UserFacingError)
 }
 
 private struct SystemActivitySheet: UIViewControllerRepresentable {
@@ -329,7 +329,7 @@ private struct SystemActivitySheet: UIViewControllerRepresentable {
         let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
         controller.completionWithItemsHandler = { _, completed, _, error in
             if let error {
-                onComplete(.failed(UserFacingErrorMapper.map(error).message))
+                onComplete(.failed(UserFacingErrorMapper.map(error)))
             } else {
                 onComplete(completed ? .completed : .cancelled)
             }

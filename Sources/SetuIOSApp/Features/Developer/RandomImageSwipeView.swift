@@ -7,12 +7,14 @@ import UIKit
 
 struct RandomImageSwipeView: View {
     @Environment(RouterPath.self) private var router
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Bindable var environment: AppEnvironment
 
     @State private var imageState: LoadState<ImageFeedCard> = .idle
     @State private var currentCard: ImageFeedCard?
     @State private var feedQueue: [ImageFeedCard] = []
+    @State private var unlockedImagesByKey: [String: SetuImageItem] = [:]
     @State private var unlockedItems: [String: SetuImageItem] = [:]
     @State private var unlockingTokens: Set<String> = []
     @State private var activePrefetchID: UUID?
@@ -23,7 +25,6 @@ struct RandomImageSwipeView: View {
     @State private var aspectRatio = ""
     @State private var excludeAI = true
     @State private var feedback: SetuFeedback?
-    @State private var feedbackAction: UserFacingErrorAction?
     @State private var showingParameters = false
     @State private var dragOffset = CGSize.zero
     @State private var balance: Int?
@@ -32,6 +33,8 @@ struct RandomImageSwipeView: View {
     @State private var favoriteStates: [String: LoadState<Bool>] = [:]
     @State private var favoriteStatusLoadIDs: [String: UUID] = [:]
     @State private var favoriteLoadingKeys: Set<String> = []
+    @State private var favoriteDestinations: [String: FavoriteDestination] = [:]
+    @State private var favoriteToastTarget: ImageCollectionReference?
     @State private var collectionTarget: ImageCollectionReference?
     @State private var originalPreviewItem: UserImagePreviewItem?
 
@@ -45,28 +48,44 @@ struct RandomImageSwipeView: View {
                 .ignoresSafeArea()
 
             VStack(spacing: SetuSpacing.md) {
-                statusStrip
-                if let feedback {
-                    VStack(spacing: SetuSpacing.sm) {
-                        SetuFeedbackBanner(feedback: feedback)
-                        if feedbackAction == .viewPoints {
-                            Button("查看积分获取方式") {
-                                router.navigate(to: .pointsLogs)
-                            }
-                            .buttonStyle(.bordered)
-                            .frame(minHeight: 44)
-                        }
-                    }
-                }
+                if !hasTransientFeedback { feedbackBanner }
                 imageStage
                 actionBar
             }
             .padding(.horizontal, SetuSpacing.lg)
             .padding(.bottom, SetuSpacing.sm)
         }
+        .overlay(alignment: .top) {
+            if hasTransientFeedback {
+                feedbackBanner
+                    .padding(.horizontal, SetuSpacing.lg)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("image.swipe.page")
         .navigationTitle("随机图片")
+        .setuRefreshAfterLogin(environment.authSession) { Task { await reloadFromParameters() } }
+        .setuRetry { Task { await reloadFromParameters() } }
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
+        .setuFeedbackPresentation($feedback)
         .toolbar {
             ToolbarItemGroup {
+                Button { router.navigate(to: .pointsLogs) } label: {
+                    HStack(spacing: SetuSpacing.xs) {
+                        Image(systemName: "bolt.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .accessibilityHidden(true)
+                        Text(balance.map(String.init) ?? "—")
+                            .font(.caption.weight(.semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                    }
+                    .fixedSize(horizontal: true, vertical: false)
+                }
+                .accessibilityLabel("当前余额 \(balanceText)")
+                .accessibilityIdentifier("image.balance")
                 Button {
                     showingParameters = true
                 } label: {
@@ -75,10 +94,14 @@ struct RandomImageSwipeView: View {
                 .disabled(hasActiveImageMutation)
                 .accessibilityLabel("调整找图设置")
                 Menu {
+                    Button("重新加载") { Task { await reloadFromParameters() } }
+                    Button("默认收藏") { router.navigate(to: .favorites) }
+                    Button("我的收藏夹") { router.navigate(to: .collections) }
+                    Button("API Key 管理") { router.navigate(to: .apiKeys) }
                     Button {
                         router.navigate(to: .points)
                     } label: {
-                        Label("高级找图设置", systemImage: "slider.horizontal.3")
+                        Label("按条件找图", systemImage: "slider.horizontal.3")
                     }
                     Button {
                         router.navigate(to: .pointsLogs)
@@ -110,12 +133,11 @@ struct RandomImageSwipeView: View {
             }
         }
         .sheet(item: $collectionTarget) { target in
-            RandomImageCollectionSheet(environment: environment, target: target) { result, savedToDefault in
+            RandomImageCollectionSheet(environment: environment, target: target) { result, destination in
                 present(.success(result))
-                if savedToDefault {
-                    favoriteStatusLoadIDs[target.imageKey] = UUID()
-                    favoriteStates[target.imageKey] = .loaded(true)
-                }
+                favoriteStatusLoadIDs[target.imageKey] = UUID()
+                favoriteStates[target.imageKey] = .loaded(true)
+                favoriteDestinations[target.imageKey] = destination
             }
         }
         .sheet(item: $originalPreviewItem) { item in
@@ -131,8 +153,14 @@ struct RandomImageSwipeView: View {
                 await loadNextImage(reason: "预览已准备好", expectedGeneration: generation)
             }
         }
-        .refreshable {
-            await reloadFromParameters()
+        .task(id: currentCard?.id) {
+            guard let card = currentCard,
+                  let delay = ImageFeedExpiryPolicy.prefetchDelay(for: card.expiresAt) else { return }
+            let generation = feedGeneration
+            do { try await Task.sleep(for: .seconds(delay)) } catch { return }
+            guard !Task.isCancelled, generation == feedGeneration else { return }
+            feedQueue.removeAll { (ImageFeedExpiryPolicy.prefetchDelay(for: $0.expiresAt) ?? 1) == 0 }
+            await prefetchIfNeeded(force: true, expectedGeneration: generation)
         }
         .alert(
             unlockConfirmationTitle,
@@ -150,42 +178,7 @@ struct RandomImageSwipeView: View {
             }
             Button("取消", role: .cancel) {}
         } message: {
-            Text("低清预览免费。当前余额：\(balanceText)；同一张图片重复查看不会再次扣分。")
-        }
-    }
-
-    private var statusStrip: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: SetuSpacing.md) {
-                statusStripContent
-            }
-            VStack(alignment: .leading, spacing: SetuSpacing.sm) {
-                statusStripContent
-            }
-        }
-        .font(.footnote)
-        .foregroundStyle(SetuColor.textSecondary)
-        .padding(.horizontal, SetuSpacing.md)
-        .padding(.vertical, SetuSpacing.sm)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: SetuRadius.md, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: SetuRadius.md, style: .continuous)
-                .stroke(SetuColor.separator, lineWidth: 1)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("当前余额 \(balanceText)，高清图每张 \(costPerImage) 积分，预览免费")
-    }
-
-    @ViewBuilder
-    private var statusStripContent: some View {
-        Label(balanceText, systemImage: "bolt.circle")
-        Label("高清 \(costPerImage) 积分", systemImage: "tag")
-        if isCurrentUnlocking {
-            Label("正在解锁", systemImage: "lock.open")
-        } else if isCurrentUnlocked {
-            Label("已解锁", systemImage: "checkmark.circle")
-        } else {
-            Label("预览免费", systemImage: "eye")
+            Text("低清预览免费。当前余额：\(balanceText)；已解锁图片在本次浏览中再次查看不扣分。")
         }
     }
 
@@ -202,7 +195,7 @@ struct RandomImageSwipeView: View {
                 case .loading where currentCard == nil:
                     loadingPlaceholder
                 case .failed(let text) where currentCard == nil:
-                    if text == noMatchingImagesMessage {
+                    if text.message == noMatchingImagesMessage {
                         SetuEmptyState(
                             title: "没有匹配图片",
                             message: "试试减少关键词或标签，或调整内容与画幅设置。",
@@ -306,7 +299,7 @@ struct RandomImageSwipeView: View {
                 }
             } label: {
                 Label(
-                    isCurrentUnlocked ? "查看高清图" : "查看高清图 · \(costPerImage) 积分",
+                    isCurrentUnlocked || dynamicTypeSize.isAccessibilitySize ? "查看高清图" : "查看高清图 · \(costPerImage) 积分",
                     systemImage: isCurrentUnlocked ? "lock.open" : "lock"
                 )
                 .frame(maxWidth: .infinity, minHeight: 48)
@@ -317,36 +310,47 @@ struct RandomImageSwipeView: View {
             .accessibilityHint("低清预览免费，确认后才会消费积分")
             .accessibilityIdentifier("image.unlock")
 
-            HStack(spacing: SetuSpacing.sm) {
+            HStack(spacing: SetuSpacing.xs) {
                 Button {
                     Task { await handleFavoriteAction() }
                 } label: {
-                    VStack(spacing: SetuSpacing.xs) {
-                        Image(systemName: currentFavoriteButtonSystemImage)
-                        Text(currentFavoriteButtonTitle)
-                            .font(.caption)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 52)
+                    ImageSwipeActionLabel(title: currentFavoriteButtonTitle, systemImage: currentFavoriteButtonSystemImage)
                 }
-                .buttonStyle(.bordered)
+                .setuButtonFeedback()
                 .disabled(!canUseCurrentFavoriteAction)
                 .accessibilityIdentifier("image.favorite")
                 .accessibilityHint(currentFavoriteAccessibilityHint)
+                .highPriorityGesture(
+                    LongPressGesture().exclusively(before: TapGesture()).onEnded { gesture in
+                        switch gesture {
+                        case .first:
+                            openCollectionPicker()
+                        case .second:
+                            Task { await handleFavoriteAction() }
+                        }
+                    }
+                )
+                .accessibilityAction(named: "选择收藏夹") { openCollectionPicker() }
 
                 Button {
                     if let currentCard {
-                        collectionTarget = ImageCollectionReference(card: currentCard)
+                        originalPreviewItem = UserImagePreviewItem(
+                            id: currentCard.id,
+                            title: title(for: currentCard),
+                            author: author(for: currentCard),
+                            width: width(for: currentCard),
+                            height: height(for: currentCard),
+                            r18: r18Value(for: currentCard),
+                            displayURLString: currentCard.displayURLString(unlockedItem: unlockedItems[currentCard.token]),
+                            originalURLString: unlockedItems[currentCard.token]?.originalURLString
+                        )
                     }
                 } label: {
-                    VStack(spacing: SetuSpacing.xs) {
-                        Image(systemName: "folder.badge.plus")
-                        Text("收藏夹")
-                            .font(.caption)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 52)
+                    ImageSwipeActionLabel(title: "分享", systemImage: "square.and.arrow.up")
                 }
-                .buttonStyle(.bordered)
+                .setuButtonFeedback()
                 .disabled(currentCard == nil || hasActiveImageMutation)
+                .accessibilityIdentifier("image.share")
 
                 Button {
                     let generation = feedGeneration
@@ -357,17 +361,13 @@ struct RandomImageSwipeView: View {
                         )
                     }
                 } label: {
-                    VStack(spacing: SetuSpacing.xs) {
-                        Image(systemName: "arrow.down.circle.fill")
-                        Text("下一张")
-                            .font(.caption)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 52)
+                    ImageSwipeActionLabel(title: "下一张", systemImage: "arrow.down.circle.fill")
                 }
-                .buttonStyle(.bordered)
+                .setuButtonFeedback()
                 .disabled(isLoadingImage || hasActiveImageMutation)
             }
         }
+        .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity)
         .padding(.vertical, SetuSpacing.sm)
         .padding(.horizontal, SetuSpacing.sm)
@@ -409,6 +409,26 @@ struct RandomImageSwipeView: View {
         .foregroundStyle(.white)
         .padding(SetuSpacing.md)
         .background(.ultraThinMaterial)
+    }
+
+    private var hasTransientFeedback: Bool {
+        switch feedback {
+        case .success, .info: true
+        default: false
+        }
+    }
+
+    @ViewBuilder
+    private var feedbackBanner: some View {
+        if let feedback {
+            SetuFeedbackBanner(
+                feedback: feedback,
+                actionTitle: favoriteToastTarget == nil ? nil : "改到其他收藏夹",
+                action: favoriteToastTarget.map { target in { collectionTarget = target } }
+            )
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: SetuRadius.sm))
+            .accessibilityIdentifier("image.feedback")
+        }
     }
 
     private var balanceText: String {
@@ -521,7 +541,6 @@ struct RandomImageSwipeView: View {
         favoriteStatusLoadIDs = [:]
         imageState = .loading
         feedback = nil
-        feedbackAction = nil
         let generation = feedGeneration
         return generation
     }
@@ -540,6 +559,7 @@ struct RandomImageSwipeView: View {
         let generation = expectedGeneration ?? feedGeneration
         guard generation == feedGeneration else { return }
         guard !isLoadingImage else { return }
+        feedQueue.removeAll { ImageFeedExpiryPolicy.isExpired($0.expiresAt) }
         if feedQueue.isEmpty, isPrefetching {
             present(.info("正在预加载下一批图片"))
             return
@@ -562,12 +582,26 @@ struct RandomImageSwipeView: View {
             return
         }
 
+        feedQueue.removeAll { ImageFeedExpiryPolicy.isExpired($0.expiresAt) }
+        guard !feedQueue.isEmpty else {
+            imageState = .failed("预览已过期，请重新加载")
+            present(.warning("预览已过期，请重新加载"))
+            return
+        }
         let next = feedQueue.removeFirst()
+        if let unlocked = unlockedImagesByKey[imageKey(for: next)] {
+            unlockedItems[next.token] = unlocked
+        }
         let favoriteKey = imageKey(for: next)
         favoriteStates[favoriteKey] = .loading
         currentCard = next
         imageState = .loaded(next)
-        present(.info(reason))
+        if reason == "已应用参数" {
+            present(.info(reason))
+        } else {
+            feedback = nil
+            favoriteToastTarget = nil
+        }
         Task { await refreshFavoriteStatus(for: next, expectedGeneration: generation) }
         if feedQueue.count <= refillThreshold {
             Task { await prefetchIfNeeded(expectedGeneration: generation) }
@@ -605,7 +639,7 @@ struct RandomImageSwipeView: View {
             guard generation == feedGeneration, activePrefetchID == requestID else { return }
             costPerImage = response.costPerImage
             balance = response.balance
-            let cards = response.items.map { ImageFeedCard(feedID: response.feedId, preview: $0) }
+            let cards = response.items.map { ImageFeedCard(feedID: response.feedId, preview: $0, expiresAt: ImageFeedExpiryPolicy.expirationDate(response.expiresAt)) }
             feedQueue.append(contentsOf: cards)
             if cards.isEmpty {
                 if currentCard == nil {
@@ -616,7 +650,7 @@ struct RandomImageSwipeView: View {
         } catch {
             guard generation == feedGeneration, activePrefetchID == requestID else { return }
             if currentCard == nil {
-                imageState = .failed(UserFacingErrorMapper.map(error).message)
+                imageState = .failed(UserFacingErrorMapper.map(error))
             }
             present(error)
         }
@@ -634,6 +668,10 @@ struct RandomImageSwipeView: View {
             return nil
         }
 
+        if ImageFeedExpiryPolicy.isExpired(card.expiresAt) {
+            await reloadExpiredFeed()
+            return nil
+        }
         unlockingTokens.insert(card.token)
         defer {
             unlockingTokens.remove(card.token)
@@ -646,6 +684,7 @@ struct RandomImageSwipeView: View {
                 reason: "open_original"
             )
             unlockedItems[card.token] = response.item
+            unlockedImagesByKey[imageKey(for: card)] = response.item
             balance = response.balance
             if currentCard?.token == card.token {
                 imageState = .loaded(card)
@@ -656,9 +695,23 @@ struct RandomImageSwipeView: View {
             return response.item
         } catch {
             if currentCard?.token == card.token {
-                present(error)
+                if ImageFeedExpiryPolicy.shouldReloadPreview(after: error) {
+                    unlockingTokens.remove(card.token)
+                    await reloadExpiredFeed()
+                } else {
+                    present(error)
+                }
             }
             return nil
+        }
+    }
+
+    private func reloadExpiredFeed() async {
+        // No recursive consume: the replacement preview can be a different picture.
+        guard let generation = beginReload() else { return }
+        await completeReload(generation: generation)
+        if generation == feedGeneration, currentCard != nil {
+            present(.info("预览已过期，已重新加载。请确认新图片后查看高清图。"))
         }
     }
 
@@ -701,11 +754,11 @@ struct RandomImageSwipeView: View {
             let isFavorited = try await environment.favoriteClient.exists(pid: card.preview.pid, p: card.preview.page)
             guard generation == feedGeneration,
                   favoriteStatusLoadIDs[key] == loadID else { return }
-            favoriteStates[key] = .loaded(isFavorited)
+            favoriteStates[key] = .loaded(isFavorited || favoriteDestinations[key] != nil)
         } catch {
             guard generation == feedGeneration,
                   favoriteStatusLoadIDs[key] == loadID else { return }
-            favoriteStates[key] = .failed(UserFacingErrorMapper.map(error).message)
+            favoriteStates[key] = .failed(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -716,7 +769,9 @@ struct RandomImageSwipeView: View {
             await refreshFavoriteStatus(for: currentCard, expectedGeneration: feedGeneration)
         case .loaded(false):
             await addCurrentToDefaultFavorites()
-        case .idle, .loading, .loaded(true):
+        case .loaded(true):
+            await removeCurrentFavorite()
+        case .idle, .loading:
             break
         }
     }
@@ -731,14 +786,47 @@ struct RandomImageSwipeView: View {
         do {
             try await environment.favoriteClient.add(pid: currentCard.preview.pid, p: currentCard.preview.page)
             favoriteStates[key] = .loaded(true)
+            favoriteDestinations[key] = .defaultCollection
             present(.success("已加入默认收藏"))
+            favoriteToastTarget = ImageCollectionReference(card: currentCard, source: .defaultCollection)
             #if os(iOS)
             UINotificationFeedbackGenerator().notificationOccurred(.success)
             #endif
         } catch {
             let mapped = UserFacingErrorMapper.map(error)
-            favoriteStates[key] = .failed(mapped.message)
-            present(.error(mapped.message), action: mapped.action)
+            favoriteStates[key] = .failed(mapped)
+            present(.error(mapped))
+        }
+    }
+
+    private func openCollectionPicker() {
+        guard let card = currentCard, !hasActiveImageMutation else { return }
+        let source: FavoriteDestination? = {
+            if let destination = favoriteDestinations[imageKey(for: card)] { return destination }
+            if case .loaded(true) = currentFavoriteState { return .defaultCollection }
+            return nil
+        }()
+        collectionTarget = ImageCollectionReference(card: card, source: source)
+    }
+
+    private func removeCurrentFavorite() async {
+        guard let card = currentCard, !hasActiveImageMutation else { return }
+        let key = imageKey(for: card)
+        favoriteLoadingKeys.insert(key)
+        favoriteStatusLoadIDs[key] = UUID()
+        defer { favoriteLoadingKeys.remove(key) }
+        do {
+            if case .collection(let id) = favoriteDestinations[key] {
+                try await environment.collectionClient.removeItem(collectionID: id, pid: card.preview.pid, p: card.preview.page)
+            } else {
+                try await environment.favoriteClient.remove(pid: card.preview.pid, p: card.preview.page)
+            }
+            favoriteDestinations[key] = nil
+            favoriteStates[key] = .loaded(false)
+            present(.success("已取消收藏"))
+        } catch {
+            favoriteStates[key] = .failed(UserFacingErrorMapper.map(error))
+            present(error)
         }
     }
 
@@ -747,8 +835,8 @@ struct RandomImageSwipeView: View {
         switch currentFavoriteState {
         case .idle, .loading: return "正在确认"
         case .failed: return "重试状态"
-        case .loaded(true): return "已喜欢"
-        case .loaded(false): return "喜欢"
+        case .loaded(true): return "已收藏"
+        case .loaded(false): return "收藏"
         }
     }
 
@@ -765,19 +853,19 @@ struct RandomImageSwipeView: View {
     private var canUseCurrentFavoriteAction: Bool {
         guard currentCard != nil, !hasActiveImageMutation else { return false }
         switch currentFavoriteState {
-        case .failed, .loaded(false): return true
-        case .idle, .loading, .loaded(true): return false
+        case .failed, .loaded: return true
+        case .idle, .loading: return false
         }
     }
 
     private var currentFavoriteAccessibilityHint: String {
         switch currentFavoriteState {
         case .failed:
-            return "暂时无法确认是否已喜欢这张图片，轻点重试"
+            return "暂时无法确认是否已收藏这张图片，轻点重试"
         case .idle, .loading:
-            return "正在确认是否已喜欢这张图片"
+            return "正在确认是否已收藏这张图片"
         case .loaded(true):
-            return "这张图片已在默认收藏中"
+            return "再次点按取消收藏，长按选择收藏夹"
         case .loaded(false):
             return "加入默认收藏"
         }
@@ -787,14 +875,15 @@ struct RandomImageSwipeView: View {
         "\(card.preview.pid)-\(card.preview.page)"
     }
 
-    private func present(_ newFeedback: SetuFeedback, action: UserFacingErrorAction? = nil) {
+    private func present(_ newFeedback: SetuFeedback) {
+        favoriteToastTarget = nil
+        favoriteToastTarget = nil
         feedback = newFeedback
-        feedbackAction = action
     }
 
     private func present(_ error: Error) {
         let mapped = UserFacingErrorMapper.map(error)
-        present(.error(mapped.message), action: mapped.action)
+        present(.error(mapped))
     }
 
     private func swipeReason(for translation: CGSize) -> String {
@@ -839,9 +928,32 @@ struct RandomImageSwipeView: View {
     }
 }
 
+private struct ImageSwipeActionLabel: View {
+    @Environment(\.isEnabled) private var isEnabled
+    let title: String
+    let systemImage: String
+
+    var body: some View {
+        VStack(spacing: SetuSpacing.xs) {
+            Image(systemName: systemImage)
+                .font(.system(size: 20, weight: .semibold))
+                .accessibilityHidden(true)
+            Text(title)
+                .font(.caption)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, minHeight: 52)
+        .padding(SetuSpacing.xs)
+        .foregroundStyle(SetuColor.brandInk)
+        .background(SetuColor.brandSoft.opacity(0.2), in: RoundedRectangle(cornerRadius: SetuRadius.md))
+        .opacity(isEnabled ? 1 : 0.5)
+    }
+}
+
 private struct ImageFeedCard: Identifiable, Sendable {
     let feedID: String
     let preview: ImageFeedItem
+    let expiresAt: Date?
 
     var id: String { preview.token }
     var token: String { preview.token }
@@ -855,12 +967,20 @@ private struct ImageFeedCard: Identifiable, Sendable {
     }
 }
 
+private enum FavoriteDestination: Equatable {
+    case defaultCollection
+    case collection(Int)
+}
+
 private struct ImageCollectionReference: Identifiable {
     let pid: Int
     let page: Int
     let title: String
 
-    init(card: ImageFeedCard) {
+    let source: FavoriteDestination?
+
+    init(card: ImageFeedCard, source: FavoriteDestination? = nil) {
+        self.source = source
         pid = card.preview.pid
         page = card.preview.page
         title = card.preview.title
@@ -882,7 +1002,7 @@ private struct RandomImageCollectionSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var environment: AppEnvironment
     let target: ImageCollectionReference
-    let onDone: (String, Bool) -> Void
+    let onDone: (String, FavoriteDestination) -> Void
 
     @State private var state: LoadState<[CollectionInfo]> = .idle
     @State private var selectedCollectionID: Int?
@@ -926,6 +1046,7 @@ private struct RandomImageCollectionSheet: View {
             }
             .listStyle(.plain)
             .setuBackground()
+            .setuRetry { Task { await loadCollections() } }
             .navigationTitle("选择收藏夹")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -947,7 +1068,7 @@ private struct RandomImageCollectionSheet: View {
             state = .loaded(collections)
             selectedCollectionID = collections.first(where: \.isDefault)?.id ?? collections.first?.id
         } catch {
-            state = .failed(UserFacingErrorMapper.map(error).message)
+            state = .failed(UserFacingErrorMapper.map(error))
         }
     }
 
@@ -962,13 +1083,20 @@ private struct RandomImageCollectionSheet: View {
             } else {
                 try await environment.collectionClient.addItem(collectionID: selectedCollectionID, pid: target.pid, p: target.page)
             }
-            onDone(
-                "已收藏到「\(collection?.name ?? "收藏夹")」",
-                collection?.isDefault == true
-            )
+            let destination: FavoriteDestination = collection?.isDefault == true ? .defaultCollection : .collection(selectedCollectionID)
+            // Add first. If removing the source fails, keep both copies and report it.
+            if let source = target.source, source != destination {
+                switch source {
+                case .defaultCollection:
+                    try await environment.favoriteClient.remove(pid: target.pid, p: target.page)
+                case .collection(let id):
+                    try await environment.collectionClient.removeItem(collectionID: id, pid: target.pid, p: target.page)
+                }
+            }
+            onDone("已收藏到「\(collection?.name ?? "收藏夹")」", destination)
             dismiss()
         } catch {
-            feedback = .error(UserFacingErrorMapper.map(error).message)
+            feedback = .error(UserFacingErrorMapper.map(error))
         }
     }
 }
@@ -1002,6 +1130,11 @@ private struct RandomImageCard: View {
                         .font(.body)
                         .foregroundStyle(SetuColor.textSecondary)
                         .padding(SetuSpacing.md)
+
+                    Image(systemName: "photo")
+                        .font(.system(size: 32))
+                        .foregroundStyle(SetuColor.textSecondary)
+                        .padding(SetuSpacing.sm)
                 }
                     .accessibilityLabel("图片预览暂不可用，\(displayTitle)，作者 \(displayAuthor)")
                     .accessibilityIdentifier("image.card.placeholder")
@@ -1045,7 +1178,19 @@ private struct RandomImageParameterSheet: View {
                 Section {
                     SetuCard {
                         VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                            SetuSectionHeader(title: "筛选", subtitle: "预加载和低清预览不扣分，只有确认查看高清图才会计费")
+                            SetuSectionHeader(title: "筛选")
+                            TextField("关键词", text: $keyword)
+                                .accessibilityLabel("关键词")
+                                .accessibilityIdentifier("image.filter.keyword")
+                                #if os(iOS)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                #endif
+                            TextField("标签，逗号分隔", text: $tagText)
+                                #if os(iOS)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                #endif
                             Picker("内容级别", selection: $r18) {
                                 Text("普通内容").tag(0)
                                 Text("成人内容").tag(1)
@@ -1057,16 +1202,6 @@ private struct RandomImageParameterSheet: View {
                                 Text("方图").tag("0.86-1.15")
                                 Text("横图").tag("1.16-3.0")
                             }
-                            TextField("关键词", text: $keyword)
-                                #if os(iOS)
-                                .textInputAutocapitalization(.never)
-                                .autocorrectionDisabled()
-                                #endif
-                            TextField("标签，逗号分隔", text: $tagText)
-                                #if os(iOS)
-                                .textInputAutocapitalization(.never)
-                                .autocorrectionDisabled()
-                                #endif
                             Toggle("排除 AI 图片", isOn: $excludeAI)
                                 .tint(SetuColor.brandPink)
                         }
@@ -1077,7 +1212,7 @@ private struct RandomImageParameterSheet: View {
                 Section {
                     SetuCard {
                         Label(
-                            "列表会提前缓存一批免费预览图。只有你主动确认查看高清图时才会消费积分，同一张图片重复查看不会再次扣分。",
+                            "列表会提前缓存一批免费预览图。只有你主动确认查看高清图时才会消费积分，已解锁图片在本次浏览中再次查看不扣分。",
                             systemImage: "hand.draw"
                         )
                         .font(SetuTypography.caption)

@@ -1,5 +1,21 @@
 import Foundation
 
+public enum MusicAudioQuality: String, CaseIterable, Codable, Sendable, Identifiable {
+    case standard, higher, exhigh, lossless, hires
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .standard: "标准"
+        case .higher: "较高"
+        case .exhigh: "极高"
+        case .lossless: "无损"
+        case .hires: "Hi-Res"
+        }
+    }
+}
+
 public enum MusicArtworkSize: Sendable {
     case thumbnail
     case lockScreen
