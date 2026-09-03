@@ -166,6 +166,9 @@ final class MusicPlaybackController {
     @ObservationIgnored private var historyTasks: [UUID: Task<Void, Never>] = [:]
     @ObservationIgnored private let playbackLog = OSLog(subsystem: "icu.yukiryou.setuios", category: "MusicPlayback")
     @ObservationIgnored private var transitionSignpost: OSSignpostID?
+    #if DEBUG // P0.1 instrumentation
+    @ObservationIgnored private let playbackDiagnostics = MusicPlaybackDiagnostics()
+    #endif // P0.1 instrumentation
     #if os(iOS)
     @ObservationIgnored private var remoteCommandTokens: [(MPRemoteCommand, Any)] = []
     #endif
@@ -360,6 +363,9 @@ final class MusicPlaybackController {
         let id = OSSignpostID(log: playbackLog)
         transitionSignpost = id
         os_signpost(.begin, log: playbackLog, name: "TrackTransition", signpostID: id)
+        #if DEBUG // P0.1 instrumentation
+        playbackDiagnostics.transitionStarted()
+        #endif // P0.1 instrumentation
     }
 
     private func endTransitionMeasurement() {
@@ -375,29 +381,56 @@ final class MusicPlaybackController {
         beginTransition()
         let ticket = transitionID
         // Commit the intent before awaiting: consecutive next taps advance from the last intent.
+        #if DEBUG // P0.1 instrumentation
+        playbackDiagnostics.mark("TransitionIntentCommitted")
+        #endif // P0.1 instrumentation
         player?.pause()
         removeItemObservers()
+        #if DEBUG // P0.1 instrumentation
+        playbackDiagnostics.replaceBegin(installing: false)
+        #endif // P0.1 instrumentation
         player?.replaceCurrentItem(with: nil)
+        #if DEBUG // P0.1 instrumentation
+        playbackDiagnostics.replaceEnd(installing: false)
+        #endif // P0.1 instrumentation
         currentTrack = track
         currentQueueIndex = index
         currentTimeSeconds = resumeAt
         isPlaying = autoplay; isBuffering = autoplay; playbackError = nil
         currentSource = nil
         feedback = .info("正在准备播放")
+        #if DEBUG // P0.1 instrumentation
+        playbackDiagnostics.mark("PreparedLookupStarted")
+        #endif // P0.1 instrumentation
         if !force, let prepared = nextItemPreparer.consume(trackID: track.id, quality: audioQuality) {
+            #if DEBUG // P0.1 instrumentation
+            playbackDiagnostics.mark("PreparedHit")
+            #endif // P0.1 instrumentation
             currentSource = prepared.source
             os_signpost(.event, log: playbackLog, name: "PreparedItemHit")
+            #if DEBUG // P0.1 instrumentation
+            playbackDiagnostics.mark("PlaybackSourceReady", value: 1)
+            #endif // P0.1 instrumentation
             load(url: prepared.source.url, track: track, index: index, notice: prepared.source.notice,
                  resumeAt: resumeAt, autoplay: autoplay, preparedItem: prepared.item)
             if recordHistory { enqueueHistory(track) }
             return true
         }
+        #if DEBUG // P0.1 instrumentation
+        playbackDiagnostics.preparedMiss(forced: force)
+        #endif // P0.1 instrumentation
         nextItemPreparer.invalidate()
         guard let urlResolver else { failPlayback(UserFacingError(message: "播放器尚未准备好")); return false }
         do {
+            #if DEBUG // P0.1 instrumentation
+            playbackDiagnostics.mark("PlaybackSourceResolveStarted")
+            #endif // P0.1 instrumentation
             let source = try await urlResolver.resolve(trackID: track.id, quality: audioQuality, force: force)
             guard transitionID == ticket, !Task.isCancelled else { return nil }
             currentSource = source
+            #if DEBUG // P0.1 instrumentation
+            playbackDiagnostics.mark("PlaybackSourceReady", value: 0)
+            #endif // P0.1 instrumentation
             load(url: source.url, track: track, index: index, notice: source.notice, resumeAt: resumeAt, autoplay: autoplay && isPlaying)
             if recordHistory { enqueueHistory(track) }
             return true
@@ -470,6 +503,9 @@ final class MusicPlaybackController {
         nextItemPreparer.invalidate()
         currentSource = nil
         endTransitionMeasurement()
+        #if DEBUG // P0.1 instrumentation
+        playbackDiagnostics.finish("PlaybackStopped")
+        #endif // P0.1 instrumentation
         player?.pause()
         resumeTask?.cancel()
         resumeTask = nil
@@ -718,14 +754,23 @@ final class MusicPlaybackController {
     }
 
     private func advance(by offset: Int, isAuto: Bool) async {
+        #if DEBUG // P0.1 instrumentation
+        playbackDiagnostics.nextRequested(offset: offset, automatic: isAuto)
+        #endif // P0.1 instrumentation
         guard let start = currentQueueIndex, !queueTracks.isEmpty else { return }
         var probe = start
         for _ in 0..<queueTracks.count {
+            #if DEBUG // P0.1 instrumentation
+            playbackDiagnostics.mark("QueueLookupStarted")
+            #endif // P0.1 instrumentation
             guard let index = queue.target(from: probe, offset: offset, isAuto: isAuto) else {
                 if isAuto { finishAtEndOfQueue() }
                 return
             }
             let track = queueTracks[index]
+            #if DEBUG // P0.1 instrumentation
+            playbackDiagnostics.queueResolved()
+            #endif // P0.1 instrumentation
             // Each transition publishes the target synchronously before suspension.
             let expectedSession = sessionID
             guard let succeeded = await transition(to: track, index: index) else { return }
@@ -777,8 +822,18 @@ final class MusicPlaybackController {
         guard let player else { return }
         player.pause()
         removeItemObservers()
+        #if DEBUG // P0.1 instrumentation
+        playbackDiagnostics.mark("PlayerItemCreationStarted")
+        #endif // P0.1 instrumentation
         let item = preparedItem ?? AVPlayerItem(url: url)
+        #if DEBUG // P0.1 instrumentation
+        playbackDiagnostics.itemReady(reused: preparedItem != nil, status: item.status)
+        playbackDiagnostics.replaceBegin(installing: true)
+        #endif // P0.1 instrumentation
         player.replaceCurrentItem(with: item)
+        #if DEBUG // P0.1 instrumentation
+        playbackDiagnostics.replaceEnd(installing: true)
+        #endif // P0.1 instrumentation
         currentTrack = track
         currentQueueIndex = index
         isPlaying = autoplay
@@ -819,12 +874,18 @@ final class MusicPlaybackController {
 
     func observeTimeControlStatus() {
         guard let player, player.currentItem != nil, playbackError == nil else { return }
+        #if DEBUG // P0.1 instrumentation
+        playbackDiagnostics.playerStatus(player.timeControlStatus, waitingReason: player.reasonForWaitingToPlay)
+        #endif // P0.1 instrumentation
         isBuffering = isPlaying && player.timeControlStatus == .waitingToPlayAtSpecifiedRate
         if player.timeControlStatus == .playing {
             isBuffering = false
             loadingTimeout?.cancel(); loadingTimeout = nil
             itemLoadDeadline = nil
             os_signpost(.event, log: playbackLog, name: "TrackPlaying")
+            #if DEBUG // P0.1 instrumentation
+            playbackDiagnostics.playing()
+            #endif // P0.1 instrumentation
             endTransitionMeasurement()
         } else if isBuffering, let item = player.currentItem, loadingTimeout == nil {
             startLoadingTimeout(for: item)
@@ -910,6 +971,9 @@ final class MusicPlaybackController {
     }
 
     private func failPlayback(_ error: UserFacingError) {
+        #if DEBUG // P0.1 instrumentation
+        playbackDiagnostics.finish("DiagnosticFailed")
+        #endif // P0.1 instrumentation
         player?.pause()
         preparationTask?.cancel(); preparationDelay?.cancel()
         nextItemPreparer.invalidate()
@@ -1035,6 +1099,9 @@ final class MusicPlaybackController {
         itemStatusObservation = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
             Task { @MainActor [weak item] in
                 guard let self, let item, self.player?.currentItem === item else { return }
+                #if DEBUG // P0.1 instrumentation
+                self.playbackDiagnostics.itemStatus(item.status)
+                #endif // P0.1 instrumentation
                 switch item.status {
                 case .failed: self.handleItemFailure(item, error: item.error)
                 case .readyToPlay: self.observeTimeControlStatus()
@@ -1085,16 +1152,25 @@ final class MusicPlaybackController {
 
     private func playWhenSessionReady(_ item: AVPlayerItem) {
         #if os(iOS)
+        #if DEBUG // P0.1 instrumentation
+        playbackDiagnostics.mark("SessionGate", value: audioSessionReady ? 1 : 0)
+        #endif // P0.1 instrumentation
         if audioSessionReady { player?.play(); return }
         audioSessionTask?.cancel()
         let session = audioSession, ticket = transitionID, revision = audioSessionRevision
         let force = audioSessionNeedsReactivation
+        #if DEBUG // P0.1 instrumentation
+        playbackDiagnostics.mark("SessionActivateBegin")
+        #endif // P0.1 instrumentation
         audioSessionTask = Task { [weak self, weak item] in
             do {
                 // AVAudioSession's synchronous calls can block; serialize them off MainActor.
                 try await session.activate(force: force)
                 guard let self, let item, !Task.isCancelled, self.transitionID == ticket,
                       self.audioSessionRevision == revision, self.player?.currentItem === item else { return }
+                #if DEBUG // P0.1 instrumentation
+                self.playbackDiagnostics.mark("SessionActivateEnd")
+                #endif // P0.1 instrumentation
                 self.audioSessionReady = true
                 self.audioSessionNeedsReactivation = false
                 self.audioSessionTask = nil
