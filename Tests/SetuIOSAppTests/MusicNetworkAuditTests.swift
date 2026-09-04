@@ -31,6 +31,10 @@ final class MusicNetworkAuditTests: XCTestCase {
         XCTAssertEqual(wrapped.id, 2)
         XCTAssertEqual(decoder.count, 1)
         XCTAssertEqual(keychain.readCount, 8)
+        decoder.reset()
+        let readsBeforeV2 = keychain.readCount
+        _ = try await MusicV2Client(apiClient: api).home()
+        XCTAssertEqual(keychain.readCount, readsBeforeV2, "SID-only v2 requests must not read the signing key")
         print("Network audit: raw search/URL/playlists = 2 decode attempts; envelope = 1; signed request = 2 Keychain reads")
     }
 }
@@ -66,6 +70,7 @@ private final class AuditURLProtocol: URLProtocol {
         case "/user/music/search": body = #"{"result":{"songs":[{"id":1,"name":"fixture"}],"songCount":1}}"#
         case "/user/music/url": body = #"{"data":[{"id":1,"url":"https://audio.test/1.mp3"}]}"#
         case "/user/playlists": body = #"[{"id":1,"name":"fixture"}]"#
+        case "/user/music/v2/home": body = #"{"sections":[],"generatedAt":"2026-09-03T08:00:00Z"}"#
         default: body = #"{"code":200,"data":{"id":2,"name":"wrapped"}}"#
         }
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)

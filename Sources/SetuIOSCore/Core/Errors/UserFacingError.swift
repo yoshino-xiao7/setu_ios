@@ -42,6 +42,10 @@ public enum UserFacingErrorAction: Hashable, Sendable {
 
 public enum UserFacingErrorMapper {
     public static func map(_ error: Error) -> UserFacingError {
+        if let musicError = error as? MusicV2ServerError {
+            return map(musicError)
+        }
+
         if let urlError = error as? URLError {
             return map(urlError)
         }
@@ -61,6 +65,40 @@ public enum UserFacingErrorMapper {
             action: .retry,
             diagnosticCode: nil
         )
+    }
+
+    private static func map(_ server: MusicV2ServerError) -> UserFacingError {
+        let diagnostic = diagnosticCode(requestID: server.requestID, traceID: server.error.traceId)
+        if server.status == 401 {
+            return UserFacingError(
+                title: "登录已过期",
+                message: "请重新登录，完成后可以继续当前操作。",
+                action: .signIn,
+                diagnosticCode: diagnostic
+            )
+        }
+        switch server.error.code {
+        case .invalidRequest:
+            return UserFacingError(title: "请求内容需要调整", message: server.error.message, action: .reviewInput, diagnosticCode: diagnostic)
+        case .forbidden:
+            return UserFacingError(title: "当前账号无法执行此操作", message: server.error.message, action: .goBack, diagnosticCode: diagnostic)
+        case .resourceNotFound:
+            return UserFacingError(title: "音乐内容不存在", message: server.error.message, action: .goBack, diagnosticCode: diagnostic)
+        case .trackNotPlayable:
+            return UserFacingError(title: "当前歌曲无法播放", message: server.error.message, action: .goBack, diagnosticCode: diagnostic)
+        case .upstreamAuthInvalid:
+            // This is the provider account, never the Setu user's SID session.
+            return UserFacingError(title: "音乐服务暂时不可用", message: server.error.message, action: .wait, diagnosticCode: diagnostic)
+        case .upstreamRateLimited, .rateLimited:
+            return UserFacingError(title: "音乐请求有点频繁", message: server.error.message, action: .wait, diagnosticCode: diagnostic)
+        case .upstreamUnavailable, .internalError:
+            return UserFacingError(title: "音乐服务暂时不可用", message: server.error.message, action: .retry, diagnosticCode: diagnostic)
+        case .unauthorized:
+            // FINAL uses HTTP status, not an untrusted/unknown code alone, as the sign-in boundary.
+            return UserFacingError(title: "请求没有完成", message: server.error.message, action: .retry, diagnosticCode: diagnostic)
+        case .unknown:
+            return UserFacingError(title: "音乐请求没有完成", message: "遇到未知的音乐服务错误，请稍后重试。", action: .retry, diagnosticCode: diagnostic)
+        }
     }
 
     private static func map(_ error: URLError) -> UserFacingError {

@@ -6,13 +6,46 @@ public enum MusicCacheKey: Hashable, Sendable {
 
     case search(keywords: String, offset: Int, limit: Int)
 
+    // V2 cache entries remain session-owned: MusicStore replaces/resets its repository on user switch.
+    case home
+    case searchV2(keywords: String, scope: MusicV2SearchScope, offset: Int, limit: Int?)
+    case searchSuggestions(String), hotSearchV2
+    case track(String), tracksBatch([String]), lyrics(String)
+    case artist(String), artistTracks(String, offset: Int, limit: Int), artistAlbums(String, offset: Int, limit: Int), artistMVs(String, offset: Int, limit: Int)
+    case album(String)
+    case providerPlaylist(String, offset: Int, limit: Int), providerPlaylistTracks(String, offset: Int, limit: Int)
+    case rankings
+    case recommendTracks, recommendPlaylists(limit: Int)
+    case newReleaseTracks(area: MusicV2Area, offset: Int, limit: Int), newReleaseAlbums(area: MusicV2Area, offset: Int, limit: Int)
+    // User-library HTTP responses are no-store, but this private process cache is allowed for 60s.
+    case library, likedTracks(offset: Int, limit: Int), favoritePlaylists(offset: Int, limit: Int), historyV2(offset: Int, limit: Int)
+    // Deliberately no radioFM key: each call must produce a fresh private batch.
+
     public var ttl: TimeInterval {
         switch self {
         case .hotSearch, .dailySongs: return 30 * 60
         case .recommendedPlaylists, .newSongs, .recommendedTracks, .search: return 10 * 60
         case .playlists, .playlist: return 5 * 60 // SWR fallback for changes from another device.
         case .history, .historyCount: return 60
+        case .home: return 5 * 60
+        case .searchV2, .searchSuggestions, .recommendPlaylists, .newReleaseTracks, .newReleaseAlbums: return 10 * 60
+        case .hotSearchV2, .track, .tracksBatch, .artist, .artistTracks, .artistAlbums, .artistMVs, .album, .rankings: return 30 * 60
+        case .lyrics: return 24 * 60 * 60
+        case .providerPlaylist, .providerPlaylistTracks: return 5 * 60
+        case .recommendTracks:
+            // A stricter client policy is safe: never retain a "daily" result beyond one day.
+            return 24 * 60 * 60
+        case .library, .likedTracks, .favoritePlaylists, .historyV2: return 60
         }
+    }
+
+    public func isFresh(fetchedAt: Date, now: Date) -> Bool {
+        if self == .recommendTracks {
+            let calendar = Calendar.autoupdatingCurrent
+            guard let nextDay = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: fetchedAt)) else { return false }
+            return now < nextDay
+        }
+        return now.timeIntervalSince(fetchedAt) < ttl
     }
 }
 
@@ -106,7 +139,7 @@ public actor MusicRepository {
 
     public func value<Value>(for query: MusicQuery<Value>, force: Bool = false) async throws -> MusicCachedValue<Value> {
         try Task.checkCancellation()
-        if !force, let entry = cached(for: query), now().timeIntervalSince(entry.fetchedAt) < query.key.ttl {
+        if !force, let entry = cached(for: query), query.key.isFresh(fetchedAt: entry.fetchedAt, now: now()) {
             return entry
         }
         let flight: Flight
@@ -165,8 +198,8 @@ public actor MusicRepository {
         let date = now()
         while cache.count > capacity {
             let victim = cache.min { lhs, rhs in
-                let leftExpired = date.timeIntervalSince(lhs.value.fetchedAt) >= lhs.key.ttl
-                let rightExpired = date.timeIntervalSince(rhs.value.fetchedAt) >= rhs.key.ttl
+                let leftExpired = !lhs.key.isFresh(fetchedAt: lhs.value.fetchedAt, now: date)
+                let rightExpired = !rhs.key.isFresh(fetchedAt: rhs.value.fetchedAt, now: date)
                 if leftExpired != rightExpired { return leftExpired }
                 return lhs.value.access < rhs.value.access
             }?.key
@@ -176,7 +209,9 @@ public actor MusicRepository {
     }
 
     private func cancelSearchConsumer(_ consumer: UUID, key: MusicCacheKey, flightID: UUID) {
-        guard case .search = key, flights[key]?.id == flightID else { return }
+        let isSearch: Bool
+        switch key { case .search, .searchV2: isSearch = true; default: isSearch = false }
+        guard isSearch, flights[key]?.id == flightID else { return }
         flights[key]?.consumers.remove(consumer)
         if flights[key]?.consumers.isEmpty == true {
             flights.removeValue(forKey: key)?.task.cancel()
@@ -202,3 +237,49 @@ public actor MusicRepository {
         flights.removeAll()
     }
 }
+
+// V2 queries reuse the existing repository/cache/SWR/single-flight implementation. The client is
+// captured by the typed query so no parallel repository or networking stack is introduced.
+public extension MusicQuery {
+    init(key: MusicCacheKey, client: MusicV2Client, fetch: @escaping @Sendable (MusicV2Client) async throws -> Value) {
+        self.init(key: key) { _ in try await fetch(client) }
+    }
+}
+
+public extension MusicQuery where Value == MusicV2HomeFeed {
+    static func home(client: MusicV2Client) -> Self { .init(key: .home, client: client) { try await $0.home() } }
+}
+public extension MusicQuery where Value == MusicV2SearchResult {
+    static func searchV2(client: MusicV2Client, keywords: String, scope: MusicV2SearchScope = .tracks, limit: Int? = nil, offset: Int = 0) -> Self {
+        let normalized = keywords.trimmingCharacters(in: .whitespacesAndNewlines)
+        return .init(key: .searchV2(keywords: normalized, scope: scope, offset: offset, limit: limit), client: client) {
+            try await $0.search(keywords: normalized, scope: scope, limit: limit, offset: offset)
+        }
+    }
+}
+public extension MusicQuery where Value == MusicV2SearchSuggestions {
+    static func searchSuggestions(client: MusicV2Client, keywords: String) -> Self {
+        let normalized = keywords.trimmingCharacters(in: .whitespacesAndNewlines)
+        return .init(key: .searchSuggestions(normalized), client: client) { try await $0.searchSuggestions(keywords: normalized) }
+    }
+}
+public extension MusicQuery where Value == MusicV2HotSearch { static func hotSearchV2(client: MusicV2Client) -> Self { .init(key: .hotSearchV2, client: client) { try await $0.hotSearch() } } }
+public extension MusicQuery where Value == MusicV2Track { static func track(client: MusicV2Client, id: MusicV2TrackID) -> Self { .init(key: .track(id.rawValue), client: client) { try await $0.track(id) } } }
+public extension MusicQuery where Value == MusicV2TrackBatch { static func tracks(client: MusicV2Client, ids: [MusicV2TrackID]) -> Self { .init(key: .tracksBatch(ids.map(\.rawValue)), client: client) { try await $0.tracks(ids) } } }
+public extension MusicQuery where Value == MusicV2Lyric { static func lyrics(client: MusicV2Client, id: MusicV2TrackID) -> Self { .init(key: .lyrics(id.rawValue), client: client) { try await $0.lyrics(trackID: id) } } }
+public extension MusicQuery where Value == MusicV2ArtistDetail { static func artist(client: MusicV2Client, id: MusicV2ArtistID) -> Self { .init(key: .artist(id.rawValue), client: client) { try await $0.artist(id) } } }
+public extension MusicQuery where Value == MusicV2TrackPage { static func artistTracks(client: MusicV2Client, id: MusicV2ArtistID, limit: Int = 20, offset: Int = 0) -> Self { .init(key: .artistTracks(id.rawValue, offset: offset, limit: limit), client: client) { try await $0.artistTracks(id, limit: limit, offset: offset) } } }
+public extension MusicQuery where Value == MusicV2AlbumPage { static func artistAlbums(client: MusicV2Client, id: MusicV2ArtistID, limit: Int = 20, offset: Int = 0) -> Self { .init(key: .artistAlbums(id.rawValue, offset: offset, limit: limit), client: client) { try await $0.artistAlbums(id, limit: limit, offset: offset) } } }
+public extension MusicQuery where Value == MusicV2MvPage { static func artistMVs(client: MusicV2Client, id: MusicV2ArtistID, limit: Int = 20, offset: Int = 0) -> Self { .init(key: .artistMVs(id.rawValue, offset: offset, limit: limit), client: client) { try await $0.artistMVs(id, limit: limit, offset: offset) } } }
+public extension MusicQuery where Value == MusicV2AlbumDetail { static func album(client: MusicV2Client, id: MusicV2AlbumID) -> Self { .init(key: .album(id.rawValue), client: client) { try await $0.album(id) } } }
+public extension MusicQuery where Value == MusicV2PlaylistDetail { static func playlistV2(client: MusicV2Client, id: MusicV2PlaylistID, limit: Int = 50, offset: Int = 0) -> Self { .init(key: .providerPlaylist(id.rawValue, offset: offset, limit: limit), client: client) { try await $0.playlist(id, limit: limit, offset: offset) } } }
+public extension MusicQuery where Value == MusicV2MembershipPage { static func playlistTracksV2(client: MusicV2Client, id: MusicV2PlaylistID, limit: Int = 50, offset: Int = 0) -> Self { .init(key: .providerPlaylistTracks(id.rawValue, offset: offset, limit: limit), client: client) { try await $0.playlistTracks(id, limit: limit, offset: offset) } } }
+public extension MusicQuery where Value == MusicV2Rankings { static func rankings(client: MusicV2Client) -> Self { .init(key: .rankings, client: client) { try await $0.rankings() } } }
+public extension MusicQuery where Value == MusicV2RecommendedTracks { static func recommendedTracksV2(client: MusicV2Client) -> Self { .init(key: .recommendTracks, client: client) { try await $0.recommendedTracks() } } }
+public extension MusicQuery where Value == MusicV2RecommendedPlaylists { static func recommendedPlaylistsV2(client: MusicV2Client, limit: Int = 20) -> Self { .init(key: .recommendPlaylists(limit: limit), client: client) { try await $0.recommendedPlaylists(limit: limit) } } }
+public extension MusicQuery where Value == MusicV2NewTracks { static func newReleaseTracks(client: MusicV2Client, area: MusicV2Area = .all, limit: Int = 30, offset: Int = 0) -> Self { .init(key: .newReleaseTracks(area: area, offset: offset, limit: limit), client: client) { try await $0.newReleaseTracks(area: area, limit: limit, offset: offset) } } }
+public extension MusicQuery where Value == MusicV2NewAlbums { static func newReleaseAlbums(client: MusicV2Client, area: MusicV2Area = .all, limit: Int = 30, offset: Int = 0) -> Self { .init(key: .newReleaseAlbums(area: area, offset: offset, limit: limit), client: client) { try await $0.newReleaseAlbums(area: area, limit: limit, offset: offset) } } }
+public extension MusicQuery where Value == MusicV2UserLibrary { static func library(client: MusicV2Client) -> Self { .init(key: .library, client: client) { try await $0.library() } } }
+public extension MusicQuery where Value == MusicV2LikedPage { static func likedTracks(client: MusicV2Client, limit: Int = 20, offset: Int = 0) -> Self { .init(key: .likedTracks(offset: offset, limit: limit), client: client) { try await $0.likedTracks(limit: limit, offset: offset) } } }
+public extension MusicQuery where Value == MusicV2SavedPage { static func favoritePlaylists(client: MusicV2Client, limit: Int = 20, offset: Int = 0) -> Self { .init(key: .favoritePlaylists(offset: offset, limit: limit), client: client) { try await $0.favoritePlaylists(limit: limit, offset: offset) } } }
+public extension MusicQuery where Value == MusicV2HistoryPage { static func historyV2(client: MusicV2Client, limit: Int = 20, offset: Int = 0) -> Self { .init(key: .historyV2(offset: offset, limit: limit), client: client) { try await $0.history(limit: limit, offset: offset) } } }

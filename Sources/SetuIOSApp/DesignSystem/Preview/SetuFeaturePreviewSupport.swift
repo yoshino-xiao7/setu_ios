@@ -384,6 +384,7 @@ enum SetuPreviewEnvironment {
             favoriteClient: FavoriteClient(apiClient: apiClient),
             imageDeleteRequestClient: ImageDeleteRequestClient(apiClient: apiClient),
             musicClient: MusicClient(apiClient: apiClient),
+            musicV2Client: MusicV2Client(apiClient: apiClient),
             downloadClient: DownloadClient(apiClient: apiClient),
             galleryUploadClient: GalleryUploadClient(apiClient: apiClient),
             adminClient: AdminClient(apiClient: apiClient),

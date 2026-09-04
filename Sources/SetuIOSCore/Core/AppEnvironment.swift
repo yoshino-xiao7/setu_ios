@@ -22,6 +22,7 @@ public final class AppEnvironment {
     public let favoriteClient: FavoriteClient
     public let imageDeleteRequestClient: ImageDeleteRequestClient
     public let musicClient: MusicClient
+    public let musicV2Client: MusicV2Client
     public let downloadClient: DownloadClient
     public let galleryUploadClient: GalleryUploadClient
     public let adminClient: AdminClient
@@ -47,6 +48,7 @@ public final class AppEnvironment {
         favoriteClient: FavoriteClient,
         imageDeleteRequestClient: ImageDeleteRequestClient,
         musicClient: MusicClient,
+        musicV2Client: MusicV2Client,
         downloadClient: DownloadClient,
         galleryUploadClient: GalleryUploadClient,
         adminClient: AdminClient,
@@ -71,6 +73,7 @@ public final class AppEnvironment {
         self.favoriteClient = favoriteClient
         self.imageDeleteRequestClient = imageDeleteRequestClient
         self.musicClient = musicClient
+        self.musicV2Client = musicV2Client
         self.downloadClient = downloadClient
         self.galleryUploadClient = galleryUploadClient
         self.adminClient = adminClient
@@ -106,6 +109,7 @@ public final class AppEnvironment {
         let favoriteClient = FavoriteClient(apiClient: client)
         let imageDeleteRequestClient = ImageDeleteRequestClient(apiClient: client)
         let musicClient = MusicClient(apiClient: client)
+        let musicV2Client = MusicV2Client(apiClient: client)
         let downloadClient = DownloadClient(apiClient: client)
         let galleryUploadClient = GalleryUploadClient(apiClient: client)
         let adminClient = AdminClient(apiClient: client)
@@ -136,6 +140,7 @@ public final class AppEnvironment {
             favoriteClient: favoriteClient,
             imageDeleteRequestClient: imageDeleteRequestClient,
             musicClient: musicClient,
+            musicV2Client: musicV2Client,
             downloadClient: downloadClient,
             galleryUploadClient: galleryUploadClient,
             adminClient: adminClient,
