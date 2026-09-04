@@ -201,7 +201,7 @@ struct MusicHomeView: View {
                                             Task {
                                                 await play(
                                                     record.song,
-                                                    queueName: "最近播放",
+                                                    context: .unknown(reason: .missingProvenance, label: "最近播放"),
                                                     queueTracks: visibleRecords.map { MusicPlaybackTrack(record: $0) }
                                                 )
                                             }
@@ -304,7 +304,7 @@ struct MusicHomeView: View {
             loadingTitle: "正在加载每日推荐",
             emptyTitle: "暂无每日推荐",
             systemImage: "sparkles",
-            queueName: "每日推荐",
+            context: .discovery(source: .sharedAlgorithmic(label: "每日推荐"), selectionKey: "dailyTracks", label: "每日推荐"),
             state: dailySongsState,
             retry: { Task { await loadLandingContent() } }
         )
@@ -317,7 +317,7 @@ struct MusicHomeView: View {
             loadingTitle: "正在加载推荐新歌",
             emptyTitle: "暂无推荐新歌",
             systemImage: "music.note",
-            queueName: "推荐新歌",
+            context: .discovery(source: .sharedAlgorithmic(label: "推荐新歌"), selectionKey: "newTracks", label: "推荐新歌"),
             state: newSongsState,
             retry: { Task { await loadLandingContent() } }
         )
@@ -329,7 +329,7 @@ struct MusicHomeView: View {
         loadingTitle: String,
         emptyTitle: String,
         systemImage: String,
-        queueName: String,
+        context: PlaybackContext,
         state: LoadState<[MusicSong]>,
         retry: @escaping () -> Void
     ) -> some View {
@@ -358,7 +358,7 @@ struct MusicHomeView: View {
                                 Task {
                                     await play(
                                         song,
-                                        queueName: queueName,
+                                        context: context,
                                         queueTracks: visibleSongs.map { MusicPlaybackTrack(song: $0) }
                                     )
                                 }
@@ -433,10 +433,10 @@ struct MusicHomeView: View {
         await store.loadHome(force: force)
     }
 
-    private func play(_ song: MusicSong, queueName: String? = nil, queueTracks: [MusicPlaybackTrack] = []) async {
+    private func play(_ song: MusicSong, context: PlaybackContext? = nil, queueTracks: [MusicPlaybackTrack] = []) async {
         player.showFeedback(.info("正在准备播放"))
         let track = MusicPlaybackTrack(song: song)
-        _ = await player.play(track: track, in: queueTracks, queueName: queueName)
+        _ = await player.play(track: track, in: queueTracks, context: context)
     }
 
     private func download(_ song: MusicSong) async {
@@ -707,7 +707,11 @@ private struct RecommendedPlaylistSheet: View {
     private func play(_ song: MusicSong, queueTracks: [MusicPlaybackTrack] = []) async {
         feedback = .info("正在准备播放")
         let track = MusicPlaybackTrack(song: song)
-        _ = await player.play(track: track, in: queueTracks, queueName: playlist.name)
+        _ = await player.play(
+            track: track,
+            in: queueTracks,
+            context: .playlist(id: .provider(.legacy(playlist.id)), label: playlist.name)
+        )
     }
 }
 

@@ -4,11 +4,6 @@ import Observation
 import os
 import SetuIOSCore
 
-#if os(iOS)
-import MediaPlayer
-import UIKit
-#endif
-
 /// Queue playback behavior. Raw values match the backend playlist `playMode`.
 enum MusicPlayMode: String, CaseIterable, Sendable, Codable {
     case sequence
@@ -81,31 +76,12 @@ enum MusicURLResolution: Sendable {
     }
 }
 
-private enum MusicPlaybackPersistence {
-    static let legacySnapshotKey = "icu.yukiryou.setu.musicPlaybackSnapshot"
-    static let audioQualityKey = "icu.yukiryou.setu.musicAudioQuality"
-
-    static func snapshotKey(userID: Int) -> String {
-        "\(legacySnapshotKey).user.\(userID)"
-    }
-}
-
-private struct MusicPlaybackSnapshot: Codable, Sendable {
-    let userID: Int
-    let track: MusicPlaybackTrack
-    let queueName: String?
-    let queueTracks: [MusicPlaybackTrack]
-    let currentQueueIndex: Int?
-    let currentTimeSeconds: Double
-    let playMode: MusicPlayMode
-    let updatedAt: Date
-}
-
 @MainActor
 @Observable
 final class MusicPlaybackController {
     private(set) var currentTrack: MusicPlaybackTrack?
-    private(set) var queueName: String?
+    private(set) var context: PlaybackContext?
+    var queueName: String? { context?.label }
     private var queue = PlaybackQueue()
     private(set) var queueTracks: [MusicPlaybackTrack] {
         get { queue.tracks }
@@ -148,8 +124,6 @@ final class MusicPlaybackController {
     @ObservationIgnored private var preparationDelay: Task<Void, Never>?
     @ObservationIgnored private var itemLoadDeadline: Date?
     @ObservationIgnored private var loadingTimeout: Task<Void, Never>?
-    @ObservationIgnored private var snapshotTasks: [Int: Task<Void, Never>] = [:]
-    @ObservationIgnored private var snapshotRevisions: [Int: UUID] = [:]
     @ObservationIgnored private var itemStatusObservation: NSKeyValueObservation?
     @ObservationIgnored private var keepUpObservation: NSKeyValueObservation?
     @ObservationIgnored private var timeControlObservation: NSKeyValueObservation?
@@ -169,34 +143,45 @@ final class MusicPlaybackController {
     #if DEBUG // P0.1 instrumentation
     @ObservationIgnored private let playbackDiagnostics = MusicPlaybackDiagnostics()
     #endif // P0.1 instrumentation
-    #if os(iOS)
-    @ObservationIgnored private var remoteCommandTokens: [(MPRemoteCommand, Any)] = []
-    #endif
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var itemObservers: [NSObjectProtocol] = []
     @ObservationIgnored private var sessionObservers: [NSObjectProtocol] = []
-    @ObservationIgnored private var remoteCommandsConfigured = false
-    @ObservationIgnored private var sleepTimerTask: Task<Void, Never>?
     @ObservationIgnored private var feedbackDismissTask: Task<Void, Never>?
     @ObservationIgnored private var resumeTask: Task<Void, Never>?
     @ObservationIgnored private let persistsPlayback: Bool
     @ObservationIgnored private let preferences: UserDefaults
+    @ObservationIgnored private let snapshotStore: PlaybackSnapshotStore
+    @ObservationIgnored private let nowPlayingCoordinator: NowPlayingCoordinator
+    @ObservationIgnored private let remoteCommandCoordinator: RemoteCommandCoordinator
+    @ObservationIgnored private let sleepTimerController: SleepTimerController
     @ObservationIgnored private var qualityChangeID = UUID()
-    @ObservationIgnored private var snapshotUserID: Int?
-    @ObservationIgnored private var lastSnapshotWriteDate: Date?
-    @ObservationIgnored private var pausesAtEndOfCurrentTrack = false
-    #if os(iOS)
-    @ObservationIgnored private var artworkTask: Task<Void, Never>?
-    @ObservationIgnored private var nowPlayingArtwork: MPMediaItemArtwork?
-    @ObservationIgnored private var nowPlayingArtworkTrackID: Int?
-    #endif
 
-    init(persistsPlayback: Bool = true, preferences: UserDefaults = .standard) {
+    init(
+        persistsPlayback: Bool = true,
+        preferences: UserDefaults = .standard,
+        snapshotStore: PlaybackSnapshotStore? = nil,
+        nowPlayingCoordinator: NowPlayingCoordinator? = nil,
+        remoteCommandCoordinator: RemoteCommandCoordinator? = nil,
+        sleepTimerController: SleepTimerController? = nil
+    ) {
         self.persistsPlayback = persistsPlayback
         self.preferences = preferences
+        self.snapshotStore = snapshotStore ?? PlaybackSnapshotStore(enabled: persistsPlayback, preferences: preferences)
+        self.nowPlayingCoordinator = nowPlayingCoordinator ?? NowPlayingCoordinator()
+        self.remoteCommandCoordinator = remoteCommandCoordinator ?? RemoteCommandCoordinator()
+        self.sleepTimerController = sleepTimerController ?? SleepTimerController()
         audioQuality = persistsPlayback
-            ? preferences.string(forKey: MusicPlaybackPersistence.audioQualityKey).flatMap(MusicAudioQuality.init(rawValue:)) ?? .exhigh
+            ? preferences.string(forKey: PlaybackSnapshotStore.audioQualityKey).flatMap(MusicAudioQuality.init(rawValue:)) ?? .exhigh
             : .exhigh
+    }
+
+    var phase: PlaybackPhase {
+        .derive(
+            hasTrack: currentTrack != nil,
+            isBuffering: isBuffering,
+            isPlaying: isPlaying,
+            hasError: playbackError != nil
+        )
     }
 
     var durationSeconds: Double {
@@ -219,6 +204,7 @@ final class MusicPlaybackController {
     }
 
     var canPlayPrevious: Bool {
+        guard context?.allowsPrevious != false else { return false }
         guard let currentQueueIndex, !queueTracks.isEmpty else { return false }
         switch playMode {
         case .loop, .random:
@@ -233,16 +219,11 @@ final class MusicPlaybackController {
         for token in itemObservers { center.removeObserver(token) }
         for token in sessionObservers { center.removeObserver(token) }
         resumeTask?.cancel()
-        sleepTimerTask?.cancel(); feedbackDismissTask?.cancel()
+        feedbackDismissTask?.cancel()
         recoveryTask?.cancel(); preparationTask?.cancel(); preparationDelay?.cancel()
         loadingTimeout?.cancel(); audioSessionTask?.cancel()
-        for task in snapshotTasks.values { task.cancel() }
         for task in historyTasks.values { task.cancel() }
         itemStatusObservation?.invalidate(); keepUpObservation?.invalidate(); timeControlObservation?.invalidate()
-        #if os(iOS)
-        for (command, token) in remoteCommandTokens { command.removeTarget(token) }
-        artworkTask?.cancel()
-        #endif
         if let timeObserver {
             player?.removeTimeObserver(timeObserver)
         }
@@ -251,29 +232,17 @@ final class MusicPlaybackController {
     // MARK: - Playback entry points
 
     func setSnapshotUserID(_ userID: Int?) {
-        guard persistsPlayback else { return }
-        snapshotUserID = userID
-        preferences.removeObject(forKey: MusicPlaybackPersistence.legacySnapshotKey)
+        snapshotStore.setUserID(userID)
     }
 
     func restorePlaybackSnapshotIfNeeded(for userID: Int) {
-        guard persistsPlayback else { return }
-        snapshotUserID = userID
         guard currentTrack == nil else { return }
-        let key = MusicPlaybackPersistence.snapshotKey(userID: userID)
-        guard let data = preferences.data(forKey: key) else { return }
-        guard let snapshot = try? JSONDecoder().decode(MusicPlaybackSnapshot.self, from: data) else {
-            preferences.removeObject(forKey: key)
-            return
-        }
-        guard snapshot.userID == userID else {
-            preferences.removeObject(forKey: key)
-            return
-        }
+        guard let snapshot = snapshotStore.restore(for: userID) else { return }
 
         let restoredQueue = snapshot.queueTracks.isEmpty ? [snapshot.track] : snapshot.queueTracks
         currentTrack = snapshot.track
-        queueName = snapshot.queueName
+        context = snapshot.context
+        updateRemoteCapabilities()
         queueTracks = restoredQueue
         if let index = snapshot.currentQueueIndex, restoredQueue.indices.contains(index) {
             currentQueueIndex = index
@@ -293,7 +262,7 @@ final class MusicPlaybackController {
     }
 
     func savePlaybackSnapshot(userID: Int? = nil) {
-        persistPlaybackSnapshot(userID: userID ?? snapshotUserID)
+        persistPlaybackSnapshot(userID: userID ?? snapshotStore.userID)
     }
 
     func showFeedback(_ value: SetuFeedback) {
@@ -330,8 +299,9 @@ final class MusicPlaybackController {
     /// All visible and remote playback entries use this path. History never blocks it.
     @discardableResult
     func play(track: MusicPlaybackTrack, in tracks: [MusicPlaybackTrack] = [],
-              queueName: String? = nil, playMode: MusicPlayMode? = nil) async -> Bool {
-        self.queueName = queueName
+              context: PlaybackContext? = nil, playMode: MusicPlayMode? = nil) async -> Bool {
+        self.context = context ?? .singleTrack(trackID: .legacyProvider(track.id), label: nil)
+        updateRemoteCapabilities()
         queueTracks = tracks.isEmpty ? [track] : tracks
         if let playMode { self.playMode = playMode }
         nextItemPreparer.invalidate()
@@ -339,10 +309,11 @@ final class MusicPlaybackController {
     }
 
     // Direct URL entry remains useful for local playback fixtures.
-    func play(url: URL, track: MusicPlaybackTrack, queueName: String? = nil,
+    func play(url: URL, track: MusicPlaybackTrack, context: PlaybackContext? = nil,
               queueTracks: [MusicPlaybackTrack] = [], playMode: MusicPlayMode? = nil, notice: String? = nil) {
         beginTransition()
-        self.queueName = queueName
+        self.context = context ?? .singleTrack(trackID: .legacyProvider(track.id), label: nil)
+        updateRemoteCapabilities()
         self.queueTracks = queueTracks.isEmpty ? [track] : queueTracks
         if let playMode { self.playMode = playMode }
         currentSource = nil
@@ -512,7 +483,8 @@ final class MusicPlaybackController {
         removeItemObservers()
         player?.replaceCurrentItem(with: nil)
         currentTrack = nil
-        queueName = nil
+        context = nil
+        updateRemoteCapabilities()
         queueTracks = []
         currentQueueIndex = nil
         isPlaying = false
@@ -617,7 +589,7 @@ final class MusicPlaybackController {
     private func commitAudioQuality(_ quality: MusicAudioQuality) {
         audioQuality = quality
         if persistsPlayback {
-            preferences.set(quality.rawValue, forKey: MusicPlaybackPersistence.audioQualityKey)
+            preferences.set(quality.rawValue, forKey: PlaybackSnapshotStore.audioQualityKey)
         }
     }
 
@@ -631,26 +603,13 @@ final class MusicPlaybackController {
         cancelSleepTimer()
         sleepTimerTitle = option.title
         feedback = .success("睡眠定时：\(option.title)")
-        if let durationSeconds = option.durationSeconds {
-            sleepTimerTask = Task { [weak self] in
-                do {
-                    try await Task.sleep(nanoseconds: durationSeconds * 1_000_000_000)
-                } catch {
-                    return
-                }
-                await MainActor.run {
-                    self?.pauseForSleepTimer()
-                }
-            }
-        } else {
-            pausesAtEndOfCurrentTrack = true
+        sleepTimerController.start(option) { [weak self] in
+            self?.pauseForSleepTimer()
         }
     }
 
     func cancelSleepTimer() {
-        sleepTimerTask?.cancel()
-        sleepTimerTask = nil
-        pausesAtEndOfCurrentTrack = false
+        sleepTimerController.cancel()
         sleepTimerTitle = nil
     }
 
@@ -795,7 +754,7 @@ final class MusicPlaybackController {
     }
 
     func playbackEndReached() async {
-        if pausesAtEndOfCurrentTrack {
+        if sleepTimerController.consumeEndOfTrack() {
             pauseForSleepTimer()
             return
         }
@@ -985,34 +944,15 @@ final class MusicPlaybackController {
     }
 
     private func pauseForSleepTimer() {
-        sleepTimerTask?.cancel()
-        sleepTimerTask = nil
-        pausesAtEndOfCurrentTrack = false
         sleepTimerTitle = nil
-        sleepTimerTask = Task { [weak self] in
-            await self?.fadeOutAndPauseForSleepTimer()
+        sleepTimerController.fadeOutAndPause(player: player) { [weak self] in
+            guard let self else { return }
+            self.isPlaying = false
+            self.isBuffering = false
+            self.feedback = .info("睡眠定时已暂停播放")
+            self.updateNowPlaying()
+            self.persistPlaybackSnapshot()
         }
-    }
-
-    private func fadeOutAndPauseForSleepTimer() async {
-        let originalVolume = player?.volume ?? 1
-        for step in stride(from: 8, through: 1, by: -1) {
-            player?.volume = originalVolume * Float(step) / 8
-            do {
-                try await Task.sleep(nanoseconds: 120_000_000)
-            } catch {
-                player?.volume = originalVolume
-                return
-            }
-        }
-        player?.pause()
-        player?.volume = originalVolume
-        sleepTimerTask = nil
-        isPlaying = false
-        isBuffering = false
-        feedback = .info("睡眠定时已暂停播放")
-        updateNowPlaying()
-        persistPlaybackSnapshot()
     }
 
     private func syncCurrentQueueIndex() {
@@ -1024,53 +964,30 @@ final class MusicPlaybackController {
     }
 
     private func persistPlaybackSnapshot(userID: Int? = nil, throttled: Bool = false) {
-        guard persistsPlayback else { return }
-        guard let targetUserID = userID ?? snapshotUserID else { return }
+        guard let targetUserID = userID ?? snapshotStore.userID else { return }
         guard let currentTrack else {
             clearPlaybackSnapshot(userID: targetUserID)
             return
         }
-
-        let now = Date()
-        if throttled,
-           let lastSnapshotWriteDate,
-           now.timeIntervalSince(lastSnapshotWriteDate) < 15 {
-            return
-        }
-        lastSnapshotWriteDate = now
-
-        let snapshot = MusicPlaybackSnapshot(
+        let snapshot = PlaybackSnapshotStore.Snapshot(
             userID: targetUserID,
             track: currentTrack,
-            queueName: queueName,
+            context: context ?? .unknown(reason: .missingProvenance, label: nil),
             queueTracks: queueTracks.isEmpty ? [currentTrack] : queueTracks,
             currentQueueIndex: currentQueueIndex,
             currentTimeSeconds: currentTimeSeconds,
             playMode: playMode,
-            updatedAt: now
+            updatedAt: Date()
         )
-        snapshotTasks[targetUserID]?.cancel()
-        let revision = UUID()
-        snapshotRevisions[targetUserID] = revision
-        snapshotTasks[targetUserID] = Task { [weak self] in
-            let data = await Task.detached(priority: .utility) { try? JSONEncoder().encode(snapshot) }.value
-            guard let self, self.snapshotRevisions[targetUserID] == revision, !Task.isCancelled, let data else { return }
-            self.preferences.set(data, forKey: MusicPlaybackPersistence.snapshotKey(userID: targetUserID))
-            self.snapshotTasks[targetUserID] = nil
-        }
+        snapshotStore.save(snapshot, throttled: throttled)
     }
 
     func waitForSnapshotWrites() async {
-        for task in snapshotTasks.values { await task.value }
+        await snapshotStore.waitForWrites()
     }
 
     private func clearPlaybackSnapshot(userID: Int? = nil) {
-        guard persistsPlayback else { return }
-        lastSnapshotWriteDate = nil
-        guard let targetUserID = userID ?? snapshotUserID else { return }
-        snapshotRevisions[targetUserID] = UUID()
-        snapshotTasks[targetUserID]?.cancel(); snapshotTasks[targetUserID] = nil
-        preferences.removeObject(forKey: MusicPlaybackPersistence.snapshotKey(userID: targetUserID))
+        snapshotStore.clear(userID: userID)
     }
 
     private func addTimeObserver() {
@@ -1241,135 +1158,45 @@ final class MusicPlaybackController {
     // MARK: - Now Playing & remote commands
 
     private func updateNowPlaying(elapsed: Double? = nil) {
-        #if os(iOS)
-        guard let currentTrack else {
-            clearNowPlaying()
-            return
-        }
-
-        var info: [String: Any] = [
-            MPMediaItemPropertyTitle: currentTrack.title,
-            MPMediaItemPropertyArtist: currentTrack.artist,
-            MPMediaItemPropertyAlbumTitle: currentTrack.album,
-            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? 1.0 : 0.0
-        ]
-        if currentTrack.durationSeconds > 0 {
-            info[MPMediaItemPropertyPlaybackDuration] = currentTrack.durationSeconds
-        }
-        if nowPlayingArtworkTrackID == currentTrack.id, let nowPlayingArtwork {
-            info[MPMediaItemPropertyArtwork] = nowPlayingArtwork
-        }
-        if let elapsed {
-            info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = max(0, elapsed)
-        } else if let player {
-            info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = max(0, player.currentTime().seconds)
-        }
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
-        #endif
+        let position = elapsed ?? player?.currentTime().seconds
+        nowPlayingCoordinator.update(track: currentTrack, isPlaying: isPlaying, elapsed: position)
     }
 
     private func clearNowPlaying() {
-        #if os(iOS)
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
-        #endif
+        nowPlayingCoordinator.clear()
     }
 
     private func resetNowPlayingArtwork() {
-        #if os(iOS)
-        artworkTask?.cancel()
-        artworkTask = nil
-        nowPlayingArtwork = nil
-        nowPlayingArtworkTrackID = nil
-        #endif
+        nowPlayingCoordinator.resetArtwork()
     }
 
     private func cancelArtworkTask() {
-        #if os(iOS)
-        artworkTask?.cancel()
-        artworkTask = nil
-        nowPlayingArtwork = nil
-        nowPlayingArtworkTrackID = nil
-        #endif
+        nowPlayingCoordinator.resetArtwork()
     }
 
     private func loadNowPlayingArtwork(for track: MusicPlaybackTrack) {
-        #if os(iOS)
-        guard let key = SetuImageKey.music(track.coverURLString, size: .large) else { return }
-        artworkTask?.cancel()
-        if let image = SetuRemoteImageLoader.shared.cachedImage(for: key) {
-            applyNowPlayingArtwork(image, for: track)
-            return
+        nowPlayingCoordinator.loadArtwork(for: track) { [weak self] in
+            guard self?.currentTrack?.id == track.id,
+                  self?.currentTrack?.coverURLString == track.coverURLString else { return }
+            self?.updateNowPlaying()
         }
-        artworkTask = Task { [weak self] in
-            do {
-                let image = try await SetuRemoteImageLoader.shared.image(for: key)
-                guard !Task.isCancelled else { return }
-                self?.applyNowPlayingArtwork(image, for: track)
-            } catch {
-                // Missing artwork should never interrupt playback.
-            }
-        }
-        #endif
     }
-
-    #if os(iOS)
-    private func applyNowPlayingArtwork(_ image: UIImage, for track: MusicPlaybackTrack) {
-        guard currentTrack?.id == track.id, currentTrack?.coverURLString == track.coverURLString else { return }
-        nowPlayingArtwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
-        nowPlayingArtworkTrackID = track.id
-        updateNowPlaying()
-    }
-    #endif
 
     private func configureRemoteCommands() {
-        #if os(iOS)
-        guard !remoteCommandsConfigured else { return }
-        let commandCenter = MPRemoteCommandCenter.shared()
+        remoteCommandCoordinator.install(.init(
+            play: { [weak self] in self?.resume() },
+            pause: { [weak self] in self?.pause() },
+            toggle: { [weak self] in self?.toggle() },
+            stop: { [weak self] in self?.stop() },
+            next: { [weak self] in await self?.userSkip(by: 1) },
+            previous: { [weak self] in await self?.userSkip(by: -1) },
+            seek: { [weak self] in self?.seek(to: $0) }
+        ))
+        updateRemoteCapabilities()
+    }
 
-        let playCommandToken = commandCenter.playCommand.addTarget { [weak self] _ in
-            Task { @MainActor in self?.resume() }
-            return .success
-        }
-        let pauseCommandToken = commandCenter.pauseCommand.addTarget { [weak self] _ in
-            Task { @MainActor in self?.pause() }
-            return .success
-        }
-        let togglePlayPauseCommandToken = commandCenter.togglePlayPauseCommand.addTarget { [weak self] _ in
-            Task { @MainActor in self?.toggle() }
-            return .success
-        }
-        let stopCommandToken = commandCenter.stopCommand.addTarget { [weak self] _ in
-            Task { @MainActor in self?.stop() }
-            return .success
-        }
-
-        commandCenter.nextTrackCommand.isEnabled = true
-        let nextTrackCommandToken = commandCenter.nextTrackCommand.addTarget { [weak self] _ in
-            Task { @MainActor in await self?.userSkip(by: 1) }
-            return .success
-        }
-        commandCenter.previousTrackCommand.isEnabled = true
-        let previousTrackCommandToken = commandCenter.previousTrackCommand.addTarget { [weak self] _ in
-            Task { @MainActor in await self?.userSkip(by: -1) }
-            return .success
-        }
-        commandCenter.changePlaybackPositionCommand.isEnabled = true
-        let changePlaybackPositionCommandToken = commandCenter.changePlaybackPositionCommand.addTarget { [weak self] event in
-            guard let positionEvent = event as? MPChangePlaybackPositionCommandEvent else {
-                return .commandFailed
-            }
-            Task { @MainActor in self?.seek(to: positionEvent.positionTime) }
-            return .success
-        }
-
-        remoteCommandTokens = [
-            (commandCenter.playCommand, playCommandToken), (commandCenter.pauseCommand, pauseCommandToken),
-            (commandCenter.togglePlayPauseCommand, togglePlayPauseCommandToken), (commandCenter.stopCommand, stopCommandToken),
-            (commandCenter.nextTrackCommand, nextTrackCommandToken), (commandCenter.previousTrackCommand, previousTrackCommandToken),
-            (commandCenter.changePlaybackPositionCommand, changePlaybackPositionCommandToken)
-        ]
-        remoteCommandsConfigured = true
-        #endif
+    private func updateRemoteCapabilities() {
+        remoteCommandCoordinator.setPreviousEnabled(context?.allowsPrevious ?? true)
     }
 }
 
@@ -1416,6 +1243,24 @@ struct MusicPlaybackTrack: Identifiable, Sendable, Codable {
         (mvID ?? 0) > 0
     }
 
+    init(
+        id: Int,
+        title: String,
+        artist: String,
+        album: String,
+        coverURLString: String?,
+        durationMilliseconds: Int,
+        mvID: Int?
+    ) {
+        self.id = id
+        self.title = title
+        self.artist = artist
+        self.album = album
+        self.coverURLString = coverURLString
+        self.durationMilliseconds = durationMilliseconds
+        self.mvID = mvID
+    }
+
     init(song: MusicSong) {
         id = song.id
         title = song.name
@@ -1460,7 +1305,7 @@ extension MusicPlaybackController {
         guard tracks.indices.contains(currentIndex) else { return }
 
         currentTrack = tracks[currentIndex]
-        self.queueName = queueName
+        context = .unknown(reason: .missingProvenance, label: queueName)
         queueTracks = tracks
         self.currentQueueIndex = currentIndex
         currentTimeSeconds = min(83, tracks[currentIndex].durationSeconds)

@@ -269,7 +269,11 @@ struct MusicSearchView: View {
     private func play(_ song: MusicSong, queueTracks: [MusicPlaybackTrack]) async {
         feedback = .info("正在准备播放")
         let track = MusicPlaybackTrack(song: song)
-        _ = await player.play(track: track, in: queueTracks, queueName: "搜索结果")
+        _ = await player.play(
+            track: track,
+            in: queueTracks,
+            context: .search(query: session.resultKeyword, scope: .tracks, label: "搜索结果")
+        )
     }
 
     private func download(_ song: MusicSong) async {
