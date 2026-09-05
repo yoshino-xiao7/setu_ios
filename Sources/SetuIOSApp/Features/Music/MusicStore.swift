@@ -83,6 +83,14 @@ final class MusicStore {
     let recentHistory = MusicResource<[MusicHistoryRecord]>()
     let playlists = MusicResource<[UserMusicPlaylist]>()
     let history = MusicResource<MusicHistoryPage>()
+    let homeFeed = MusicResource<MusicV2HomeFeed>()
+    let rankings = MusicResource<MusicV2Rankings>()
+    let dailyRecommendations = MusicResource<MusicV2RecommendedTracks>()
+    private(set) var newReleaseTracks: [MusicV2Area: MusicResource<MusicDiscoverPage<MusicV2Track>>] = [:]
+    private(set) var newReleaseAlbums: [MusicV2Area: MusicResource<MusicDiscoverPage<MusicV2Album>>] = [:]
+    private(set) var discoverMoreLoading: Set<String> = []
+    private(set) var discoverMoreErrors: [String: UserFacingError] = [:]
+    @ObservationIgnored private var discoverRevisions: [String: UUID] = [:]
     private(set) var playlistDetails: [Int: MusicResource<UserMusicPlaylistDetail>] = [:]
     private(set) var recommendedTracks: [Int: MusicResource<[MusicSong]>] = [:]
     private(set) var artistDetails: [String: MusicResource<MusicV2ArtistDetail>] = [:]
@@ -118,6 +126,11 @@ final class MusicStore {
         historyRevision = UUID()
         hotSearch.reset(); recommendedPlaylists.reset(); newSongs.reset(); dailySongs.reset()
         recentHistory.reset(); playlists.reset(); history.reset()
+        homeFeed.reset(); rankings.reset(); dailyRecommendations.reset()
+        for resource in newReleaseTracks.values { resource.reset() }
+        for resource in newReleaseAlbums.values { resource.reset() }
+        newReleaseTracks.removeAll(); newReleaseAlbums.removeAll()
+        discoverMoreLoading.removeAll(); discoverMoreErrors.removeAll(); discoverRevisions.removeAll()
         for resource in playlistDetails.values { resource.reset() }
         for resource in recommendedTracks.values { resource.reset() }
         playlistDetails.removeAll(); recommendedTracks.removeAll()
@@ -165,6 +178,81 @@ final class MusicStore {
         async let recent: Void = load(recentHistory, .history(limit: 8), force: force)
         async let lists: Void = loadPlaylists(force: force)
         _ = await (hot, recommended, new, daily, recent, lists)
+    }
+
+    func loadHomeV2(client: MusicV2Client, force: Bool = false) async {
+        await load(homeFeed, .home(client: client), force: force)
+    }
+
+    func loadRankings(client: MusicV2Client, force: Bool = false) async {
+        await load(rankings, .rankings(client: client), force: force)
+    }
+
+    func loadDailyRecommendations(client: MusicV2Client, force: Bool = false) async {
+        // MusicResource has a duration TTL; apply P9's day boundary before entering it.
+        let stale = dailyRecommendations.fetchedAt.map { !MusicCacheKey.recommendTracks.isFresh(fetchedAt: $0, now: now()) } ?? false
+        await load(dailyRecommendations, .recommendedTracksV2(client: client), force: force || stale)
+    }
+
+    func releaseTracks(_ area: MusicV2Area) -> MusicResource<MusicDiscoverPage<MusicV2Track>> {
+        if let value = newReleaseTracks[area] { return value }
+        let value = MusicResource<MusicDiscoverPage<MusicV2Track>>()
+        newReleaseTracks[area] = value; return value
+    }
+
+    func releaseAlbums(_ area: MusicV2Area) -> MusicResource<MusicDiscoverPage<MusicV2Album>> {
+        if let value = newReleaseAlbums[area] { return value }
+        let value = MusicResource<MusicDiscoverPage<MusicV2Album>>()
+        newReleaseAlbums[area] = value; return value
+    }
+
+    func loadNewTracks(_ area: MusicV2Area, client: MusicV2Client, force: Bool = false, more: Bool = false) async {
+        await loadDiscoverPage(releaseTracks(area), key: "tracks:" + area.rawValue, force: force, more: more,
+            query: { .newReleaseTracks(client: client, area: area, offset: $0) },
+            project: { MusicDiscoverPage(items: $0.items.items, source: $0.source, nextOffset: $0.items.nextOffset, loadedOffsets: [$0.items.offset]) })
+    }
+
+    func loadNewAlbums(_ area: MusicV2Area, client: MusicV2Client, force: Bool = false, more: Bool = false) async {
+        await loadDiscoverPage(releaseAlbums(area), key: "albums:" + area.rawValue, force: force, more: more,
+            query: { .newReleaseAlbums(client: client, area: area, offset: $0) },
+            project: { MusicDiscoverPage(items: $0.items.items, source: $0.source, nextOffset: $0.items.nextOffset, loadedOffsets: [$0.items.offset]) })
+    }
+
+    private func loadDiscoverPage<Item, Response>(_ resource: MusicResource<MusicDiscoverPage<Item>>, key: String,
+        force: Bool, more: Bool, query: @escaping @Sendable (Int) -> MusicQuery<Response>,
+        project: @escaping @Sendable (Response) -> MusicDiscoverPage<Item>) async {
+        let repository = repository
+        if more {
+            guard !resource.isRefreshing, !discoverMoreLoading.contains(key),
+                  let offset = resource.value?.nextOffset else { return }
+            let owner = generation, revision = discoverRevisions[key]
+            discoverMoreLoading.insert(key); discoverMoreErrors[key] = nil
+            do {
+                let result = try await repository.value(for: query(offset))
+                guard owner == generation, revision == discoverRevisions[key] else { return }
+                let page = project(result.value)
+                resource.update(markStale: false) { value in
+                    value?.items.append(contentsOf: page.items)
+                    value?.nextOffset = page.nextOffset
+                    value?.loadedOffsets.append(offset)
+                }
+            } catch {
+                guard owner == generation, revision == discoverRevisions[key] else { return }
+                discoverMoreErrors[key] = UserFacingErrorMapper.map(error)
+            }
+            discoverMoreLoading.remove(key)
+        } else {
+            let first = query(0)
+            if !resource.isRefreshing, force || resource.fetchedAt.map({ !first.key.isFresh(fetchedAt: $0, now: now()) }) != false {
+                discoverRevisions[key] = UUID(); discoverMoreLoading.remove(key); discoverMoreErrors[key] = nil
+            }
+            let offsets = resource.value?.loadedOffsets ?? []
+            await resource.load(ttl: first.key.ttl, now: now(), force: force) {
+                if force { await repository.invalidate(Set(offsets.map { query($0).key })) }
+                let result = try await repository.value(for: first, force: force)
+                return (project(result.value), result.fetchedAt)
+            }
+        }
     }
 
     func loadPlaylists(force: Bool = false) async { await load(playlists, .playlists, force: force) }

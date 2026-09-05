@@ -105,6 +105,14 @@ private struct SetuRootUITestContext {
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-ai") { navigation.selectedTab = .ai }
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-music") { navigation.selectedTab = .music }
         let args = ProcessInfo.processInfo.arguments
+        if args.contains("-ui-testing-music-discover"), let index = args.firstIndex(of: "-ui-testing-discover-page"), args.indices.contains(index + 1) {
+            switch args[index + 1] {
+            case "rankings": navigation.navigate(to: .music, route: .rankings)
+            case "newReleases": navigation.navigate(to: .music, route: .newReleases(albums: false))
+            case "dailyRecommend": navigation.navigate(to: .music, route: .dailyRecommend)
+            default: break
+            }
+        }
         if args.contains("-ui-testing-music-details"), let index = args.firstIndex(of: "-ui-testing-detail-page"), args.indices.contains(index + 1) {
             let route: AppRoute = switch args[index + 1] {
             case "album": .albumDetail("netease:album:detail")
@@ -346,6 +354,10 @@ enum SetuPreviewEnvironment {
             detailFlags.albumDetailEnabled = true
             detailFlags.usesV2PlaylistDetail = true
         }
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-music-discover") {
+            detailFlags.usesV2Home = true; detailFlags.rankingsEnabled = true; detailFlags.newReleasesEnabled = true
+            detailFlags.artistDetailEnabled = true; detailFlags.albumDetailEnabled = true; detailFlags.usesV2PlaylistDetail = true
+        }
         let config = AppConfig(
             apiBaseURL: URL(string: "https://preview.setu.invalid/")!,
             siteBaseURL: URL(string: "https://preview-site.setu.invalid/")!,
@@ -518,6 +530,10 @@ private enum SetuPreviewAPI {
             return json("{\"message\":\"无效的预览请求\"}", statusCode: 400)
         }
 
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-music-discover"), path.hasPrefix("/user/music/v2/") {
+            let (status, data) = MusicDiscoverPreviewFixtures.response(path: path, query: request.url?.query)
+            return Fixture(statusCode: status, data: data)
+        }
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-music-details"), path.hasPrefix("/user/music/v2/") {
             let (status, data) = MusicDetailPreviewFixtures.response(path: path, query: request.url?.query)
             return Fixture(statusCode: status, data: data)
