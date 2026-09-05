@@ -96,7 +96,7 @@ private struct SetuUITestAppearance: ViewModifier {
                 || arguments.contains("UICTContentSizeCategoryAccessibilityXXXL")
             content
                 .dynamicTypeSize(usesAX5 ? .accessibility5 : .large)
-                .preferredColorScheme(arguments.contains("Dark") ? .dark : .light)
+                .preferredColorScheme(arguments.contains("-ui-testing-system-appearance") ? nil : (arguments.contains("Dark") ? .dark : .light))
         } else {
             content
         }

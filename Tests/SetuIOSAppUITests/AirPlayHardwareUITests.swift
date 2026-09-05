@@ -59,6 +59,33 @@ final class AirPlayHardwareUITests: XCTestCase {
         print("AIRPLAY_STEP all_round_trip_checks_completed")
     }
 
+    func testBackgroundHomePlaybackContinuesOnDevice() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["SETU_AIRPLAY_HARDWARE"] == "1", "Opt-in physical playback acceptance")
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing-root-player", "-ui-testing-lyrics-playback", "-ui-testing-airplay-hardware"]
+        app.launch()
+        let open = app.buttons["打开正在播放：夏夜微风"]
+        XCTAssertTrue(open.waitForExistence(timeout: 10)); open.tap()
+        try tapVisible("播放", in: app)
+        try waitPhase("playing", app: app)
+        let before = try snapshot(app)
+        XCUIDevice.shared.press(.home)
+        let background = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in app.state != .runningForeground }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [background], timeout: 8), .completed)
+        Thread.sleep(forTimeInterval: 12)
+        app.activate()
+        try waitPhase("playing", app: app)
+        let after = try snapshot(app)
+        XCTAssertEqual(after["track"] as? Int, before["track"] as? Int)
+        XCTAssertEqual(after["queue"] as? [Int], before["queue"] as? [Int])
+        XCTAssertGreaterThanOrEqual(try time(after) - time(before), 10)
+        XCTAssertEqual(after["avPlayerInstancesObserved"] as? Int, 1)
+        XCTAssertEqual(after["error"] as? Bool, false)
+        print("P13_BACKGROUND home_12_seconds_continuity_verified")
+        // Home backgrounding does not claim a lock-screen acceptance.
+    }
+
     private func exercise(_ app: XCUIApplication, label: String) throws {
         try waitPhase("playing", app: app)
         let before = try snapshot(app)

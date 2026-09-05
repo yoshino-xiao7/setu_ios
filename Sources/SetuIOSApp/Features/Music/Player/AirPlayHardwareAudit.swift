@@ -6,6 +6,7 @@ import SwiftUI
 /// Opt-in, read-only hardware acceptance telemetry. Never configures or overrides audio routes.
 /// Only enabled with the isolated v1 fixture launch arguments; no credentials or real-library data.
 struct AirPlayHardwareAudit: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
     let player: MusicPlaybackController
     let lyrics: NowPlayingLyricsModel
     @State private var json = "{}"
@@ -22,7 +23,7 @@ struct AirPlayHardwareAudit: ViewModifier {
                 Text("AirPlay hardware audit")
                     .font(.system(size: 1)).frame(width: 2, height: 2)
                     .accessibilityIdentifier("airplay.audit").accessibilityValue(json)
-                    .task {
+                    .task(id: colorScheme) {
                         while !Task.isCancelled {
                             snapshot()
                             try? await Task.sleep(nanoseconds: 500_000_000)
@@ -48,6 +49,7 @@ struct AirPlayHardwareAudit: ViewModifier {
         if case .loaded(let lines) = lyrics.state { lyricIndex = LyricParser.activeIndex(in: lines, at: finite) ?? -1 }
         else { lyricIndex = -1 }
         let payload: [String: Any] = [
+            "appearance": colorScheme == .dark ? "dark" : "light",
             "route": audio.currentRoute.outputs.map { $0.portType.rawValue },
             "targetMac": audio.currentRoute.outputs.contains { $0.portType == .airPlay && $0.portName == "雪涼的MacBook Neo" },
             "routeEvents": routeEvents, "routeReason": lastReason,

@@ -75,3 +75,8 @@ The installed app previously omitted `CADisableMinimumFrameDurationOnPhone`. App
 Final targeted physical run: `MusicPlayerP13LayoutTests/testWordRenderingAndScrollingCadenceOnDevice`, 1/1 PASS, xcodebuild exit 0. Evidence: `/private/tmp/setu-p13-promotion-2.xcresult` and `/private/tmp/setu-p13-promotion-2.log`. 478 intervals over the four-second word-rendering/scroll workload, device maximumFPS 120, median 8.334667 ms, maximum 12.502 ms, zero intervals above 20 ms. This is approximately 120-Hz callback cadence and **does not prove zero dropped presented frames**. No P0 performance improvement claim. M-9 remains open pending stronger rendering evidence; Instruments still independently lists this otherwise XCTest-accessible physical device offline.
 
 This continuation required two corrective targeted build/test invocations to validate the actual Info.plist artifact. No new Swift full-suite run. All client cutover flags stay false. `git diff --check` passes.
+
+
+## System acceptance follow-up — 2026-09-05
+
+M-10 actual VoiceOver speech now passes on device. M-12 actual light/dark/light transitions pass for P13 NowPlaying. Home-background playback continuity passes as a partial M-1 check, not a lock-screen pass. See [system evidence](system/acceptance.md) for final case identities, correction history and remaining full-scope gates. No full Swift suite rerun; all client flags remain false.
