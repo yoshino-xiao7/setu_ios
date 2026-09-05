@@ -24,6 +24,17 @@ final class PlaybackContract3LiveUITests: XCTestCase {
         XCTAssertFalse(app.buttons["播放模式：顺序播放"].firstMatch.isEnabled)
         print("P14_REAL_UI_PASS normalAuth=true actualFMPage=true")
     }
+    func testRealFMReadyForManualLockscreen() throws {
+        let app = try launchRadio()
+        XCTAssertTrue(app.buttons["不再播放"].firstMatch.exists)
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "Real FM ready for manual lockscreen check"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        print("P14_MANUAL_LOCKSCREEN_READY actualFMPage=true playbackControl=pause")
+        // Keep the verified real page available while the user checks the physical lock screen.
+        Thread.sleep(forTimeInterval: 300)
+    }
     func testM13NormalAppForInstruments() throws {
         let app = try launchRadio()
         defer { app.terminate() }
