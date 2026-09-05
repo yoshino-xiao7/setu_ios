@@ -28,6 +28,8 @@ enum AppRoute: Hashable {
     case publicAiWork(PublicAiWorkSnapshot)
     case aiSquare
     case musicSearch(String?)
+    case likedTracks
+    case favoritePlaylists
     case musicHistory
     case playlists
     case playlistDetail(Int)

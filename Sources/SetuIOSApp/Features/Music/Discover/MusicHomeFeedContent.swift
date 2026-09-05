@@ -70,6 +70,8 @@ struct MusicHomeSectionView: View {
 
     private func isHiddenRadio(_ action: MusicV2HomeAction) -> Bool {
         if case .discovery("radio", _) = action { return !flags.radioFMEnabled }
+        if case .library("liked", _) = action { return !flags.likedTracksEnabled }
+        if case .library("saved", _) = action { return !flags.favoritePlaylistsEnabled }
         return false
     }
 

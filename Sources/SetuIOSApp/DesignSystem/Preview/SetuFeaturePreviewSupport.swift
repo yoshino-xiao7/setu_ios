@@ -137,6 +137,8 @@ private struct SetuRootUITestContext {
         let args = ProcessInfo.processInfo.arguments
         if args.contains("-ui-testing-music-discover"), let index = args.firstIndex(of: "-ui-testing-discover-page"), args.indices.contains(index + 1) {
             switch args[index + 1] {
+            case "likedTracks": navigation.navigate(to: .music, route: .likedTracks)
+            case "favoritePlaylists": navigation.navigate(to: .music, route: .favoritePlaylists)
             case "radioFM": navigation.navigate(to: .music, route: .radioFM)
             case "rankings": navigation.navigate(to: .music, route: .rankings)
             case "newReleases": navigation.navigate(to: .music, route: .newReleases(albums: false))
@@ -390,6 +392,9 @@ enum SetuPreviewEnvironment {
             detailFlags.usesV2Home = true; detailFlags.rankingsEnabled = true; detailFlags.newReleasesEnabled = true
             detailFlags.artistDetailEnabled = true; detailFlags.albumDetailEnabled = true; detailFlags.usesV2PlaylistDetail = true
         }
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-music-library") {
+            detailFlags.likedTracksEnabled = true; detailFlags.favoritePlaylistsEnabled = true
+        }
         let config = AppConfig(
             apiBaseURL: URL(string: "https://preview.setu.invalid/")!,
             siteBaseURL: URL(string: "https://preview-site.setu.invalid/")!,
@@ -562,6 +567,10 @@ private enum SetuPreviewAPI {
             return json("{\"message\":\"无效的预览请求\"}", statusCode: 400)
         }
 
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-music-library"), path.contains("/library") {
+            let (status, data) = MusicLibraryPreviewFixtures.response(request)
+            return Fixture(statusCode: status, data: data)
+        }
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-music-discover"), path.hasPrefix("/user/music/v2/") {
             let (status, data) = MusicDiscoverPreviewFixtures.response(path: path, query: request.url?.query)
             return Fixture(statusCode: status, data: data)

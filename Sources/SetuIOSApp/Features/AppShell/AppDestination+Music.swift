@@ -21,12 +21,21 @@ extension RootAppView {
         case .newReleases(let albums):
             if environment.config.musicFeatureFlags.newReleasesEnabled {
                 NewReleasesView(environment: environment, albums: albums).environment(musicStore)
-                    .environment(\.musicPlaybackIntent, MusicPlaybackIntent(player: musicPlayer, store: musicStore))
+                    .environment(\.musicPlaybackIntent, MusicPlaybackIntent(player: musicPlayer, store: musicStore, libraryClient: environment.musicV2Client, libraryEnabled: environment.config.musicFeatureFlags.likedTracksEnabled))
             }
         case .dailyRecommend:
             if environment.config.musicFeatureFlags.usesV2Home {
                 DailyRecommendView(environment: environment).environment(musicStore)
-                    .environment(\.musicPlaybackIntent, MusicPlaybackIntent(player: musicPlayer, store: musicStore))
+                    .environment(\.musicPlaybackIntent, MusicPlaybackIntent(player: musicPlayer, store: musicStore, libraryClient: environment.musicV2Client, libraryEnabled: environment.config.musicFeatureFlags.likedTracksEnabled))
+            }
+        case .likedTracks:
+            if environment.config.musicFeatureFlags.likedTracksEnabled {
+                LikedTracksView(environment: environment).environment(musicStore)
+                    .environment(\.musicPlaybackIntent, MusicPlaybackIntent(player: musicPlayer, store: musicStore, libraryClient: environment.musicV2Client, libraryEnabled: environment.config.musicFeatureFlags.likedTracksEnabled))
+            }
+        case .favoritePlaylists:
+            if environment.config.musicFeatureFlags.favoritePlaylistsEnabled {
+                FavoritePlaylistsView(environment: environment).environment(musicStore)
             }
         case .musicHistory:
             MusicHistoryView(environment: environment, player: musicPlayer)
@@ -43,12 +52,12 @@ extension RootAppView {
         case .artistDetail(let id):
             if MusicDetailRoutes.artist(.init(rawValue: id), flags: environment.config.musicFeatureFlags) != nil {
                 ArtistDetailView(environment: environment, artistID: id).environment(musicStore)
-                    .environment(\.musicPlaybackIntent, MusicPlaybackIntent(player: musicPlayer, store: musicStore))
+                    .environment(\.musicPlaybackIntent, MusicPlaybackIntent(player: musicPlayer, store: musicStore, libraryClient: environment.musicV2Client, libraryEnabled: environment.config.musicFeatureFlags.likedTracksEnabled))
             }
         case .albumDetail(let id):
             if MusicDetailRoutes.album(.init(rawValue: id), flags: environment.config.musicFeatureFlags) != nil {
                 AlbumDetailView(environment: environment, albumID: id).environment(musicStore)
-                    .environment(\.musicPlaybackIntent, MusicPlaybackIntent(player: musicPlayer, store: musicStore))
+                    .environment(\.musicPlaybackIntent, MusicPlaybackIntent(player: musicPlayer, store: musicStore, libraryClient: environment.musicV2Client, libraryEnabled: environment.config.musicFeatureFlags.likedTracksEnabled))
             }
         case .playlistDetailV2(let raw):
             if environment.config.musicFeatureFlags.usesV2PlaylistDetail {
@@ -63,6 +72,6 @@ extension RootAppView {
     }
     private func playlistDetailDestination(_ id: MusicV2PlaylistID) -> some View {
         PlaylistDetailView(environment: environment, playlistID: id).environment(musicStore)
-            .environment(\.musicPlaybackIntent, MusicPlaybackIntent(player: musicPlayer, store: musicStore))
+            .environment(\.musicPlaybackIntent, MusicPlaybackIntent(player: musicPlayer, store: musicStore, libraryClient: environment.musicV2Client, libraryEnabled: environment.config.musicFeatureFlags.likedTracksEnabled))
     }
 }

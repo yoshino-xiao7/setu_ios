@@ -75,7 +75,13 @@ struct MusicDetailTrackRow: View {
     var body: some View {
         MusicSongRow(track: track, onPlay: { Task { await intent?.play(track, in: tracks, context: context) } },
                      onArtist: callback(MusicDetailRoutes.artist(track.artists.first?.id, flags: flags)),
-                     onAlbum: callback(MusicDetailRoutes.album(track.album?.id, flags: flags)))
+                     onAlbum: callback(MusicDetailRoutes.album(track.album?.id, flags: flags)),
+                     isLiked: intent?.store.likedState(track.id) == true, onToggleLike: likeCallback)
+            .task(id: intent?.store.userID) {
+                if flags.likedTracksEnabled, let client = intent?.libraryClient {
+                    await intent?.store.prepareLikedState(client: client)
+                }
+            }
             .contextMenu {
                 Button("下一首播放") { intent?.playNext(track) }
                 ForEach(track.artists.indices, id: \.self) { index in
@@ -84,6 +90,14 @@ struct MusicDetailTrackRow: View {
                     }
                 }
             }
+    }
+    private var likeCallback: (() -> Void)? {
+        guard flags.likedTracksEnabled, let intent, let client = intent.libraryClient,
+              intent.store.likedState(track.id) != nil else { return nil }
+        return {
+            guard !intent.store.libraryWriting else { return }
+            Task { await intent.toggleLike(track, client: client, enabled: flags.likedTracksEnabled) }
+        }
     }
     private func callback(_ route: AppRoute?) -> (() -> Void)? {
         guard let route else { return nil }

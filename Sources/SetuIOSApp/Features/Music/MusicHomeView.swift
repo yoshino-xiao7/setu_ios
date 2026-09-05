@@ -25,6 +25,12 @@ struct MusicHomeView: View {
 
     var body: some View {
         List {
+            if environment.config.musicFeatureFlags.likedTracksEnabled && !environment.config.musicFeatureFlags.usesV2Home {
+                NavigationLink("我喜欢", value: AppRoute.likedTracks)
+            }
+            if environment.config.musicFeatureFlags.favoritePlaylistsEnabled {
+                NavigationLink("收藏歌单", value: AppRoute.favoritePlaylists)
+            }
             if dynamicTypeSize.isAccessibilitySize {
                 Section {
                     SetuCard {
@@ -47,7 +53,7 @@ struct MusicHomeView: View {
             if environment.config.musicFeatureFlags.usesV2Home {
                 MusicHomeFeedContent(resource: store.homeFeed, flags: environment.config.musicFeatureFlags,
                                      userID: store.userID, retry: { await loadLandingContent(force: true) })
-                    .environment(\.musicPlaybackIntent, MusicPlaybackIntent(player: player, store: store))
+                    .environment(\.musicPlaybackIntent, MusicPlaybackIntent(player: player, store: store, libraryClient: environment.musicV2Client, libraryEnabled: environment.config.musicFeatureFlags.likedTracksEnabled))
             } else {
                 recentHistoryContent
                 myPlaylistContent

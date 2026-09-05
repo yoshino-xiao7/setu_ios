@@ -60,6 +60,10 @@ struct NowPlayingSheet: View {
             if let track = player.currentTrack {
                 VStack(spacing: SetuSpacing.md) {
                     detailHeader
+                    if environment.config.musicFeatureFlags.likedTracksEnabled,
+                       case .canonical(let id) = track.id {
+                        MusicLikeButton(id: id, environment: environment)
+                    }
 
                     nowPlayingPageContent(for: track)
 

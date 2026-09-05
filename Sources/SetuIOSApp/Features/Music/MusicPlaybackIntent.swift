@@ -5,6 +5,8 @@ import SwiftUI
 struct MusicPlaybackIntent {
     let player: MusicPlaybackController
     let store: MusicStore
+    var libraryClient: MusicV2Client? = nil
+    var libraryEnabled = false
 
     func play(_ track: MusicV2Track, in tracks: [MusicV2Track], context: PlaybackContext,
               mode: MusicPlayMode? = nil) async {
@@ -12,10 +14,15 @@ struct MusicPlaybackIntent {
                           context: context, playMode: mode)
     }
     func playNext(_ track: MusicV2Track) { player.playNext(MusicPlaybackTrack(track: track)) }
-    func toggleLike(_ track: MusicV2Track) async {
-        // P15 owns the mutation and reconciliation; do not guess a liked state here.
-        player.showFeedback(.info("喜欢歌曲功能尚未启用"))
+    func toggleLike(_ track: MusicV2Track, client: MusicV2Client, enabled: Bool) async {
+        let owner = store.sessionToken
+        do { try await store.toggleLike(track.id, track: track, client: client, enabled: enabled) }
+        catch {
+            guard owner == store.sessionToken else { return }
+            player.showFeedback(.error(UserFacingErrorMapper.map(error)))
+        }
     }
+
 }
 
 private struct MusicPlaybackIntentKey: EnvironmentKey {

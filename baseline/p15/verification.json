@@ -1,0 +1,131 @@
+{
+  "phase": "P15",
+  "baseCommit": "92523397751e417be0e3e506ca5bdbc7bd49ca0b",
+  "branch": "yukiryou/music-p15-library",
+  "developmentDependsOnM13Pass": false,
+  "status": "IMPLEMENTED / MERGE-READY; client cutover OFF",
+  "checks": {
+    "targeted": {
+      "passed": 16,
+      "failed": 0,
+      "log": "/private/tmp/p15-targeted-final.log",
+      "logSha256": "a5bb7ae9a46d8466ad33ba859e647c9ec76c1477c6c9b8a8d6c70060bce04812"
+    },
+    "directRegression": {
+      "passed": 22,
+      "failed": 0,
+      "log": "/private/tmp/p15-direct-regression.log",
+      "logSha256": "1a1770671b44a2cf67f45929f7168510eb54b456db41905df552a78230c6dd6a"
+    },
+    "swiftFull": {
+      "passed": 312,
+      "failed": 0,
+      "runs": 1,
+      "log": "/private/tmp/p15-swift-full.log",
+      "exactFinalUITree": false,
+      "logSha256": "a031e01eb45d3b78160c519ebe626e0805517452e37a9415a814350e1326b743"
+    },
+    "connectedPhysicalBuild": {
+      "result": "PASS",
+      "runs": 1,
+      "device": "connected iPhone 17",
+      "log": "/private/tmp/p15-device-build.log",
+      "exactFinalUITree": false,
+      "logSha256": "594427006401632465b72391f86926c448b882605e251cfc94baed63a64982e0"
+    },
+    "finalUITestsAndLayouts": {
+      "passed": 16,
+      "failed": 0,
+      "detail": "ui-results.json",
+      "G-IOS-8": "5/5 PASS",
+      "G-IOS-9": "2/2 PASS",
+      "LibraryUI": "5/5 PASS",
+      "LibraryLayout": "4/4 PASS"
+    },
+    "finalSimulatorAppBuild": {
+      "result": "PASS",
+      "log": "/private/tmp/p15-library-final.log",
+      "logSha256": "31f9cfdf3134bf9281e36d32f9725368e1c337a08eb52f0616e9908f7ca92904"
+    },
+    "FINAL": {
+      "result": "PASS",
+      "boundaryCases": 71,
+      "evidenceCases": 85,
+      "log": "/private/tmp/p15-final-verifier.log",
+      "logSha256": "0fed11428971455f7dd528bb9f7f404e3ab4d27a6a2f48fc3a7d35c929035598"
+    },
+    "Frozen": {
+      "result": "PASS",
+      "artifacts": 74,
+      "log": "/private/tmp/p15-frozen-verifier.json",
+      "logSha256": "b4d5f8181bc585419c6de7fe1fc674ae14b8494f27bed776d1c0a6503483dcaa"
+    },
+    "diffCheck": {
+      "result": "PASS"
+    }
+  },
+  "verificationSequence": "Full suite and physical build ran once. Final P15-only button hit-testing and observable userID task corrections were subsequently verified with targeted Swift tests and rebuilt simulator UI tests; no exact-final-tree full or physical rebuild is claimed.",
+  "infrastructure": "Small-screen XCTest accessibility query interruption and Xcode result finalization failures retained in external logs. Unfinished guards completed sequentially; two layout screenshots reacquired by targeted rerun.",
+  "M13": "P14 M-13 EXTERNAL EVIDENCE REMAINS; no retry in this goal; future 1-2 minute trace Stop/save/reopen/data-read gate before 30 minutes",
+  "allRealClientFlags": false,
+  "backendChanged": false,
+  "playbackCoreChanged": false,
+  "nextPhaseStarted": false,
+  "screenshots": {
+    "p15-liked-empty.png": "ce1aa7c93b233cf80dbd4e411daabbd36de59fefc95c9bf4fddfb56f374aaa0b",
+    "p15-liked-error.png": "3b835accbadcb8df6efb4ef0608a644ad2fb9454f0f111fe8a75f6815fd4fe84",
+    "p15-liked-failure-rollback.png": "598f4257252d08aa422b300c2c086f8cfa1a7d0a1ee8a7e8b44db5bf132cb292",
+    "p15-liked-loading.png": "9a237e9cb2d112901b05e02c1515fab7a0c77e667075ccb5b64a5dfd6fa30a10",
+    "p15-liked-page-375.png": "fb77f4edc6abc9ccbefd442bf13a79333b9a6c28c4feb9573c698fb1e35fe985",
+    "p15-liked-page-430.png": "3136abb46ed602260f3bc7dd2f060d297d8a6428b9e4ce8ad70713ed8aad0811",
+    "p15-liked-pagination-playback.png": "2fffc129888b99cbab77d69e255c4d103eff2be16f5f5d7bf722362e3bcbb5db",
+    "p15-liked-row-375-accessibility5.png": "2e8d216e9932d38d609716a80109f1d03b6a8ba824605a5a1f5468c80fde82a0",
+    "p15-liked-row-375-large.png": "e6b6abbfca3380a6e924a491e195893d573f4840bc84bbed0181cb8005de8815",
+    "p15-liked-row-430-accessibility5.png": "d6bf921bd954af028aa2beab9b129365085be9b8526987b5921c6a434942691e",
+    "p15-liked-row-430-large.png": "016e94a50c6a9b1237abf89d916eba28018571746105d74232d15afc7e09720a",
+    "p15-liked-saved-empty-after-remove.png": "434bf201d0b8f5030a1a7e43f152cd8c1e847fb8358a5783efacaf6c0000bb97",
+    "p15-liked-unauthorized-state.png": "c130522f42d68dba523d991ed3d9fb84c5edcd15748adada3d306926fd584f33",
+    "p15-liked-unauthorized.png": "770bc48202513d75a3708a143dcc2e490815c933645a9e4d9b87ddbafe89892f"
+  },
+  "filesChanged": [
+    "SetuIOSApp.xcodeproj/project.pbxproj",
+    "Sources/SetuIOSApp/DesignSystem/Preview/SetuFeaturePreviewSupport.swift",
+    "Sources/SetuIOSApp/Features/AppShell/AppDestination+Music.swift",
+    "Sources/SetuIOSApp/Features/AppShell/AppRoute.swift",
+    "Sources/SetuIOSApp/Features/Music/Detail/MusicDetailComponents.swift",
+    "Sources/SetuIOSApp/Features/Music/Detail/PlaylistDetailView.swift",
+    "Sources/SetuIOSApp/Features/Music/Discover/MusicDiscoverModels.swift",
+    "Sources/SetuIOSApp/Features/Music/Discover/MusicHomeFeedContent.swift",
+    "Sources/SetuIOSApp/Features/Music/Library/LikedTracksView.swift",
+    "Sources/SetuIOSApp/Features/Music/Library/MusicHistoryView.swift",
+    "Sources/SetuIOSApp/Features/Music/Library/MusicLibraryButtons.swift",
+    "Sources/SetuIOSApp/Features/Music/Library/MusicLibraryModels.swift",
+    "Sources/SetuIOSApp/Features/Music/Library/MusicLibraryPreviewFixtures.swift",
+    "Sources/SetuIOSApp/Features/Music/Library/MusicPlaylistsView.swift",
+    "Sources/SetuIOSApp/Features/Music/MusicHomeView.swift",
+    "Sources/SetuIOSApp/Features/Music/MusicPlaybackIntent.swift",
+    "Sources/SetuIOSApp/Features/Music/MusicSongRow.swift",
+    "Sources/SetuIOSApp/Features/Music/MusicStore.swift",
+    "Sources/SetuIOSApp/Features/Music/Player/NowPlayingSheet.swift",
+    "Tests/SetuIOSAppTests/MusicLibraryLayoutTests.swift",
+    "Tests/SetuIOSAppTests/MusicLibraryTests.swift",
+    "Tests/SetuIOSAppUITests/MusicLibraryUITests.swift",
+    "baseline/p15/acceptance.md",
+    "baseline/p15/screenshots/p15-liked-empty.png",
+    "baseline/p15/screenshots/p15-liked-error.png",
+    "baseline/p15/screenshots/p15-liked-failure-rollback.png",
+    "baseline/p15/screenshots/p15-liked-loading.png",
+    "baseline/p15/screenshots/p15-liked-page-375.png",
+    "baseline/p15/screenshots/p15-liked-page-430.png",
+    "baseline/p15/screenshots/p15-liked-pagination-playback.png",
+    "baseline/p15/screenshots/p15-liked-row-375-accessibility5.png",
+    "baseline/p15/screenshots/p15-liked-row-375-large.png",
+    "baseline/p15/screenshots/p15-liked-row-430-accessibility5.png",
+    "baseline/p15/screenshots/p15-liked-row-430-large.png",
+    "baseline/p15/screenshots/p15-liked-saved-empty-after-remove.png",
+    "baseline/p15/screenshots/p15-liked-unauthorized-state.png",
+    "baseline/p15/screenshots/p15-liked-unauthorized.png",
+    "baseline/p15/ui-results.json",
+    "baseline/p15/verification.json"
+  ]
+}

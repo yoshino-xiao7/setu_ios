@@ -83,6 +83,18 @@ final class MusicStore {
     let recentHistory = MusicResource<[MusicHistoryRecord]>()
     let playlists = MusicResource<[UserMusicPlaylist]>()
     let history = MusicResource<MusicHistoryPage>()
+    let library = MusicResource<MusicV2UserLibrary>()
+    let likedTracks = MusicResource<MusicLibraryPage<MusicLibraryTrack>>()
+    let favoritePlaylists = MusicResource<MusicLibraryPage<MusicLibraryPlaylist>>()
+    private(set) var likedTrackIDs: Set<String> = []
+    private(set) var savedPlaylistIDs: Set<String> = []
+    private(set) var libraryWriting = false
+    private(set) var libraryMoreLoading: Set<String> = []
+    private(set) var libraryMoreErrors: [String: UserFacingError] = [:]
+    @ObservationIgnored private var libraryRevision = UUID()
+    @ObservationIgnored private var libraryKeys: Set<MusicCacheKey> = [.library]
+    @ObservationIgnored private var likedPreparation: Task<Void, Never>?
+    @ObservationIgnored private var savedPreparation: Task<Void, Never>?
     let homeFeed = MusicResource<MusicV2HomeFeed>()
     let rankings = MusicResource<MusicV2Rankings>()
     let dailyRecommendations = MusicResource<MusicV2RecommendedTracks>()
@@ -123,6 +135,13 @@ final class MusicStore {
         guard self.userID != userID else { return }
         self.userID = userID
         generation = UUID()
+        libraryRevision = UUID()
+        likedPreparation?.cancel(); likedPreparation = nil
+        savedPreparation?.cancel(); savedPreparation = nil
+        library.reset(); likedTracks.reset(); favoritePlaylists.reset()
+        likedTrackIDs.removeAll(); savedPlaylistIDs.removeAll()
+        libraryWriting = false; libraryMoreLoading.removeAll(); libraryMoreErrors.removeAll()
+        libraryKeys = [.library]
         historyRevision = UUID()
         hotSearch.reset(); recommendedPlaylists.reset(); newSongs.reset(); dailySongs.reset()
         recentHistory.reset(); playlists.reset(); history.reset()
@@ -370,6 +389,180 @@ final class MusicStore {
         } catch {
             guard owner == generation, ticket == historyRevision else { return }
             if !(error is CancellationError) { historyMoreError = UserFacingErrorMapper.map(error) }
+        }
+    }
+
+    func loadLibrary(client: MusicV2Client, force: Bool = false) async {
+        guard !libraryWriting else { return }
+        await load(library, .library(client: client), force: force)
+    }
+
+    func loadLikedTracks(client: MusicV2Client, force: Bool = false, more: Bool = false) async {
+        await loadLibraryPage(likedTracks, name: "liked", force: force, more: more,
+            query: { .likedTracks(client: client, offset: $0) },
+            project: { MusicLibraryPage(items: $0.items.map(MusicLibraryTrack.init), nextOffset: $0.nextOffset, total: $0.total) })
+        likedTrackIDs = Set(likedTracks.value?.items.map { $0.id.rawValue } ?? [])
+    }
+
+    func loadFavoritePlaylists(client: MusicV2Client, force: Bool = false, more: Bool = false) async {
+        await loadLibraryPage(favoritePlaylists, name: "saved", force: force, more: more,
+            query: { .favoritePlaylists(client: client, offset: $0) },
+            project: { MusicLibraryPage(items: $0.items.map(MusicLibraryPlaylist.init), nextOffset: $0.nextOffset, total: $0.total) })
+        savedPlaylistIDs = Set(favoritePlaylists.value?.items.map { $0.id.rawValue } ?? [])
+    }
+
+    private func loadLibraryPage<Wire: Sendable, Item: Identifiable & Sendable>(
+        _ resource: MusicResource<MusicLibraryPage<Item>>, name: String, force: Bool, more: Bool,
+        query: (Int) -> MusicQuery<Wire>, project: @escaping @Sendable (Wire) -> MusicLibraryPage<Item>
+    ) async where Item.ID: Sendable {
+        guard !libraryWriting, !libraryMoreLoading.contains(name) else { return }
+        let owner = generation, revision = libraryRevision, repository = repository
+        if more {
+            guard !resource.isRefreshing, let offset = resource.value?.nextOffset else { return }
+            libraryMoreLoading.insert(name); libraryMoreErrors[name] = nil
+            defer { if owner == generation, revision == libraryRevision { libraryMoreLoading.remove(name) } }
+            let request = query(offset); libraryKeys.insert(request.key)
+            do {
+                let response = try await repository.value(for: request, force: force)
+                guard owner == generation, revision == libraryRevision, !resource.isRefreshing,
+                      resource.value?.nextOffset == offset else { return }
+                let page = project(response.value)
+                guard page.nextOffset == nil || page.nextOffset! > offset else { throw UserFacingError(message: "分页未前进，请刷新后重试") }
+                resource.update(markStale: false) { value in
+                    guard var current = value else { return }
+                    let existing = Set(current.items.map(\.id))
+                    current.items.append(contentsOf: page.items.filter { !existing.contains($0.id) })
+                    current.nextOffset = page.nextOffset; current.total = page.total; value = current
+                }
+            } catch {
+                guard owner == generation, revision == libraryRevision else { return }
+                if !(error is CancellationError) { libraryMoreErrors[name] = UserFacingErrorMapper.map(error) }
+            }
+        } else {
+            let request = query(0); libraryKeys.insert(request.key)
+            await resource.load(ttl: request.key.ttl, now: now(), force: force) {
+                let response = try await repository.value(for: request, force: force)
+                return (project(response.value), response.fetchedAt)
+            }
+        }
+    }
+
+    /// Absence is known only after the complete relation list, never from a Home preview.
+    func likedState(_ id: MusicV2TrackID) -> Bool? {
+        if likedTrackIDs.contains(id.rawValue) { return true }
+        return likedTracks.value?.nextOffset == nil && likedTracks.value != nil ? false : nil
+    }
+    func savedState(_ id: MusicV2ProviderPlaylistID) -> Bool? {
+        if savedPlaylistIDs.contains(id.rawValue) { return true }
+        return favoritePlaylists.value?.nextOffset == nil && favoritePlaylists.value != nil ? false : nil
+    }
+
+    func prepareLikedState(client: MusicV2Client) async {
+        if let task = likedPreparation { await task.value; return }
+        let owner = generation
+        let task = Task { [weak self] in
+            guard let self else { return }
+            await self.loadLikedTracks(client: client)
+            while self.generation == owner, !Task.isCancelled, self.likedTracks.value?.nextOffset != nil {
+                let offset = self.likedTracks.value?.nextOffset
+                await self.loadLikedTracks(client: client, more: true)
+                if self.likedTracks.value?.nextOffset == offset { break }
+            }
+        }
+        likedPreparation = task; await task.value
+        if generation == owner { likedPreparation = nil }
+    }
+    func prepareSavedState(client: MusicV2Client) async {
+        if let task = savedPreparation { await task.value; return }
+        let owner = generation
+        let task = Task { [weak self] in
+            guard let self else { return }
+            await self.loadFavoritePlaylists(client: client)
+            while self.generation == owner, !Task.isCancelled, self.favoritePlaylists.value?.nextOffset != nil {
+                let offset = self.favoritePlaylists.value?.nextOffset
+                await self.loadFavoritePlaylists(client: client, more: true)
+                if self.favoritePlaylists.value?.nextOffset == offset { break }
+            }
+        }
+        savedPreparation = task; await task.value
+        if generation == owner { savedPreparation = nil }
+    }
+
+    func toggleLike(_ id: MusicV2TrackID, track: MusicV2Track? = nil, client: MusicV2Client, enabled: Bool) async throws {
+        guard enabled, let userID, !libraryWriting, let wasLiked = likedState(id) else {
+            throw UserFacingError(message: "喜欢状态尚未就绪，请重试")
+        }
+        let before = likedTracks.value, ids = likedTrackIDs, owner = generation
+        let snapshot = try track.map { try JSONDecoder().decode(MusicV2TrackDisplaySnapshot.self, from: JSONEncoder().encode($0)) }
+        beginLibraryWrite()
+        if wasLiked { likedTrackIDs.remove(id.rawValue) } else { likedTrackIDs.insert(id.rawValue) }
+        likedTracks.update { value in
+            guard var page = value else { return }
+            page.items.removeAll { $0.id == id }
+            if !wasLiked { page.items.insert(.init(id: id, ownerID: "setu:user:\(userID)", track: track), at: 0) }
+            page.total = max(0, page.total + (wasLiked ? -1 : 1)); value = page
+        }
+        do {
+            try await write(keys: libraryKeys) { _ in
+                if wasLiked { try await client.unlike(id) } else { try await client.like(id, snapshot: snapshot) }
+            }
+            guard generation == owner else { throw CancellationError() }
+            finishLibraryWrite(client: client, liked: true)
+        } catch {
+            guard generation == owner else { throw CancellationError() }
+            likedTracks.update { $0 = before }; likedTrackIDs = ids
+            finishLibraryWrite(client: client, liked: true)
+            throw error
+        }
+    }
+
+    func toggleFavoritePlaylist(_ id: MusicV2ProviderPlaylistID, playlist: MusicV2ProviderPlaylist? = nil,
+                                client: MusicV2Client, enabled: Bool) async throws {
+        guard enabled, let userID, !libraryWriting, let wasSaved = savedState(id) else {
+            throw UserFacingError(message: "收藏状态尚未就绪，请重试")
+        }
+        let before = favoritePlaylists.value, ids = savedPlaylistIDs, owner = generation
+        let snapshot = try playlist.map { try JSONDecoder().decode(MusicV2PlaylistDisplaySnapshot.self, from: JSONEncoder().encode($0)) }
+        beginLibraryWrite()
+        if wasSaved { savedPlaylistIDs.remove(id.rawValue) } else { savedPlaylistIDs.insert(id.rawValue) }
+        favoritePlaylists.update { value in
+            guard var page = value else { return }
+            page.items.removeAll { $0.id == id }
+            if !wasSaved { page.items.insert(.init(id: id, ownerID: "setu:user:\(userID)", playlist: playlist), at: 0) }
+            page.total = max(0, page.total + (wasSaved ? -1 : 1)); value = page
+        }
+        do {
+            try await write(keys: libraryKeys) { _ in
+                if wasSaved { try await client.unsavePlaylist(id) } else { try await client.savePlaylist(id, snapshot: snapshot) }
+            }
+            guard generation == owner else { throw CancellationError() }
+            finishLibraryWrite(client: client, liked: false)
+        } catch {
+            guard generation == owner else { throw CancellationError() }
+            favoritePlaylists.update { $0 = before }; savedPlaylistIDs = ids
+            finishLibraryWrite(client: client, liked: false)
+            throw error
+        }
+    }
+    private func beginLibraryWrite() {
+        libraryWriting = true; libraryRevision = UUID()
+        likedPreparation?.cancel(); likedPreparation = nil
+        savedPreparation?.cancel(); savedPreparation = nil
+        library.invalidate(); likedTracks.invalidate(); favoritePlaylists.invalidate(); homeFeed.invalidate()
+        libraryMoreLoading.removeAll(); libraryMoreErrors.removeAll()
+    }
+    private func finishLibraryWrite(client: MusicV2Client, liked: Bool) {
+        let owner = generation, revision = libraryRevision
+        // Serialize reconciliation with writes so an older GET cannot erase a newer intent.
+        Task { [weak self] in
+            guard let self, self.generation == owner, self.libraryRevision == revision else { return }
+            await self.repository.invalidate(self.libraryKeys.union([.home]))
+            guard self.generation == owner, self.libraryRevision == revision else { return }
+            self.libraryWriting = false
+            if liked { await self.loadLikedTracks(client: client, force: true) }
+            else { await self.loadFavoritePlaylists(client: client, force: true) }
+            guard self.generation == owner, self.libraryRevision == revision else { return }
+            if self.library.value != nil { await self.loadLibrary(client: client, force: true) }
         }
     }
 
