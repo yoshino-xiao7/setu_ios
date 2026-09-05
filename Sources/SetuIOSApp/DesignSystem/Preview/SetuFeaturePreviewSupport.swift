@@ -4,6 +4,35 @@ import SwiftUI
 
 #if DEBUG
 
+/// Isolated real-renderer workload for physical scrolling metrics. No client flags or network.
+struct SetuP13WordScrollScenario: View {
+    private let started = Date()
+    @State private var elapsed = 0.0
+    private let lines: [LyricLine] = {
+        let body: [String: Any] = ["trackId": "netease:track:1", "kind": ProcessInfo.processInfo.arguments.contains("-ui-testing-p13-line-control") ? "line" : "word", "hasTranslation": true,
+            "contributors": [], "lines": (0..<120).map { index in
+                ["text": "沿着星光慢慢回家", "startMs": index * 4000, "durationMs": 4000,
+                 "translation": "Walking home beneath the stars",
+                 "words": ["沿着", "星光", "慢慢", "回家"].enumerated().map {
+                     ["text": $0.element, "startMs": index * 4000 + $0.offset * 1000, "durationMs": 1000] as [String: Any]
+                 }] as [String: Any]
+            }]
+        let data = try! JSONSerialization.data(withJSONObject: body)
+        return LyricParser.parse(try! JSONDecoder().decode(MusicV2Lyric.self, from: data))
+    }()
+    var body: some View {
+        LyricScrollView(lines: lines, currentTime: elapsed, expands: true, isPlaying: !ProcessInfo.processInfo.arguments.contains("-ui-testing-p13-static-word"),
+                        sampleTime: { Date().timeIntervalSince(started) }, onSeek: { elapsed = $0 })
+            .accessibilityIdentifier("p13.word-scroll")
+            .task {
+                while !Task.isCancelled {
+                    elapsed = Date().timeIntervalSince(started)
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+            }
+    }
+}
+
 /// Dependencies for page-level previews.
 ///
 /// The API session is handled entirely in-process. Fixture payloads deliberately

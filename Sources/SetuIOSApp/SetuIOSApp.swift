@@ -32,7 +32,9 @@ struct SetuIOSApp: App {
     @ViewBuilder
     private var appContent: some View {
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("-ui-testing-root") })
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-p13-word-scroll") {
+            SetuP13WordScrollScenario()
+        } else if ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("-ui-testing-root") })
             || ProcessInfo.processInfo.arguments.contains("-ui-testing-welcome-fixture") {
             SetuRootUITestScenario()
         } else if ProcessInfo.processInfo.arguments.contains("-ui-testing-public-ai-work")

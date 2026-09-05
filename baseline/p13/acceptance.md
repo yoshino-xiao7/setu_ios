@@ -80,3 +80,8 @@ This continuation required two corrective targeted build/test invocations to val
 ## System acceptance follow-up — 2026-09-05
 
 M-10 actual VoiceOver speech now passes on device. M-12 actual light/dark/light transitions pass for P13 NowPlaying. Home-background playback continuity passes as a partial M-1 check, not a lock-screen pass. See [system evidence](system/acceptance.md) for final case identities, correction history and remaining full-scope gates. No full Swift suite rerun; all client flags remain false.
+
+
+## Presented-rendering metrics follow-up — 2026-09-05
+
+XCTest system scroll metrics now provide stronger evidence than the earlier display-link cadence: original word rendering reports 5/1/5 hitches across three iterations, so M-9 is **not passed**. The line-only control reports zero hitches; further isolation of P13 rendering is in progress. An async-Canvas experiment failed to eliminate hitches and was reverted. See [diagnostic evidence and failing checker](render/diagnosis.md). Do not treat performance-test execution success as performance acceptance.

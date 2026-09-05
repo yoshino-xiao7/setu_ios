@@ -1,0 +1,35 @@
+{
+  "result": "FAIL",
+  "metrics": {
+    "animation.hitches.total.duration": [
+      41.672831,
+      8.334749,
+      41.673163
+    ],
+    "duration": [
+      2.25931725,
+      2.273814458,
+      2.2698646250000003
+    ],
+    "animation.hitch.time.ratio": [
+      18.44487901525708,
+      3.6655365478277537,
+      18.35931808782062
+    ],
+    "animation.frame.count": [
+      0,
+      0,
+      0
+    ],
+    "animation.frame.rate": [
+      80.55531311035156,
+      82.68045043945312,
+      80.62154388427734
+    ],
+    "animation.hitch.number": [
+      5,
+      1,
+      5
+    ]
+  }
+}

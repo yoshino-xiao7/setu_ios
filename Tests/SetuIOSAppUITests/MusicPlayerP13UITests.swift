@@ -77,6 +77,24 @@ final class MusicPlayerP13UITests: XCTestCase {
         print("P13_APPEARANCE light_dark_light_completed")
     }
 
+    func testPhysicalWordScrollPresentedMetrics() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["SETU_P13_RENDER_METRICS"] == "1", "Opt-in physical rendered-frame metrics")
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing-p13-word-scroll"]
+        if ProcessInfo.processInfo.environment["SETU_P13_STATIC_WORD"] == "1" { app.launchArguments.append("-ui-testing-p13-static-word") }
+        if ProcessInfo.processInfo.environment["SETU_P13_LINE_CONTROL"] == "1" { app.launchArguments.append("-ui-testing-p13-line-control") }
+        app.launch()
+        defer { app.terminate() }
+        let scroll = app.scrollViews.firstMatch
+        XCTAssertTrue(scroll.waitForExistence(timeout: 10))
+        let options = XCTMeasureOptions()
+        options.iterationCount = 3
+        measure(metrics: [XCTOSSignpostMetric.scrollingAndDecelerationMetric], options: options) {
+            scroll.swipeUp(velocity: .slow)
+            scroll.swipeDown(velocity: .slow)
+        }
+    }
+
     private func verifyControls(category: String, name: String) {
         let app = XCUIApplication()
         app.launchArguments = ["-ui-testing-root-player", "-UIPreferredContentSizeCategoryName", category]
