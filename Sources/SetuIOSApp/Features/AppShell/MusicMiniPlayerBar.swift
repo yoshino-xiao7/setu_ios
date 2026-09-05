@@ -420,7 +420,7 @@ struct MusicQueueDrawerView: View {
     private func playQueuedTrack(_ track: MusicPlaybackTrack) async {
         guard track.id != player.currentTrack?.id else { return }
         PlayerHaptics.light()
-        _ = await player.play(track: track, in: player.queueTracks, queueName: player.queueName)
+        _ = await player.play(track: track, in: player.queueTracks, context: player.context)
         if let feedback = player.feedback { showFeedback(feedback) }
     }
 

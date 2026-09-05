@@ -200,7 +200,11 @@ struct MusicHistoryView: View {
     private func play(_ record: MusicHistoryRecord, queueTracks: [MusicPlaybackTrack] = []) async {
         feedback = .info("正在准备播放")
         let track = MusicPlaybackTrack(record: record)
-        _ = await player.play(track: track, in: queueTracks, queueName: "播放历史")
+        _ = await player.play(
+            track: track,
+            in: queueTracks,
+            context: .unknown(reason: .missingProvenance, label: "播放历史")
+        )
     }
 
     private func clear() async {

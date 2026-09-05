@@ -138,7 +138,7 @@ struct MusicPlaylistDetailView: View {
                                     Task {
                                         await play(
                                             song,
-                                            queueName: playlist.name,
+                                            context: .playlist(id: .local(.legacy(playlist.id)), label: playlist.name),
                                             queueTracks: songs.map { MusicPlaybackTrack(song: $0) }
                                         )
                                     }
@@ -388,7 +388,7 @@ struct MusicPlaylistDetailView: View {
         }
         await play(
             firstSong,
-            queueName: playlist.name,
+            context: .playlist(id: .local(.legacy(playlist.id)), label: playlist.name),
             queueTracks: songs.map { MusicPlaybackTrack(song: $0) },
             playMode: MusicPlayMode(playlistMode: selectedMode)
         )
@@ -397,10 +397,10 @@ struct MusicPlaylistDetailView: View {
         }
     }
 
-    private func play(_ song: PlaylistSong, queueName: String? = nil, queueTracks: [MusicPlaybackTrack] = [], playMode: MusicPlayMode? = nil) async {
+    private func play(_ song: PlaylistSong, context: PlaybackContext? = nil, queueTracks: [MusicPlaybackTrack] = [], playMode: MusicPlayMode? = nil) async {
         feedback = .info("正在准备播放")
         let track = MusicPlaybackTrack(song: song)
-        _ = await player.play(track: track, in: queueTracks, queueName: queueName, playMode: playMode)
+        _ = await player.play(track: track, in: queueTracks, context: context, playMode: playMode)
         feedback = player.feedback
     }
 
