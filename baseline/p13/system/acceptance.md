@@ -33,3 +33,24 @@ CoreDevice subsequently reported `passcodeRequired=false`. The authorized AX5 co
 
 
 A subsequent read-only readiness check reports CoreDevice `transportType=localNetwork`, `pairingState=paired`, `tunnelState=connected`, developer mode enabled and DDI services available. `system_profiler SPUSBDataType -json` contains no iPhone entry. Thus current evidence no longer establishes a wired connection, though it does establish network discovery and pairing. This does not by itself prove the cause of the XCTest channel refusal. Restoring the physical data connection is the next isolated recovery step; no pairing, network or unrelated system setting was changed.
+
+
+## Wired recovery and actual lock attempt
+
+CoreDevice subsequently reported `transportType=wired`, paired and connected. Attempt 6 reused the signed product and successfully entered the test, superseding the runner-connectivity blocker for that run. It started fixture playback with one AVPlayer, queue [7101,7102,7103], track 7101, playing phase and no error. Siri received the explicit lock-screen command, and an independent CoreDevice query during the test returned `passcodeRequired=true`. After 45 seconds, the test found no accessible next button while the screen had not been explicitly woken. Its subsequent attempt to activate Setu was rejected by SpringBoard because the device was locked. This proves actual lock, not locked playback continuity or remote next. The case failed; no M-1/M-2 PASS is claimed.
+
+A focused follow-up adds Home to wake the locked display before querying its media controls and avoids attempting to launch the app on the no-control failure path. This has not yet been run. An unlock-only user action was requested because physical authentication cannot be performed by the test. No user completion is recorded here yet. Evidence: `/private/tmp/setu-p13-lock-attempt-6.xcresult`, exit 65, actual case execution 57.509 seconds.
+
+
+## Wake-and-next attempt 7
+
+After the user explicitly confirmed unlock, CoreDevice returned `passcodeRequired=false`. The rebuilt targeted case ran, started fixture track 7101 around 83.77 seconds, invoked Siri lock, and independently returned `passcodeRequired=true`. Home woke the display; XCTest found a hittable next button at t=59.22 seconds. Its tap then waited for SpringBoard idle for 60 seconds, after which the next element was no longer present and no tap completed. The case failed at 122.357 seconds, xcodebuild exit 65. This corrects the earlier assumption that waking alone would suffice. No locked-next or playback continuity PASS is claimed. Raw result remains temporary because automatic XCTest failure diagnostics can include unrelated system UI; no raw diagnostics or hierarchy are copied into this repository.
+
+The SDK public XCUIAutomation headers expose no matching idle/quiescence/animation timeout configuration in the local search. No private bypass or system setting modification was introduced. An attach-only continuation is prepared to inspect the same app process after real user unlock, with an explicit expected fixture track (7101 for the failed-next case, 7102 only after successful next). It has not yet run. The user was asked to unlock only and preserve the current Setu session.
+
+
+## Same-session continuation boundary
+
+The user confirmed unlock after attempt 7. The attach-only continuation then found Setu not running and stopped immediately without launching it (`setu-p13-lock-resume-1.xcresult`, 0.049 seconds, exit 65). It therefore provides no continuity evidence; the precise termination cause was not established by this assertion. Splitting across test invocations cannot reliably retain the session.
+
+A single-case alternative was then compiled and run: lock via public Siri API, wait, send public Siri next, wait for real unlock, and inspect the same app without relaunch. In `/private/tmp/setu-p13-lock-session-1.xcresult` the first Siri activation timed out after the phone became locked, before the next command or unlock window executed. Case duration 69.887 seconds, exit 65. The alternative also provides no M-1/M-2 PASS. Installed public XCUIDeviceButton headers list Home, volume, Action and Camera, with no lock button. No private API, authentication bypass or fake route/playback change was used. These failure modes are distinct from a confirmed Setu playback bug. Further locked-system automation remains unresolved.

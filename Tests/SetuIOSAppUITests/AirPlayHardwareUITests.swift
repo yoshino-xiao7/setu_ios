@@ -95,29 +95,71 @@ final class AirPlayHardwareUITests: XCTestCase {
         let open = app.buttons["打开正在播放：夏夜微风"]
         XCTAssertTrue(open.waitForExistence(timeout: 10)); open.tap()
         try tapVisible("播放", in: app); try waitPhase("playing", app: app)
-        let before = try snapshot(app)
+        _ = try snapshot(app)
         print("P13_LOCK requesting_system_lock")
         XCUIDevice.shared.siriService.activate(voiceRecognitionText: "锁定屏幕")
         Thread.sleep(forTimeInterval: 15)
         print("P13_LOCK external_lock_state_check_window")
         Thread.sleep(forTimeInterval: 30)
+        // Siri locks and turns off the display; wake it before querying media controls.
+        // Home does not bypass the passcode or biometric authentication.
+        XCUIDevice.shared.press(.home)
+        Thread.sleep(forTimeInterval: 2)
         let spring = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         let next = spring.buttons.matching(NSPredicate(format: "label == '下一首'")).allElementsBoundByIndex.filter(\.isHittable)
         guard let button = next.first else {
             print("P13_LOCK no_accessible_system_next")
-            app.activate()
             throw NSError(domain: "P13LockAcceptance", code: 1, userInfo: [NSLocalizedDescriptionKey: "No accessible lock-screen next control; no lock acceptance claimed"])
         }
         button.tap()
         print("P13_LOCK system_next_invoked")
-        Thread.sleep(forTimeInterval: 3)
+        let expectedTitle = spring.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "沿着星光回家")).firstMatch
+        XCTAssertTrue(expectedTitle.waitForExistence(timeout: 10))
+        print("P13_LOCK system_next_metadata_verified_requires_external_lock_evidence")
+        // Reopening the application requires real user authentication. Resume
+        // inspection in the separate attach-only case after the user unlocks.
+    }
+
+    func testLockSiriNextAndUnlockInOneSession() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["SETU_P13_LOCK_SESSION"] == "1", "Opt-in single-session physical lock acceptance")
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing-root-player", "-ui-testing-lyrics-playback", "-ui-testing-airplay-hardware"]
+        app.launch()
+        let open = app.buttons["打开正在播放：夏夜微风"]
+        XCTAssertTrue(open.waitForExistence(timeout: 10)); open.tap()
+        try tapVisible("播放", in: app); try waitPhase("playing", app: app)
+        let before = try snapshot(app)
+        XCUIDevice.shared.siriService.activate(voiceRecognitionText: "锁定屏幕")
+        print("P13_LOCK_SESSION locked_observation_window")
+        Thread.sleep(forTimeInterval: 25)
+        XCUIDevice.shared.siriService.activate(voiceRecognitionText: "下一首")
+        print("P13_LOCK_SESSION unlock_only_window_90_seconds")
+        Thread.sleep(forTimeInterval: 90)
         app.activate()
         try waitPhase("playing", app: app)
         let after = try snapshot(app)
-        XCTAssertNotEqual(after["track"] as? Int, before["track"] as? Int)
+        XCTAssertEqual(after["track"] as? Int, 7102, "Real Siri remote next must change the fixture track")
         XCTAssertEqual(after["queue"] as? [Int], before["queue"] as? [Int])
+        XCTAssertEqual(after["avPlayerInstancesObserved"] as? Int, 1)
         XCTAssertEqual(after["error"] as? Bool, false)
-        print("P13_LOCK controls_completed_requires_external_lock_evidence")
+        try exercise(app, label: "single_session_post_lock")
+    }
+
+    func testResumeAfterSystemLockWithoutRelaunch() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["SETU_P13_LOCK_RESUME"] == "1", "Opt-in attach-only lock continuation")
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        XCTAssertNotEqual(app.state, .notRunning, "Must preserve the locked playback session")
+        app.activate()
+        try waitPhase("playing", app: app)
+        let after = try snapshot(app)
+        let expectedTrack = Int(ProcessInfo.processInfo.environment["SETU_P13_LOCK_EXPECTED_TRACK"] ?? "7102")
+        XCTAssertEqual(after["track"] as? Int, expectedTrack)
+        XCTAssertEqual(after["queue"] as? [Int], [7101, 7102, 7103])
+        XCTAssertEqual(after["avPlayerInstancesObserved"] as? Int, 1)
+        XCTAssertEqual(after["error"] as? Bool, false)
+        try exercise(app, label: "post_lock")
     }
 
     private func exercise(_ app: XCUIApplication, label: String) throws {
