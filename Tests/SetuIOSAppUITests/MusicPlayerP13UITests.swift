@@ -148,6 +148,7 @@ final class P13PageAX5AuditUITests: XCTestCase {
     func testReleaseAlbums() throws { try audit("releaseAlbums") }
     func testSearchAlbums() throws { try audit("searchAlbums") }
     func testSearchArtists() throws { try audit("searchArtists") }
+    func testCreatePlaylist() throws { try audit("createPlaylist") }
 
     private func audit(_ page: String) throws {
         continueAfterFailure = false
@@ -165,15 +166,22 @@ final class P13PageAX5AuditUITests: XCTestCase {
         app.launchArguments = args + ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityExtraExtraExtraLarge"]
         app.launch(); defer { app.terminate() }
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10))
-        if page == "history" || page == "playlists" || page == "legacyPlaylistDetail" {
+        if page == "history" || page == "playlists" || page == "legacyPlaylistDetail" || page == "createPlaylist" {
             let button = app.buttons[page == "history" ? "查看全部播放历史" : "管理全部歌单"].firstMatch
             for _ in 0..<6 where !button.isHittable { app.swipeUp() }
             XCTAssertTrue(button.isHittable)
             if page == "history" { button.tap() } else { button.staticTexts["管理全部歌单"].tap() }
             XCTAssertTrue(app.navigationBars[page == "history" ? "播放历史" : "我的歌单"].waitForExistence(timeout: 10))
+            if page == "createPlaylist" {
+                let create = app.buttons["创建歌单"]
+                XCTAssertTrue(create.waitForExistence(timeout: 10)); create.tap()
+                XCTAssertTrue(app.navigationBars["新建歌单"].waitForExistence(timeout: 10))
+            }
             if page == "legacyPlaylistDetail" {
                 let row = app.buttons["music.playlists.row.7401"]
-                XCTAssertTrue(row.waitForExistence(timeout: 10)); row.tap()
+                for _ in 0..<6 where !row.isHittable { app.swipeUp() }
+                XCTAssertTrue(row.isHittable); row.tap()
+                XCTAssertTrue(app.navigationBars["歌单详情"].waitForExistence(timeout: 10))
             }
         } else if page.hasPrefix("search") {
             let field = app.textFields["搜索歌曲、歌手或专辑"].firstMatch

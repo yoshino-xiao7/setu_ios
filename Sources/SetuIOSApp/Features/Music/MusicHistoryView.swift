@@ -228,7 +228,7 @@ private struct MusicHistoryIconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.headline.weight(.semibold))
+                .font(.system(size: 20, weight: .semibold))
                 .foregroundStyle(tint)
                 .frame(width: 44, height: 44)
                 .background(tint.opacity(0.12), in: Circle())

@@ -124,5 +124,96 @@
     "seconds": 13.151,
     "bundle": "p13-m11-additional-1.xcresult",
     "coverage": "BLOCKED: test navigation/selector; corrected test pending"
+  },
+  {
+    "test": "testHistory",
+    "executionResult": "failed",
+    "seconds": 13.081,
+    "bundle": "p13-m11-navigation-final.xcresult",
+    "coverage": "See acceptance.md for navigation correction, production fix and remaining audit finding boundaries"
+  },
+  {
+    "test": "testLegacyPlaylistDetail",
+    "executionResult": "failed",
+    "seconds": 24.373,
+    "bundle": "p13-m11-navigation-final.xcresult",
+    "coverage": "See acceptance.md for navigation correction, production fix and remaining audit finding boundaries"
+  },
+  {
+    "test": "testPlaylists",
+    "executionResult": "passed",
+    "seconds": 27.978,
+    "bundle": "p13-m11-navigation-final.xcresult",
+    "coverage": "See acceptance.md for navigation correction, production fix and remaining audit finding boundaries"
+  },
+  {
+    "test": "testSearch",
+    "executionResult": "failed",
+    "seconds": 75.421,
+    "bundle": "p13-m11-navigation-final.xcresult",
+    "coverage": "See acceptance.md for navigation correction, production fix and remaining audit finding boundaries"
+  },
+  {
+    "test": "testSearchAlbums",
+    "executionResult": "failed",
+    "seconds": 16.315,
+    "bundle": "p13-m11-navigation-final.xcresult",
+    "coverage": "See acceptance.md for navigation correction, production fix and remaining audit finding boundaries"
+  },
+  {
+    "test": "testSearchArtists",
+    "executionResult": "failed",
+    "seconds": 16.291,
+    "bundle": "p13-m11-navigation-final.xcresult",
+    "coverage": "See acceptance.md for navigation correction, production fix and remaining audit finding boundaries"
+  },
+  {
+    "test": "testCreatePlaylist",
+    "executionResult": "failed",
+    "seconds": 22.319,
+    "bundle": "p13-m11-submit-fix.xcresult",
+    "coverage": "See acceptance.md for navigation correction, production fix and remaining audit finding boundaries"
+  },
+  {
+    "test": "testLegacyPlaylistDetail",
+    "executionResult": "passed",
+    "seconds": 35.133,
+    "bundle": "p13-m11-submit-fix.xcresult",
+    "coverage": "See acceptance.md for navigation correction, production fix and remaining audit finding boundaries"
+  },
+  {
+    "test": "testSearch",
+    "executionResult": "failed",
+    "seconds": 9.164,
+    "bundle": "p13-m11-submit-fix.xcresult",
+    "coverage": "See acceptance.md for navigation correction, production fix and remaining audit finding boundaries"
+  },
+  {
+    "test": "testSearchAlbums",
+    "executionResult": "failed",
+    "seconds": 12.234,
+    "bundle": "p13-m11-submit-fix.xcresult",
+    "coverage": "See acceptance.md for navigation correction, production fix and remaining audit finding boundaries"
+  },
+  {
+    "test": "testSearchArtists",
+    "executionResult": "failed",
+    "seconds": 12.247,
+    "bundle": "p13-m11-submit-fix.xcresult",
+    "coverage": "See acceptance.md for navigation correction, production fix and remaining audit finding boundaries"
+  },
+  {
+    "test": "testHistory",
+    "executionResult": "failed",
+    "seconds": 9.962,
+    "bundle": "p13-m11-history-wrap.xcresult",
+    "coverage": "See acceptance.md for navigation correction, production fix and remaining audit finding boundaries"
+  },
+  {
+    "test": "testHistory",
+    "executionResult": "failed",
+    "seconds": 9.974,
+    "bundle": "p13-m11-history-icons.xcresult",
+    "coverage": "See acceptance.md for navigation correction, production fix and remaining audit finding boundaries"
   }
 ]

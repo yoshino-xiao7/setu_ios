@@ -34,3 +34,23 @@ This evidence does not provide a direct remote-command receipt event (the existi
 
 
 The user was asked only to unlock after the successful lock/next capture so the remaining App-page AX5 audits can run; the latest check still reports locked. No repeated media action is requested. The corrected AX5 navigation/selector tests compiled successfully in `/private/tmp/p13-m11-navigation-build.log` but remain unexecuted pending unlock.
+
+
+## Post-unlock AX5 follow-up
+
+The corrected Root-route matrix ran after user unlock. Library playlists now genuinely reached 我的歌单 and passed three viewports; the old preview-host result stays invalidated. Legacy playlist detail required scrolling its virtualized list row into view; the subsequent targeted case reached 歌单详情 and passed three viewports. A 新建歌单 modal audit was also executed and reported Text clipped on the multiline public-playlist toggle label.
+
+### Two confirmed production corrections
+
+1. At AX5 the Home search entry is a TextField. Source listened only for `.search` submissions; all three search cases typed and submitted but never reached 搜索音乐. Changing to `.onSubmit(of: [.text, .search])` let all three reach the destination and execute their audits in `p13-m11-submit-fix.xcresult`. Their audits still report Text clipped on the 搜索音乐 button; navigation success is not claimed as whole-page acceptance.
+2. Full physical history screenshots showed the private MusicHistoryIconButton play/add symbols overlapping at AX5. Its font is now bounded at 20pt, preserving 44×44pt frames. The final `p13-m11-history-icons.xcresult` screenshot was reviewed and shows separated, contained icons. The audit still flags the timestamp Label.
+
+A timestamp wrapping experiment did not change the reported finding and was reverted. Crucially, the full history screenshot shows the complete time text; its element-only attachment crops hanging lines outside the issue bounding rectangle. The earlier inference of actual timestamp clipping from that cropped attachment is withdrawn. No timestamp/content rewrite is retained. Similar Label findings are not automatically waived or presented as system timeouts; they remain unresolved for strict audit closure.
+
+Only the two one-line production edits above remain. No Backend, Frozen, cutover flags, ordinary-size 管理全部歌单 fix, AirPlay rerun, or P14 changes. The separate user checkout remains untouched.
+
+### Validation accounting
+
+One Swift full run was started after the search production correction: 287 executed, 286 passed, one failure in `NotificationClientTests/testNotificationsAcceptFrontendCompatiblePayloadShapes` at its exact URL-string assertion (line 63). A single isolated `swift test --skip-build --filter NotificationClientTests/testNotificationsAcceptFrontendCompatiblePayloadShapes` passed. No notification code was changed, no full rerun was performed, and the original full result is not relabeled green. The later retained history-icon correction was compiled and inspected in its targeted physical run. Logs: `/private/tmp/p13-remaining-full-once.log`, `/private/tmp/p13-notification-isolated.log`. `git diff --check` passes.
+
+M-11 remains BLOCKED: audited controls have unresolved Text clipped reports, coverage is viewport-specific, and some modal surfaces still lack audited evidence. Lock-screen next/continuation remains confirmed; aggregate M-2 still lacks complete artwork/previous/remote seek evidence. M-9 remains EXTERNAL TOOLING BLOCKER and was not retried.

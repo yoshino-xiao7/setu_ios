@@ -68,7 +68,7 @@ struct MusicHomeView: View {
                 usesNavigationSearch: !dynamicTypeSize.isAccessibilitySize
             )
         )
-        .onSubmit(of: .search) {
+        .onSubmit(of: [.text, .search]) {
             openSearch()
         }
         .navigationTitle("音乐")
