@@ -1,0 +1,97 @@
+{
+  "action": "User confirmed lock-screen seek to approximately 3:00",
+  "before": {
+    "artistMatches": true,
+    "avPlayerInstancesObserved": 1,
+    "buffering": false,
+    "controllerTime": 56.000131967,
+    "error": false,
+    "index": 0,
+    "lyricIndex": 56,
+    "miniInstances": 1,
+    "nowPlayingElapsed": 56.000131967,
+    "observedAt": 1788590917.676754,
+    "parses": 3,
+    "phase": "playing",
+    "playing": true,
+    "queue": [
+      7101,
+      7102,
+      7103
+    ],
+    "rate": 1,
+    "route": [
+      "Speaker"
+    ],
+    "routeEvents": 1,
+    "routeReason": 3,
+    "sleepTimer": false,
+    "time": 56.75821747,
+    "titleMatches": true,
+    "track": 7101,
+    "urlRequests": 3
+  },
+  "after": {
+    "artistMatches": true,
+    "avPlayerInstancesObserved": 1,
+    "buffering": false,
+    "controllerTime": 180.718333333,
+    "error": false,
+    "index": 0,
+    "lyricIndex": 180,
+    "miniInstances": 1,
+    "nowPlayingElapsed": 180.718333333,
+    "observedAt": 1788590918.201132,
+    "parses": 3,
+    "phase": "playing",
+    "playing": true,
+    "queue": [
+      7101,
+      7102,
+      7103
+    ],
+    "rate": 1,
+    "route": [
+      "Speaker"
+    ],
+    "routeEvents": 1,
+    "routeReason": 3,
+    "sleepTimer": false,
+    "time": 180.718333333,
+    "titleMatches": true,
+    "track": 7101,
+    "urlRequests": 3
+  },
+  "continued": {
+    "artistMatches": true,
+    "avPlayerInstancesObserved": 1,
+    "buffering": false,
+    "controllerTime": 231.000097363,
+    "error": false,
+    "index": 0,
+    "lyricIndex": 231,
+    "miniInstances": 1,
+    "nowPlayingElapsed": 231.000097363,
+    "observedAt": 1788590972.1083,
+    "parses": 3,
+    "phase": "playing",
+    "playing": true,
+    "queue": [
+      7101,
+      7102,
+      7103
+    ],
+    "rate": 1,
+    "route": [
+      "Speaker"
+    ],
+    "routeEvents": 1,
+    "routeReason": 3,
+    "sleepTimer": false,
+    "time": 231.234257113,
+    "titleMatches": true,
+    "track": 7101,
+    "urlRequests": 3
+  },
+  "limit": "Native MPNowPlaying progress and playback evidence; no screenshot of system media presentation or direct command receipt event"
+}

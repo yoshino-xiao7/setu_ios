@@ -172,6 +172,11 @@ final class AirPlayHardwareUITests: XCTestCase {
         XCTAssertTrue(open.waitForExistence(timeout: 10)); open.tap()
         try tapVisible("播放", in: app); try waitPhase("playing", app: app)
         _ = try snapshot(app)
+        if ProcessInfo.processInfo.environment["SETU_P13_PREPARE_PREVIOUS"] == "1" {
+            app.buttons["下一首"].tap()
+            try waitPhase("playing", app: app)
+            XCTAssertEqual(try snapshot(app)["track"] as? Int, 7102)
+        }
         print("P13_MANUAL_REMOTE_READY native_console_observation_window_180_seconds")
         Thread.sleep(forTimeInterval: 180)
         // This is a preparation window, not a remote-command PASS assertion.

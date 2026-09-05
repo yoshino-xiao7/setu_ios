@@ -5,6 +5,7 @@ import UIKit
 #endif
 
 struct MusicQueueDrawerView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var player: MusicPlaybackController
     let onDismiss: () -> Void
 
@@ -27,7 +28,8 @@ struct MusicQueueDrawerView: View {
                     Text(queueCaption)
                         .font(SetuTypography.caption)
                         .foregroundStyle(SetuColor.textSecondary)
-                        .lineLimit(1)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Spacer()
@@ -39,7 +41,7 @@ struct MusicQueueDrawerView: View {
                         showFeedback(.success("已清空待播歌曲"))
                     } label: {
                         Image(systemName: "trash")
-                            .font(.subheadline.weight(.semibold))
+                            .font(.system(size: 20, weight: .semibold))
                             .frame(width: 44, height: 44)
                     }
                     .setuButtonFeedback(cornerRadius: 22)
@@ -50,7 +52,7 @@ struct MusicQueueDrawerView: View {
                     onDismiss()
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.subheadline.weight(.bold))
+                        .font(.system(size: 20, weight: .bold))
                         .foregroundStyle(SetuColor.textSecondary)
                         .frame(width: 44, height: 44)
                         .background(SetuColor.surfaceMuted, in: Circle())
@@ -144,6 +146,7 @@ struct MusicQueueDrawerView: View {
 }
 
 private struct MusicQueueDrawerRow: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let track: MusicPlaybackTrack
     let isCurrent: Bool
     let isPlaying: Bool
@@ -166,16 +169,20 @@ private struct MusicQueueDrawerRow: View {
                     Text(track.title)
                         .font(.subheadline.weight(isCurrent ? .semibold : .regular))
                         .foregroundStyle(isCurrent ? SetuColor.brandInk : SetuColor.textPrimary)
-                        .lineLimit(1)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                        .fixedSize(horizontal: false, vertical: true)
                     Text(track.artist)
                         .font(.caption)
                         .foregroundStyle(SetuColor.textSecondary)
-                        .lineLimit(1)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                 .contentShape(Rectangle())
             }
             .setuButtonFeedback()
+            .accessibilityLabel("\(track.title)，\(track.artist)")
+            .accessibilityValue(isCurrent ? (isPlaying ? "正在播放" : "已暂停") : "待播放")
             .disabled(isCurrent)
 
             if isCurrent {

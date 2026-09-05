@@ -202,6 +202,7 @@ private struct CreatePlaylistSheet: View {
                     SetuCard {
                         VStack(alignment: .leading, spacing: SetuSpacing.md) {
                             SetuSectionHeader(title: "歌单信息", subtitle: "创建后可继续添加歌曲")
+                                .fixedSize(horizontal: false, vertical: true)
                             TextField("名称", text: $name)
                                 .textFieldStyle(.roundedBorder)
                             TextField("描述", text: $description, axis: .vertical)
