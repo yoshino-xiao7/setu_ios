@@ -20,3 +20,16 @@ The combined system-acceptance-2 bundle contains the then-failing appearance cas
 - M-11 all music pages at AX5; existing P13 player and hosted width checks do not establish all-page coverage.
 
 The installed SDK exposes XCTOSSignpostMetric.scrollingAndDecelerationMetric, which can collect frame rate/count and hitch metrics. This is a potential next measurement path despite standalone Instruments reporting the phone offline; no result from it is claimed yet.
+
+
+## Lock-screen attempt readiness — 2026-09-05
+
+The opt-in lock-screen attempt in `/private/tmp/setu-p13-lock-attempt-1.xcresult` never reached a test case: Xcode reported the physical device locked and waited for readiness. The same process was polled across three consecutive goal turns, then returned exit 65 / TEST FAILED with “Lost pending connection to the test runner before launch”. The final runner error does not independently prove why the connection was lost. A fresh CoreDevice lock-state check still returned `passcodeRequired=true`. This is an infrastructure readiness failure, not a demonstrated playback failure, and provides no lock-screen PASS. The process is now terminal; a new targeted invocation after physical unlock is necessary. Post-correction AX5 rendering also remains pending. No full Swift suite was repeated.
+
+
+## Unlocked device and runner handshake follow-up
+
+CoreDevice subsequently reported `passcodeRequired=false`. The authorized AX5 correction then passed its physical hosted test, confirming that device test execution was possible for the application unit-test host. UI-test attempts 2 and 3 reused the built product; attempt 4 regenerated the single-case test configuration; attempt 5 reinstalled only `icu.yukiryou.setuios.uitests.xctrunner` and reused the signed product. All terminated before a test case started, with runner exit 74 and XCTest IDE-channel refusal/disconnection. Xcode's foreground window was the welcome screen, not another active project test. The clean runner reinstall did not uninstall Setu or touch its user data. No lock-screen behavior was exercised; these are infrastructure failures, not playback failures. Each result is `/private/tmp/setu-p13-lock-attempt-N.xcresult` for N=2..5. A single physical cable reconnect with the phone unlocked was requested after these scoped automatic recovery attempts. No user completion of that action is recorded yet.
+
+
+A subsequent read-only readiness check reports CoreDevice `transportType=localNetwork`, `pairingState=paired`, `tunnelState=connected`, developer mode enabled and DDI services available. `system_profiler SPUSBDataType -json` contains no iPhone entry. Thus current evidence no longer establishes a wired connection, though it does establish network discovery and pairing. This does not by itself prove the cause of the XCTest channel refusal. Restoring the physical data connection is the next isolated recovery step; no pairing, network or unrelated system setting was changed.

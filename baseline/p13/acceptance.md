@@ -95,3 +95,8 @@ The P13 mask now batches its syllable rectangles into a single Path fill instead
 ## Authorized shared-icon AX5 correction — 2026-09-05
 
 The user approved only the one-line MusicIconButton font bound after the M-11 scope conflict was presented. The 44-point target is preserved; the unrelated 管理全部歌单 baseline is untouched. See [AX5 evidence](ax5/acceptance.md). Post-fix search-row device rendering passes 1/1; all six size/width images were reviewed and confirm the authorized overlap correction. Full M-11 coverage is not inferred from this row test. The separate lock-screen attempt did not execute: it waited for device unlock and then terminated with exit 65. CoreDevice still requires a passcode; see system evidence. No lock-screen acceptance is claimed.
+
+
+## Current follow-up state
+
+Authorized shared-icon AX5 correction committed as `1f353cf`; physical search-row rendering and review pass at both widths and all three text sizes. The phone later unlocked, superseding the lock-state blocker. UI-test execution now fails during XCTest IDE handshake even after scoped automatic runner recovery; see system evidence. Full locked-screen/M-2, M-9 and complete M-11 acceptance remain open, so P13 is not yet claimed MERGE-READY.

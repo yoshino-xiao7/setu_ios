@@ -86,6 +86,40 @@ final class AirPlayHardwareUITests: XCTestCase {
         // Home backgrounding does not claim a lock-screen acceptance.
     }
 
+    func testSystemLockScreenPlaybackAttempt() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["SETU_P13_LOCK_ACCEPTANCE"] == "1", "Opt-in system lock-screen acceptance")
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing-root-player", "-ui-testing-lyrics-playback", "-ui-testing-airplay-hardware"]
+        app.launch()
+        let open = app.buttons["打开正在播放：夏夜微风"]
+        XCTAssertTrue(open.waitForExistence(timeout: 10)); open.tap()
+        try tapVisible("播放", in: app); try waitPhase("playing", app: app)
+        let before = try snapshot(app)
+        print("P13_LOCK requesting_system_lock")
+        XCUIDevice.shared.siriService.activate(voiceRecognitionText: "锁定屏幕")
+        Thread.sleep(forTimeInterval: 15)
+        print("P13_LOCK external_lock_state_check_window")
+        Thread.sleep(forTimeInterval: 30)
+        let spring = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let next = spring.buttons.matching(NSPredicate(format: "label == '下一首'")).allElementsBoundByIndex.filter(\.isHittable)
+        guard let button = next.first else {
+            print("P13_LOCK no_accessible_system_next")
+            app.activate()
+            throw NSError(domain: "P13LockAcceptance", code: 1, userInfo: [NSLocalizedDescriptionKey: "No accessible lock-screen next control; no lock acceptance claimed"])
+        }
+        button.tap()
+        print("P13_LOCK system_next_invoked")
+        Thread.sleep(forTimeInterval: 3)
+        app.activate()
+        try waitPhase("playing", app: app)
+        let after = try snapshot(app)
+        XCTAssertNotEqual(after["track"] as? Int, before["track"] as? Int)
+        XCTAssertEqual(after["queue"] as? [Int], before["queue"] as? [Int])
+        XCTAssertEqual(after["error"] as? Bool, false)
+        print("P13_LOCK controls_completed_requires_external_lock_evidence")
+    }
+
     private func exercise(_ app: XCUIApplication, label: String) throws {
         try waitPhase("playing", app: app)
         let before = try snapshot(app)
