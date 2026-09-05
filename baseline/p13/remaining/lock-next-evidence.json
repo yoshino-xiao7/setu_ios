@@ -1,0 +1,133 @@
+{
+  "manualAssistance": "User locked iPhone and pressed next once, then confirmed completion",
+  "devicePasscodeRequiredAfterAction": true,
+  "before": {
+    "artistMatches": true,
+    "avPlayerInstancesObserved": 1,
+    "buffering": false,
+    "controllerTime": 517.0005553,
+    "error": false,
+    "index": 0,
+    "lyricIndex": 517,
+    "miniInstances": 1,
+    "nowPlayingElapsed": 517.0005553,
+    "observedAt": 1788588457.05514,
+    "parses": 1,
+    "phase": "playing",
+    "playing": true,
+    "queue": [
+      7101,
+      7102,
+      7103
+    ],
+    "rate": 1,
+    "route": [
+      "Speaker"
+    ],
+    "routeEvents": 1,
+    "routeReason": 3,
+    "sleepTimer": false,
+    "time": 517.050093205,
+    "titleMatches": true,
+    "track": 7101,
+    "urlRequests": 2
+  },
+  "after": {
+    "artistMatches": true,
+    "avPlayerInstancesObserved": 1,
+    "buffering": false,
+    "controllerTime": 0,
+    "error": false,
+    "index": 1,
+    "lyricIndex": 0,
+    "miniInstances": 1,
+    "nowPlayingElapsed": 0,
+    "observedAt": 1788588457.5808551,
+    "parses": 2,
+    "phase": "playing",
+    "playing": true,
+    "queue": [
+      7101,
+      7102,
+      7103
+    ],
+    "rate": 1,
+    "route": [
+      "Speaker"
+    ],
+    "routeEvents": 1,
+    "routeReason": 3,
+    "sleepTimer": false,
+    "time": 0.124140948,
+    "titleMatches": true,
+    "track": 7102,
+    "urlRequests": 3
+  },
+  "later": {
+    "artistMatches": true,
+    "avPlayerInstancesObserved": 1,
+    "buffering": false,
+    "controllerTime": 77.000155472,
+    "error": false,
+    "index": 1,
+    "lyricIndex": 77,
+    "miniInstances": 1,
+    "nowPlayingElapsed": 77.000155472,
+    "observedAt": 1788588535.2274969,
+    "parses": 2,
+    "phase": "playing",
+    "playing": true,
+    "queue": [
+      7101,
+      7102,
+      7103
+    ],
+    "rate": 1,
+    "route": [
+      "Speaker"
+    ],
+    "routeEvents": 1,
+    "routeReason": 3,
+    "sleepTimer": false,
+    "time": 77.770960801,
+    "titleMatches": true,
+    "track": 7102,
+    "urlRequests": 3
+  },
+  "playingBaseline": {
+    "artistMatches": true,
+    "avPlayerInstancesObserved": 1,
+    "buffering": true,
+    "controllerTime": 83,
+    "error": false,
+    "index": 0,
+    "lyricIndex": 0,
+    "miniInstances": 1,
+    "nowPlayingElapsed": 83,
+    "observedAt": 1788588022.801762,
+    "parses": 1,
+    "phase": "loading",
+    "playing": true,
+    "queue": [
+      7101,
+      7102,
+      7103
+    ],
+    "rate": 0,
+    "route": [
+      "Speaker"
+    ],
+    "routeEvents": 1,
+    "routeReason": 3,
+    "sleepTimer": false,
+    "time": 0,
+    "titleMatches": true,
+    "track": 7101,
+    "urlRequests": 1
+  },
+  "sameQueue": true,
+  "postSwitchSinglePlayer": true,
+  "observedErrors": 0,
+  "postSwitchMetadataMatches": true,
+  "directCommandReceiptLogAvailable": false
+}

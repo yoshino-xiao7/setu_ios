@@ -162,6 +162,22 @@ final class AirPlayHardwareUITests: XCTestCase {
         try exercise(app, label: "post_lock")
     }
 
+    func testPrepareManualRemoteWindow() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["SETU_P13_MANUAL_REMOTE"] == "1", "Opt-in native-console manual remote evidence")
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        XCTAssertNotEqual(app.state, .notRunning, "Native-console fixture must already be running")
+        app.activate()
+        let open = app.buttons["打开正在播放：夏夜微风"]
+        XCTAssertTrue(open.waitForExistence(timeout: 10)); open.tap()
+        try tapVisible("播放", in: app); try waitPhase("playing", app: app)
+        _ = try snapshot(app)
+        print("P13_MANUAL_REMOTE_READY native_console_observation_window_180_seconds")
+        Thread.sleep(forTimeInterval: 180)
+        // This is a preparation window, not a remote-command PASS assertion.
+        // Native-console telemetry is evaluated independently before/after the user action.
+    }
+
     private func exercise(_ app: XCUIApplication, label: String) throws {
         try waitPhase("playing", app: app)
         let before = try snapshot(app)

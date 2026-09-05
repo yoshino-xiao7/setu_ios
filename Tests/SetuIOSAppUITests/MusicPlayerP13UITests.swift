@@ -128,3 +128,80 @@ final class MusicPlayerP13UITests: XCTestCase {
         XCTAssertTrue(app.buttons["睡眠定时"].waitForExistence(timeout: 5))
     }
 }
+
+final class P13PageAX5AuditUITests: XCTestCase {
+    func testLegacyHome() throws { try audit("legacyHome") }
+    func testDiscoveryHome() throws { try audit("home") }
+    func testDaily() throws { try audit("dailyRecommend") }
+    func testReleases() throws { try audit("newReleases") }
+    func testRankings() throws { try audit("rankings") }
+    func testPlaylist() throws { try audit("playlist") }
+    func testAlbum() throws { try audit("album") }
+    func testArtist() throws { try audit("artist") }
+    func testHistory() throws { try audit("history") }
+    func testPlaylists() throws { try audit("playlists") }
+    func testSearch() throws { try audit("search") }
+    func testPlayer() throws { try audit("player") }
+    func testLyrics() throws { try audit("lyrics") }
+    func testQueue() throws { try audit("queue") }
+    func testLegacyPlaylistDetail() throws { try audit("legacyPlaylistDetail") }
+    func testReleaseAlbums() throws { try audit("releaseAlbums") }
+    func testSearchAlbums() throws { try audit("searchAlbums") }
+    func testSearchArtists() throws { try audit("searchArtists") }
+
+    private func audit(_ page: String) throws {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        var args = ["-ui-testing-root-music"]
+        if ["home", "dailyRecommend", "newReleases", "rankings", "releaseAlbums"].contains(page) {
+            args += ["-ui-testing-music-discover", "-ui-testing-discover-page", page == "releaseAlbums" ? "newReleases" : page]
+        } else if ["playlist", "album", "artist"].contains(page) {
+            args += ["-ui-testing-music-details", "-ui-testing-detail-page", page]
+        } else if ["player", "lyrics", "queue"].contains(page) {
+            args = ["-ui-testing-root-player"]
+        } else if page.hasPrefix("search") {
+            args += ["-ui-testing-music-search-pages"]
+        } else { args = ["-ui-testing-root-music"] }
+        app.launchArguments = args + ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityExtraExtraExtraLarge"]
+        app.launch(); defer { app.terminate() }
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10))
+        if page == "history" || page == "playlists" || page == "legacyPlaylistDetail" {
+            let button = app.buttons[page == "history" ? "查看全部播放历史" : "管理全部歌单"].firstMatch
+            for _ in 0..<6 where !button.isHittable { app.swipeUp() }
+            XCTAssertTrue(button.isHittable)
+            if page == "history" { button.tap() } else { button.staticTexts["管理全部歌单"].tap() }
+            XCTAssertTrue(app.navigationBars[page == "history" ? "播放历史" : "我的歌单"].waitForExistence(timeout: 10))
+            if page == "legacyPlaylistDetail" {
+                let row = app.buttons["music.playlists.row.7401"]
+                XCTAssertTrue(row.waitForExistence(timeout: 10)); row.tap()
+            }
+        } else if page.hasPrefix("search") {
+            let field = app.textFields["搜索歌曲、歌手或专辑"].firstMatch
+            for _ in 0..<3 where !field.exists { app.swipeDown() }
+            let initial = XCTAttachment(screenshot: app.screenshot()); initial.name = "p13-search-entry-AX5"; initial.lifetime = .keepAlways; add(initial)
+            XCTAssertTrue(field.waitForExistence(timeout: 10)); field.tap(); field.typeText("测试\n")
+            XCTAssertTrue(app.navigationBars["搜索音乐"].waitForExistence(timeout: 10))
+            if page != "search" { app.segmentedControls.buttons[page == "searchAlbums" ? "专辑" : "歌手"].tap() }
+        } else if page == "releaseAlbums" {
+            XCTAssertTrue(app.buttons["新专辑"].waitForExistence(timeout: 10)); app.buttons["新专辑"].tap()
+        } else if page == "queue" {
+            let queue = app.buttons["查看当前播放列表"]
+            XCTAssertTrue(queue.waitForExistence(timeout: 10)); queue.tap()
+        } else if page == "player" || page == "lyrics" {
+            let open = app.buttons["打开正在播放：夏夜微风"]
+            XCTAssertTrue(open.waitForExistence(timeout: 10)); open.tap()
+            if page == "lyrics" { app.buttons["歌曲封面，点击查看歌词"].tap() }
+        }
+        for viewport in 0..<3 {
+            print("P13_AX5_AUDIT_BEGIN page=\(page) viewport=\(viewport)")
+            let shot = XCTAttachment(screenshot: app.screenshot())
+            shot.name = "p13-AX5-\(page)-\(viewport)"; shot.lifetime = .keepAlways; add(shot)
+            // The fixture explicitly pins AX5. A font-switching audit cannot change it;
+            // audit actual AX5 clipping/elements without treating that harness limit as a pass.
+            try app.performAccessibilityAudit(for: [.textClipped, .elementDetection])
+            print("P13_AX5_AUDIT_PASS page=\(page) viewport=\(viewport)")
+            if page == "player" { break }
+            app.swipeUp()
+        }
+    }
+}

@@ -1,0 +1,128 @@
+[
+  {
+    "test": "testAlbum",
+    "executionResult": "failed",
+    "seconds": 8.778,
+    "bundle": "p13-m11-audits-2.xcresult",
+    "coverage": "UNRESOLVED audit finding; not classified as system timeout or proven App overlap"
+  },
+  {
+    "test": "testArtist",
+    "executionResult": "failed",
+    "seconds": 9.643,
+    "bundle": "p13-m11-audits-2.xcresult",
+    "coverage": "UNRESOLVED audit finding; not classified as system timeout or proven App overlap"
+  },
+  {
+    "test": "testDaily",
+    "executionResult": "failed",
+    "seconds": 8.132,
+    "bundle": "p13-m11-audits-2.xcresult",
+    "coverage": "UNRESOLVED audit finding; not classified as system timeout or proven App overlap"
+  },
+  {
+    "test": "testDiscoveryHome",
+    "executionResult": "passed",
+    "seconds": 23.19,
+    "bundle": "p13-m11-audits-2.xcresult",
+    "coverage": "Captured viewports only; not whole-page/all-state acceptance"
+  },
+  {
+    "test": "testHistory",
+    "executionResult": "passed",
+    "seconds": 20.839,
+    "bundle": "p13-m11-audits-2.xcresult",
+    "coverage": "INVALIDATED: preview navigation did not establish destination"
+  },
+  {
+    "test": "testLegacyHome",
+    "executionResult": "passed",
+    "seconds": 20.061,
+    "bundle": "p13-m11-audits-2.xcresult",
+    "coverage": "Captured viewports only; not whole-page/all-state acceptance"
+  },
+  {
+    "test": "testLyrics",
+    "executionResult": "passed",
+    "seconds": 77.13,
+    "bundle": "p13-m11-audits-2.xcresult",
+    "coverage": "Captured viewports only; not whole-page/all-state acceptance"
+  },
+  {
+    "test": "testPlayer",
+    "executionResult": "passed",
+    "seconds": 7.778,
+    "bundle": "p13-m11-audits-2.xcresult",
+    "coverage": "Captured viewports only; not whole-page/all-state acceptance"
+  },
+  {
+    "test": "testPlaylist",
+    "executionResult": "failed",
+    "seconds": 4.499,
+    "bundle": "p13-m11-audits-2.xcresult",
+    "coverage": "UNRESOLVED audit finding; not classified as system timeout or proven App overlap"
+  },
+  {
+    "test": "testPlaylists",
+    "executionResult": "passed",
+    "seconds": 30.144,
+    "bundle": "p13-m11-audits-2.xcresult",
+    "coverage": "INVALIDATED: preview navigation did not establish destination"
+  },
+  {
+    "test": "testRankings",
+    "executionResult": "passed",
+    "seconds": 13.469,
+    "bundle": "p13-m11-audits-2.xcresult",
+    "coverage": "Captured viewports only; not whole-page/all-state acceptance"
+  },
+  {
+    "test": "testReleases",
+    "executionResult": "failed",
+    "seconds": 4.553,
+    "bundle": "p13-m11-audits-2.xcresult",
+    "coverage": "UNRESOLVED audit finding; not classified as system timeout or proven App overlap"
+  },
+  {
+    "test": "testSearch",
+    "executionResult": "failed",
+    "seconds": 13.002,
+    "bundle": "p13-m11-audits-2.xcresult",
+    "coverage": "BLOCKED: test navigation/selector; corrected test pending"
+  },
+  {
+    "test": "testLegacyPlaylistDetail",
+    "executionResult": "failed",
+    "seconds": 23.333,
+    "bundle": "p13-m11-additional-1.xcresult",
+    "coverage": "BLOCKED: test navigation/selector; corrected test pending"
+  },
+  {
+    "test": "testQueue",
+    "executionResult": "failed",
+    "seconds": 8.303,
+    "bundle": "p13-m11-additional-1.xcresult",
+    "coverage": "UNRESOLVED audit finding; not classified as system timeout or proven App overlap"
+  },
+  {
+    "test": "testReleaseAlbums",
+    "executionResult": "passed",
+    "seconds": 18.187,
+    "bundle": "p13-m11-additional-1.xcresult",
+    "coverage": "Captured viewports only; not whole-page/all-state acceptance"
+  },
+  {
+    "test": "testSearchAlbums",
+    "executionResult": "failed",
+    "seconds": 12.151,
+    "bundle": "p13-m11-additional-1.xcresult",
+    "coverage": "BLOCKED: test navigation/selector; corrected test pending"
+  },
+  {
+    "test": "testSearchArtists",
+    "executionResult": "failed",
+    "seconds": 13.151,
+    "bundle": "p13-m11-additional-1.xcresult",
+    "coverage": "BLOCKED: test navigation/selector; corrected test pending"
+  }
+]
