@@ -1,0 +1,38 @@
+
+/// Opt-in live development probe. No mock protocol, fixture arguments, credentials
+/// or persisted defaults; all requests use the normal App transport and session.
+final class RadioFMDevelopmentUITests: XCTestCase {
+    func testDevelopmentFMEntryAndPlayback() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-SETU_API_BASE_URL", "https://api.yukiryou.icu",
+            "-SETU_MUSIC_USES_V2_HOME", "YES", "-SETU_MUSIC_RADIO_FM_ENABLED", "YES"]
+        app.launch()
+        defer { app.terminate() }
+        let music = app.buttons["音乐"].firstMatch
+        guard music.waitForExistence(timeout: 15) else {
+            throw XCTSkip("REAL_FM_BLOCKED: normal session/music entry unavailable")
+        }
+        music.tap()
+        let radio = app.buttons.matching(NSPredicate(format: "label CONTAINS 'FM' OR label CONTAINS '电台'")).firstMatch
+        guard radio.waitForExistence(timeout: 20) else {
+            let errors = app.staticTexts.matching(NSPredicate(format: "label CONTAINS '不可用' OR label CONTAINS '维护' OR label CONTAINS '登录' OR label CONTAINS '失败' OR label CONTAINS '重试' OR label CONTAINS '网络'"))
+                .allElementsBoundByIndex.map(\.label).prefix(4).joined(separator: " / ")
+            throw XCTSkip("REAL_FM_BLOCKED: development Home did not expose a reachable FM entry; \(errors)")
+        }
+        radio.tap()
+        XCTAssertTrue(app.navigationBars["私人 FM"].waitForExistence(timeout: 10))
+        let current = app.buttons.matching(NSPredicate(format: "label BEGINSWITH '打开正在播放：'")).firstMatch
+        guard current.waitForExistence(timeout: 45) else {
+            let errors = app.staticTexts.matching(NSPredicate(format: "label CONTAINS '不可用' OR label CONTAINS '维护' OR label CONTAINS '登录' OR label CONTAINS '失败' OR label CONTAINS '新歌曲'"))
+                .allElementsBoundByIndex.map(\.label).prefix(3).joined(separator: " / ")
+            throw XCTSkip("REAL_FM_BLOCKED: no current real FM track; \(errors)")
+        }
+        guard app.buttons["暂停"].firstMatch.waitForExistence(timeout: 20) else {
+            let errors = app.staticTexts.matching(NSPredicate(format: "label CONTAINS '不可用' OR label CONTAINS '失败' OR label CONTAINS '超时'"))
+                .allElementsBoundByIndex.map(\.label).prefix(3).joined(separator: " / ")
+            throw XCTSkip("REAL_FM_BLOCKED: real track obtained but no playing control; \(errors)")
+        }
+        // This only proves visible playback state, not M-13 or audible output.
+        XCTAssertTrue(app.buttons["不再播放"].firstMatch.exists)
+    }
+}

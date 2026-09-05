@@ -32,7 +32,9 @@ struct SetuIOSApp: App {
     @ViewBuilder
     private var appContent: some View {
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("-ui-testing-root") })
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-p13-word-scroll") {
+            SetuP13WordScrollScenario()
+        } else if ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("-ui-testing-root") })
             || ProcessInfo.processInfo.arguments.contains("-ui-testing-welcome-fixture") {
             SetuRootUITestScenario()
         } else if ProcessInfo.processInfo.arguments.contains("-ui-testing-public-ai-work")
@@ -81,8 +83,19 @@ struct SetuIOSApp: App {
     }
 
     private var liveContent: some View {
-        RootAppView(environment: environment, pushNotifications: pushNotifications)
+        #if DEBUG
+        let navigation = AppNavigationCoordinator()
+        if ProcessInfo.processInfo.arguments.contains("-development-playback3-radio"),
+           environment.config.apiBaseURL.absoluteString == "https://api.yukiryou.icu",
+           environment.config.musicFeatureFlags.radioFMEnabled {
+            navigation.navigate(to: .music, route: .radioFM)
+        }
+        return RootAppView(environment: environment, pushNotifications: pushNotifications, navigationCoordinator: navigation)
             .task { pushNotifications.configure() }
+        #else
+        return RootAppView(environment: environment, pushNotifications: pushNotifications)
+            .task { pushNotifications.configure() }
+        #endif
     }
 }
 
@@ -96,7 +109,7 @@ private struct SetuUITestAppearance: ViewModifier {
                 || arguments.contains("UICTContentSizeCategoryAccessibilityXXXL")
             content
                 .dynamicTypeSize(usesAX5 ? .accessibility5 : .large)
-                .preferredColorScheme(arguments.contains("Dark") ? .dark : .light)
+                .preferredColorScheme(arguments.contains("-ui-testing-system-appearance") ? nil : (arguments.contains("Dark") ? .dark : .light))
         } else {
             content
         }

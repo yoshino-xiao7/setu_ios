@@ -106,6 +106,13 @@ final class MusicPlaybackController {
     private(set) var audioQuality: MusicAudioQuality
     private(set) var isChangingQuality = false
 
+    @ObservationIgnored private var radioFeeder: RadioFMFeeder?
+    @ObservationIgnored private var radioClient: MusicV2Client?
+    @ObservationIgnored private var radioSession = UUID()
+    @ObservationIgnored private var radioAwaitingNext = false
+    @ObservationIgnored private var radioBlocked: Set<MusicV2TrackID> = []
+    @ObservationIgnored private var radioBlocksInFlight: Set<MusicV2TrackID> = []
+
     @ObservationIgnored var urlResolver: PlaybackURLResolver?
     /// An explicit quality change must not silently fall back on a failed request.
     @ObservationIgnored var resolveQualityURL: (@MainActor (MusicPlaybackTrack, MusicAudioQuality) async -> MusicURLResolution)?
@@ -251,7 +258,7 @@ final class MusicPlaybackController {
         }
         let maxResumeTime = snapshot.track.durationSeconds > 0 ? snapshot.track.durationSeconds : snapshot.currentTimeSeconds
         currentTimeSeconds = min(max(snapshot.currentTimeSeconds, 0), max(maxResumeTime, 0))
-        playMode = snapshot.playMode
+        playMode = snapshot.context.isInfinite ? .sequence : snapshot.playMode
         isPlaying = false
         isBuffering = false
         playbackError = nil
@@ -300,10 +307,12 @@ final class MusicPlaybackController {
     @discardableResult
     func play(track: MusicPlaybackTrack, in tracks: [MusicPlaybackTrack] = [],
               context: PlaybackContext? = nil, playMode: MusicPlayMode? = nil) async -> Bool {
+        if context?.isInfinite != true { endRadioSession() }
         self.context = context ?? .singleTrack(trackID: track.contextTrackID, label: nil)
         updateRemoteCapabilities()
         queueTracks = tracks.isEmpty ? [track] : tracks
-        if let playMode { self.playMode = playMode }
+        if self.context?.isInfinite == true { self.playMode = .sequence }
+        else if let playMode { self.playMode = playMode }
         nextItemPreparer.invalidate()
         return await transition(to: track, index: queueTracks.firstIndex { $0.id == track.id }) == true
     }
@@ -312,10 +321,12 @@ final class MusicPlaybackController {
     func play(url: URL, track: MusicPlaybackTrack, context: PlaybackContext? = nil,
               queueTracks: [MusicPlaybackTrack] = [], playMode: MusicPlayMode? = nil, notice: String? = nil) {
         beginTransition()
+        if context?.isInfinite != true { endRadioSession() }
         self.context = context ?? .singleTrack(trackID: track.contextTrackID, label: nil)
         updateRemoteCapabilities()
         self.queueTracks = queueTracks.isEmpty ? [track] : queueTracks
-        if let playMode { self.playMode = playMode }
+        if self.context?.isInfinite == true { self.playMode = .sequence }
+        else if let playMode { self.playMode = playMode }
         currentSource = nil
         nextItemPreparer.invalidate()
         load(url: url, track: track, index: self.queueTracks.firstIndex { $0.id == track.id }, notice: notice)
@@ -366,6 +377,7 @@ final class MusicPlaybackController {
         #endif // P0.1 instrumentation
         currentTrack = track
         currentQueueIndex = index
+        requestRadioRefill()
         currentTimeSeconds = resumeAt
         isPlaying = autoplay; isBuffering = autoplay; playbackError = nil
         currentSource = nil
@@ -398,6 +410,7 @@ final class MusicPlaybackController {
             #endif // P0.1 instrumentation
             let source = try await urlResolver.resolve(trackID: track.id, quality: audioQuality, force: force)
             guard transitionID == ticket, !Task.isCancelled else { return nil }
+            guard source.isValid(at: Date()) else { throw UserFacingError(message: "播放资源已过期") }
             currentSource = source
             #if DEBUG // P0.1 instrumentation
             playbackDiagnostics.mark("PlaybackSourceReady", value: 0)
@@ -424,6 +437,7 @@ final class MusicPlaybackController {
     }
 
     func pause() {
+        radioAwaitingNext = false
         player?.pause()
         isPlaying = false
         isBuffering = false
@@ -434,6 +448,19 @@ final class MusicPlaybackController {
     }
 
     func resume() {
+        if context?.isInfinite == true, currentTrack == nil {
+            radioAwaitingNext = true
+            let index = (currentQueueIndex ?? -1) + 1
+            if queueTracks.indices.contains(index) {
+                let ticket = radioSession, track = queueTracks[index]
+                radioAwaitingNext = false
+                Task { [weak self] in
+                    guard let self, self.radioSession == ticket else { return }
+                    _ = await self.transition(to: track, index: index)
+                }
+            } else { requestRadioRefill() }
+            return
+        }
         if player?.currentItem == nil || player?.currentItem?.status == .failed || currentSource.map({ !$0.isValid(at: Date()) }) == true {
             resumeRestoredCurrentTrack()
             return
@@ -483,6 +510,7 @@ final class MusicPlaybackController {
         removeItemObservers()
         player?.replaceCurrentItem(with: nil)
         currentTrack = nil
+        endRadioSession()
         context = nil
         updateRemoteCapabilities()
         queueTracks = []
@@ -510,6 +538,7 @@ final class MusicPlaybackController {
     }
 
     func setPlayMode(_ mode: MusicPlayMode) {
+        guard context?.isInfinite != true else { return }
         playMode = mode
         queueDidChange()
         feedback = .info(mode.title)
@@ -570,6 +599,10 @@ final class MusicPlaybackController {
                 return false
             }
             guard qualityChangeID == requestID, currentTrack?.id == track.id, !Task.isCancelled else { return false }
+            if let source, !source.isValid(at: Date()) {
+                feedback = .error("播放资源已过期，请重新选择音质")
+                return false
+            }
             let resumeTime = currentTimeSeconds
             let shouldPlay = isPlaying
             beginTransition()
@@ -633,6 +666,7 @@ final class MusicPlaybackController {
     }
 
     func moveQueueTracks(from source: IndexSet, to destination: Int) {
+        guard context?.isInfinite != true else { return }
         guard !source.isEmpty else { return }
         let moving = source.sorted().compactMap { queueTracks.indices.contains($0) ? queueTracks[$0] : nil }
         for index in source.sorted(by: >) where queueTracks.indices.contains(index) {
@@ -648,6 +682,7 @@ final class MusicPlaybackController {
     }
 
     func removeQueuedTrack(_ track: MusicPlaybackTrack) {
+        guard context?.isInfinite != true else { return }
         if track.id == currentTrack?.id {
             stop()
             feedback = .success("已从队列移除当前歌曲")
@@ -661,6 +696,7 @@ final class MusicPlaybackController {
     }
 
     func clearUpcomingTracks() {
+        guard context?.isInfinite != true else { return }
         guard let currentTrack else {
             queueTracks = []
             currentQueueIndex = nil
@@ -675,6 +711,7 @@ final class MusicPlaybackController {
     }
 
     func playNext(_ track: MusicPlaybackTrack) {
+        guard context?.isInfinite != true else { return }
         guard let currentQueueIndex else { return }
         guard track.id != currentTrack?.id else { return }
         queueTracks.removeAll { $0.id == track.id && $0.id != currentTrack?.id }
@@ -686,6 +723,111 @@ final class MusicPlaybackController {
         queueDidChange()
         feedback = .success("下一首播放：\(track.title)")
         persistPlaybackSnapshot()
+    }
+
+    // MARK: - Private FM (finite queue operations stay outside PlaybackQueue)
+
+    func startRadio(client: MusicV2Client) {
+        endRadioSession()
+        stop()
+        radioClient = client
+        let ticket = radioSession
+        context = .radio(sessionID: ticket.uuidString, source: .sharedAlgorithmic(), label: "私人 FM")
+        playMode = .sequence
+        updateRemoteCapabilities()
+        radioFeeder = RadioFMFeeder(fetch: { try await client.radioFM(limit: 4) })
+        radioAwaitingNext = true
+        requestRadioRefill()
+    }
+
+    func retryRadio() {
+        if currentTrack == nil { radioAwaitingNext = true }
+        requestRadioRefill()
+    }
+
+    func waitForRadioRefill() async { await radioFeeder?.waitForRefill() }
+
+    private func endRadioSession() {
+        radioSession = UUID()
+        radioFeeder?.stop()
+        radioFeeder = nil
+        radioClient = nil
+        radioAwaitingNext = false
+        radioBlocked.removeAll()
+        radioBlocksInFlight.removeAll()
+    }
+
+    private func requestRadioRefill() {
+        guard context?.isInfinite == true, let radioFeeder else { return }
+        let ticket = radioSession
+        let remaining = queueTracks.count - ((currentQueueIndex ?? -1) + 1)
+        radioFeeder.refill(remaining: remaining, receive: { [weak self] batch in
+            guard let self, self.radioSession == ticket else { return }
+            let incoming = batch.tracks.filter { !self.radioBlocked.contains($0.id) }
+            guard !incoming.isEmpty else {
+                self.feedback = .info("暂时没有新歌曲，请稍后重试")
+                return
+            }
+            let trim = RadioFMFeeder.trimCount(count: self.queueTracks.count + incoming.count,
+                                                currentIndex: self.currentQueueIndex)
+            if trim > 0 {
+                self.queueTracks.removeFirst(trim)
+                self.currentQueueIndex = self.currentQueueIndex.map { $0 - trim }
+            }
+            self.queueTracks.append(contentsOf: incoming.map(MusicPlaybackTrack.init(track:)))
+            self.queueDidChange()
+            self.persistPlaybackSnapshot()
+            if self.radioAwaitingNext {
+                self.radioAwaitingNext = false
+                let index = (self.currentQueueIndex ?? -1) + 1
+                if self.queueTracks.indices.contains(index) {
+                    _ = await self.transition(to: self.queueTracks[index], index: index)
+                }
+            }
+        }, failure: { [weak self] error in
+            guard let self, self.radioSession == ticket else { return }
+            self.feedback = error.map { .failure(UserFacingErrorMapper.map($0)) }
+                ?? .info("暂时没有新歌曲，请稍后重试")
+        })
+    }
+
+    func blockRadioTrack(_ track: MusicPlaybackTrack) async {
+        guard context?.isInfinite == true, let client = radioClient,
+              case .canonical(let id) = track.id, !radioBlocksInFlight.contains(id) else { return }
+        let ticket = radioSession
+        radioBlocksInFlight.insert(id)
+        defer { if radioSession == ticket { radioBlocksInFlight.remove(id) } }
+        do {
+            try await client.blockRadioTrack(id)
+            guard radioSession == ticket else { return }
+            radioBlocked.insert(id)
+            let oldIndex = currentQueueIndex ?? 0
+            let removesCurrent = currentTrack?.id == track.id
+            let removedBefore = queueTracks.prefix(oldIndex).filter { $0.id == track.id }.count
+            queueTracks.removeAll { $0.id == track.id }
+            currentQueueIndex = oldIndex - removedBefore
+            queueDidChange()
+            if removesCurrent {
+                player?.pause()
+                if let index = currentQueueIndex, queueTracks.indices.contains(index) {
+                    _ = await transition(to: queueTracks[index], index: index)
+                } else {
+                    currentQueueIndex = queueTracks.indices.last
+                    currentTrack = nil
+                    removeItemObservers()
+                    player?.replaceCurrentItem(with: nil)
+                    isPlaying = false
+                    isBuffering = false
+                    clearNowPlaying()
+                    radioAwaitingNext = true
+                }
+            }
+            requestRadioRefill()
+            persistPlaybackSnapshot()
+        } catch {
+            guard radioSession == ticket else { return }
+            feedback = .failure(UserFacingErrorMapper.map(error))
+        }
     }
 
     // MARK: - Queue advancement
@@ -701,6 +843,7 @@ final class MusicPlaybackController {
                 let source = try await resolver.resolve(trackID: track.id, quality: quality, force: force)
                 guard let self, self.transitionID == ticket, !Task.isCancelled else { return }
                 self.resumeTask = nil
+                guard source.isValid(at: Date()) else { throw UserFacingError(message: "播放资源已过期") }
                 self.currentSource = source
                 self.load(url: source.url, track: track, index: self.currentQueueIndex, notice: source.notice,
                           resumeAt: position, autoplay: self.isPlaying)
@@ -713,6 +856,12 @@ final class MusicPlaybackController {
     }
 
     private func advance(by offset: Int, isAuto: Bool) async {
+        guard offset >= 0 || context?.isInfinite != true else { return }
+        if context?.isInfinite == true, !canPlayNext {
+            radioAwaitingNext = true
+            requestRadioRefill()
+            return
+        }
         #if DEBUG // P0.1 instrumentation
         playbackDiagnostics.nextRequested(offset: offset, automatic: isAuto)
         #endif // P0.1 instrumentation
@@ -734,11 +883,11 @@ final class MusicPlaybackController {
             let expectedSession = sessionID
             guard let succeeded = await transition(to: track, index: index) else { return }
             guard sessionID == expectedSession, currentTrack?.id == track.id else { return }
-            if succeeded { return }
+            if succeeded { requestRadioRefill(); return }
             // A replacement intent, cancellation or authentication error stops probing.
             guard !Task.isCancelled, playbackError != nil else { return }
             if case .failure(let reason) = feedback, reason.action == .signIn { return }
-            probe = index
+            probe = context?.isInfinite == true ? (currentQueueIndex ?? index) : index
         }
         isPlaying = false; isBuffering = false
         updateNowPlaying(); persistPlaybackSnapshot()
@@ -793,8 +942,12 @@ final class MusicPlaybackController {
         #if DEBUG // P0.1 instrumentation
         playbackDiagnostics.replaceEnd(installing: true)
         #endif // P0.1 instrumentation
+        // FM refill can trim the head while this track's URL is resolving.
+        // transition already committed its occurrence index before suspension.
+        let committedIndex = context?.isInfinite == true && currentTrack?.id == track.id
+            ? currentQueueIndex : index
         currentTrack = track
-        currentQueueIndex = index
+        currentQueueIndex = committedIndex
         isPlaying = autoplay
         isBuffering = autoplay
         playbackError = nil
@@ -893,6 +1046,11 @@ final class MusicPlaybackController {
         guard player?.currentItem === item, recoveryTask == nil, playbackError == nil else { return }
         loadingTimeout?.cancel(); loadingTimeout = nil
         guard recoveryCount == 0, let resolver = urlResolver, let track = currentTrack else {
+            currentSource = nil
+            nextItemPreparer.invalidate()
+            if let resolver = urlResolver, let track = currentTrack {
+                Task { await resolver.invalidate(trackID: track.id) }
+            }
             failPlayback(UserFacingErrorMapper.map(error ?? UserFacingError(message: "播放失败，请重新获取播放地址")))
             return
         }
@@ -900,6 +1058,7 @@ final class MusicPlaybackController {
         let recoverable = nsError?.domain == NSURLErrorDomain || nsError?.domain == AVFoundationErrorDomain
             || currentSource.map { !$0.isValid(at: Date()) } == true
         guard recoverable else { failPlayback(UserFacingErrorMapper.map(error ?? UserFacingError(message: "音源无法播放"))); return }
+        currentSource = nil
         recoveryCount += 1
         let ticket = transitionID, position = currentTimeSeconds, shouldPlay = isPlaying, quality = audioQuality
         isBuffering = shouldPlay
@@ -917,6 +1076,7 @@ final class MusicPlaybackController {
             do {
                 let source = try await resolver.resolve(trackID: track.id, quality: quality, force: true)
                 guard let self, self.transitionID == ticket, !Task.isCancelled else { return }
+                guard source.isValid(at: Date()) else { throw UserFacingError(message: "播放资源已过期") }
                 self.currentSource = source
                 self.recoveryTask = nil
                 self.load(url: source.url, track: track, index: self.currentQueueIndex, notice: source.notice,

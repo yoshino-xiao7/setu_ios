@@ -25,9 +25,8 @@ struct PlaylistDetailView: View {
                                 Button(mode.title) { Task { await updateMode(mode, local: local) } }
                             }
                         }.disabled(writing).frame(minHeight: 44)
-                    } else if case .provider = data.playlist {
-                        Button {} label: { Label("收藏功能尚未启用", systemImage: "star") }
-                            .disabled(true).frame(minHeight: 44)
+                    } else if case .provider(let playlist) = data.playlist, flags.favoritePlaylistsEnabled {
+                        MusicSavePlaylistButton(playlist: playlist, environment: environment)
                     }
                 }
                 Section("歌曲") {

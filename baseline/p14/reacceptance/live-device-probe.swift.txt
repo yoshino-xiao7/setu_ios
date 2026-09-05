@@ -1,0 +1,42 @@
+
+#if os(iOS)
+/// Explicitly selected physical-device integration probe. Uses the application's
+/// normal keychain/cookie transport; never exports credentials or response bodies.
+@MainActor
+final class RadioFMDevelopmentDeviceTests: XCTestCase {
+    func testDevelopmentBatchAndPlayback() async throws {
+        let environment = AppEnvironment.live()
+        guard environment.config.apiBaseURL.absoluteString == "https://api.yukiryou.icu" else {
+            throw XCTSkip("REAL_FM_BLOCKED: development endpoint mismatch")
+        }
+        let batch: MusicV2RadioBatch
+        do { batch = try await environment.musicV2Client.radioFM(limit: 4) }
+        catch {
+            if let server = error as? MusicV2ServerError {
+                throw XCTSkip("REAL_FM_BLOCKED: live GET /user/music/v2/radio/fm HTTP \(server.status), code=\(server.error.code.rawValue), retryable=\(server.error.retryable)")
+            }
+            throw XCTSkip("REAL_FM_BLOCKED: live GET /user/music/v2/radio/fm: \(UserFacingErrorMapper.map(error).message)")
+        }
+        guard !batch.tracks.isEmpty else { throw XCTSkip("REAL_FM_BLOCKED: actual upstream batch empty") }
+        XCTAssertLessThanOrEqual(batch.tracks.count, 4)
+        XCTAssertFalse(batch.source.personalized)
+        XCTAssertTrue(batch.tracks.allSatisfy { $0.id.rawValue.hasPrefix("netease:track:") })
+        let player = MusicPlaybackController(persistsPlayback: false)
+        defer { player.stop() }
+        player.urlResolver = PlaybackURLResolver(client: environment.musicClient, v2: environment.musicV2Client)
+        let tracks = batch.tracks.map(MusicPlaybackTrack.init(track:))
+        let played = await player.play(track: tracks[0], in: tracks,
+            context: .radio(sessionID: UUID().uuidString, source: .sharedAlgorithmic(), label: "私人 FM"))
+        guard played else {
+            throw XCTSkip("REAL_FM_BLOCKED: actual FM tracks obtained, real playback unavailable: \(player.playbackError ?? "unknown")")
+        }
+        let progressing = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            MainActor.assumeIsolated { (player.player?.currentTime().seconds ?? 0) > 1 }
+        }, object: nil)
+        await fulfillment(of: [progressing], timeout: 15)
+        XCTAssertNil(player.playbackError)
+        XCTAssertFalse(player.canPlayPrevious)
+        XCTAssertEqual(player.playMode, .sequence)
+    }
+}
+#endif

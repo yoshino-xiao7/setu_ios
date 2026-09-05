@@ -43,7 +43,7 @@ public struct MusicV2Client: Sendable {
         level: MusicV2PlaybackQuality = .standard,
         allowFallback: Bool = true
     ) async throws -> MusicV2PlaybackResolution {
-        try await get("/tracks/\(component(trackID.rawValue))/playback" + query([
+        try await playbackGet("/tracks/\(component(trackID.rawValue))/playback" + query([
             ("level", level.rawValue), ("allowFallback", String(allowFallback))
         ]))
     }
@@ -53,7 +53,7 @@ public struct MusicV2Client: Sendable {
         level: MusicV2PlaybackQuality = .standard,
         allowFallback: Bool = true
     ) async throws -> MusicV2PlaybackBatch {
-        try await get("/tracks/playback?ids=\(idList(trackIDs.map(\.rawValue)))&level=\(component(level.rawValue))&allowFallback=\(allowFallback)")
+        try await playbackGet("/tracks/playback?ids=\(idList(trackIDs.map(\.rawValue)))&level=\(component(level.rawValue))&allowFallback=\(allowFallback)")
     }
 
     public func lyrics(trackID: MusicV2TrackID) async throws -> MusicV2Lyric { try await get("/tracks/\(component(trackID.rawValue))/lyrics") }
@@ -89,6 +89,13 @@ public struct MusicV2Client: Sendable {
 
     private func get<Value: Decodable & Sendable>(_ path: String) async throws -> Value {
         try await translate { try await apiClient.get(Self.base + path, signed: false) }
+    }
+
+    private func playbackGet<Value: Decodable & Sendable>(_ path: String) async throws -> Value {
+        try await translate {
+            try await apiClient.get(Self.base + path, signed: false,
+                                    headers: ["X-Setu-Playback-Contract": "3.0.0"])
+        }
     }
 
     private func post204<Body: Encodable & Sendable>(_ path: String, body: Body) async throws {

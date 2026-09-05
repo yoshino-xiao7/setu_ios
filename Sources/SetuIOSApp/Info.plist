@@ -8,6 +8,9 @@
 	  INFOPLIST_KEY_* build setting, so it must live here for background audio
 	  to actually work; without it iOS suspends the app and playback stops.
 	-->
+	<!-- Permit ProMotion timing requests; the system still controls frame pacing. -->
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>

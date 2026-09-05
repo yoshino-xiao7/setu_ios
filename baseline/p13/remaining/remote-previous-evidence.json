@@ -1,0 +1,101 @@
+{
+  "action": "User confirmed one lock-screen previous command",
+  "before": {
+    "artistMatches": true,
+    "avPlayerInstancesObserved": 1,
+    "buffering": false,
+    "controllerTime": 68.000167823,
+    "error": false,
+    "index": 1,
+    "lyricIndex": 68,
+    "miniInstances": 1,
+    "nowPlayingElapsed": 68.000167823,
+    "observedAt": 1788590860.686558,
+    "parses": 2,
+    "phase": "playing",
+    "playing": true,
+    "queue": [
+      7101,
+      7102,
+      7103
+    ],
+    "rate": 1,
+    "route": [
+      "Speaker"
+    ],
+    "routeEvents": 1,
+    "routeReason": 3,
+    "sleepTimer": false,
+    "time": 68.158031353,
+    "titleMatches": true,
+    "track": 7102,
+    "urlRequests": 3
+  },
+  "after": {
+    "artistMatches": true,
+    "avPlayerInstancesObserved": 1,
+    "buffering": false,
+    "controllerTime": 0,
+    "error": false,
+    "index": 0,
+    "lyricIndex": 0,
+    "miniInstances": 1,
+    "nowPlayingElapsed": 0,
+    "observedAt": 1788590861.201113,
+    "parses": 3,
+    "phase": "playing",
+    "playing": true,
+    "queue": [
+      7101,
+      7102,
+      7103
+    ],
+    "rate": 1,
+    "route": [
+      "Speaker"
+    ],
+    "routeEvents": 1,
+    "routeReason": 3,
+    "sleepTimer": false,
+    "time": 0.276960737,
+    "titleMatches": true,
+    "track": 7101,
+    "urlRequests": 3
+  },
+  "continued": {
+    "artistMatches": true,
+    "avPlayerInstancesObserved": 1,
+    "buffering": false,
+    "controllerTime": 44.000182119,
+    "error": false,
+    "index": 0,
+    "lyricIndex": 44,
+    "miniInstances": 1,
+    "nowPlayingElapsed": 44.000182119,
+    "observedAt": 1788590905.220269,
+    "parses": 3,
+    "phase": "playing",
+    "playing": true,
+    "queue": [
+      7101,
+      7102,
+      7103
+    ],
+    "rate": 1,
+    "route": [
+      "Speaker"
+    ],
+    "routeEvents": 1,
+    "routeReason": 3,
+    "sleepTimer": false,
+    "time": 44.299193836,
+    "titleMatches": true,
+    "track": 7101,
+    "urlRequests": 3
+  },
+  "lockState": {
+    "passcodeRequired": false,
+    "unlockedSinceBoot": true
+  },
+  "limit": "User reported lock-screen action; post-action lock check passcodeRequired=false, so no independent locked-state assertion. State transition evidence, not a direct command receipt event."
+}

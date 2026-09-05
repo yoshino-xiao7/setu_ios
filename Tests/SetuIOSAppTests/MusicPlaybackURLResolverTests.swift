@@ -19,7 +19,7 @@ final class MusicPlaybackURLResolverTests: XCTestCase {
             return try playbackResponse(ids: ids, quality: quality, expi: 30)
         }
         let first = try await resolver.resolve(trackID: 1, quality: .exhigh)
-        XCTAssertEqual(first.expiresAt.timeIntervalSince(first.resolvedAt), 25)
+        XCTAssertEqual(first.refreshAt.timeIntervalSince(first.resolvedAt), 25)
         _ = try await resolver.resolve(trackID: 1, quality: .exhigh)
         var count = await counter.count; XCTAssertEqual(count, 1)
         clock.advance(26)

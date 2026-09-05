@@ -1,0 +1,113 @@
+[
+  {
+    "testIdentifier": "MusicPlayerP13UITests/testPhysicalWordScrollPresentedMetrics()",
+    "testRuns": [
+      {
+        "metrics": [
+          {
+            "baselineAverage": 0,
+            "baselineName": "",
+            "displayName": "Hitches Total Duration (Scroll_DraggingAndDeceleration)",
+            "identifier": "com.apple.dt.XCTMetric_OSSignpost-Scroll_DraggingAndDeceleration.animation.hitches.total.duration",
+            "maxPercentRegression": 10,
+            "maxPercentRelativeStandardDeviation": 10,
+            "maxRegression": 0,
+            "maxStandardDeviation": 10,
+            "measurements": [
+              0,
+              0,
+              0
+            ],
+            "polarity": "prefers smaller",
+            "unitOfMeasurement": "ms"
+          },
+          {
+            "baselineAverage": 0,
+            "baselineName": "",
+            "displayName": "Duration (Scroll_DraggingAndDeceleration)",
+            "identifier": "com.apple.dt.XCTMetric_OSSignpost-Scroll_DraggingAndDeceleration.duration",
+            "maxPercentRegression": 10,
+            "maxPercentRelativeStandardDeviation": 10,
+            "maxRegression": 0,
+            "maxStandardDeviation": 10,
+            "measurements": [
+              2.2573684170000003,
+              2.275372291,
+              2.2749813750000003
+            ],
+            "polarity": "prefers smaller",
+            "unitOfMeasurement": "s"
+          },
+          {
+            "baselineAverage": 0,
+            "baselineName": "",
+            "displayName": "Hitch Time Ratio (Scroll_DraggingAndDeceleration)",
+            "identifier": "com.apple.dt.XCTMetric_OSSignpost-Scroll_DraggingAndDeceleration.animation.hitch.time.ratio",
+            "maxPercentRegression": 10,
+            "maxPercentRelativeStandardDeviation": 10,
+            "maxRegression": 0,
+            "maxStandardDeviation": 10,
+            "measurements": [
+              0,
+              0,
+              0
+            ],
+            "polarity": "prefers smaller",
+            "unitOfMeasurement": "ms per s"
+          },
+          {
+            "baselineAverage": 0,
+            "baselineName": "",
+            "displayName": "Frame Count (Scroll_DraggingAndDeceleration)",
+            "identifier": "com.apple.dt.XCTMetric_OSSignpost-Scroll_DraggingAndDeceleration.animation.frame.count",
+            "maxPercentRegression": 10,
+            "maxPercentRelativeStandardDeviation": 10,
+            "maxRegression": 0,
+            "maxStandardDeviation": 10,
+            "measurements": [
+              0,
+              0,
+              0
+            ],
+            "polarity": "prefers larger",
+            "unitOfMeasurement": "frames"
+          },
+          {
+            "baselineAverage": 0,
+            "baselineName": "",
+            "displayName": "Frame Rate (Scroll_DraggingAndDeceleration)",
+            "identifier": "com.apple.dt.XCTMetric_OSSignpost-Scroll_DraggingAndDeceleration.animation.frame.rate",
+            "maxPercentRegression": 10,
+            "maxPercentRelativeStandardDeviation": 10,
+            "maxRegression": 0,
+            "maxStandardDeviation": 10,
+            "measurements": [
+              82.39683532714844,
+              82.62384033203125,
+              82.63804626464844
+            ],
+            "polarity": "prefers larger",
+            "unitOfMeasurement": "fps"
+          },
+          {
+            "baselineAverage": 0,
+            "baselineName": "",
+            "displayName": "Number of Hitches (Scroll_DraggingAndDeceleration)",
+            "identifier": "com.apple.dt.XCTMetric_OSSignpost-Scroll_DraggingAndDeceleration.animation.hitch.number",
+            "maxPercentRegression": 10,
+            "maxPercentRelativeStandardDeviation": 10,
+            "maxRegression": 0,
+            "maxStandardDeviation": 10,
+            "measurements": [
+              0,
+              0,
+              0
+            ],
+            "polarity": "prefers smaller",
+            "unitOfMeasurement": "hitches"
+          }
+        ]
+      }
+    ]
+  }
+]

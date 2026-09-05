@@ -19,9 +19,16 @@ enum MusicDiscoverRoutes {
             case "rankings": return flags.rankingsEnabled ? .rankings : nil
             case "newTracks": return flags.newReleasesEnabled ? .newReleases(albums: false) : nil
             case "newAlbums": return flags.newReleasesEnabled ? .newReleases(albums: true) : nil
-            default: return nil // Radio and later-phase capabilities remain unavailable.
+            case "radio": return flags.radioFMEnabled ? .radioFM : nil
+            default: return nil // Later-phase capabilities remain unavailable.
             }
-        case .library(let collection, _): return collection == "history" ? .musicHistory : nil
+        case .library(let collection, _):
+            switch collection {
+            case "history": return .musicHistory
+            case "liked": return flags.likedTracksEnabled ? .likedTracks : nil
+            case "saved": return flags.favoritePlaylistsEnabled ? .favoritePlaylists : nil
+            default: return nil
+            }
         case .resource(let ref, _):
             switch ref {
             case .artist(let id): return MusicDetailRoutes.artist(id, flags: flags)

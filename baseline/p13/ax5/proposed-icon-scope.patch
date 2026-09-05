@@ -1,0 +1,11 @@
+--- a/Sources/SetuIOSApp/Features/Music/MusicHomeView.swift
++++ b/Sources/SetuIOSApp/Features/Music/MusicHomeView.swift
+@@ -541,7 +541,7 @@
+     var body: some View {
+         Button(action: action) {
+             Image(systemName: systemImage)
+-                .font(.headline.weight(.semibold))
++                .font(.system(size: 20, weight: .semibold))
+                 .foregroundStyle(tint)
+                 .frame(width: 44, height: 44)
+                 .background(tint.opacity(0.12), in: Circle())

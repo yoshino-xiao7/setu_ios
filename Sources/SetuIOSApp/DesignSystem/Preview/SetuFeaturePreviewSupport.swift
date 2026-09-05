@@ -4,6 +4,36 @@ import SwiftUI
 
 #if DEBUG
 
+/// Isolated real-renderer workload for physical scrolling metrics. No client flags or network.
+struct SetuP13WordScrollScenario: View {
+    private let started = Date()
+    @State private var elapsed = 0.0
+    private var fixedLine: Bool { ProcessInfo.processInfo.arguments.contains("-ui-testing-p13-fixed-line") }
+    private let lines: [LyricLine] = {
+        let body: [String: Any] = ["trackId": "netease:track:1", "kind": ProcessInfo.processInfo.arguments.contains("-ui-testing-p13-line-control") ? "line" : "word", "hasTranslation": true,
+            "contributors": [], "lines": (0..<120).map { index in
+                ["text": "沿着星光慢慢回家", "startMs": index * 4000, "durationMs": 4000,
+                 "translation": "Walking home beneath the stars",
+                 "words": ["沿着", "星光", "慢慢", "回家"].enumerated().map {
+                     ["text": $0.element, "startMs": index * 4000 + $0.offset * 1000, "durationMs": 1000] as [String: Any]
+                 }] as [String: Any]
+            }]
+        let data = try! JSONSerialization.data(withJSONObject: body)
+        return LyricParser.parse(try! JSONDecoder().decode(MusicV2Lyric.self, from: data))
+    }()
+    var body: some View {
+        LyricScrollView(lines: lines, currentTime: elapsed, expands: true, isPlaying: !ProcessInfo.processInfo.arguments.contains("-ui-testing-p13-static-word"),
+                        sampleTime: { fixedLine ? Date().timeIntervalSince(started).truncatingRemainder(dividingBy: 4) : Date().timeIntervalSince(started) }, onSeek: { elapsed = $0 })
+            .accessibilityIdentifier("p13.word-scroll")
+            .task {
+                while !Task.isCancelled {
+                    elapsed = fixedLine ? 0.5 : Date().timeIntervalSince(started)
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+            }
+    }
+}
+
 /// Dependencies for page-level previews.
 ///
 /// The API session is handled entirely in-process. Fixture payloads deliberately
@@ -107,6 +137,9 @@ private struct SetuRootUITestContext {
         let args = ProcessInfo.processInfo.arguments
         if args.contains("-ui-testing-music-discover"), let index = args.firstIndex(of: "-ui-testing-discover-page"), args.indices.contains(index + 1) {
             switch args[index + 1] {
+            case "likedTracks": navigation.navigate(to: .music, route: .likedTracks)
+            case "favoritePlaylists": navigation.navigate(to: .music, route: .favoritePlaylists)
+            case "radioFM": navigation.navigate(to: .music, route: .radioFM)
             case "rankings": navigation.navigate(to: .music, route: .rankings)
             case "newReleases": navigation.navigate(to: .music, route: .newReleases(albums: false))
             case "dailyRecommend": navigation.navigate(to: .music, route: .dailyRecommend)
@@ -355,8 +388,12 @@ enum SetuPreviewEnvironment {
             detailFlags.usesV2PlaylistDetail = true
         }
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-music-discover") {
+            if ProcessInfo.processInfo.arguments.contains("-ui-testing-radio-fm") { detailFlags.radioFMEnabled = true }
             detailFlags.usesV2Home = true; detailFlags.rankingsEnabled = true; detailFlags.newReleasesEnabled = true
             detailFlags.artistDetailEnabled = true; detailFlags.albumDetailEnabled = true; detailFlags.usesV2PlaylistDetail = true
+        }
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-music-library") {
+            detailFlags.likedTracksEnabled = true; detailFlags.favoritePlaylistsEnabled = true
         }
         let config = AppConfig(
             apiBaseURL: URL(string: "https://preview.setu.invalid/")!,
@@ -530,6 +567,10 @@ private enum SetuPreviewAPI {
             return json("{\"message\":\"无效的预览请求\"}", statusCode: 400)
         }
 
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-music-library"), path.contains("/library") {
+            let (status, data) = MusicLibraryPreviewFixtures.response(request)
+            return Fixture(statusCode: status, data: data)
+        }
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-music-discover"), path.hasPrefix("/user/music/v2/") {
             let (status, data) = MusicDiscoverPreviewFixtures.response(path: path, query: request.url?.query)
             return Fixture(statusCode: status, data: data)
@@ -717,6 +758,9 @@ private enum SetuPreviewAPI {
         case "/user/music/search":
             return json("{\"result\":{\"songs\":\(musicSongsJSON),\"songCount\":3}}")
         case "/user/music/url" where ProcessInfo.processInfo.arguments.contains("-ui-testing-lyrics-playback"):
+            #if os(iOS)
+            if ProcessInfo.processInfo.arguments.contains("-ui-testing-airplay-hardware") { AirPlayFixtureCounters.requested() }
+            #endif
             guard let requestURL = request.url, let audioURL = lyricPlaybackURL else {
                 return json(#"{"message":"本地音频夹具不可用"}"#, statusCode: 500)
             }
@@ -753,6 +797,10 @@ private enum SetuPreviewAPI {
             return json(#"{"data":{"id":99,"name":"预览 MV","brs":[{"br":480},{"br":720}]}}"#)
         case "/user/music/mv/url":
             return json(#"{"data":null}"#)
+        case "/user/music/lyric" where ProcessInfo.processInfo.arguments.contains("-ui-testing-airplay-hardware"):
+            let text = (0..<900).map { String(format: "[%02d:%02d.00]隔空播放验收歌词 %d", $0 / 60, $0 % 60, $0) }.joined(separator: "\n")
+            let data = try! JSONSerialization.data(withJSONObject: ["lrc": ["lyric": text], "tlyric": NSNull()])
+            return Fixture(statusCode: 200, data: data)
         case "/user/music/lyric":
             return json("{\"lrc\":{\"lyric\":\"[00:00.00] 夏夜微风\\n[00:12.00] 沿着星光慢慢回家\"},\"tlyric\":null}")
         default:
@@ -767,11 +815,22 @@ private enum SetuPreviewAPI {
             var little = value.littleEndian
             withUnsafeBytes(of: &little) { data.append(contentsOf: $0) }
         }
-        let bytes = 8_000 * 2 * 180
+        let seconds = ProcessInfo.processInfo.arguments.contains("-ui-testing-airplay-hardware") ? 900 : 180
+        let bytes = 8_000 * 2 * seconds
         data.append(Data("RIFF".utf8)); append(UInt32(36 + bytes)); data.append(Data("WAVEfmt ".utf8))
         append(UInt32(16)); append(UInt16(1)); append(UInt16(1)); append(UInt32(8_000))
         append(UInt32(16_000)); append(UInt16(2)); append(UInt16(16))
-        data.append(Data("data".utf8)); append(UInt32(bytes)); data.append(Data(repeating: 0, count: bytes))
+        data.append(Data("data".utf8)); append(UInt32(bytes))
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-airplay-hardware") {
+            // A quiet generated melody, exclusively for real-output hardware acceptance.
+            let notes = [220.0, 261.63, 329.63, 293.66, 261.63, 220.0, 196.0, 220.0]
+            for sample in 0..<(bytes / 2) {
+                let t = Double(sample) / 8000
+                let frequency = notes[Int(t * 2) % notes.count]
+                let envelope = min(1, (t * 2).truncatingRemainder(dividingBy: 1) * 20)
+                append(Int16(sin(2 * .pi * frequency * t) * 900 * envelope))
+            }
+        } else { data.append(Data(repeating: 0, count: bytes)) }
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("setu-lyrics-playback.wav")
         do { try data.write(to: url, options: .atomic); return url }
         catch { return nil }

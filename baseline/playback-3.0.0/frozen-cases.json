@@ -1,0 +1,851 @@
+{
+  "contractVersion": "3.0.0",
+  "legacyCases": "../../music-api-v2-contract-cases.json",
+  "fixtureProvenance": "synthetic; example durations are not policy values",
+  "boundaries": [
+    {
+      "id": "source-expiry-null-success",
+      "schema": "PlaybackSource",
+      "value": {
+        "trackId": "netease:track:123",
+        "url": "https://media.example.invalid/contract-fixture",
+        "requestedQuality": "standard",
+        "actualQuality": null,
+        "bitrate": null,
+        "sizeBytes": null,
+        "format": null,
+        "notice": null,
+        "refreshAt": "2030-01-01T00:01:00Z",
+        "sourceExpiresAt": null
+      },
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "valid": true,
+      "scope": "offline-contract-fixture",
+      "evidence": "synthetic; no measured policy TTL"
+    },
+    {
+      "id": "refreshAt-missing",
+      "schema": "PlaybackSource",
+      "value": {
+        "trackId": "netease:track:123",
+        "url": "https://media.example.invalid/contract-fixture",
+        "requestedQuality": "standard",
+        "actualQuality": null,
+        "bitrate": null,
+        "sizeBytes": null,
+        "format": null,
+        "notice": null,
+        "sourceExpiresAt": null
+      },
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "valid": false,
+      "scope": "offline-contract-fixture",
+      "evidence": "synthetic; no measured policy TTL"
+    },
+    {
+      "id": "sourceExpiresAt-missing",
+      "schema": "PlaybackSource",
+      "value": {
+        "trackId": "netease:track:123",
+        "url": "https://media.example.invalid/contract-fixture",
+        "requestedQuality": "standard",
+        "actualQuality": null,
+        "bitrate": null,
+        "sizeBytes": null,
+        "format": null,
+        "notice": null,
+        "refreshAt": "2030-01-01T00:01:00Z"
+      },
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "valid": false,
+      "scope": "offline-contract-fixture",
+      "evidence": "synthetic; no measured policy TTL"
+    },
+    {
+      "id": "refreshAt-null",
+      "schema": "PlaybackSource",
+      "value": {
+        "trackId": "netease:track:123",
+        "url": "https://media.example.invalid/contract-fixture",
+        "requestedQuality": "standard",
+        "actualQuality": null,
+        "bitrate": null,
+        "sizeBytes": null,
+        "format": null,
+        "notice": null,
+        "refreshAt": null,
+        "sourceExpiresAt": null
+      },
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "valid": false,
+      "scope": "offline-contract-fixture",
+      "evidence": "synthetic; no measured policy TTL"
+    },
+    {
+      "id": "refreshAt-equal-receivedAt",
+      "schema": "PlaybackSource",
+      "value": {
+        "trackId": "netease:track:123",
+        "url": "https://media.example.invalid/contract-fixture",
+        "requestedQuality": "standard",
+        "actualQuality": null,
+        "bitrate": null,
+        "sizeBytes": null,
+        "format": null,
+        "notice": null,
+        "refreshAt": "2030-01-01T00:00:00Z",
+        "sourceExpiresAt": null
+      },
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "valid": false,
+      "scope": "offline-contract-fixture",
+      "evidence": "synthetic; no measured policy TTL"
+    },
+    {
+      "id": "refreshAt-before-receivedAt",
+      "schema": "PlaybackSource",
+      "value": {
+        "trackId": "netease:track:123",
+        "url": "https://media.example.invalid/contract-fixture",
+        "requestedQuality": "standard",
+        "actualQuality": null,
+        "bitrate": null,
+        "sizeBytes": null,
+        "format": null,
+        "notice": null,
+        "refreshAt": "2029-12-31T23:59:59Z",
+        "sourceExpiresAt": null
+      },
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "valid": false,
+      "scope": "offline-contract-fixture",
+      "evidence": "synthetic; no measured policy TTL"
+    },
+    {
+      "id": "sourceExpiresAt-equal-refreshAt",
+      "schema": "PlaybackSource",
+      "value": {
+        "trackId": "netease:track:123",
+        "url": "https://media.example.invalid/contract-fixture",
+        "requestedQuality": "standard",
+        "actualQuality": null,
+        "bitrate": null,
+        "sizeBytes": null,
+        "format": null,
+        "notice": null,
+        "refreshAt": "2030-01-01T00:01:00Z",
+        "sourceExpiresAt": "2030-01-01T00:01:00Z"
+      },
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "valid": false,
+      "scope": "offline-contract-fixture",
+      "evidence": "synthetic; no measured policy TTL",
+      "sourceEvidence": "synthetic-trusted"
+    },
+    {
+      "id": "sourceExpiresAt-before-refreshAt",
+      "schema": "PlaybackSource",
+      "value": {
+        "trackId": "netease:track:123",
+        "url": "https://media.example.invalid/contract-fixture",
+        "requestedQuality": "standard",
+        "actualQuality": null,
+        "bitrate": null,
+        "sizeBytes": null,
+        "format": null,
+        "notice": null,
+        "refreshAt": "2030-01-01T00:01:00Z",
+        "sourceExpiresAt": "2030-01-01T00:00:30Z"
+      },
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "valid": false,
+      "scope": "offline-contract-fixture",
+      "evidence": "synthetic; no measured policy TTL",
+      "sourceEvidence": "synthetic-trusted"
+    },
+    {
+      "id": "trusted-source-expiry-valid",
+      "schema": "PlaybackSource",
+      "value": {
+        "trackId": "netease:track:123",
+        "url": "https://media.example.invalid/contract-fixture",
+        "requestedQuality": "standard",
+        "actualQuality": null,
+        "bitrate": null,
+        "sizeBytes": null,
+        "format": null,
+        "notice": null,
+        "refreshAt": "2030-01-01T00:01:00Z",
+        "sourceExpiresAt": "2030-01-01T00:02:00Z"
+      },
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "valid": true,
+      "scope": "offline-contract-fixture",
+      "evidence": "synthetic; no measured policy TTL",
+      "sourceEvidence": "synthetic-trusted"
+    },
+    {
+      "id": "non-null-without-evidence",
+      "schema": "PlaybackSource",
+      "value": {
+        "trackId": "netease:track:123",
+        "url": "https://media.example.invalid/contract-fixture",
+        "requestedQuality": "standard",
+        "actualQuality": null,
+        "bitrate": null,
+        "sizeBytes": null,
+        "format": null,
+        "notice": null,
+        "refreshAt": "2030-01-01T00:01:00Z",
+        "sourceExpiresAt": "2030-01-01T00:02:00Z"
+      },
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "valid": false,
+      "scope": "offline-contract-fixture",
+      "evidence": "synthetic; no measured policy TTL"
+    },
+    {
+      "id": "mixed-old-new-fields",
+      "schema": "PlaybackSource",
+      "value": {
+        "trackId": "netease:track:123",
+        "url": "https://media.example.invalid/contract-fixture",
+        "requestedQuality": "standard",
+        "actualQuality": null,
+        "bitrate": null,
+        "sizeBytes": null,
+        "format": null,
+        "notice": null,
+        "refreshAt": "2030-01-01T00:01:00Z",
+        "sourceExpiresAt": null,
+        "expiresAt": "2030-01-01T00:01:00Z"
+      },
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "valid": false,
+      "scope": "offline-contract-fixture",
+      "evidence": "synthetic; no measured policy TTL"
+    },
+    {
+      "id": "non-https",
+      "schema": "PlaybackSource",
+      "value": {
+        "trackId": "netease:track:123",
+        "url": "http://media.example.invalid/fixture",
+        "requestedQuality": "standard",
+        "actualQuality": null,
+        "bitrate": null,
+        "sizeBytes": null,
+        "format": null,
+        "notice": null,
+        "refreshAt": "2030-01-01T00:01:00Z",
+        "sourceExpiresAt": null
+      },
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "valid": false,
+      "scope": "offline-contract-fixture",
+      "evidence": "synthetic; no measured policy TTL",
+      "expectedTrackId": "netease:track:123"
+    },
+    {
+      "id": "identity-mismatch",
+      "schema": "PlaybackSource",
+      "value": {
+        "trackId": "netease:track:456",
+        "url": "https://media.example.invalid/contract-fixture",
+        "requestedQuality": "standard",
+        "actualQuality": null,
+        "bitrate": null,
+        "sizeBytes": null,
+        "format": null,
+        "notice": null,
+        "refreshAt": "2030-01-01T00:01:00Z",
+        "sourceExpiresAt": null
+      },
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "valid": false,
+      "scope": "offline-contract-fixture",
+      "evidence": "synthetic; no measured policy TTL",
+      "expectedTrackId": "netease:track:123"
+    },
+    {
+      "id": "bad-time",
+      "schema": "PlaybackSource",
+      "value": {
+        "trackId": "netease:track:123",
+        "url": "https://media.example.invalid/contract-fixture",
+        "requestedQuality": "standard",
+        "actualQuality": null,
+        "bitrate": null,
+        "sizeBytes": null,
+        "format": null,
+        "notice": null,
+        "refreshAt": "garbage",
+        "sourceExpiresAt": null
+      },
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "valid": false,
+      "scope": "offline-contract-fixture",
+      "evidence": "synthetic; no measured policy TTL",
+      "expectedTrackId": "netease:track:123"
+    },
+    {
+      "id": "numeric-id",
+      "schema": "PlaybackSource",
+      "value": {
+        "trackId": 123,
+        "url": "https://media.example.invalid/contract-fixture",
+        "requestedQuality": "standard",
+        "actualQuality": null,
+        "bitrate": null,
+        "sizeBytes": null,
+        "format": null,
+        "notice": null,
+        "refreshAt": "2030-01-01T00:01:00Z",
+        "sourceExpiresAt": null
+      },
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "valid": false,
+      "scope": "offline-contract-fixture",
+      "evidence": "synthetic; no measured policy TTL",
+      "expectedTrackId": "netease:track:123"
+    }
+  ],
+  "httpFixtures": [
+    {
+      "id": "musicV2Op07-legacy-absent",
+      "operationId": "musicV2Op07",
+      "authenticated": true,
+      "requestHeaders": [],
+      "expectedVersion": "2.0.0",
+      "status": 200,
+      "responseHeaders": {
+        "Cache-Control": "private, no-store",
+        "Vary": "Cookie, X-Setu-Playback-Contract",
+        "X-Setu-Playback-Contract": "2.0.0"
+      },
+      "serializedBody": "{\"kind\":\"success\",\"source\":{\"trackId\":\"netease:track:123\",\"url\":\"https://media.example.invalid/contract-fixture\",\"requestedQuality\":\"standard\",\"actualQuality\":null,\"bitrate\":null,\"sizeBytes\":null,\"format\":null,\"notice\":null,\"expiresAt\":\"2030-01-01T00:01:00Z\"}}",
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "sourceEvidence": "synthetic-trusted",
+      "sourceDeadline": "2030-01-01T00:02:00Z",
+      "scope": "synthetic serialized HTTP fixture; runtime NOT EXECUTED"
+    },
+    {
+      "id": "musicV2Op07-legacy-explicit",
+      "operationId": "musicV2Op07",
+      "authenticated": true,
+      "requestHeaders": [
+        [
+          "X-Setu-Playback-Contract",
+          "2.0.0"
+        ]
+      ],
+      "expectedVersion": "2.0.0",
+      "status": 200,
+      "responseHeaders": {
+        "Cache-Control": "private, no-store",
+        "Vary": "Cookie, X-Setu-Playback-Contract",
+        "X-Setu-Playback-Contract": "2.0.0"
+      },
+      "serializedBody": "{\"kind\":\"success\",\"source\":{\"trackId\":\"netease:track:123\",\"url\":\"https://media.example.invalid/contract-fixture\",\"requestedQuality\":\"standard\",\"actualQuality\":null,\"bitrate\":null,\"sizeBytes\":null,\"format\":null,\"notice\":null,\"expiresAt\":\"2030-01-01T00:01:00Z\"}}",
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "sourceEvidence": "synthetic-trusted",
+      "sourceDeadline": "2030-01-01T00:02:00Z",
+      "scope": "synthetic serialized HTTP fixture; runtime NOT EXECUTED"
+    },
+    {
+      "id": "musicV2Op07-new-explicit",
+      "operationId": "musicV2Op07",
+      "authenticated": true,
+      "requestHeaders": [
+        [
+          "X-Setu-Playback-Contract",
+          "3.0.0"
+        ]
+      ],
+      "expectedVersion": "3.0.0",
+      "status": 200,
+      "responseHeaders": {
+        "Cache-Control": "private, no-store",
+        "Vary": "Cookie, X-Setu-Playback-Contract",
+        "X-Setu-Playback-Contract": "3.0.0"
+      },
+      "serializedBody": "{\"kind\":\"success\",\"source\":{\"trackId\":\"netease:track:123\",\"url\":\"https://media.example.invalid/contract-fixture\",\"requestedQuality\":\"standard\",\"actualQuality\":null,\"bitrate\":null,\"sizeBytes\":null,\"format\":null,\"notice\":null,\"refreshAt\":\"2030-01-01T00:01:00Z\",\"sourceExpiresAt\":null}}",
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "sourceEvidence": null,
+      "sourceDeadline": null,
+      "scope": "synthetic serialized HTTP fixture; runtime NOT EXECUTED"
+    },
+    {
+      "id": "musicV2Op07-unsupported",
+      "operationId": "musicV2Op07",
+      "authenticated": true,
+      "requestHeaders": [
+        [
+          "X-Setu-Playback-Contract",
+          "9.0.0"
+        ]
+      ],
+      "expectedVersion": null,
+      "status": 400,
+      "responseHeaders": {
+        "Cache-Control": "private, no-store",
+        "Vary": "Cookie, X-Setu-Playback-Contract"
+      },
+      "serializedBody": "{\"code\":\"INVALID_REQUEST\",\"message\":\"Contract fixture\",\"retryable\":false,\"traceId\":null}",
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "sourceEvidence": null,
+      "sourceDeadline": null,
+      "scope": "synthetic serialized HTTP fixture; runtime NOT EXECUTED"
+    },
+    {
+      "id": "musicV2Op07-empty",
+      "operationId": "musicV2Op07",
+      "authenticated": true,
+      "requestHeaders": [
+        [
+          "X-Setu-Playback-Contract",
+          ""
+        ]
+      ],
+      "expectedVersion": null,
+      "status": 400,
+      "responseHeaders": {
+        "Cache-Control": "private, no-store",
+        "Vary": "Cookie, X-Setu-Playback-Contract"
+      },
+      "serializedBody": "{\"code\":\"INVALID_REQUEST\",\"message\":\"Contract fixture\",\"retryable\":false,\"traceId\":null}",
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "sourceEvidence": null,
+      "sourceDeadline": null,
+      "scope": "synthetic serialized HTTP fixture; runtime NOT EXECUTED"
+    },
+    {
+      "id": "musicV2Op07-duplicate",
+      "operationId": "musicV2Op07",
+      "authenticated": true,
+      "requestHeaders": [
+        [
+          "X-Setu-Playback-Contract",
+          "3.0.0"
+        ],
+        [
+          "X-Setu-Playback-Contract",
+          "3.0.0"
+        ]
+      ],
+      "expectedVersion": null,
+      "status": 400,
+      "responseHeaders": {
+        "Cache-Control": "private, no-store",
+        "Vary": "Cookie, X-Setu-Playback-Contract"
+      },
+      "serializedBody": "{\"code\":\"INVALID_REQUEST\",\"message\":\"Contract fixture\",\"retryable\":false,\"traceId\":null}",
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "sourceEvidence": null,
+      "sourceDeadline": null,
+      "scope": "synthetic serialized HTTP fixture; runtime NOT EXECUTED"
+    },
+    {
+      "id": "musicV2Op07-comma-list",
+      "operationId": "musicV2Op07",
+      "authenticated": true,
+      "requestHeaders": [
+        [
+          "X-Setu-Playback-Contract",
+          "2.0.0,3.0.0"
+        ]
+      ],
+      "expectedVersion": null,
+      "status": 400,
+      "responseHeaders": {
+        "Cache-Control": "private, no-store",
+        "Vary": "Cookie, X-Setu-Playback-Contract"
+      },
+      "serializedBody": "{\"code\":\"INVALID_REQUEST\",\"message\":\"Contract fixture\",\"retryable\":false,\"traceId\":null}",
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "sourceEvidence": null,
+      "sourceDeadline": null,
+      "scope": "synthetic serialized HTTP fixture; runtime NOT EXECUTED"
+    },
+    {
+      "id": "musicV2Op07-unauthenticated",
+      "operationId": "musicV2Op07",
+      "authenticated": false,
+      "requestHeaders": [
+        [
+          "X-Setu-Playback-Contract",
+          "3.0.0"
+        ]
+      ],
+      "expectedVersion": null,
+      "status": 401,
+      "responseHeaders": {
+        "Cache-Control": "private, no-store",
+        "Vary": "Cookie, X-Setu-Playback-Contract"
+      },
+      "serializedBody": "{\"code\":\"UNAUTHORIZED\",\"message\":\"Contract fixture\",\"retryable\":false,\"traceId\":null}",
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "sourceEvidence": null,
+      "sourceDeadline": null,
+      "scope": "synthetic serialized HTTP fixture; runtime NOT EXECUTED"
+    },
+    {
+      "id": "musicV2Op07-legacy-unknown-expiry",
+      "operationId": "musicV2Op07",
+      "authenticated": true,
+      "requestHeaders": [
+        [
+          "X-Setu-Playback-Contract",
+          "2.0.0"
+        ]
+      ],
+      "expectedVersion": "2.0.0",
+      "status": 503,
+      "responseHeaders": {
+        "Cache-Control": "private, no-store",
+        "Vary": "Cookie, X-Setu-Playback-Contract",
+        "X-Setu-Playback-Contract": "2.0.0"
+      },
+      "serializedBody": "{\"code\": \"UPSTREAM_UNAVAILABLE\", \"message\": \"Unknown trusted expiry\", \"retryable\": true, \"traceId\": null}",
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "sourceEvidence": null,
+      "scope": "synthetic serialized HTTP fixture; runtime NOT EXECUTED"
+    },
+    {
+      "id": "musicV2Op07-new-upstream-unavailable",
+      "operationId": "musicV2Op07",
+      "authenticated": true,
+      "requestHeaders": [
+        [
+          "X-Setu-Playback-Contract",
+          "3.0.0"
+        ]
+      ],
+      "expectedVersion": "3.0.0",
+      "status": 503,
+      "responseHeaders": {
+        "Cache-Control": "private, no-store",
+        "Vary": "Cookie, X-Setu-Playback-Contract",
+        "X-Setu-Playback-Contract": "3.0.0"
+      },
+      "serializedBody": "{\"code\": \"UPSTREAM_UNAVAILABLE\", \"message\": \"Upstream failure\", \"retryable\": true, \"traceId\": null}",
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "sourceEvidence": null,
+      "scope": "synthetic serialized HTTP fixture; runtime NOT EXECUTED"
+    },
+    {
+      "id": "musicV2Op08-legacy-absent",
+      "operationId": "musicV2Op08",
+      "authenticated": true,
+      "requestHeaders": [],
+      "expectedVersion": "2.0.0",
+      "status": 200,
+      "responseHeaders": {
+        "Cache-Control": "private, no-store",
+        "Vary": "Cookie, X-Setu-Playback-Contract",
+        "X-Setu-Playback-Contract": "2.0.0"
+      },
+      "serializedBody": "{\"items\":[{\"kind\":\"success\",\"source\":{\"trackId\":\"netease:track:123\",\"url\":\"https://media.example.invalid/contract-fixture\",\"requestedQuality\":\"standard\",\"actualQuality\":null,\"bitrate\":null,\"sizeBytes\":null,\"format\":null,\"notice\":null,\"expiresAt\":\"2030-01-01T00:01:00Z\"}}]}",
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "sourceEvidence": "synthetic-trusted",
+      "sourceDeadline": "2030-01-01T00:02:00Z",
+      "scope": "synthetic serialized HTTP fixture; runtime NOT EXECUTED"
+    },
+    {
+      "id": "musicV2Op08-legacy-explicit",
+      "operationId": "musicV2Op08",
+      "authenticated": true,
+      "requestHeaders": [
+        [
+          "X-Setu-Playback-Contract",
+          "2.0.0"
+        ]
+      ],
+      "expectedVersion": "2.0.0",
+      "status": 200,
+      "responseHeaders": {
+        "Cache-Control": "private, no-store",
+        "Vary": "Cookie, X-Setu-Playback-Contract",
+        "X-Setu-Playback-Contract": "2.0.0"
+      },
+      "serializedBody": "{\"items\":[{\"kind\":\"success\",\"source\":{\"trackId\":\"netease:track:123\",\"url\":\"https://media.example.invalid/contract-fixture\",\"requestedQuality\":\"standard\",\"actualQuality\":null,\"bitrate\":null,\"sizeBytes\":null,\"format\":null,\"notice\":null,\"expiresAt\":\"2030-01-01T00:01:00Z\"}}]}",
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "sourceEvidence": "synthetic-trusted",
+      "sourceDeadline": "2030-01-01T00:02:00Z",
+      "scope": "synthetic serialized HTTP fixture; runtime NOT EXECUTED"
+    },
+    {
+      "id": "musicV2Op08-new-explicit",
+      "operationId": "musicV2Op08",
+      "authenticated": true,
+      "requestHeaders": [
+        [
+          "X-Setu-Playback-Contract",
+          "3.0.0"
+        ]
+      ],
+      "expectedVersion": "3.0.0",
+      "status": 200,
+      "responseHeaders": {
+        "Cache-Control": "private, no-store",
+        "Vary": "Cookie, X-Setu-Playback-Contract",
+        "X-Setu-Playback-Contract": "3.0.0"
+      },
+      "serializedBody": "{\"items\":[{\"kind\":\"success\",\"source\":{\"trackId\":\"netease:track:123\",\"url\":\"https://media.example.invalid/contract-fixture\",\"requestedQuality\":\"standard\",\"actualQuality\":null,\"bitrate\":null,\"sizeBytes\":null,\"format\":null,\"notice\":null,\"refreshAt\":\"2030-01-01T00:01:00Z\",\"sourceExpiresAt\":null}}]}",
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "sourceEvidence": null,
+      "sourceDeadline": null,
+      "scope": "synthetic serialized HTTP fixture; runtime NOT EXECUTED"
+    },
+    {
+      "id": "musicV2Op08-unsupported",
+      "operationId": "musicV2Op08",
+      "authenticated": true,
+      "requestHeaders": [
+        [
+          "X-Setu-Playback-Contract",
+          "9.0.0"
+        ]
+      ],
+      "expectedVersion": null,
+      "status": 400,
+      "responseHeaders": {
+        "Cache-Control": "private, no-store",
+        "Vary": "Cookie, X-Setu-Playback-Contract"
+      },
+      "serializedBody": "{\"code\":\"INVALID_REQUEST\",\"message\":\"Contract fixture\",\"retryable\":false,\"traceId\":null}",
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "sourceEvidence": null,
+      "sourceDeadline": null,
+      "scope": "synthetic serialized HTTP fixture; runtime NOT EXECUTED"
+    },
+    {
+      "id": "musicV2Op08-empty",
+      "operationId": "musicV2Op08",
+      "authenticated": true,
+      "requestHeaders": [
+        [
+          "X-Setu-Playback-Contract",
+          ""
+        ]
+      ],
+      "expectedVersion": null,
+      "status": 400,
+      "responseHeaders": {
+        "Cache-Control": "private, no-store",
+        "Vary": "Cookie, X-Setu-Playback-Contract"
+      },
+      "serializedBody": "{\"code\":\"INVALID_REQUEST\",\"message\":\"Contract fixture\",\"retryable\":false,\"traceId\":null}",
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "sourceEvidence": null,
+      "sourceDeadline": null,
+      "scope": "synthetic serialized HTTP fixture; runtime NOT EXECUTED"
+    },
+    {
+      "id": "musicV2Op08-duplicate",
+      "operationId": "musicV2Op08",
+      "authenticated": true,
+      "requestHeaders": [
+        [
+          "X-Setu-Playback-Contract",
+          "3.0.0"
+        ],
+        [
+          "X-Setu-Playback-Contract",
+          "3.0.0"
+        ]
+      ],
+      "expectedVersion": null,
+      "status": 400,
+      "responseHeaders": {
+        "Cache-Control": "private, no-store",
+        "Vary": "Cookie, X-Setu-Playback-Contract"
+      },
+      "serializedBody": "{\"code\":\"INVALID_REQUEST\",\"message\":\"Contract fixture\",\"retryable\":false,\"traceId\":null}",
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "sourceEvidence": null,
+      "sourceDeadline": null,
+      "scope": "synthetic serialized HTTP fixture; runtime NOT EXECUTED"
+    },
+    {
+      "id": "musicV2Op08-comma-list",
+      "operationId": "musicV2Op08",
+      "authenticated": true,
+      "requestHeaders": [
+        [
+          "X-Setu-Playback-Contract",
+          "2.0.0,3.0.0"
+        ]
+      ],
+      "expectedVersion": null,
+      "status": 400,
+      "responseHeaders": {
+        "Cache-Control": "private, no-store",
+        "Vary": "Cookie, X-Setu-Playback-Contract"
+      },
+      "serializedBody": "{\"code\":\"INVALID_REQUEST\",\"message\":\"Contract fixture\",\"retryable\":false,\"traceId\":null}",
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "sourceEvidence": null,
+      "sourceDeadline": null,
+      "scope": "synthetic serialized HTTP fixture; runtime NOT EXECUTED"
+    },
+    {
+      "id": "musicV2Op08-unauthenticated",
+      "operationId": "musicV2Op08",
+      "authenticated": false,
+      "requestHeaders": [
+        [
+          "X-Setu-Playback-Contract",
+          "3.0.0"
+        ]
+      ],
+      "expectedVersion": null,
+      "status": 401,
+      "responseHeaders": {
+        "Cache-Control": "private, no-store",
+        "Vary": "Cookie, X-Setu-Playback-Contract"
+      },
+      "serializedBody": "{\"code\":\"UNAUTHORIZED\",\"message\":\"Contract fixture\",\"retryable\":false,\"traceId\":null}",
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "sourceEvidence": null,
+      "sourceDeadline": null,
+      "scope": "synthetic serialized HTTP fixture; runtime NOT EXECUTED"
+    },
+    {
+      "id": "musicV2Op08-legacy-unknown-expiry",
+      "operationId": "musicV2Op08",
+      "authenticated": true,
+      "requestHeaders": [
+        [
+          "X-Setu-Playback-Contract",
+          "2.0.0"
+        ]
+      ],
+      "expectedVersion": "2.0.0",
+      "status": 503,
+      "responseHeaders": {
+        "Cache-Control": "private, no-store",
+        "Vary": "Cookie, X-Setu-Playback-Contract",
+        "X-Setu-Playback-Contract": "2.0.0"
+      },
+      "serializedBody": "{\"code\": \"UPSTREAM_UNAVAILABLE\", \"message\": \"Unknown trusted expiry\", \"retryable\": true, \"traceId\": null}",
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "sourceEvidence": null,
+      "scope": "synthetic serialized HTTP fixture; runtime NOT EXECUTED"
+    },
+    {
+      "id": "musicV2Op08-new-upstream-unavailable",
+      "operationId": "musicV2Op08",
+      "authenticated": true,
+      "requestHeaders": [
+        [
+          "X-Setu-Playback-Contract",
+          "3.0.0"
+        ]
+      ],
+      "expectedVersion": "3.0.0",
+      "status": 503,
+      "responseHeaders": {
+        "Cache-Control": "private, no-store",
+        "Vary": "Cookie, X-Setu-Playback-Contract",
+        "X-Setu-Playback-Contract": "3.0.0"
+      },
+      "serializedBody": "{\"code\": \"UPSTREAM_UNAVAILABLE\", \"message\": \"Upstream failure\", \"retryable\": true, \"traceId\": null}",
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "sourceEvidence": null,
+      "scope": "synthetic serialized HTTP fixture; runtime NOT EXECUTED"
+    },
+    {
+      "id": "musicV2Op07-denied-2.0.0",
+      "operationId": "musicV2Op07",
+      "authenticated": true,
+      "requestHeaders": [
+        [
+          "X-Setu-Playback-Contract",
+          "2.0.0"
+        ]
+      ],
+      "expectedVersion": "2.0.0",
+      "status": 200,
+      "responseHeaders": {
+        "Cache-Control": "private, no-store",
+        "Vary": "Cookie, X-Setu-Playback-Contract",
+        "X-Setu-Playback-Contract": "2.0.0"
+      },
+      "serializedBody": "{\"kind\": \"denied\", \"trackId\": \"netease:track:123\", \"availability\": {\"status\": \"trialOnly\", \"reason\": \"Fixture known unplayable\", \"maxQuality\": null}}",
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "sourceEvidence": "synthetic-trusted",
+      "sourceDeadline": "2030-01-01T00:02:00Z",
+      "scope": "synthetic serialized HTTP fixture; runtime NOT EXECUTED"
+    },
+    {
+      "id": "musicV2Op07-denied-3.0.0",
+      "operationId": "musicV2Op07",
+      "authenticated": true,
+      "requestHeaders": [
+        [
+          "X-Setu-Playback-Contract",
+          "3.0.0"
+        ]
+      ],
+      "expectedVersion": "3.0.0",
+      "status": 200,
+      "responseHeaders": {
+        "Cache-Control": "private, no-store",
+        "Vary": "Cookie, X-Setu-Playback-Contract",
+        "X-Setu-Playback-Contract": "3.0.0"
+      },
+      "serializedBody": "{\"kind\": \"denied\", \"trackId\": \"netease:track:123\", \"availability\": {\"status\": \"trialOnly\", \"reason\": \"Fixture known unplayable\", \"maxQuality\": null}}",
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "sourceEvidence": null,
+      "sourceDeadline": null,
+      "scope": "synthetic serialized HTTP fixture; runtime NOT EXECUTED"
+    },
+    {
+      "id": "musicV2Op08-denied-2.0.0",
+      "operationId": "musicV2Op08",
+      "authenticated": true,
+      "requestHeaders": [
+        [
+          "X-Setu-Playback-Contract",
+          "2.0.0"
+        ]
+      ],
+      "expectedVersion": "2.0.0",
+      "status": 200,
+      "responseHeaders": {
+        "Cache-Control": "private, no-store",
+        "Vary": "Cookie, X-Setu-Playback-Contract",
+        "X-Setu-Playback-Contract": "2.0.0"
+      },
+      "serializedBody": "{\"items\": [{\"kind\": \"denied\", \"trackId\": \"netease:track:123\", \"availability\": {\"status\": \"trialOnly\", \"reason\": \"Fixture known unplayable\", \"maxQuality\": null}}]}",
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "sourceEvidence": "synthetic-trusted",
+      "sourceDeadline": "2030-01-01T00:02:00Z",
+      "scope": "synthetic serialized HTTP fixture; runtime NOT EXECUTED"
+    },
+    {
+      "id": "musicV2Op08-denied-3.0.0",
+      "operationId": "musicV2Op08",
+      "authenticated": true,
+      "requestHeaders": [
+        [
+          "X-Setu-Playback-Contract",
+          "3.0.0"
+        ]
+      ],
+      "expectedVersion": "3.0.0",
+      "status": 200,
+      "responseHeaders": {
+        "Cache-Control": "private, no-store",
+        "Vary": "Cookie, X-Setu-Playback-Contract",
+        "X-Setu-Playback-Contract": "3.0.0"
+      },
+      "serializedBody": "{\"items\": [{\"kind\": \"denied\", \"trackId\": \"netease:track:123\", \"availability\": {\"status\": \"trialOnly\", \"reason\": \"Fixture known unplayable\", \"maxQuality\": null}}]}",
+      "receivedAt": "2030-01-01T00:00:00Z",
+      "sourceEvidence": null,
+      "sourceDeadline": null,
+      "scope": "synthetic serialized HTTP fixture; runtime NOT EXECUTED"
+    }
+  ]
+}

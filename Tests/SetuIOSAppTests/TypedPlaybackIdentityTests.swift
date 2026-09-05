@@ -36,7 +36,7 @@ final class TypedPlaybackIdentityTests: XCTestCase {
         let capture = MusicV2RequestCapture()
         MusicV2URLProtocol.handler = { request in
             capture.append(request)
-            return .init(body: typedSourceResponse(request))
+            return .init(body: typedSourceResponse(request), headers: ["X-Setu-Playback-Contract": "3.0.0"])
         }
         let resolver = PlaybackURLResolver(client: musicTestClient(), v2: makeMusicV2Client())
         let first = MusicPlaybackIdentity.canonical(.init(rawValue: "future:track:A%2Fb"))
@@ -63,7 +63,7 @@ final class TypedPlaybackIdentityTests: XCTestCase {
 
     func testTypedPlayerEntryQualitySkipRetryAndUserReset() async throws {
         let capture = MusicV2RequestCapture()
-        MusicV2URLProtocol.handler = { request in capture.append(request); return .init(body: typedSourceResponse(request)) }
+        MusicV2URLProtocol.handler = { request in capture.append(request); return .init(body: typedSourceResponse(request), headers: ["X-Setu-Playback-Contract": "3.0.0"]) }
         let player = MusicPlaybackController(persistsPlayback: false)
         defer { player.stop() }
         player.urlResolver = PlaybackURLResolver(client: musicTestClient(), v2: makeMusicV2Client())
@@ -122,12 +122,34 @@ final class TypedPlaybackIdentityTests: XCTestCase {
         XCTAssertEqual(player.currentTrack?.id, track.id)
     }
 
+    func testReplacementMediaFailureDoesNotStartAnotherForcedResolution() async throws {
+        let capture = MusicV2RequestCapture()
+        MusicV2URLProtocol.handler = { request in
+            capture.append(request)
+            return .init(body: typedSourceResponse(request), headers: ["X-Setu-Playback-Contract": "3.0.0"])
+        }
+        let player = MusicPlaybackController(persistsPlayback: false)
+        defer { player.stop() }
+        player.urlResolver = PlaybackURLResolver(client: musicTestClient(), v2: makeMusicV2Client())
+        let local = try playbackWave()
+        defer { try? FileManager.default.removeItem(at: local) }
+        player.play(url: local, track: try typedTrack("netease:track:1"))
+        let original = try XCTUnwrap(player.player?.currentItem)
+        player.handleItemFailure(original, error: URLError(.timedOut))
+        for _ in 0..<100 where player.player?.currentItem === original { try await Task.sleep(nanoseconds: 10_000_000) }
+        let replacement = try XCTUnwrap(player.player?.currentItem)
+        XCTAssertFalse(replacement === original)
+        player.handleItemFailure(replacement, error: URLError(.timedOut))
+        XCTAssertNotNil(player.playbackError)
+        XCTAssertEqual(capture.requests.count, 1)
+    }
+
     func testTypedResolutionResetRejectsOldUserInFlight() async throws {
         let capture = MusicV2RequestCapture()
         MusicV2URLProtocol.handler = { request in
             capture.append(request)
             Thread.sleep(forTimeInterval: 0.08)
-            return .init(body: typedSourceResponse(request))
+            return .init(body: typedSourceResponse(request), headers: ["X-Setu-Playback-Contract": "3.0.0"])
         }
         let resolver = PlaybackURLResolver(client: musicTestClient(), v2: makeMusicV2Client())
         let id = MusicPlaybackIdentity.canonical(.init(rawValue: "opaque:owner"))
@@ -140,7 +162,7 @@ final class TypedPlaybackIdentityTests: XCTestCase {
     }
 
     func testTypedPreparedNextRequiresExactIdentity() async throws {
-        MusicV2URLProtocol.handler = { .init(body: typedSourceResponse($0)) }
+        MusicV2URLProtocol.handler = { .init(body: typedSourceResponse($0), headers: ["X-Setu-Playback-Contract": "3.0.0"]) }
         let resolver = PlaybackURLResolver(client: musicTestClient(), v2: makeMusicV2Client())
         let url = try playbackWave()
         defer { try? FileManager.default.removeItem(at: url) }
@@ -185,6 +207,6 @@ func typedSourceResponse(_ request: URLRequest) -> Data {
     let id = request.url!.pathComponents.dropLast().last!
     let level = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "level" }?.value ?? "standard"
     let object: [String: Any] = ["kind": "success", "source": ["trackId": id, "url": "https://example.invalid/audio.mp3", "requestedQuality": level, "actualQuality": level,
-        "expiresAt": "2099-01-01T00:00:00Z", "bitrate": NSNull(), "sizeBytes": NSNull(), "format": NSNull(), "notice": NSNull()]]
+        "refreshAt": "2099-01-01T00:00:00Z", "sourceExpiresAt": NSNull(), "bitrate": NSNull(), "sizeBytes": NSNull(), "format": NSNull(), "notice": NSNull()]]
     return try! JSONSerialization.data(withJSONObject: object)
 }

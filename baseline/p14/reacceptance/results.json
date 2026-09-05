@@ -1,0 +1,61 @@
+{
+  "baseline": {
+    "production": "3f18163",
+    "swiftFull": "295/295 PASS, retained, not rerun"
+  },
+  "ui": {
+    "passed": 10,
+    "failed": 0,
+    "cases": {
+      "architecture": 5,
+      "cache": 2,
+      "fmEntryAndLayout": 2,
+      "fmControls": 1
+    }
+  },
+  "realProbes": {
+    "uiSkipped": 2,
+    "deviceIntegrationSkipped": 2,
+    "endpoint": "https://api.yukiryou.icu/user/music/v2/radio/fm?limit=4",
+    "httpStatus": 503,
+    "code": "UPSTREAM_UNAVAILABLE",
+    "retryable": true,
+    "realTracksObtained": 0,
+    "upstreamContactConfirmed": false,
+    "realBlockRequestsSent": 0
+  },
+  "M-13": {
+    "status": "NOT_EXECUTED_UPSTREAM_PREREQUISITE_BLOCKED",
+    "minutes": 0,
+    "appFailureObserved": false,
+    "toolingFailureConfirmed": false,
+    "instrumentsDeviceOnline": true
+  },
+  "productionCodeChanged": false,
+  "logs": {
+    "p14-reaccept-serial.log": {
+      "path": "/private/tmp/p14-reaccept-serial.log",
+      "sha256": "96bebde7dc0b7c846670ab1df43f7f87173a37add38bb2acac89e6b7cd146ab2"
+    },
+    "p14-reaccept-usb.log": {
+      "path": "/private/tmp/p14-reaccept-usb.log",
+      "sha256": "c2e6bcc807d65ec3aadd2d616452d98359105be8554a6061e3efc33a9bddf312"
+    },
+    "p14-development-entry.log": {
+      "path": "/private/tmp/p14-development-entry.log",
+      "sha256": "d94cb000e52bdf6a4a81e0e8d80952d0356b6aeb3bbd2f97f94217575684a7d6"
+    },
+    "p14-development-entry-diagnostic.log": {
+      "path": "/private/tmp/p14-development-entry-diagnostic.log",
+      "sha256": "2b1b32568137164193d9b8d97cf2232285fd74e05a2054fe4d8d527d1cc3441f"
+    },
+    "p14-development-device.log": {
+      "path": "/private/tmp/p14-development-device.log",
+      "sha256": "0b2983a7f04622e98a0a68793a9ca10a41954cf1b40d2bed12f77ec113e03503"
+    },
+    "p14-reaccept-final-probes.log": {
+      "path": "/private/tmp/p14-reaccept-final-probes.log",
+      "sha256": "95f861d8107781ffc29c405b99cc82476bbb31ed792f6adfa9a3df2b9d3f8631"
+    }
+  }
+}

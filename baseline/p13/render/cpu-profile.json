@@ -1,0 +1,164 @@
+[
+  {
+    "testIdentifier": "MusicPlayerP13UITests/testPhysicalWordScrollPresentedMetrics()",
+    "testRuns": [
+      {
+        "metrics": [
+          {
+            "baselineAverage": 0,
+            "baselineName": "",
+            "displayName": "Duration (Scroll_DraggingAndDeceleration)",
+            "identifier": "com.apple.dt.XCTMetric_OSSignpost-Scroll_DraggingAndDeceleration.duration",
+            "maxPercentRegression": 10,
+            "maxPercentRelativeStandardDeviation": 10,
+            "maxRegression": 0,
+            "maxStandardDeviation": 10,
+            "measurements": [
+              2.276121042,
+              2.276098958,
+              2.275877292
+            ],
+            "polarity": "prefers smaller",
+            "unitOfMeasurement": "s"
+          },
+          {
+            "baselineAverage": 0,
+            "baselineName": "",
+            "displayName": "Number of Hitches (Scroll_DraggingAndDeceleration)",
+            "identifier": "com.apple.dt.XCTMetric_OSSignpost-Scroll_DraggingAndDeceleration.animation.hitch.number",
+            "maxPercentRegression": 10,
+            "maxPercentRelativeStandardDeviation": 10,
+            "maxRegression": 0,
+            "maxStandardDeviation": 10,
+            "measurements": [
+              2,
+              9,
+              5
+            ],
+            "polarity": "prefers smaller",
+            "unitOfMeasurement": "hitches"
+          },
+          {
+            "baselineAverage": 0,
+            "baselineName": "",
+            "displayName": "CPU Instructions Retired (setuios)",
+            "identifier": "com.apple.dt.XCTMetric_CPU-icu.yukiryou.setuios.instructions_retired",
+            "maxPercentRegression": 10,
+            "maxPercentRelativeStandardDeviation": 10,
+            "maxRegression": 0,
+            "maxStandardDeviation": 10,
+            "measurements": [
+              7234838.555,
+              7052190.243,
+              7398012.195
+            ],
+            "polarity": "prefers smaller",
+            "unitOfMeasurement": "kI"
+          },
+          {
+            "baselineAverage": 0,
+            "baselineName": "",
+            "displayName": "CPU Cycles (setuios)",
+            "identifier": "com.apple.dt.XCTMetric_CPU-icu.yukiryou.setuios.cycles",
+            "maxPercentRegression": 10,
+            "maxPercentRelativeStandardDeviation": 10,
+            "maxRegression": 0,
+            "maxStandardDeviation": 10,
+            "measurements": [
+              4101157.211,
+              3811253.801,
+              4193951.292
+            ],
+            "polarity": "prefers smaller",
+            "unitOfMeasurement": "kC"
+          },
+          {
+            "baselineAverage": 0,
+            "baselineName": "",
+            "displayName": "Hitch Time Ratio (Scroll_DraggingAndDeceleration)",
+            "identifier": "com.apple.dt.XCTMetric_OSSignpost-Scroll_DraggingAndDeceleration.animation.hitch.time.ratio",
+            "maxPercentRegression": 10,
+            "maxPercentRelativeStandardDeviation": 10,
+            "maxRegression": 0,
+            "maxStandardDeviation": 10,
+            "measurements": [
+              7.323515765720207,
+              32.95671733663455,
+              18.311070703412813
+            ],
+            "polarity": "prefers smaller",
+            "unitOfMeasurement": "ms per s"
+          },
+          {
+            "baselineAverage": 0,
+            "baselineName": "",
+            "displayName": "CPU Time (setuios)",
+            "identifier": "com.apple.dt.XCTMetric_CPU-icu.yukiryou.setuios.time",
+            "maxPercentRegression": 10,
+            "maxPercentRelativeStandardDeviation": 10,
+            "maxRegression": 0,
+            "maxStandardDeviation": 10,
+            "measurements": [
+              2.129495843,
+              1.933295468,
+              2.2339168160000002
+            ],
+            "polarity": "prefers smaller",
+            "unitOfMeasurement": "s"
+          },
+          {
+            "baselineAverage": 0,
+            "baselineName": "",
+            "displayName": "Frame Count (Scroll_DraggingAndDeceleration)",
+            "identifier": "com.apple.dt.XCTMetric_OSSignpost-Scroll_DraggingAndDeceleration.animation.frame.count",
+            "maxPercentRegression": 10,
+            "maxPercentRelativeStandardDeviation": 10,
+            "maxRegression": 0,
+            "maxStandardDeviation": 10,
+            "measurements": [
+              0,
+              0,
+              0
+            ],
+            "polarity": "prefers larger",
+            "unitOfMeasurement": "frames"
+          },
+          {
+            "baselineAverage": 0,
+            "baselineName": "",
+            "displayName": "Frame Rate (Scroll_DraggingAndDeceleration)",
+            "identifier": "com.apple.dt.XCTMetric_OSSignpost-Scroll_DraggingAndDeceleration.animation.frame.rate",
+            "maxPercentRegression": 10,
+            "maxPercentRelativeStandardDeviation": 10,
+            "maxRegression": 0,
+            "maxStandardDeviation": 10,
+            "measurements": [
+              81.71797180175781,
+              79.08267974853516,
+              80.84793853759766
+            ],
+            "polarity": "prefers larger",
+            "unitOfMeasurement": "fps"
+          },
+          {
+            "baselineAverage": 0,
+            "baselineName": "",
+            "displayName": "Hitches Total Duration (Scroll_DraggingAndDeceleration)",
+            "identifier": "com.apple.dt.XCTMetric_OSSignpost-Scroll_DraggingAndDeceleration.animation.hitches.total.duration",
+            "maxPercentRegression": 10,
+            "maxPercentRelativeStandardDeviation": 10,
+            "maxRegression": 0,
+            "maxStandardDeviation": 10,
+            "measurements": [
+              16.669207,
+              75.012741,
+              41.673745000000004
+            ],
+            "polarity": "prefers smaller",
+            "unitOfMeasurement": "ms"
+          }
+        ]
+      }
+    ]
+  }
+]

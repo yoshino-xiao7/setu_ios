@@ -1,0 +1,162 @@
+[
+  {
+    "appearance": "light",
+    "artistMatches": true,
+    "avPlayerInstancesObserved": 1,
+    "buffering": true,
+    "controllerTime": 83,
+    "error": false,
+    "index": 0,
+    "lyricIndex": 83,
+    "miniInstances": 1,
+    "nowPlayingElapsed": 83,
+    "parses": 1,
+    "phase": "loading",
+    "playing": true,
+    "queue": [
+      7101,
+      7102,
+      7103
+    ],
+    "rate": 0,
+    "route": [
+      "Speaker"
+    ],
+    "routeEvents": 1,
+    "routeReason": 3,
+    "sleepTimer": false,
+    "targetMac": false,
+    "time": 83,
+    "titleMatches": true,
+    "track": 7101,
+    "urlRequests": 1
+  },
+  {
+    "appearance": "light",
+    "artistMatches": true,
+    "avPlayerInstancesObserved": 1,
+    "buffering": false,
+    "controllerTime": 83,
+    "error": false,
+    "index": 0,
+    "lyricIndex": 83,
+    "miniInstances": 1,
+    "nowPlayingElapsed": 83,
+    "parses": 1,
+    "phase": "playing",
+    "playing": true,
+    "queue": [
+      7101,
+      7102,
+      7103
+    ],
+    "rate": 1,
+    "route": [
+      "Speaker"
+    ],
+    "routeEvents": 1,
+    "routeReason": 3,
+    "sleepTimer": false,
+    "targetMac": false,
+    "time": 83.821866542,
+    "titleMatches": true,
+    "track": 7101,
+    "urlRequests": 2
+  },
+  {
+    "appearance": "light",
+    "artistMatches": true,
+    "avPlayerInstancesObserved": 1,
+    "buffering": false,
+    "controllerTime": 83,
+    "error": false,
+    "index": 0,
+    "lyricIndex": 83,
+    "miniInstances": 1,
+    "nowPlayingElapsed": 83,
+    "parses": 1,
+    "phase": "playing",
+    "playing": true,
+    "queue": [
+      7101,
+      7102,
+      7103
+    ],
+    "rate": 1,
+    "route": [
+      "Speaker"
+    ],
+    "routeEvents": 1,
+    "routeReason": 3,
+    "sleepTimer": false,
+    "targetMac": false,
+    "time": 83.821866542,
+    "titleMatches": true,
+    "track": 7101,
+    "urlRequests": 2
+  },
+  {
+    "appearance": "light",
+    "artistMatches": true,
+    "avPlayerInstancesObserved": 1,
+    "buffering": false,
+    "controllerTime": 98.00013152,
+    "error": false,
+    "index": 0,
+    "lyricIndex": 98,
+    "miniInstances": 1,
+    "nowPlayingElapsed": 98.00013152,
+    "parses": 1,
+    "phase": "playing",
+    "playing": true,
+    "queue": [
+      7101,
+      7102,
+      7103
+    ],
+    "rate": 1,
+    "route": [
+      "Speaker"
+    ],
+    "routeEvents": 1,
+    "routeReason": 3,
+    "sleepTimer": false,
+    "targetMac": false,
+    "time": 98.840997037,
+    "titleMatches": true,
+    "track": 7101,
+    "urlRequests": 2
+  },
+  {
+    "appearance": "light",
+    "artistMatches": true,
+    "avPlayerInstancesObserved": 1,
+    "buffering": false,
+    "controllerTime": 98.00013152,
+    "error": false,
+    "index": 0,
+    "lyricIndex": 98,
+    "miniInstances": 1,
+    "nowPlayingElapsed": 98.00013152,
+    "parses": 1,
+    "phase": "playing",
+    "playing": true,
+    "queue": [
+      7101,
+      7102,
+      7103
+    ],
+    "rate": 1,
+    "route": [
+      "Speaker"
+    ],
+    "routeEvents": 1,
+    "routeReason": 3,
+    "sleepTimer": false,
+    "targetMac": false,
+    "time": 98.840997037,
+    "titleMatches": true,
+    "track": 7101,
+    "urlRequests": 2
+  }
+]

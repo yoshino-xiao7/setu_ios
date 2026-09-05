@@ -1,0 +1,66 @@
+{
+  "MusicLibraryLayoutTests/testLikedTracks375And430WithHeartsAndAccessibility": {
+    "log": "/private/tmp/p15-ui.log",
+    "result": "Test Case '-[SetuIOSAppTests.MusicLibraryLayoutTests testLikedTracks375And430WithHeartsAndAccessibility]' passed (0.557 seconds)."
+  },
+  "MusicLibraryLayoutTests/testLoadingStateRenders": {
+    "log": "/private/tmp/p15-ui.log",
+    "result": "Test Case '-[SetuIOSAppTests.MusicLibraryLayoutTests testLoadingStateRenders]' passed (0.229 seconds)."
+  },
+  "MusicArchitectureUITests/testLyricsStayParsedAcrossBrowsingAndCoverSwitches": {
+    "log": "/private/tmp/p15-ui.log",
+    "result": "Test Case '-[SetuIOSAppUITests.MusicArchitectureUITests testLyricsStayParsedAcrossBrowsingAndCoverSwitches]' passed (36.617 seconds)."
+  },
+  "MusicArchitectureUITests/testMVParentAndChildShareOneDetailRequest": {
+    "log": "/private/tmp/p15-ui.log",
+    "result": "Test Case '-[SetuIOSAppUITests.MusicArchitectureUITests testMVParentAndChildShareOneDetailRequest]' passed (31.202 seconds)."
+  },
+  "MusicLibraryLayoutTests/testFullLikedPageAt375And430": {
+    "log": "/private/tmp/p15-layout-final.log",
+    "result": "Test Case '-[SetuIOSAppTests.MusicLibraryLayoutTests testFullLikedPageAt375And430]' passed (1.275 seconds)."
+  },
+  "MusicLibraryLayoutTests/testUnauthorizedPageStateRenders": {
+    "log": "/private/tmp/p15-layout-final.log",
+    "result": "Test Case '-[SetuIOSAppTests.MusicLibraryLayoutTests testUnauthorizedPageStateRenders]' passed (0.260 seconds)."
+  },
+  "MusicArchitectureUITests/testPlaybackAndBulkPlaylistSheetsKeepTheirExistingSummaries": {
+    "log": "/private/tmp/p15-final-ui.log",
+    "result": "Test Case '-[SetuIOSAppUITests.MusicArchitectureUITests testPlaybackAndBulkPlaylistSheetsKeepTheirExistingSummaries]' passed (26.574 seconds)."
+  },
+  "MusicArchitectureUITests/testSinglePlayerIdentityAcrossTabsPushPopQueueAndNowPlaying": {
+    "log": "/private/tmp/p15-final-ui.log",
+    "result": "Test Case '-[SetuIOSAppUITests.MusicArchitectureUITests testSinglePlayerIdentityAcrossTabsPushPopQueueAndNowPlaying]' passed (36.218 seconds)."
+  },
+  "MusicArchitectureUITests/testSongPlaylistSheetUsesExistingStoreAndPreservesSummary": {
+    "log": "/private/tmp/p15-final-ui.log",
+    "result": "Test Case '-[SetuIOSAppUITests.MusicArchitectureUITests testSongPlaylistSheetUsesExistingStoreAndPreservesSummary]' passed (16.408 seconds)."
+  },
+  "MusicCacheUITests/testHomeSearchReturnKeepsCachedContent": {
+    "log": "/private/tmp/p15-final-ui.log",
+    "result": "Test Case '-[SetuIOSAppUITests.MusicCacheUITests testHomeSearchReturnKeepsCachedContent]' passed (14.827 seconds)."
+  },
+  "MusicCacheUITests/testPlaylistDetailReentryKeepsContent": {
+    "log": "/private/tmp/p15-final-ui.log",
+    "result": "Test Case '-[SetuIOSAppUITests.MusicCacheUITests testPlaylistDetailReentryKeepsContent]' passed (15.714 seconds)."
+  },
+  "MusicLibraryUITests/testUnlikeSuccessAndSavedList": {
+    "log": "/private/tmp/p15-library-final.log",
+    "result": "Test Case '-[SetuIOSAppUITests.MusicLibraryUITests testUnlikeSuccessAndSavedList]' passed (10.751 seconds)."
+  },
+  "MusicLibraryUITests/testEmptyErrorUnauthorized": {
+    "log": "/private/tmp/p15-library-final.log",
+    "result": "Test Case '-[SetuIOSAppUITests.MusicLibraryUITests testEmptyErrorUnauthorized]' passed (28.493 seconds)."
+  },
+  "MusicLibraryUITests/testFalseFlagsHideLibraryEntries": {
+    "log": "/private/tmp/p15-library-final.log",
+    "result": "Test Case '-[SetuIOSAppUITests.MusicLibraryUITests testFalseFlagsHideLibraryEntries]' passed (7.045 seconds)."
+  },
+  "MusicLibraryUITests/testLikedPaginationAndPlaybackIntent": {
+    "log": "/private/tmp/p15-library-final.log",
+    "result": "Test Case '-[SetuIOSAppUITests.MusicLibraryUITests testLikedPaginationAndPlaybackIntent]' passed (9.619 seconds)."
+  },
+  "MusicLibraryUITests/testUnlikeFailureRollbackAndFeedback": {
+    "log": "/private/tmp/p15-library-final.log",
+    "result": "Test Case '-[SetuIOSAppUITests.MusicLibraryUITests testUnlikeFailureRollbackAndFeedback]' passed (8.822 seconds)."
+  }
+}

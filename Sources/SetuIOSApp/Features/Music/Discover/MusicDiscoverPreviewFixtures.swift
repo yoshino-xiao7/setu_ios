@@ -58,6 +58,14 @@ enum MusicDiscoverPreviewFixtures {
         let empty = args.contains("-ui-testing-discover-empty")
         let body: [String: Any]
         switch path {
+        case "/user/music/v2/radio/fm":
+            body = ["tracks": empty ? [] : (0..<4).map { index -> [String: Any] in
+                var song = track
+                song["id"] = "netease:track:p14-\(index)"
+                song["title"] = "FM 测试歌曲 \(index)"
+                return song
+            }, "source": source("sharedAlgorithmic")]
+        case "/user/music/v2/radio/fm/block": return (204, Data())
         case "/user/music/v2/home": body = home(empty: empty)
         case "/user/music/v2/rankings": body = ["items": empty ? [] : [playlist], "source": source("ranking")]
         case "/user/music/v2/recommend/tracks": body = ["tracks": empty ? [] : [track], "source": source("sharedAlgorithmic")]

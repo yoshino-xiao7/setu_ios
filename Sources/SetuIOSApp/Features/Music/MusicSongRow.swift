@@ -34,13 +34,17 @@ struct MusicSongRow: View {
         self.onDownload = onDownload
     }
     init(track: MusicV2Track, onPlay: (() -> Void)? = nil,
-         onArtist: (() -> Void)? = nil, onAlbum: (() -> Void)? = nil) {
+         onArtist: (() -> Void)? = nil, onAlbum: (() -> Void)? = nil,
+         isLiked: Bool = false, onToggleLike: (() -> Void)? = nil) {
+        self.isLiked = isLiked; self.onToggleLike = onToggleLike
         title = track.title
         artist = track.artists.map(\.name).joined(separator: " / ")
         album = track.album?.title ?? "未知专辑"
         coverURLString = track.artwork?.url; hasMV = track.mvId != nil
         self.onPlay = onPlay; self.onArtist = onArtist; self.onAlbum = onAlbum
     }
+    var isLiked = false
+    var onToggleLike: (() -> Void)?
     var onArtist: (() -> Void)?
     var onAlbum: (() -> Void)?
     var onPlay: (() -> Void)?
@@ -142,6 +146,7 @@ struct MusicSongRow: View {
 
     private var actionsGrid: some View {
         LazyVGrid(columns: actionColumns, alignment: .trailing, spacing: SetuSpacing.xs) {
+            likeButton
             if hasMV {
                 if let onPlayMv {
                     MusicIconButton(
@@ -188,6 +193,7 @@ struct MusicSongRow: View {
 
     @ViewBuilder
     private var actionButtons: some View {
+        likeButton
         if hasMV {
             if let onPlayMv {
                 MusicIconButton(
@@ -221,6 +227,14 @@ struct MusicSongRow: View {
         }
     }
 
+    @ViewBuilder private var likeButton: some View {
+        if let onToggleLike {
+            MusicIconButton(systemImage: isLiked ? "heart.fill" : "heart",
+                accessibilityLabel: "\(isLiked ? "取消喜欢" : "喜欢") \(title)",
+                tint: SetuColor.brandPink, action: onToggleLike)
+        }
+    }
+
     private var actionColumns: [GridItem] {
         [
             GridItem(.fixed(44), spacing: SetuSpacing.xs),
@@ -229,6 +243,6 @@ struct MusicSongRow: View {
     }
 
     private var hasActions: Bool {
-        hasMV || onAddToPlaylist != nil || onDownload != nil
+        hasMV || onAddToPlaylist != nil || onDownload != nil || onToggleLike != nil
     }
 }

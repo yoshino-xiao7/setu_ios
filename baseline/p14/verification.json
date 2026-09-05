@@ -1,0 +1,65 @@
+{
+  "p13Candidate": "78b5d84",
+  "p14Branch": "yukiryou/music-p14-radio-fm",
+  "protectedFilesUnchanged": {
+    "Sources/SetuIOSCore/Core/AppConfig.swift": true,
+    "Sources/SetuIOSApp/Features/Music/PlaybackQueue.swift": true,
+    "Sources/SetuIOSCore/Core/Music/MusicRepository.swift": true,
+    "Sources/SetuIOSCore/Core/Music/PlaybackURLResolver.swift": true,
+    "Sources/SetuIOSApp/Features/Music/NextItemPreparer.swift": true,
+    "Sources/SetuIOSApp/Features/Music/Playback/PlaybackSnapshotStore.swift": true,
+    "Sources/SetuIOSApp/Features/Music/Playback/PlaybackContext.swift": true,
+    "Sources/SetuIOSApp/Features/Music/Playback/NowPlayingCoordinator.swift": true,
+    "Sources/SetuIOSApp/Features/Music/Playback/PlaybackPhase.swift": true,
+    "Sources/SetuIOSApp/Features/Music/Playback/SleepTimerController.swift": true,
+    "Sources/SetuIOSApp/Features/Music/Playback/RemoteCommandCoordinator.swift": true
+  },
+  "targeted": {
+    "tests": 39,
+    "failures": 0,
+    "radioTests": 8,
+    "queueTests": 3
+  },
+  "fullSuite": {
+    "runs": 1,
+    "tests": 295,
+    "failures": 0
+  },
+  "p13ExternalEvidence": {
+    "M-9": "EXTERNAL TOOLING BLOCKER",
+    "M-11": "TOOLING-LIMITED COVERAGE; NOT PASS"
+  },
+  "logs": {
+    "p14-targeted-verified.log": {
+      "path": "/private/tmp/p14-targeted-verified.log",
+      "sha256": "eb61f96b2678d62a029a700f8b67f32db9bc5a2daab9be5621edd1835ae7ba82"
+    },
+    "p14-full-once.log": {
+      "path": "/private/tmp/p14-full-once.log",
+      "sha256": "6eb08be61579fde06fe96cbd4b96443f03136474e980798b454ebff29ee988b9"
+    },
+    "p14-ui-once.log": {
+      "path": "/private/tmp/p14-ui-once.log",
+      "sha256": "87d0b18aaa4fe9b3344f93a26fb36e883bf90775748776066c8ce1807e47f2c5"
+    },
+    "p14-ui-final.log": {
+      "path": "/private/tmp/p14-ui-final.log",
+      "sha256": "e6a938365a2af7c4a3385bb9949cae7552cbed48fa11b416491e268d3dd93f9a"
+    }
+  },
+  "physicalBuild": "App and test runner compiled and signed",
+  "ui": {
+    "executed": 0,
+    "status": "BLOCKED",
+    "runnerExitCode": 74,
+    "launches": 2,
+    "rebuilds": 0,
+    "selected": [
+      "RadioFMUITests",
+      "MusicArchitectureUITests",
+      "MusicCacheUITests"
+    ]
+  },
+  "M-13": "NOT VERIFIED",
+  "productionFlagsChanged": false
+}

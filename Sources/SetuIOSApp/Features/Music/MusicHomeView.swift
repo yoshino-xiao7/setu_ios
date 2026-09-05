@@ -25,6 +25,12 @@ struct MusicHomeView: View {
 
     var body: some View {
         List {
+            if environment.config.musicFeatureFlags.likedTracksEnabled && !environment.config.musicFeatureFlags.usesV2Home {
+                NavigationLink("我喜欢", value: AppRoute.likedTracks)
+            }
+            if environment.config.musicFeatureFlags.favoritePlaylistsEnabled {
+                NavigationLink("收藏歌单", value: AppRoute.favoritePlaylists)
+            }
             if dynamicTypeSize.isAccessibilitySize {
                 Section {
                     SetuCard {
@@ -47,7 +53,7 @@ struct MusicHomeView: View {
             if environment.config.musicFeatureFlags.usesV2Home {
                 MusicHomeFeedContent(resource: store.homeFeed, flags: environment.config.musicFeatureFlags,
                                      userID: store.userID, retry: { await loadLandingContent(force: true) })
-                    .environment(\.musicPlaybackIntent, MusicPlaybackIntent(player: player, store: store))
+                    .environment(\.musicPlaybackIntent, MusicPlaybackIntent(player: player, store: store, libraryClient: environment.musicV2Client, libraryEnabled: environment.config.musicFeatureFlags.likedTracksEnabled))
             } else {
                 recentHistoryContent
                 myPlaylistContent
@@ -68,7 +74,7 @@ struct MusicHomeView: View {
                 usesNavigationSearch: !dynamicTypeSize.isAccessibilitySize
             )
         )
-        .onSubmit(of: .search) {
+        .onSubmit(of: [.text, .search]) {
             openSearch()
         }
         .navigationTitle("音乐")
@@ -541,7 +547,7 @@ struct MusicIconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.headline.weight(.semibold))
+                .font(.system(size: 20, weight: .semibold))
                 .foregroundStyle(tint)
                 .frame(width: 44, height: 44)
                 .background(tint.opacity(0.12), in: Circle())
@@ -572,11 +578,14 @@ struct MusicMetadataRow: View {
 }
 
 struct RecommendedPlaylistRow: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    var expanded = false
     let title: String
     let artwork: String?
     let description: String?
     let playCount: Int?
-    init(playlist: MusicRecommendedPlaylist) {
+    init(playlist: MusicRecommendedPlaylist, expanded: Bool = false) {
+        self.expanded = expanded
         title = playlist.name; artwork = playlist.picUrl
         description = playlist.description; playCount = playlist.playCount
     }
@@ -591,12 +600,14 @@ struct RecommendedPlaylistRow: View {
                 Text(title)
                     .font(SetuTypography.headline)
                     .foregroundStyle(SetuColor.textPrimary)
-                    .lineLimit(2)
+                    .lineLimit(expanded && dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                    .fixedSize(horizontal: false, vertical: expanded && dynamicTypeSize.isAccessibilitySize)
                 if let description, !description.isEmpty {
                     Text(description)
                         .font(SetuTypography.caption)
                         .foregroundStyle(SetuColor.textSecondary)
-                        .lineLimit(2)
+                        .lineLimit(expanded && dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                        .fixedSize(horizontal: false, vertical: expanded && dynamicTypeSize.isAccessibilitySize)
                 }
                 if let playCount {
                     HStack(spacing: SetuSpacing.xs) {
@@ -645,7 +656,7 @@ private struct RecommendedPlaylistSheet: View {
                     SetuCard {
                         VStack(alignment: .leading, spacing: SetuSpacing.md) {
                             SetuSectionHeader(title: "歌单")
-                            RecommendedPlaylistRow(playlist: playlist)
+                            RecommendedPlaylistRow(playlist: playlist, expanded: true)
                         }
                     }
                     .setuListRow()

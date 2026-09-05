@@ -35,6 +35,7 @@ targets:
     type: application
     platform: iOS
     sources:
+      # Recursively includes P13 Music/Player and Music/Lyrics.
       - path: Sources/SetuIOSApp
         excludes:
           - Resources
