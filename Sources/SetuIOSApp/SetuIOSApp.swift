@@ -83,8 +83,19 @@ struct SetuIOSApp: App {
     }
 
     private var liveContent: some View {
-        RootAppView(environment: environment, pushNotifications: pushNotifications)
+        #if DEBUG
+        let navigation = AppNavigationCoordinator()
+        if ProcessInfo.processInfo.arguments.contains("-development-playback3-radio"),
+           environment.config.apiBaseURL.absoluteString == "https://api.yukiryou.icu",
+           environment.config.musicFeatureFlags.radioFMEnabled {
+            navigation.navigate(to: .music, route: .radioFM)
+        }
+        return RootAppView(environment: environment, pushNotifications: pushNotifications, navigationCoordinator: navigation)
             .task { pushNotifications.configure() }
+        #else
+        return RootAppView(environment: environment, pushNotifications: pushNotifications)
+            .task { pushNotifications.configure() }
+        #endif
     }
 }
 

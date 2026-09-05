@@ -423,11 +423,45 @@ public struct MusicV2PlaybackSource: Codable, Hashable, Sendable {
     public let url: String
     public let requestedQuality: MusicV2PlaybackQuality
     @MusicV2RequiredNullable public var actualQuality: MusicV2PlaybackQuality?
-    public let expiresAt: String
+    public let refreshAt: String
+    @MusicV2RequiredNullable public var sourceExpiresAt: String?
     @MusicV2RequiredNullable public var bitrate: Int?
     @MusicV2RequiredNullable public var sizeBytes: Int?
     @MusicV2RequiredNullable public var format: String?
     @MusicV2RequiredNullable public var notice: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case trackId, url, requestedQuality, actualQuality, refreshAt, sourceExpiresAt, bitrate, sizeBytes, format, notice
+    }
+    private enum LegacyKey: String, CodingKey { case expiresAt }
+    public init(from decoder: Decoder) throws {
+        let legacy = try decoder.container(keyedBy: LegacyKey.self)
+        guard !legacy.contains(.expiresAt) else {
+            throw DecodingError.dataCorruptedError(forKey: .expiresAt, in: legacy, debugDescription: "Mixed playback representations")
+        }
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        trackId = try c.decode(MusicV2TrackID.self, forKey: .trackId)
+        url = try c.decode(String.self, forKey: .url)
+        requestedQuality = try c.decode(MusicV2PlaybackQuality.self, forKey: .requestedQuality)
+        _actualQuality = try c.decode(MusicV2RequiredNullable<MusicV2PlaybackQuality>.self, forKey: .actualQuality)
+        refreshAt = try c.decode(String.self, forKey: .refreshAt)
+        _sourceExpiresAt = try c.decode(MusicV2RequiredNullable<String>.self, forKey: .sourceExpiresAt)
+        _bitrate = try c.decode(MusicV2RequiredNullable<Int>.self, forKey: .bitrate)
+        _sizeBytes = try c.decode(MusicV2RequiredNullable<Int>.self, forKey: .sizeBytes)
+        _format = try c.decode(MusicV2RequiredNullable<String>.self, forKey: .format)
+        _notice = try c.decode(MusicV2RequiredNullable<String>.self, forKey: .notice)
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        func instant(_ value: String) -> Date? {
+            guard value.hasSuffix("Z") else { return nil }
+            return formatter.date(from: value) ?? ISO8601DateFormatter().date(from: value)
+        }
+        guard let refresh = instant(refreshAt), let address = URL(string: url),
+              address.scheme == "https", address.host != nil, address.user == nil, address.fragment == nil,
+              sourceExpiresAt.map({ instant($0).map { refresh < $0 } ?? false }) ?? true else {
+            throw DecodingError.dataCorruptedError(forKey: .refreshAt, in: c, debugDescription: "Invalid playback source or deadlines")
+        }
+    }
 }
 
 public enum MusicV2PlaybackResolution: Codable, Hashable, Sendable {

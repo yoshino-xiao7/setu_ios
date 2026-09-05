@@ -5,11 +5,28 @@ public struct ResolvedPlaybackURL: Sendable {
     public let url: URL
     public let effectiveLevel: String
     public let resolvedAt: Date
-    public let expiresAt: Date
+    public let refreshAt: Date
+    public let sourceExpiresAt: Date?
+    private let acquiredUptime: TimeInterval
+    private let uptime: @Sendable () -> TimeInterval
     public let notice: String?
     public let usedFallback: Bool
 
-    public func isValid(at date: Date) -> Bool { date < expiresAt }
+    public init(trackID: MusicPlaybackIdentity, url: URL, effectiveLevel: String, resolvedAt: Date,
+                expiresAt: Date, notice: String?, usedFallback: Bool, sourceExpiresAt: Date? = nil,
+                uptime: @escaping @Sendable () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
+        self.trackID = trackID; self.url = url; self.effectiveLevel = effectiveLevel
+        self.resolvedAt = resolvedAt; self.refreshAt = expiresAt; self.sourceExpiresAt = sourceExpiresAt
+        self.notice = notice; self.usedFallback = usedFallback
+        self.uptime = uptime; self.acquiredUptime = uptime()
+    }
+
+    public func isValid(at date: Date) -> Bool {
+        let elapsed = uptime() - acquiredUptime
+        return date >= resolvedAt && date < refreshAt && elapsed >= 0
+            && elapsed < refreshAt.timeIntervalSince(resolvedAt)
+            && (sourceExpiresAt.map { date < $0 && refreshAt < $0 } ?? true)
+    }
 }
 
 /// Session-scoped, memory-only URL cache. Batch responses are always matched by ID.
@@ -19,22 +36,29 @@ public actor PlaybackURLResolver {
         let id: MusicPlaybackIdentity
         let quality: MusicAudioQuality
         let allowsFallback: Bool
+        let generation: UUID
+        let contractVersion: String
     }
     private struct Flight {
         let token: UUID
+        let forced: Bool
         let task: Task<[MusicPlaybackIdentity: Outcome], Never>
     }
     private let fetch: @Sendable ([Int], MusicAudioQuality) async throws -> MusicUrlResponse
     private let v2: MusicV2Client?
+    private let uptime: @Sendable () -> TimeInterval
     private let now: @Sendable () -> Date
     private var cache: [Key: ResolvedPlaybackURL] = [:]
     private var flights: [Key: Flight] = [:]
     private var generation = UUID()
+    private var epochs: [Key: UUID] = [:]
 
-    public init(client: MusicClient, v2: MusicV2Client? = nil, now: @escaping @Sendable () -> Date = { Date() }) {
+    public init(client: MusicClient, v2: MusicV2Client? = nil, now: @escaping @Sendable () -> Date = { Date() },
+                uptime: @escaping @Sendable () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
         fetch = { try await client.url(songIDs: $0, level: $1.rawValue) }
         self.v2 = v2
         self.now = now
+        self.uptime = uptime
     }
 
     public init(now: @escaping @Sendable () -> Date = { Date() },
@@ -42,6 +66,7 @@ public actor PlaybackURLResolver {
         self.now = now
         self.fetch = fetch
         self.v2 = nil
+        self.uptime = { ProcessInfo.processInfo.systemUptime }
     }
 
     public func resolve(trackID: Int, quality: MusicAudioQuality, force: Bool = false,
@@ -67,11 +92,18 @@ public actor PlaybackURLResolver {
                         allowsFallback: Bool = true) async throws -> [MusicPlaybackIdentity: Outcome] {
         try Task.checkCancellation()
         let owner = generation
-        let keys = Array(Set(ids)).sorted().map { Key(id: $0, quality: quality, allowsFallback: allowsFallback) }
+        let keys = Array(Set(ids)).sorted().map { Key(id: $0, quality: quality, allowsFallback: allowsFallback, generation: owner,
+                                                     contractVersion: $0.legacyID == nil ? "3.0.0" : "legacy") }
         var result: [MusicPlaybackIdentity: Outcome] = [:]
         var pending: [Key: Flight] = [:]
         var missing: [Key] = []
         for key in keys {
+            if force {
+                cache[key] = nil
+                if let flight = flights[key], !flight.forced {
+                    flight.task.cancel(); flights[key] = nil; epochs[key] = UUID()
+                }
+            }
             if !force, let cached = cache[key], cached.isValid(at: now()) {
                 result[key.id] = .success(cached)
             } else if let flight = flights[key] {
@@ -82,19 +114,22 @@ public actor PlaybackURLResolver {
         }
         if !missing.isEmpty {
             let requested = missing.map(\.id)
-            let fetch = self.fetch, now = self.now, v2 = self.v2
-            let flight = Flight(token: UUID(), task: Task {
-                await Self.fetchIdentities(ids: requested, quality: quality, allowsFallback: allowsFallback, now: now, fetch: fetch, v2: v2)
+            let fetch = self.fetch, now = self.now, v2 = self.v2, uptime = self.uptime
+            let flight = Flight(token: UUID(), forced: force, task: Task {
+                await Self.fetchIdentities(ids: requested, quality: quality, allowsFallback: allowsFallback, now: now, uptime: uptime, fetch: fetch, v2: v2)
             })
-            for key in missing { flights[key] = flight; pending[key] = flight }
+            for key in missing { flights[key] = flight; pending[key] = flight; epochs[key] = flight.token }
         }
         for (key, flight) in pending {
             let outcomes = await flight.task.value
-            guard owner == generation else { throw CancellationError() }
-            let outcome = outcomes[key.id] ?? .failure(UserFacingError(message: "音乐服务未返回这首歌曲"))
+            guard owner == generation, epochs[key] == flight.token else { throw CancellationError() }
+            var outcome = outcomes[key.id] ?? .failure(UserFacingError(message: "音乐服务未返回这首歌曲"))
+            if case .success(let value) = outcome, !value.isValid(at: now()) {
+                outcome = .failure(UserFacingError(message: "播放资源已过期"))
+            }
             if flights[key]?.token == flight.token {
                 flights[key] = nil
-                if case .success(let value) = outcome { cache[key] = value }
+                if case .success(let value) = outcome { cache[key] = value } else { cache[key] = nil }
             }
             result[key.id] = outcome
         }
@@ -102,17 +137,25 @@ public actor PlaybackURLResolver {
         return result
     }
 
+    public func invalidate(trackID: MusicPlaybackIdentity) {
+        for key in Set(cache.keys).union(flights.keys).filter({ $0.id == trackID }) {
+            cache[key] = nil; flights[key]?.task.cancel(); flights[key] = nil; epochs[key] = UUID()
+        }
+    }
+
     public func reset() {
         generation = UUID()
         for flight in flights.values { flight.task.cancel() }
         flights.removeAll()
         cache.removeAll()
+        epochs.removeAll()
     }
 
     /// Identity selects the route. Legacy callers stay on v1 while gated detail pages may use canonical IDs.
     /// V2 failures/denials never fall back to v1 or manufacture a lifetime/quality.
     private static func fetchIdentities(ids: [MusicPlaybackIdentity], quality: MusicAudioQuality,
                                         allowsFallback: Bool, now: @Sendable () -> Date,
+                                        uptime: @escaping @Sendable () -> TimeInterval,
                                         fetch: @Sendable ([Int], MusicAudioQuality) async throws -> MusicUrlResponse,
                                         v2: MusicV2Client?) async -> [MusicPlaybackIdentity: Outcome] {
         var results: [MusicPlaybackIdentity: Outcome] = [:]
@@ -150,14 +193,19 @@ public actor PlaybackURLResolver {
                 case .success(let source):
                     let formatter = ISO8601DateFormatter()
                     formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-                    let date = formatter.date(from: source.expiresAt) ?? ISO8601DateFormatter().date(from: source.expiresAt)
-                    guard let url = URL(string: source.url), url.scheme == "https", url.host != nil,
-                          let expires = date, expires > now() else {
+                    let date = formatter.date(from: source.refreshAt) ?? ISO8601DateFormatter().date(from: source.refreshAt)
+                    let received = now()
+                    let deadline = source.sourceExpiresAt.flatMap { formatter.date(from: $0) ?? ISO8601DateFormatter().date(from: $0) }
+                    guard source.requestedQuality == level,
+                          source.sourceExpiresAt == nil || deadline != nil,
+                          let url = URL(string: source.url), url.scheme == "https", url.host != nil,
+                          let expires = date, expires > received, deadline.map({ expires < $0 }) ?? true else {
                         results[.canonical(id)] = .failure(UserFacingError(message: "播放资源无效或已过期")); continue
                     }
                     results[.canonical(id)] = .success(ResolvedPlaybackURL(trackID: .canonical(id), url: url,
-                        effectiveLevel: source.actualQuality?.rawValue ?? "unknown", resolvedAt: now(), expiresAt: expires,
-                        notice: source.notice, usedFallback: source.actualQuality == .standard && source.requestedQuality != .standard))
+                        effectiveLevel: source.actualQuality?.rawValue ?? "unknown", resolvedAt: received, expiresAt: expires,
+                        notice: source.notice, usedFallback: source.actualQuality == .standard && source.requestedQuality != .standard,
+                        sourceExpiresAt: deadline, uptime: uptime))
                 case .denied(_, let availability):
                     results[.canonical(id)] = .failure(UserFacingError(message: availability.reason ?? "该歌曲暂时无法播放"))
                 case .failure(_, let error):

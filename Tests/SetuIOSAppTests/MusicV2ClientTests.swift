@@ -151,13 +151,13 @@ final class MusicV2RequestCapture: @unchecked Sendable {
 }
 
 final class MusicV2URLProtocol: URLProtocol {
-    struct Reply { let status: Int; let body: Data; init(status: Int = 200, body: Data) { self.status = status; self.body = body } }
+    struct Reply { let status: Int; let body: Data; let headers: [String: String]; init(status: Int = 200, body: Data, headers: [String: String] = [:]) { self.status = status; self.body = body; self.headers = headers } }
     nonisolated(unsafe) static var handler: (@Sendable (URLRequest) -> Reply)?
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
         let reply = Self.handler?(request) ?? .init(status: 500, body: Data())
-        let response = HTTPURLResponse(url: request.url!, statusCode: reply.status, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!
+        let response = HTTPURLResponse(url: request.url!, statusCode: reply.status, httpVersion: nil, headerFields: reply.headers.merging(["Content-Type": "application/json"]) { first, _ in first })!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         if !reply.body.isEmpty { client?.urlProtocol(self, didLoad: reply.body) }
         client?.urlProtocolDidFinishLoading(self)
@@ -190,9 +190,9 @@ enum MusicV2Fixtures {
         case "/user/music/v2/search/suggest": body = #"{"keywords":[],"tracks":[],"artists":[],"playlists":[]}"#
         case "/user/music/v2/search/hot": body = #"{"items":[],"source":\#(source)}"#
         case "/user/music/v2/tracks": body = #"{"items":[\#(track)]}"#
-        case "/user/music/v2/tracks/playback": body = #"{"items":[]}"#
+        case "/user/music/v2/tracks/playback": return .init(body: Data(#"{"items":[]}"#.utf8), headers: ["X-Setu-Playback-Contract": "3.0.0"])
         case let p where p.hasSuffix("/playback"):
-            body = #"{"kind":"denied","trackId":"netease:track:1","availability":{"status":"unavailable","reason":"Unavailable","maxQuality":null}}"#
+            return .init(body: Data(#"{"kind":"denied","trackId":"netease:track:1","availability":{"status":"unavailable","reason":"Unavailable","maxQuality":null}}"#.utf8), headers: ["X-Setu-Playback-Contract": "3.0.0"])
         case let p where p.hasSuffix("/lyrics"): body = #"{"trackId":"netease:track:1","kind":"none","lines":[],"hasTranslation":false,"contributors":[]}"#
         case let p where p.hasSuffix("/similar"): body = #"{"tracks":[],"playlists":[],"source":\#(source)}"#
         case let p where p.contains("/artists/") && p.hasSuffix("/tracks"): body = trackPage

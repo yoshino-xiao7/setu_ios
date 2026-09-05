@@ -170,6 +170,7 @@ public struct APIClient: Sendable {
             throw APIError.invalidResponse
         }
         let signatureError = isSignatureErrorResponse(response: httpResponse, data: data, signed: signed)
+
         if retryingSignatureError,
            signatureError,
            await refreshSignature(force: true) {
@@ -234,6 +235,12 @@ public struct APIClient: Sendable {
             throw APIError.invalidResponse
         }
         let signatureError = isSignatureErrorResponse(response: httpResponse, data: data, signed: signed)
+        if let version = headers["X-Setu-Playback-Contract"],
+           httpResponse.statusCode != 401,
+           !(httpResponse.statusCode == 400 && httpResponse.value(forHTTPHeaderField: "X-Setu-Playback-Contract") == nil),
+           httpResponse.value(forHTTPHeaderField: "X-Setu-Playback-Contract") != version {
+            throw APIError.invalidResponse
+        }
         if retryingSignatureError,
            signatureError,
            await refreshSignature(force: true) {

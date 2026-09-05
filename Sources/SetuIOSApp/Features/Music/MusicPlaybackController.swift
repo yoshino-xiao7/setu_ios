@@ -410,6 +410,7 @@ final class MusicPlaybackController {
             #endif // P0.1 instrumentation
             let source = try await urlResolver.resolve(trackID: track.id, quality: audioQuality, force: force)
             guard transitionID == ticket, !Task.isCancelled else { return nil }
+            guard source.isValid(at: Date()) else { throw UserFacingError(message: "播放资源已过期") }
             currentSource = source
             #if DEBUG // P0.1 instrumentation
             playbackDiagnostics.mark("PlaybackSourceReady", value: 0)
@@ -598,6 +599,10 @@ final class MusicPlaybackController {
                 return false
             }
             guard qualityChangeID == requestID, currentTrack?.id == track.id, !Task.isCancelled else { return false }
+            if let source, !source.isValid(at: Date()) {
+                feedback = .error("播放资源已过期，请重新选择音质")
+                return false
+            }
             let resumeTime = currentTimeSeconds
             let shouldPlay = isPlaying
             beginTransition()
@@ -838,6 +843,7 @@ final class MusicPlaybackController {
                 let source = try await resolver.resolve(trackID: track.id, quality: quality, force: force)
                 guard let self, self.transitionID == ticket, !Task.isCancelled else { return }
                 self.resumeTask = nil
+                guard source.isValid(at: Date()) else { throw UserFacingError(message: "播放资源已过期") }
                 self.currentSource = source
                 self.load(url: source.url, track: track, index: self.currentQueueIndex, notice: source.notice,
                           resumeAt: position, autoplay: self.isPlaying)
@@ -1040,6 +1046,11 @@ final class MusicPlaybackController {
         guard player?.currentItem === item, recoveryTask == nil, playbackError == nil else { return }
         loadingTimeout?.cancel(); loadingTimeout = nil
         guard recoveryCount == 0, let resolver = urlResolver, let track = currentTrack else {
+            currentSource = nil
+            nextItemPreparer.invalidate()
+            if let resolver = urlResolver, let track = currentTrack {
+                Task { await resolver.invalidate(trackID: track.id) }
+            }
             failPlayback(UserFacingErrorMapper.map(error ?? UserFacingError(message: "播放失败，请重新获取播放地址")))
             return
         }
@@ -1047,6 +1058,7 @@ final class MusicPlaybackController {
         let recoverable = nsError?.domain == NSURLErrorDomain || nsError?.domain == AVFoundationErrorDomain
             || currentSource.map { !$0.isValid(at: Date()) } == true
         guard recoverable else { failPlayback(UserFacingErrorMapper.map(error ?? UserFacingError(message: "音源无法播放"))); return }
+        currentSource = nil
         recoveryCount += 1
         let ticket = transitionID, position = currentTimeSeconds, shouldPlay = isPlaying, quality = audioQuality
         isBuffering = shouldPlay
@@ -1064,6 +1076,7 @@ final class MusicPlaybackController {
             do {
                 let source = try await resolver.resolve(trackID: track.id, quality: quality, force: true)
                 guard let self, self.transitionID == ticket, !Task.isCancelled else { return }
+                guard source.isValid(at: Date()) else { throw UserFacingError(message: "播放资源已过期") }
                 self.currentSource = source
                 self.recoveryTask = nil
                 self.load(url: source.url, track: track, index: self.currentQueueIndex, notice: source.notice,
