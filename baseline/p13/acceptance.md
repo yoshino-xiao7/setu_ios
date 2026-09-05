@@ -1,0 +1,59 @@
+# P13 — Player UI and structured lyrics
+
+## Baseline and scope
+
+- P12 accepted feature: `73c4aee63b38b8e394c6b39372f4127b72fe49f7`.
+- P12 normal merge on published main: `532513af75742bf01c3f604b54174a7c68568e6c`.
+- P13 branch: `yukiryou/music-p13-player-lyrics`.
+- Formal source: `11-execution-tasks.md`, P13, referencing 06 §3.2/3.6/8, 08 §6/9, 10 §E/L/O/P and G-IOS-1..9.
+- Read only those sections and the Issue 2 description. No P3–P12 re-audit, backend changes, frozen changes, or P14 work.
+
+## Implementation
+
+The former AppShell player file is relocated into Music/Player. Principal files are MusicMiniPlayerBar (261 lines), NowPlayingSheet (406), NowPlayingLyricsPane (60), and MusicQueueDrawerView (209). Shared controls and existing playlist/download/menu helpers live in NowPlayingControls; AVRoutePickerView is wrapped by AirPlayRouteButton. Existing Root overlay references still resolve without a RootAppView change. XcodeGen recursively includes both new directories.
+
+The mini player's presentation model survives cover/lyrics switches and sheet returns. Canonical identities use P9 LyricStore; legacy identities keep their original MusicClient LRC path. No numeric-to-canonical inference. Owner changes discard the session cache and generation checks reject obsolete work. The existing LyricStore capacity, TTL, single flight and oversized-word downgrade are reused unchanged.
+
+T-LY-7..9 cover the v2 adapter, absolute syllable timestamps, gaps, boundaries, backwards seeks and 60 ticks without reparsing. FINAL plain lyrics have no seek/active-line behavior; none stays empty and failures stay failures. Line lyrics retain the existing presentation. Words with nonmatching text fall back to the complete line.
+
+Active word lines use one Text plus GeometryReader/mask/Canvas. TextKit glyph rectangles are cached on layout/font changes. Animation samples the existing AVPlayer clock; it adds neither another player nor a playback observer. Existing line selection and scrolling cadence are retained. No per-word Text, sorting, parsing or glyph layout per animation tick.
+
+## AX5 correction (separate from relocation)
+
+Issue 2 involved Dynamic Type enlarging SF Symbols beyond fixed 50/72-point controls. Symbols now use bounded 20/28-point sizes, while labels and other text still scale. Controls retain 50/72-point tap areas, flexible spacing and accessible names. The scrubber is at least 44 points high. At accessibility sizes the cover content scrolls within its area so it cannot force the pinned controls out of their area. The player's visual theme and playback actions are preserved.
+
+Physical UI tests assert each control is at least 44 points, is within screen bounds and does not intersect its neighbor. Hosted rendering captures 375/430-point standard and AX5 layouts in light/dark mode. Screenshots must be visually reviewed before closing Issue 2.
+
+## Flags and boundaries
+
+All 14 production client flags remain false, including usesV2Home, usesV2Playback, wordByWordLyricsEnabled and airPlayPickerEnabled. Tests enable P13 features only in newly constructed fixture environments; no real defaults or client cutover were changed. PlaybackController, Playback/, LyricStore, MusicStore, MusicRepository, resolver, P11/P12 pages and remote image loader are unchanged.
+
+The separate user checkout retains its three original uncommitted UI/test/report edits. The old normal-size 管理全部歌单 hit-region problem is untouched. P12's recorded 63.4 ms warm median and ~73–84 fps are not a P13 comparison or evidence of stable 120 fps.
+
+## Verification
+
+- P12 post-merge targeted MusicDiscover: 8/8 PASS.
+- P13 targeted Lyric: 20/20 PASS, including P9 LyricStore tests.
+- Swift full suite: 287/287 PASS, exactly one P13 full run.
+- FINAL/Frozen verifier: PASS, failures=[]; no runtime backend tests claimed.
+- activeIndex implementation: byte-identical to main.
+- Queue UI body: unchanged, aside from file-ending whitespace.
+- git diff --check: PASS.
+- First build-for-testing failed in the new layout test because it referenced a private preview fixture. Fixed only that test to use its own MusicSong fixture. The required targeted UI test command completed the incremental physical-device build and signing. This was a corrective build inside the test invocation; it was not a second full-suite run.
+- Final physical targeted tests: 21/21 PASS (14 parser, 4 presentation/data integration, 3 layout/render/cadence).
+- Architecture UI: 5/5 PASS. Cache UI: 2/2 PASS. P13 controls UI: 2/2 PASS. Aggregate final relevant UI cases: 9/9 PASS across runs.
+- First UI runner handshake exited before executing cases; same-artifact retry ran successfully. The first new P13 UI assertions ambiguously matched the underlying mini player's identically named play button. The revised test requires exactly one hittable play button and preserves all size/bounds/separation assertions.
+- Screenshot review caught incomplete mask coverage of glyph descenders. The mask now maps complete typographic line fragments into SwiftUI's text height, preserving wrapped words. A corrective targeted physical test invocation rebuilt this iOS-only change and passed. No second Swift full suite was run; this final iOS-only renderer was validated on device.
+- Build-budget deviation: one standalone build-for-testing attempt plus two corrective incremental builds within targeted test invocations. This exceeds a strict one-total-physical-build interpretation; it is recorded rather than represented as a single successful attempt.
+- Original, unedited screenshots are in screenshots/: physical standard/AX5 controls, hosted 375/430 AX5 light/dark and wrapped word/translation mask. Visual review confirms distinct playback symbols and complete mask coverage. Issue 2 is fixed for the checked player layouts.
+- Cadence probe: 120-Hz-capable iPhone, 240 intervals over 4 seconds, median 16.6693 ms, max 16.7021 ms, zero intervals over 20 ms. Observed cadence is approximately 60 Hz. This does NOT establish 120-fps rendering or formal M-9 no-dropped-frame acceptance.
+
+## Manual acceptance (not replaced by build or fixtures)
+
+M-1 background/lock-screen playback, M-2 system playback controls, M-4 actual AirPlay receiver switching, M-9 120-Hz scrolling/drop measurement, M-10 VoiceOver, M-11 all-page AX5 and M-12 device appearance switching require explicit evidence. A compiled route picker or a static word mask screenshot does not prove successful audio routing or a no-dropped-frame result.
+
+## Remaining acceptance / merge status
+
+User confirmed only AirPods are available. AirPods are a Bluetooth output and cannot substitute for a real AirPlay receiver in M-4. M-4 receiver switching and M-9 true 120-Hz acceptance remain unverified, as do the manual background/system-control/VoiceOver checks listed above. No manual PASS was inferred from the automated tests. Implementation is committed for review, but strict formal P13 MERGE-READY is not asserted while these gates remain. P14 has not started.
+
+Evidence bundles: `/private/tmp/setu-p13-ui.xcresult` (initial hosted layouts plus runner failure), `/private/tmp/setu-p13-ui-retry.xcresult` (architecture/cache passes and first P13 selector failure), `/private/tmp/setu-p13-render-final.xcresult` (final 21 targeted + 2 P13 UI passes). Swift full log: `/private/tmp/setu-p13-full.log`. Frozen verification: `/private/tmp/setu-p13-frozen.log`.

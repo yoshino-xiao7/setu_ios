@@ -9,6 +9,8 @@ struct LyricScrollView: View {
     let currentTime: TimeInterval
     /// Fill all available height (full-page lyrics) instead of the compact inline size.
     var expands = false
+    var isPlaying = false
+    var sampleTime: (() -> TimeInterval)?
     var onBackgroundTap: (() -> Void)?
     let onSeek: (TimeInterval) -> Void
 
@@ -22,7 +24,7 @@ struct LyricScrollView: View {
     @State private var lastObservedScrollOffset: CGPoint?
 
     private var activeIndex: Int? {
-        LyricParser.activeIndex(in: lines, at: currentTime)
+        lines.first?.isTimed == false ? nil : LyricParser.activeIndex(in: lines, at: currentTime)
     }
 
     var body: some View {
@@ -125,11 +127,12 @@ struct LyricScrollView: View {
         }
         lastObservedScrollOffset = snapshot.contentOffset
 
-        guard snapshot.isUserDriven, didMove else { return }
+        guard lines.first?.isTimed != false, snapshot.isUserDriven, didMove else { return }
         enterBrowsingMode(viewportHeight: viewportHeight, keepAlive: snapshot.isFingerDown)
     }
 
     private func handleScrollPhase(_ phase: LyricScrollInteractionPhase, viewportHeight: CGFloat) {
+        guard lines.first?.isTimed != false else { return }
         switch phase {
         case .began, .changed:
             enterBrowsingMode(viewportHeight: viewportHeight, keepAlive: true)
@@ -231,11 +234,17 @@ struct LyricScrollView: View {
         isBrowsingSelected: Bool
     ) -> some View {
         VStack(alignment: .center, spacing: 2) {
+            if isActive, !line.words.isEmpty {
+                WordLyricText(line: line, currentTime: currentTime, isPlaying: isPlaying,
+                              sampleTime: sampleTime ?? { currentTime })
+                    .frame(maxWidth: .infinity, alignment: .center)
+            } else {
             Text(line.text)
                 .font(.subheadline.weight((isActive || isBrowsingSelected) ? .semibold : .regular))
                 .foregroundStyle(primaryLyricColor(isActive: isActive, isBrowsingSelected: isBrowsingSelected))
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity, alignment: .center)
+            }
             if let translation = line.translation, !translation.isEmpty {
                 Text(translation)
                     .font(.caption)
@@ -250,7 +259,7 @@ struct LyricScrollView: View {
         .onTapGesture {
             onBackgroundTap?()
         }
-        .accessibilityLabel("\(formatTime(line.time)) \(line.text)")
+        .accessibilityLabel(line.isTimed ? "\(formatTime(line.time)) \(line.text)" : line.text)
     }
 
     private func selectionGuide(for line: LyricLine, play: @escaping () -> Void) -> some View {

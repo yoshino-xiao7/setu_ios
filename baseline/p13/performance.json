@@ -1,0 +1,12 @@
+{
+  "deviceMaximumFPS": 120,
+  "sampleCount": 240,
+  "durationSeconds": 4,
+  "medianIntervalMs": 16.669333330355585,
+  "maxIntervalMs": 16.702041670214385,
+  "intervalsOver20Ms": 0,
+  "observedCadenceFPS": 60,
+  "formalM9Passed": false,
+  "method": "CADisplayLink callbacks during fixture word masking and programmatic lyric scrolling; not presentation-frame or Instruments hitch measurement",
+  "comparativePerformanceClaim": false
+}

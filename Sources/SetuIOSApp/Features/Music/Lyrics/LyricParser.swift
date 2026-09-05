@@ -1,13 +1,51 @@
 import Foundation
+import SetuIOSCore
 
 struct LyricLine: Identifiable, Equatable, Sendable {
     let id: String
     let time: TimeInterval
     let text: String
     var translation: String?
+    var isTimed = true
+    var words: [MusicV2LyricWord] = []
+}
+
+struct LyricSyllableProgress: Equatable {
+    let index: Int
+    let ratio: Double
 }
 
 enum LyricParser {
+    /// FINAL plain lyrics have no clock. Keep their source order without inventing timestamps.
+    static func parse(_ lyric: MusicV2Lyric) -> [LyricLine] {
+        #if DEBUG
+        MusicPerformanceProbe.shared.lyricParsed()
+        #endif
+        guard lyric.kind != .none else { return [] }
+        let timed = lyric.kind == .line || lyric.kind == .word
+        return lyric.lines.enumerated().map { index, line in
+            LyricLine(id: "v2-\(index)", time: Double(line.startMs ?? 0) / 1000,
+                      text: line.text, translation: line.translation,
+                      isTimed: timed && line.startMs != nil,
+                      words: lyric.kind == .word && line.words.map(\.text).joined() == line.text ? line.words : [])
+        }
+    }
+
+    /// Absolute millisecond timing; gaps hold the previous syllable at 100%.
+    static func syllableProgress(in line: LyricLine, at timeMs: Int) -> LyricSyllableProgress? {
+        guard line.isTimed, !line.words.isEmpty else { return nil }
+        var lower = 0, upper = line.words.count
+        while lower < upper {
+            let middle = lower + (upper - lower) / 2
+            if line.words[middle].startMs <= timeMs { lower = middle + 1 }
+            else { upper = middle }
+        }
+        let index = max(0, lower - 1), word = line.words[max(0, lower - 1)]
+        let elapsed = Double(timeMs) - Double(word.startMs)
+        let ratio = word.durationMs > 0 ? elapsed / Double(word.durationMs) : (elapsed >= 0 ? 1.0 : 0.0)
+        return .init(index: index, ratio: min(1, max(0, ratio)))
+    }
+
     static func parse(_ rawLyric: String, translation rawTranslation: String? = nil) -> [LyricLine] {
         #if DEBUG
         MusicPerformanceProbe.shared.lyricParsed()
