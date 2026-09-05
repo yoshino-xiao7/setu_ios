@@ -104,6 +104,15 @@ private struct SetuRootUITestContext {
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-images") { navigation.selectedTab = .images }
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-ai") { navigation.selectedTab = .ai }
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-music") { navigation.selectedTab = .music }
+        let args = ProcessInfo.processInfo.arguments
+        if args.contains("-ui-testing-music-details"), let index = args.firstIndex(of: "-ui-testing-detail-page"), args.indices.contains(index + 1) {
+            let route: AppRoute = switch args[index + 1] {
+            case "album": .albumDetail("netease:album:detail")
+            case "playlist": .playlistDetailV2("netease:playlist:detail")
+            default: .artistDetail("netease:artist:detail")
+            }
+            navigation.navigate(to: .music, route: route)
+        }
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-favorites") { navigation.navigate(to: .images, route: .favorites) }
     }
 
@@ -331,9 +340,16 @@ private struct SetuNotificationPermissionUITestHarness: View {
 enum SetuPreviewEnvironment {
     static func make() -> AppEnvironment {
         let keychain = SetuPreviewKeychain()
+        var detailFlags = MusicFeatureFlags()
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-music-details") {
+            detailFlags.artistDetailEnabled = true
+            detailFlags.albumDetailEnabled = true
+            detailFlags.usesV2PlaylistDetail = true
+        }
         let config = AppConfig(
             apiBaseURL: URL(string: "https://preview.setu.invalid/")!,
-            siteBaseURL: URL(string: "https://preview-site.setu.invalid/")!
+            siteBaseURL: URL(string: "https://preview-site.setu.invalid/")!,
+            musicFeatureFlags: detailFlags
         )
         let signer = AuthSigner(keychain: keychain)
         let sessionConfiguration = URLSessionConfiguration.ephemeral
@@ -502,6 +518,10 @@ private enum SetuPreviewAPI {
             return json("{\"message\":\"无效的预览请求\"}", statusCode: 400)
         }
 
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-music-details"), path.hasPrefix("/user/music/v2/") {
+            let (status, data) = MusicDetailPreviewFixtures.response(path: path, query: request.url?.query)
+            return Fixture(statusCode: status, data: data)
+        }
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-dashboard-failures"),
            dashboardFailurePaths.contains(path) {
             return json("{\"message\":\"预览中的模拟服务故障\"}", statusCode: 503)

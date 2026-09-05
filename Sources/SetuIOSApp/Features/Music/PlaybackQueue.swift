@@ -1,4 +1,5 @@
 import Foundation
+import SetuIOSCore
 
 /// Owns the pending random choice so preparation and navigation consume one target.
 struct PlaybackQueue {
@@ -6,10 +7,10 @@ struct PlaybackQueue {
     var currentIndex: Int? { didSet { invalidateTarget() } }
     var mode: MusicPlayMode = .sequence { didSet { invalidateTarget() } }
     private(set) var pendingRandomIndex: Int?
-    private var explicitNextID: Int?
+    private var explicitNextID: MusicPlaybackIdentity?
 
     mutating func invalidateTarget() { pendingRandomIndex = nil; explicitNextID = nil }
-    mutating func prioritizeNext(_ id: Int) { explicitNextID = id; pendingRandomIndex = nil }
+    mutating func prioritizeNext(_ id: MusicPlaybackIdentity) { explicitNextID = id; pendingRandomIndex = nil }
 
     mutating func target(from index: Int, offset: Int, isAuto: Bool,
                          random: (Range<Int>) -> Int = { Int.random(in: $0) }) -> Int? {

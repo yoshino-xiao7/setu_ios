@@ -403,7 +403,11 @@ struct MusicHomeView: View {
                             VStack(spacing: 0) {
                                 ForEach(Array(visiblePlaylists.enumerated()), id: \.element.id) { index, playlist in
                                     Button {
-                                        selectedRecommendedPlaylist = playlist
+                                        if environment.config.musicFeatureFlags.usesV2PlaylistDetail {
+                                            router.navigate(to: .playlistDetailV2("netease:playlist:\(playlist.id)"))
+                                        } else {
+                                            selectedRecommendedPlaylist = playlist
+                                        }
                                     } label: {
                                         RecommendedPlaylistRow(playlist: playlist)
                                     }

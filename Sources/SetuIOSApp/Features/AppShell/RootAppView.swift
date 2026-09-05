@@ -147,12 +147,18 @@ struct RootAppView: View {
     /// Lets the playback controller fetch a fresh URL for the next track on its own, so
     /// end-of-track auto-play and lock-screen/headphone skip work without a visible view.
     private func configureMusicPlayerResolver() {
-        musicPlayer.urlResolver = PlaybackURLResolver(client: environment.musicClient)
+        musicPlayer.urlResolver = PlaybackURLResolver(client: environment.musicClient, v2: environment.musicV2Client)
         let store = musicStore
+        let v2 = environment.musicV2Client
         musicPlayer.recordPlaybackHistory = { track in
+            if case .canonical(let id) = track.id {
+                try? await v2.recordHistory(trackID: id)
+                return
+            }
+            guard let legacyID = track.id.legacyID else { return }
             try? await store.addHistory(
                 AddMusicHistoryRequest(
-                    songId: track.id,
+                    songId: legacyID,
                     songName: track.title,
                     artistName: track.artist,
                     albumName: track.album,

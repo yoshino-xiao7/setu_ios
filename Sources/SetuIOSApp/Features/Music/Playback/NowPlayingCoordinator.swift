@@ -1,4 +1,5 @@
 import Foundation
+import SetuIOSCore
 
 #if os(iOS)
 import MediaPlayer
@@ -20,7 +21,7 @@ final class NowPlayingCoordinator {
     #if os(iOS)
     private var artworkTask: Task<Void, Never>?
     private var artwork: MPMediaItemArtwork?
-    private var artworkTrackID: Int?
+    private var artworkTrackID: MusicPlaybackIdentity?
     #endif
 
     deinit {
