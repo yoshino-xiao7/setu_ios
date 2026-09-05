@@ -1083,10 +1083,14 @@ private struct MusicNowPlayingDetailView: View {
         }
     }
 
-    private func loadLyric(songID: Int) async {
+    private func loadLyric(songID: MusicPlaybackIdentity) async {
+        guard let legacyID = songID.legacyID else {
+            lyricState = .failed(UserFacingError(message: "此歌曲的歌词入口尚未启用"))
+            return
+        }
         lyricState = .loading
         do {
-            let response = try await environment.musicClient.lyric(songID: songID)
+            let response = try await environment.musicClient.lyric(songID: legacyID)
             try Task.checkCancellation()
             let lines = await Task.detached(priority: .utility) {
                 LyricParser.parse(response.lrc?.lyric ?? "", translation: response.tlyric?.lyric)
@@ -1104,10 +1108,16 @@ private struct MusicNowPlayingDetailView: View {
         showFeedback(.info("正在准备下载"))
         defer { isDownloading = false }
         do {
-            let response = try await environment.musicClient.url(songID: track.id, level: "standard")
-            guard let item = response.data?.first, let urlString = item.playableURLString else {
-                showFeedback(.error(response.unavailableMessage))
-                return
+            let urlString: String
+            if let id = track.id.legacyID {
+                let response = try await environment.musicClient.url(songID: id, level: "standard")
+                guard let item = response.data?.first, let url = item.playableURLString else {
+                    showFeedback(.error(response.unavailableMessage)); return
+                }
+                urlString = url
+            } else {
+                guard let resolver = player.urlResolver else { throw UserFacingError(message: "播放器尚未准备好") }
+                urlString = try await resolver.resolve(trackID: track.id, quality: .standard).url.absoluteString
             }
             let filename = "\(track.title) - \(track.artist).mp3"
             let signed = try await environment.downloadClient.sign(url: urlString, filename: filename)
@@ -1194,8 +1204,9 @@ private struct AddPlaybackTrackToPlaylistSheet: View {
     let onFeedback: (SetuFeedback) -> Void
 
     var body: some View {
+        if let legacyID = track.id.legacyID {
         PlaylistSelectionSheet(presentation: .playback, requests: [
-            AddSongToPlaylistRequest(songId: track.id, songName: track.title, artistName: track.artist,
+            AddSongToPlaylistRequest(songId: legacyID, songName: track.title, artistName: track.artist,
                                      albumName: track.album, coverUrl: track.coverURLString, duration: track.durationMilliseconds)
         ]) { playlist in
             onFeedback(.success("已加入 \(playlist.name)"))
@@ -1207,6 +1218,9 @@ private struct AddPlaybackTrackToPlaylistSheet: View {
                     Text(track.artist).font(SetuTypography.caption).foregroundStyle(SetuColor.textSecondary).lineLimit(1)
                 }
             }
+        }
+        } else {
+            ContentUnavailableView("暂不支持此操作", systemImage: "music.note.list", description: Text("此歌曲的加入歌单入口尚未启用"))
         }
     }
 }

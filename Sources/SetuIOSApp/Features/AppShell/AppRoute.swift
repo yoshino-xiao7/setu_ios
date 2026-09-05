@@ -31,6 +31,9 @@ enum AppRoute: Hashable {
     case musicHistory
     case playlists
     case playlistDetail(Int)
+    case artistDetail(String)
+    case albumDetail(String)
+    case playlistDetailV2(String)
     case notifications
     case favorites
     case imageDeleteRequests

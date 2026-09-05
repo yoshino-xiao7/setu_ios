@@ -27,7 +27,8 @@ final class MusicCacheUITests: XCTestCase {
         let manage = app.buttons["管理全部歌单"]
         XCTAssertTrue(manage.waitForExistence(timeout: 10))
         if !manage.isHittable { app.swipeUp() }
-        manage.tap()
+        // Exercise cache reentry independently of the baseline row's spacer hit region.
+        manage.staticTexts["管理全部歌单"].tap()
         XCTAssertTrue(app.navigationBars["我的歌单"].waitForExistence(timeout: 5))
         let playlist = app.buttons["music.playlists.row.7401"]
         XCTAssertTrue(playlist.waitForExistence(timeout: 5))

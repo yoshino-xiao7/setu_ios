@@ -85,6 +85,12 @@ final class MusicStore {
     let history = MusicResource<MusicHistoryPage>()
     private(set) var playlistDetails: [Int: MusicResource<UserMusicPlaylistDetail>] = [:]
     private(set) var recommendedTracks: [Int: MusicResource<[MusicSong]>] = [:]
+    private(set) var artistDetails: [String: MusicResource<MusicV2ArtistDetail>] = [:]
+    private(set) var albumDetails: [String: MusicResource<MusicV2AlbumDetail>] = [:]
+    private(set) var playlistDetailsV2: [String: MusicResource<MusicPlaylistDetailData>] = [:]
+    private(set) var detailMoreLoading: Set<String> = []
+    private(set) var detailMoreErrors: [String: UserFacingError] = [:]
+    @ObservationIgnored private var detailRevisions: [String: UUID] = [:]
     private(set) var isLoadingMore = false
     private(set) var historyMoreError: UserFacingError?
     private(set) var userID: Int?
@@ -115,6 +121,11 @@ final class MusicStore {
         for resource in playlistDetails.values { resource.reset() }
         for resource in recommendedTracks.values { resource.reset() }
         playlistDetails.removeAll(); recommendedTracks.removeAll()
+        for resource in artistDetails.values { resource.reset() }
+        for resource in albumDetails.values { resource.reset() }
+        for resource in playlistDetailsV2.values { resource.reset() }
+        artistDetails.removeAll(); albumDetails.removeAll(); playlistDetailsV2.removeAll()
+        detailMoreLoading.removeAll(); detailMoreErrors.removeAll(); detailRevisions.removeAll()
         isLoadingMore = false
         historyMoreError = nil
         // Swap synchronously: no new-user read can race asynchronous cache clearing.
@@ -159,6 +170,77 @@ final class MusicStore {
     func loadPlaylists(force: Bool = false) async { await load(playlists, .playlists, force: force) }
     func loadDetail(_ id: Int, force: Bool = false) async { await load(detail(id), .playlist(id), force: force) }
     func loadTracks(_ id: Int, force: Bool = false) async { await load(tracks(id), .recommendedTracks(id), force: force) }
+
+    func artistDetail(_ id: String) -> MusicResource<MusicV2ArtistDetail> {
+        if let value = artistDetails[id] { return value }
+        let value = MusicResource<MusicV2ArtistDetail>(); artistDetails[id] = value; return value
+    }
+
+    func albumDetail(_ id: String) -> MusicResource<MusicV2AlbumDetail> {
+        if let value = albumDetails[id] { return value }
+        let value = MusicResource<MusicV2AlbumDetail>(); albumDetails[id] = value; return value
+    }
+
+    func playlistDetailV2(_ id: String) -> MusicResource<MusicPlaylistDetailData> {
+        if let value = playlistDetailsV2[id] { return value }
+        let value = MusicResource<MusicPlaylistDetailData>(); playlistDetailsV2[id] = value; return value
+    }
+
+    func loadArtistDetail(_ id: String, client: MusicV2Client, force: Bool = false) async {
+        await load(artistDetail(id), .artist(client: client, id: .init(rawValue: id)), force: force)
+    }
+
+    func loadAlbumDetail(_ id: String, client: MusicV2Client, force: Bool = false) async {
+        await load(albumDetail(id), .album(client: client, id: .init(rawValue: id)), force: force)
+    }
+
+    func loadPlaylistDetailV2(_ id: MusicV2PlaylistID, client: MusicV2Client, force: Bool = false) async {
+        let resource = playlistDetailV2(id.rawValue)
+        let repository = repository
+        let query = MusicQuery<MusicV2PlaylistDetail>.playlistV2(client: client, id: id)
+        let needsLoad = force || resource.value == nil || resource.fetchedAt.map { now().timeIntervalSince($0) >= query.key.ttl } != false
+        if !resource.isRefreshing, needsLoad {
+            detailRevisions[id.rawValue] = UUID(); detailMoreErrors[id.rawValue] = nil
+        }
+        let offsets = resource.value?.loadedOffsets ?? []
+        await resource.load(ttl: query.key.ttl, now: now(), force: force) {
+            if force {
+                await repository.invalidate(Set(offsets.map { .providerPlaylistTracks(id.rawValue, offset: $0, limit: 50) }))
+            }
+            let result = try await repository.value(for: query, force: force)
+            return (MusicPlaylistDetailData(result.value), result.fetchedAt)
+        }
+    }
+
+    func invalidateLegacyPlaylistReadsAfterDetailWrite() async {
+        let owner = generation, repository = repository
+        let keys = Set([MusicCacheKey.playlists] + playlistDetails.keys.map(MusicCacheKey.playlist))
+        await repository.invalidate(keys)
+        guard owner == generation else { return }
+        playlists.invalidate()
+        for resource in playlistDetails.values { resource.invalidate() }
+    }
+
+    func loadMorePlaylistDetail(_ id: MusicV2PlaylistID, client: MusicV2Client) async {
+        let key = id.rawValue, resource = playlistDetailV2(id.rawValue)
+        guard let value = resource.value, let offset = value.nextOffset,
+              !resource.isRefreshing, !detailMoreLoading.contains(key) else { return }
+        let owner = generation, revision = detailRevisions[key], repository = repository
+        detailMoreLoading.insert(key); detailMoreErrors[key] = nil
+        defer { if generation == owner { detailMoreLoading.remove(key) } }
+        do {
+            let page = try await repository.value(for: .playlistTracksV2(client: client, id: id, offset: offset))
+            guard generation == owner, detailRevisions[key] == revision, !resource.isRefreshing,
+                  resource.value?.nextOffset == offset else { return }
+            guard page.value.offset == offset, !page.value.hasMore || (page.value.nextOffset ?? offset) > offset else {
+                throw UserFacingError(message: "歌单分页信息无效，请刷新后重试")
+            }
+            resource.update(markStale: false) { $0?.append(page.value) }
+        } catch {
+            guard generation == owner, detailRevisions[key] == revision else { return }
+            detailMoreErrors[key] = UserFacingErrorMapper.map(error)
+        }
+    }
 
     func loadHistory(force: Bool = false) async {
         if !history.isRefreshing,

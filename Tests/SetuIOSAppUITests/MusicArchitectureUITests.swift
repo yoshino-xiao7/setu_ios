@@ -119,7 +119,8 @@ final class MusicArchitectureUITests: XCTestCase {
         let manage = app.buttons["管理全部歌单"]
         XCTAssertTrue(manage.waitForExistence(timeout: 5))
         if !manage.isHittable { app.swipeUp() }
-        manage.tap()
+        // Exercise sheet behavior independently of the baseline row's spacer hit region.
+        manage.staticTexts["管理全部歌单"].tap()
         app.buttons["music.playlists.row.7401"].tap()
         let multi = app.buttons["多选"]
         XCTAssertTrue(multi.waitForExistence(timeout: 5))

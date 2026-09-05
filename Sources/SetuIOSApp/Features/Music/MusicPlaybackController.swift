@@ -135,7 +135,7 @@ final class MusicPlaybackController {
     @ObservationIgnored private let audioSession = PlaybackAudioSession()
     #endif
     @ObservationIgnored private var stalledCount = 0
-    @ObservationIgnored private var historyInFlightIDs: Set<Int> = []
+    @ObservationIgnored private var historyInFlightIDs: Set<MusicPlaybackIdentity> = []
     @ObservationIgnored private var interruptedPlayback = false
     @ObservationIgnored private var historyTasks: [UUID: Task<Void, Never>] = [:]
     @ObservationIgnored private let playbackLog = OSLog(subsystem: "icu.yukiryou.setuios", category: "MusicPlayback")
@@ -300,7 +300,7 @@ final class MusicPlaybackController {
     @discardableResult
     func play(track: MusicPlaybackTrack, in tracks: [MusicPlaybackTrack] = [],
               context: PlaybackContext? = nil, playMode: MusicPlayMode? = nil) async -> Bool {
-        self.context = context ?? .singleTrack(trackID: .legacyProvider(track.id), label: nil)
+        self.context = context ?? .singleTrack(trackID: track.contextTrackID, label: nil)
         updateRemoteCapabilities()
         queueTracks = tracks.isEmpty ? [track] : tracks
         if let playMode { self.playMode = playMode }
@@ -312,7 +312,7 @@ final class MusicPlaybackController {
     func play(url: URL, track: MusicPlaybackTrack, context: PlaybackContext? = nil,
               queueTracks: [MusicPlaybackTrack] = [], playMode: MusicPlayMode? = nil, notice: String? = nil) {
         beginTransition()
-        self.context = context ?? .singleTrack(trackID: .legacyProvider(track.id), label: nil)
+        self.context = context ?? .singleTrack(trackID: track.contextTrackID, label: nil)
         updateRemoteCapabilities()
         self.queueTracks = queueTracks.isEmpty ? [track] : queueTracks
         if let playMode { self.playMode = playMode }
@@ -1226,7 +1226,7 @@ private enum MusicQualityError: Error {
 }
 
 struct MusicPlaybackTrack: Identifiable, Sendable, Codable {
-    let id: Int
+    let id: MusicPlaybackIdentity
     let title: String
     let artist: String
     let album: String
@@ -1234,6 +1234,24 @@ struct MusicPlaybackTrack: Identifiable, Sendable, Codable {
     let durationMilliseconds: Int
     /// Netease MV id when the track has one; enables in-app MV playback from the player.
     let mvID: Int?
+
+    var contextTrackID: PlaybackContext.TrackID {
+        switch id {
+        case .legacy(let id): return .legacyProvider(id)
+        case .canonical(let id): return .canonical(.init(rawValue: id.rawValue))
+        }
+    }
+
+    init(track: MusicV2Track) {
+        id = .canonical(track.id)
+        title = track.title
+        artist = track.artists.map(\.name).joined(separator: " / ")
+        album = track.album?.title ?? "未知专辑"
+        coverURLString = track.artwork?.url
+        durationMilliseconds = track.durationMs ?? 0
+        // V2 MV summaries have no playback operation. Do not invent legacy IDs.
+        mvID = nil
+    }
 
     var durationSeconds: Double {
         Double(durationMilliseconds) / 1000
@@ -1252,7 +1270,7 @@ struct MusicPlaybackTrack: Identifiable, Sendable, Codable {
         durationMilliseconds: Int,
         mvID: Int?
     ) {
-        self.id = id
+        self.id = .legacy(id)
         self.title = title
         self.artist = artist
         self.album = album
@@ -1262,7 +1280,7 @@ struct MusicPlaybackTrack: Identifiable, Sendable, Codable {
     }
 
     init(song: MusicSong) {
-        id = song.id
+        id = .legacy(song.id)
         title = song.name
         artist = song.artistNames.isEmpty ? "未知歌手" : song.artistNames
         album = song.albumName
@@ -1272,7 +1290,7 @@ struct MusicPlaybackTrack: Identifiable, Sendable, Codable {
     }
 
     init(song: PlaylistSong) {
-        id = song.songId
+        id = .legacy(song.songId)
         title = song.songName
         artist = song.artistName
         album = song.albumName ?? "未知专辑"
@@ -1282,7 +1300,7 @@ struct MusicPlaybackTrack: Identifiable, Sendable, Codable {
     }
 
     init(record: MusicHistoryRecord) {
-        id = record.songId
+        id = .legacy(record.songId)
         title = record.songName
         artist = record.artistName
         album = record.albumName ?? "未知专辑"

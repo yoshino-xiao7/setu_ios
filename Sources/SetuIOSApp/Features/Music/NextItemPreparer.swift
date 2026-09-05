@@ -4,13 +4,13 @@ import SetuIOSCore
 @MainActor
 final class NextItemPreparer {
     struct Prepared {
-        let trackID: Int
+        let trackID: MusicPlaybackIdentity
         let quality: MusicAudioQuality
         let source: ResolvedPlaybackURL
         let item: AVPlayerItem
     }
     private(set) var prepared: Prepared?
-    private var targetID: Int?
+    private var targetID: MusicPlaybackIdentity?
     private var quality: MusicAudioQuality?
     private var revision = UUID()
     private var task: Task<Void, Never>?
@@ -27,14 +27,14 @@ final class NextItemPreparer {
 
     deinit { task?.cancel() }
 
-    func invalidate(unlessTrackID id: Int? = nil, quality: MusicAudioQuality? = nil) {
+    func invalidate(unlessTrackID id: MusicPlaybackIdentity? = nil, quality: MusicAudioQuality? = nil) {
         if let id, targetID == id, self.quality == quality { return }
         revision = UUID()
         task?.cancel(); task = nil
         prepared = nil; targetID = nil; self.quality = nil
     }
 
-    func prepare(trackID: Int, quality: MusicAudioQuality, resolver: PlaybackURLResolver) async {
+    func prepare(trackID: MusicPlaybackIdentity, quality: MusicAudioQuality, resolver: PlaybackURLResolver) async {
         invalidate(unlessTrackID: trackID, quality: quality)
         if let prepared, prepared.source.isValid(at: Date()), prepared.item.status != .failed { return }
         if let task { await task.value; return }
@@ -54,7 +54,7 @@ final class NextItemPreparer {
         if revision == ticket { task = nil }
     }
 
-    func consume(trackID: Int, quality: MusicAudioQuality, now: Date = Date()) -> Prepared? {
+    func consume(trackID: MusicPlaybackIdentity, quality: MusicAudioQuality, now: Date = Date()) -> Prepared? {
         guard let prepared, prepared.trackID == trackID, prepared.quality == quality,
               prepared.source.isValid(at: now), prepared.item.status != .failed else { return nil }
         invalidate()

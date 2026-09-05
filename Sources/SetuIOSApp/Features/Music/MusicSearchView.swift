@@ -8,6 +8,7 @@ import UIKit
 
 struct MusicSearchView: View {
     @Environment(MusicStore.self) private var store
+    @Environment(RouterPath.self) private var router
     @Bindable var environment: AppEnvironment
     @Bindable var player: MusicPlaybackController
     let initialQuery: String?
@@ -24,6 +25,17 @@ struct MusicSearchView: View {
     @State private var visibleNearEndIDs: Set<Int> = []
     @State private var viewport = CGRect.zero
     private var session: MusicSearchSession { store.searchSession }
+
+    private func artistCallback(_ song: MusicSong) -> (() -> Void)? {
+        guard let id = (song.artists ?? song.ar)?.first?.id, id > 0,
+              let route = MusicDetailRoutes.artist(.init(rawValue: "netease:artist:\(id)"), flags: environment.config.musicFeatureFlags) else { return nil }
+        return { router.navigate(to: route) }
+    }
+    private func albumCallback(_ song: MusicSong) -> (() -> Void)? {
+        guard let id = (song.album ?? song.al)?.id, id > 0,
+              let route = MusicDetailRoutes.album(.init(rawValue: "netease:album:\(id)"), flags: environment.config.musicFeatureFlags) else { return nil }
+        return { router.navigate(to: route) }
+    }
 
     var body: some View {
         @Bindable var session = session
@@ -192,7 +204,7 @@ struct MusicSearchView: View {
                             Task { await play(row.song, queueTracks: session.pager.items.map { MusicPlaybackTrack(song: $0.song) }) }
                         }, onPlayMv: { mvSong = row.song }, onAddToPlaylist: { selectedSong = row.song }, onDownload: {
                             Task { await download(row.song) }
-                        })
+                        }, onArtist: artistCallback(row.song), onAlbum: albumCallback(row.song))
                         .background {
                             if session.pager.items.suffix(3).contains(where: { $0.id == row.id }) {
                                 Color.clear

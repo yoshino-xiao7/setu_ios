@@ -181,7 +181,7 @@ final class MusicPlaybackControllerTests: XCTestCase {
         controller.urlResolver = PlaybackURLResolver { ids, quality in
             started.fulfill(); await gate.wait(); return try playbackResponse(ids: ids, quality: quality, url: url)
         }
-        var history: [Int] = []
+        var history: [MusicPlaybackIdentity] = []
         controller.recordPlaybackHistory = { history.append($0.id) }
         let old = Task { await controller.play(track: tracks[0], in: tracks) }
         await fulfillment(of: [started], timeout: 2)
@@ -340,7 +340,7 @@ final class MusicPlaybackControllerTests: XCTestCase {
     }
 }
 
-private func playbackWave() throws -> URL {
+func playbackWave() throws -> URL {
     var data = Data()
     func append<T: FixedWidthInteger>(_ value: T) { var little = value.littleEndian; withUnsafeBytes(of: &little) { data.append(contentsOf: $0) } }
     let bytes = 8_000 * 2 * 180
