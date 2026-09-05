@@ -66,3 +66,12 @@ The existing implementation and clean feature checkout were revalidated without 
 ## AirPlay hardware follow-up — 2026-09-05
 
 The earlier receiver-availability blocker is superseded: the current Mac was used as a real AirPlay Receiver. M-4 physical v1/default-off AirPlay round-trip acceptance now passes, with one initial user output selection followed by automated Mac → iPhone → Mac and playback/system remote controls. See [hardware evidence](airplay/acceptance.md). Word-by-word flags remain off; this run verifies line-level LRC timing. Other outstanding P13 manual/120-Hz gates are unchanged, and P14 has not started.
+
+
+## ProMotion configuration follow-up — 2026-09-05
+
+The installed app previously omitted `CADisableMinimumFrameDurationOnPhone`. Apple's [ProMotion guidance](https://developer.apple.com/documentation/quartzcore/optimizing-iphone-and-ipad-apps-to-support-promotion-displays) requires this opt-in for requests above the default rate. The existing supplementary `Sources/SetuIOSApp/Info.plist` now declares the Boolean true. This three-line rendering configuration is a necessary small scope extension for P13's 120-Hz acceptance, not a client cutover flag or playback logic change. The first build-setting attempt did not enter the generated plist; that attempt was removed. The final installed product's plist was inspected and contains true.
+
+Final targeted physical run: `MusicPlayerP13LayoutTests/testWordRenderingAndScrollingCadenceOnDevice`, 1/1 PASS, xcodebuild exit 0. Evidence: `/private/tmp/setu-p13-promotion-2.xcresult` and `/private/tmp/setu-p13-promotion-2.log`. 478 intervals over the four-second word-rendering/scroll workload, device maximumFPS 120, median 8.334667 ms, maximum 12.502 ms, zero intervals above 20 ms. This is approximately 120-Hz callback cadence and **does not prove zero dropped presented frames**. No P0 performance improvement claim. M-9 remains open pending stronger rendering evidence; Instruments still independently lists this otherwise XCTest-accessible physical device offline.
+
+This continuation required two corrective targeted build/test invocations to validate the actual Info.plist artifact. No new Swift full-suite run. All client cutover flags stay false. `git diff --check` passes.
