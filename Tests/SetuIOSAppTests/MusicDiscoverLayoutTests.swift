@@ -14,7 +14,7 @@ final class MusicDiscoverLayoutTests: XCTestCase {
         try populate(store)
         for (page, view) in pages(environment, store) {
             for width in [375.0, 430.0] {
-                for size in [DynamicTypeSize.large, .accessibility3] {
+                for size in [DynamicTypeSize.large, .accessibility3, .accessibility5] {
                     let content = NavigationStack { view }.environment(store).environment(router)
                         .environment(\.musicPlaybackIntent, MusicPlaybackIntent(player: player, store: store))
                         .environment(\.dynamicTypeSize, size)

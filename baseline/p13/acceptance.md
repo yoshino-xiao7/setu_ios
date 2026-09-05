@@ -26,7 +26,7 @@ Physical UI tests assert each control is at least 44 points, is within screen bo
 
 ## Flags and boundaries
 
-All 14 production client flags remain false, including usesV2Home, usesV2Playback, wordByWordLyricsEnabled and airPlayPickerEnabled. Tests enable P13 features only in newly constructed fixture environments; no real defaults or client cutover were changed. PlaybackController, Playback/, LyricStore, MusicStore, MusicRepository, resolver, P11/P12 pages and remote image loader are unchanged.
+All 14 production client flags remain false, including usesV2Home, usesV2Playback, wordByWordLyricsEnabled and airPlayPickerEnabled. Tests enable P13 features only in newly constructed fixture environments; no real defaults or client cutover were changed. PlaybackController, Playback/, LyricStore, MusicStore, MusicRepository, resolver and remote image loader are unchanged. The later explicitly authorized shared-icon AX5 correction is the sole P11/P12 page-file exception; see the AX5 follow-up below.
 
 The separate user checkout retains its three original uncommitted UI/test/report edits. The old normal-size 管理全部歌单 hit-region problem is untouched. P12's recorded 63.4 ms warm median and ~73–84 fps are not a P13 comparison or evidence of stable 120 fps.
 
@@ -90,3 +90,8 @@ XCTest system scroll metrics now provide stronger evidence than the earlier disp
 ## Word mask rendering follow-up — 2026-09-05
 
 The P13 mask now batches its syllable rectangles into a single Path fill instead of repeated Canvas fills. Physical long-text/translation render test and screenshot review pass. The full scrolling workload measured 0/0/1 hitches in the first three iterations and zero hitches in all ten expanded iterations. Observed FPS remains about 82–83, and frame-count telemetry is unavailable; no stable-120-fps or unconditional M-9 PASS is asserted. See [all retained measurements](render/diagnosis.md). Playback, activeIndex and scrolling algorithms remain unchanged.
+
+
+## Authorized shared-icon AX5 correction — 2026-09-05
+
+The user approved only the one-line MusicIconButton font bound after the M-11 scope conflict was presented. The 44-point target is preserved; the unrelated 管理全部歌单 baseline is untouched. See [AX5 evidence](ax5/acceptance.md). Post-fix search-row device rendering passes 1/1; all six size/width images were reviewed and confirm the authorized overlap correction. Full M-11 coverage is not inferred from this row test. The separate lock-screen attempt did not execute: it waited for device unlock and then terminated with exit 65. CoreDevice still requires a passcode; see system evidence. No lock-screen acceptance is claimed.

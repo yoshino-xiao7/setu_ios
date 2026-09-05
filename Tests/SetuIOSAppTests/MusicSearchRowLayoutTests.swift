@@ -14,7 +14,7 @@ final class MusicSearchRowLayoutTests: XCTestCase {
             album: .init(id: 2, name: "很长的专辑名称：夏日限定版本"), mv: 1
         ))
         for width in [375.0, 430.0] {
-            for size in [DynamicTypeSize.large, .accessibility3] {
+            for size in [DynamicTypeSize.large, .accessibility3, .accessibility5] {
                 let content = MusicSongRow(model: model, onPlay: {}, onPlayMv: {}, onAddToPlaylist: {}, onDownload: {})
                     .padding(.horizontal, 16)
                     .frame(width: width)
