@@ -34,7 +34,7 @@ struct MusicQueueDrawerView: View {
 
                 Spacer()
 
-                if player.queueTracks.count > 1 {
+                if player.queueTracks.count > 1, player.context?.isInfinite != true {
                     Button(role: .destructive) {
                         PlayerHaptics.medium()
                         player.clearUpcomingTracks()
@@ -79,10 +79,11 @@ struct MusicQueueDrawerView: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(Array(player.queueTracks.enumerated()), id: \.element.id) { index, track in
+                        ForEach(Array(player.queueTracks.enumerated()), id: \.offset) { index, track in
                             MusicQueueDrawerRow(
                                 track: track,
-                                isCurrent: track.id == player.currentTrack?.id,
+                                isRadio: player.context?.isInfinite == true,
+                                isCurrent: index == player.currentQueueIndex,
                                 isPlaying: player.isPlaying,
                                 play: {
                                     Task { await playQueuedTrack(track) }
@@ -93,7 +94,9 @@ struct MusicQueueDrawerView: View {
                                     showFeedback(.success("已设为下一首播放"))
                                 },
                                 remove: {
-                                    player.removeQueuedTrack(track)
+                                    if player.context?.isInfinite == true {
+                                        Task { await player.blockRadioTrack(track) }
+                                    } else { player.removeQueuedTrack(track) }
                                 }
                             )
                             .padding(.horizontal, SetuSpacing.lg)
@@ -148,6 +151,7 @@ struct MusicQueueDrawerView: View {
 private struct MusicQueueDrawerRow: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let track: MusicPlaybackTrack
+    let isRadio: Bool
     let isCurrent: Bool
     let isPlaying: Bool
     let play: () -> Void
@@ -161,7 +165,7 @@ private struct MusicQueueDrawerRow: View {
                 width: 44,
                 height: 44,
                 cornerRadius: SetuRadius.sm,
-                onTap: play
+                onTap: { if !isRadio { play() } }
             )
 
             Button(action: play) {
@@ -183,9 +187,11 @@ private struct MusicQueueDrawerRow: View {
             .setuButtonFeedback()
             .accessibilityLabel("\(track.title)，\(track.artist)")
             .accessibilityValue(isCurrent ? (isPlaying ? "正在播放" : "已暂停") : "待播放")
-            .disabled(isCurrent)
+            .disabled(isCurrent || isRadio)
 
-            if isCurrent {
+            if isRadio {
+                Button("不再播放", action: remove).frame(minWidth: 44, minHeight: 44)
+            } else if isCurrent {
                 Image(systemName: isPlaying ? "speaker.wave.2.fill" : "pause.fill")
                     .foregroundStyle(SetuColor.brandPink)
                     .frame(width: 44, height: 44)

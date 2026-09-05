@@ -13,6 +13,7 @@
 		043D764B89F275E523B9325B /* AiDrawDraftUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC8CB12C3A8824F2DBFBF08E /* AiDrawDraftUITests.swift */; };
 		05F1DCEAD6E144A5BB28BD63 /* FavoriteClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 556DF98218F10099940D0FBC /* FavoriteClient.swift */; };
 		069BF4DC2729A7AE5C53BF00 /* CollectionClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECD30D8E6702BC68E02012D4 /* CollectionClient.swift */; };
+		06D2843A9D858D0CAAED8FA3 /* RadioFMFeeder.swift in Sources */ = {isa = PBXBuildFile; fileRef = D89DA4225B3BADF81A8EBEA0 /* RadioFMFeeder.swift */; };
 		097C2DAF7D9EC07F0A95F7B5 /* NotificationClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2436DEE3C98FCD787E7B367C /* NotificationClient.swift */; };
 		0AAAD572D96D4447D9CB2826 /* ImageFeedExpiryPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59495B7528E5A519F77B784F /* ImageFeedExpiryPolicyTests.swift */; };
 		0BF6D82321C421B535A66042 /* AuthSessionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1456165BE7AF7F3C92C54AD2 /* AuthSessionModels.swift */; };
@@ -138,6 +139,7 @@
 		78D8257D0F0D7CB9D49C581B /* SetuIOSLiveActivityWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F8EB5E430004624DF32AE6E7 /* SetuIOSLiveActivityWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		78EA7F03727B07DE46380D33 /* ImageUnlockPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FCF7C9E1BE43DD455302ED7 /* ImageUnlockPolicyTests.swift */; };
 		78F5050863AA5F6A270D99A4 /* SecuritySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5E929FD5136E6E36876D7CE /* SecuritySettingsView.swift */; };
+		794B6D1E3AA6C2A0E7BDD552 /* RadioFMUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0370AB53C3DA69EF6CBB68F4 /* RadioFMUITests.swift */; };
 		7AB572495BFD26025C0DFF70 /* MusicSongRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD297F9E64A627591FE2E81F /* MusicSongRow.swift */; };
 		7BEAABB0A5F0C747C1095B93 /* SetuIOSCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = E83FF3E83093A6F76A280DD8 /* SetuIOSCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		7D89C4487941FDA6FB4A1AC0 /* PasskeyClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A73916342BFBD050720B6015 /* PasskeyClientTests.swift */; };
@@ -247,6 +249,7 @@
 		D6D6F047A83C75D0488FF28C /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C91CFF67E98BBC01DC6893D1 /* ProfileView.swift */; };
 		D7DE67A5B334A549195732FA /* AppleAuthClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33C3FD265E1FD43010883478 /* AppleAuthClientTests.swift */; };
 		D84F9474E8AEFCCD96C3B9BA /* FavoriteClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 545F27D69810BEB14D1827D3 /* FavoriteClientTests.swift */; };
+		D9166F7C9043CF321F72E735 /* RadioFMView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EFF82FDB97114E808663470 /* RadioFMView.swift */; };
 		DB20D03E45B6002C9056B79C /* SetuIOSCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E83FF3E83093A6F76A280DD8 /* SetuIOSCore.framework */; };
 		DD8FC20D69FD9789378FFA5B /* MusicDiscoverLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D7F1C05CA9466757553E2D /* MusicDiscoverLayoutTests.swift */; };
 		DDA1C3472E6D23435A9962D6 /* SetuStateSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4D270D70073A9357A05BF8F /* SetuStateSection.swift */; };
@@ -283,6 +286,7 @@
 		FA1597436BF30928A65C3D94 /* ImageDeleteRequestDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EC7E0DF25FB6902D5BD525E /* ImageDeleteRequestDetailView.swift */; };
 		FA305A7FED3CD3AEC2419BD0 /* AdminPixivCrawlView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D65CD600EB96DA067D349D7E /* AdminPixivCrawlView.swift */; };
 		FAD73840F6FAC39D66876740 /* SystemStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA263C6C60D6DAEBF1EDADA9 /* SystemStatusView.swift */; };
+		FBF1B84FA78DA4B5034DC4B1 /* RadioFMFeederTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29E5256D2CFDF5D727D23B75 /* RadioFMFeederTests.swift */; };
 		FE273EC908BFB74560257D20 /* AdminAiDeleteRequestsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5680B80541513C9C12C1AFE6 /* AdminAiDeleteRequestsView.swift */; };
 /* End PBXBuildFile section */
 
@@ -372,6 +376,7 @@
 		025C32B13BAE8DCE14258698 /* SetuMetrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuMetrics.swift; sourceTree = "<group>"; };
 		026D8717DD1A7F17F55E44E5 /* TypedPlaybackIdentityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypedPlaybackIdentityTests.swift; sourceTree = "<group>"; };
 		028C52A4D6545581205E0400 /* SleepTimerControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SleepTimerControllerTests.swift; sourceTree = "<group>"; };
+		0370AB53C3DA69EF6CBB68F4 /* RadioFMUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadioFMUITests.swift; sourceTree = "<group>"; };
 		040C887BFBD3799A61BF2F2C /* AuthSigner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthSigner.swift; sourceTree = "<group>"; };
 		0459CFBA1ABCCCB8396F450D /* SetuCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuCard.swift; sourceTree = "<group>"; };
 		04D5FD33628FDD90D4A0D356 /* PointsClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PointsClient.swift; sourceTree = "<group>"; };
@@ -413,6 +418,7 @@
 		285C53337E7CEBF25A99F633 /* MusicSearchSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicSearchSessionTests.swift; sourceTree = "<group>"; };
 		285FABC7318C6DEEE5674CBB /* PointsLogsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PointsLogsView.swift; sourceTree = "<group>"; };
 		29682C327EBC3063E5483890 /* MusicSearchRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicSearchRepositoryTests.swift; sourceTree = "<group>"; };
+		29E5256D2CFDF5D727D23B75 /* RadioFMFeederTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadioFMFeederTests.swift; sourceTree = "<group>"; };
 		2A218B63E6B35A6E75F92766 /* AdminAiGenerationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminAiGenerationsView.swift; sourceTree = "<group>"; };
 		2A4C64BFF446EE80613710C4 /* AiGenerationGridTile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AiGenerationGridTile.swift; sourceTree = "<group>"; };
 		2A69CCD6CAD768223BBBAF17 /* AdminImageDeleteRequestsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminImageDeleteRequestsView.swift; sourceTree = "<group>"; };
@@ -526,6 +532,7 @@
 		879D7C16B2B972A0397B64EE /* SetuRemoteImageCacheTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuRemoteImageCacheTests.swift; sourceTree = "<group>"; };
 		8DCB470385749A8792B64C44 /* AdminOverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminOverviewView.swift; sourceTree = "<group>"; };
 		8E057CDEDA0D21F02E97905D /* SetuHeroCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuHeroCard.swift; sourceTree = "<group>"; };
+		8EFF82FDB97114E808663470 /* RadioFMView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadioFMView.swift; sourceTree = "<group>"; };
 		8FD869D0428D00382137410C /* SetuPressableButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuPressableButtonStyle.swift; sourceTree = "<group>"; };
 		90B5C9BD778EFE9385092A12 /* MusicModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicModels.swift; sourceTree = "<group>"; };
 		921947F19A7E30783AFEF887 /* MusicSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicSearchView.swift; sourceTree = "<group>"; };
@@ -598,6 +605,7 @@
 		D4C23E3C6F80D3081B0709A4 /* PlaylistSelectionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistSelectionSheet.swift; sourceTree = "<group>"; };
 		D62E77C6D951D355D788C5E8 /* AdminAiWorkersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminAiWorkersView.swift; sourceTree = "<group>"; };
 		D65CD600EB96DA067D349D7E /* AdminPixivCrawlView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminPixivCrawlView.swift; sourceTree = "<group>"; };
+		D89DA4225B3BADF81A8EBEA0 /* RadioFMFeeder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadioFMFeeder.swift; sourceTree = "<group>"; };
 		D99D59E18C0AB69ACDBC4BEB /* RemoteCommandCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteCommandCoordinatorTests.swift; sourceTree = "<group>"; };
 		DAB10EA9D9EEDB135EA6EFB3 /* SetuIOSApp.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = SetuIOSApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DB1A10CDB5283D71DADB5C1D /* SetuSkeleton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuSkeleton.swift; sourceTree = "<group>"; };
@@ -690,6 +698,7 @@
 				F6A0E4CBB2B997AACF652AAE /* PlaybackContext.swift */,
 				969CE41D6D3D68611D315C26 /* PlaybackPhase.swift */,
 				1B74BFA4A37A94442F16B8B7 /* PlaybackSnapshotStore.swift */,
+				D89DA4225B3BADF81A8EBEA0 /* RadioFMFeeder.swift */,
 				BDBBE48F16E3F518E4A18840 /* RemoteCommandCoordinator.swift */,
 				0A921FB5DE2E975700EEC418 /* SleepTimerController.swift */,
 			);
@@ -773,6 +782,7 @@
 				5C2D255EC50DD03AFCF97504 /* MusicDiscoverPreviewFixtures.swift */,
 				83CDF84E7D9DB5E3AD54128C /* MusicHomeFeedContent.swift */,
 				ECCD5C9C0914724B7BCDD6A3 /* NewReleasesView.swift */,
+				8EFF82FDB97114E808663470 /* RadioFMView.swift */,
 				B03CE7A83A84C826CA7FE804 /* RankingsView.swift */,
 			);
 			path = Discover;
@@ -831,6 +841,7 @@
 				31E7D3DDBB381C1A5709922C /* NotificationPermissionUITests.swift */,
 				6D231D43F5C49CF6DDCF3066 /* ProductAccessibilityUITests.swift */,
 				E77F0F45C76E431F3955422D /* PublicAiWorkUITests.swift */,
+				0370AB53C3DA69EF6CBB68F4 /* RadioFMUITests.swift */,
 				26AC9E85E4064CA6D60DE455 /* RandomImageConsumptionUITests.swift */,
 				CE919DDE322356A41535AE53 /* UXFlowUITests.swift */,
 				FFE72410FB51CA775E53F09E /* WelcomeFlowUITests.swift */,
@@ -1194,6 +1205,7 @@
 				E01087E519C93EB5AC1DBCF1 /* PlaybackSnapshotStoreTests.swift */,
 				7C1350CE332A24D794E3F48B /* PublicAiWorkRefreshPolicyTests.swift */,
 				9F1353DE9EE8D70BA228EA5F /* PublicBlogClientTests.swift */,
+				29E5256D2CFDF5D727D23B75 /* RadioFMFeederTests.swift */,
 				D99D59E18C0AB69ACDBC4BEB /* RemoteCommandCoordinatorTests.swift */,
 				879D7C16B2B972A0397B64EE /* SetuRemoteImageCacheTests.swift */,
 				028C52A4D6545581205E0400 /* SleepTimerControllerTests.swift */,
@@ -1465,6 +1477,7 @@
 				EF74BA3B788B42E495EB515E /* PlaybackSnapshotStoreTests.swift in Sources */,
 				A619F8D7747750A2D40E184C /* PublicAiWorkRefreshPolicyTests.swift in Sources */,
 				F4EA2FB6BAC068B27874E9FD /* PublicBlogClientTests.swift in Sources */,
+				FBF1B84FA78DA4B5034DC4B1 /* RadioFMFeederTests.swift in Sources */,
 				788868002D9CDDE9AA100E9F /* RemoteCommandCoordinatorTests.swift in Sources */,
 				3A9A5E67B99F2BEDFAEE1622 /* SetuRemoteImageCacheTests.swift in Sources */,
 				A74602310C5B737F4D668274 /* SleepTimerControllerTests.swift in Sources */,
@@ -1489,6 +1502,7 @@
 				203F7C08A9CFF66CEDDAE690 /* NotificationPermissionUITests.swift in Sources */,
 				E1B8C5B44E7B4DFEE1EF310B /* ProductAccessibilityUITests.swift in Sources */,
 				70BF017A63D12D7F0FAB1C7C /* PublicAiWorkUITests.swift in Sources */,
+				794B6D1E3AA6C2A0E7BDD552 /* RadioFMUITests.swift in Sources */,
 				4C75FDA9AE05D2EF7B9B8F04 /* RandomImageConsumptionUITests.swift in Sources */,
 				1A2A3199919A9ECBBAC858FE /* UXFlowUITests.swift in Sources */,
 				A1A0F37C4ABD509F6E5309F3 /* WelcomeFlowUITests.swift in Sources */,
@@ -1602,6 +1616,8 @@
 				A8FBD1E6E6F162E9A46ADAFD /* PublicCollectionDetailView.swift in Sources */,
 				EFC3522C424986B25369E387 /* PublicUserProfileView.swift in Sources */,
 				995A8AF99D8858745098E86D /* QqBindingView.swift in Sources */,
+				06D2843A9D858D0CAAED8FA3 /* RadioFMFeeder.swift in Sources */,
+				D9166F7C9043CF321F72E735 /* RadioFMView.swift in Sources */,
 				121C83EEB89DD719E602B880 /* RandomImageSwipeView.swift in Sources */,
 				275CF6A75F0B6739DAC981C3 /* RankingsView.swift in Sources */,
 				B4B27B6FD570CC5AEBEB75C3 /* RemoteCommandCoordinator.swift in Sources */,

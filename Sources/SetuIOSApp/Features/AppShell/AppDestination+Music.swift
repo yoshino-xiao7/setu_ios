@@ -10,6 +10,10 @@ extension RootAppView {
         switch route {
         case .musicSearch(let initialQuery):
             MusicSearchView(environment: environment, player: musicPlayer, initialQuery: initialQuery)
+        case .radioFM:
+            if environment.config.musicFeatureFlags.radioFMEnabled {
+                RadioFMView(environment: environment, player: musicPlayer).environment(musicStore)
+            }
         case .rankings:
             if environment.config.musicFeatureFlags.rankingsEnabled {
                 RankingsView(environment: environment).environment(musicStore)

@@ -137,6 +137,7 @@ private struct SetuRootUITestContext {
         let args = ProcessInfo.processInfo.arguments
         if args.contains("-ui-testing-music-discover"), let index = args.firstIndex(of: "-ui-testing-discover-page"), args.indices.contains(index + 1) {
             switch args[index + 1] {
+            case "radioFM": navigation.navigate(to: .music, route: .radioFM)
             case "rankings": navigation.navigate(to: .music, route: .rankings)
             case "newReleases": navigation.navigate(to: .music, route: .newReleases(albums: false))
             case "dailyRecommend": navigation.navigate(to: .music, route: .dailyRecommend)
@@ -385,6 +386,7 @@ enum SetuPreviewEnvironment {
             detailFlags.usesV2PlaylistDetail = true
         }
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-music-discover") {
+            if ProcessInfo.processInfo.arguments.contains("-ui-testing-radio-fm") { detailFlags.radioFMEnabled = true }
             detailFlags.usesV2Home = true; detailFlags.rankingsEnabled = true; detailFlags.newReleasesEnabled = true
             detailFlags.artistDetailEnabled = true; detailFlags.albumDetailEnabled = true; detailFlags.usesV2PlaylistDetail = true
         }

@@ -78,7 +78,8 @@ extension NowPlayingSheet {
                 NowPlayingRoundButton(
                     systemImage: player.playMode.systemImage,
                     label: "播放模式：\(player.playMode.title)",
-                    tint: SetuColor.info
+                    tint: SetuColor.info,
+                    disabled: player.context?.isInfinite == true
                 ) {
                     PlayerHaptics.light()
                     player.cyclePlayMode()

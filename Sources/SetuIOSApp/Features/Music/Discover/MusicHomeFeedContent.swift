@@ -68,6 +68,11 @@ struct MusicHomeSectionView: View {
         }.accessibilityIdentifier("music.home.v2.section.\(model.id)")
     }
 
+    private func isHiddenRadio(_ action: MusicV2HomeAction) -> Bool {
+        if case .discovery("radio", _) = action { return !flags.radioFMEnabled }
+        return false
+    }
+
     private var columns: [GridItem] {
         dynamicTypeSize.isAccessibilitySize ? [GridItem(.flexible())] : [GridItem(.adaptive(minimum: 96), spacing: SetuSpacing.sm)]
     }
@@ -84,9 +89,11 @@ struct MusicHomeSectionView: View {
                 }.setuButtonFeedback(cornerRadius: 22)
             case .entry(_, let title, let action, _):
                 let route = MusicDiscoverRoutes.route(action, flags: flags)
-                Button(title) { if let route { router.navigate(to: route) } }
-                    .font(.caption.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 44)
-                    .disabled(route == nil)
+                if !isHiddenRadio(action) {
+                    Button(title) { if let route { router.navigate(to: route) } }
+                        .font(.caption.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 44)
+                        .disabled(route == nil)
+                }
             case .unknown: EmptyView()
             }
         }

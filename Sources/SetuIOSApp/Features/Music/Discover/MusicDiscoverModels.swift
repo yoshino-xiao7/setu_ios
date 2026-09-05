@@ -19,7 +19,8 @@ enum MusicDiscoverRoutes {
             case "rankings": return flags.rankingsEnabled ? .rankings : nil
             case "newTracks": return flags.newReleasesEnabled ? .newReleases(albums: false) : nil
             case "newAlbums": return flags.newReleasesEnabled ? .newReleases(albums: true) : nil
-            default: return nil // Radio and later-phase capabilities remain unavailable.
+            case "radio": return flags.radioFMEnabled ? .radioFM : nil
+            default: return nil // Later-phase capabilities remain unavailable.
             }
         case .library(let collection, _): return collection == "history" ? .musicHistory : nil
         case .resource(let ref, _):
