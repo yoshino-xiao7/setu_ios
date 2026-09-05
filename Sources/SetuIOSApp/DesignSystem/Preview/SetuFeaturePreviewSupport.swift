@@ -717,6 +717,9 @@ private enum SetuPreviewAPI {
         case "/user/music/search":
             return json("{\"result\":{\"songs\":\(musicSongsJSON),\"songCount\":3}}")
         case "/user/music/url" where ProcessInfo.processInfo.arguments.contains("-ui-testing-lyrics-playback"):
+            #if os(iOS)
+            if ProcessInfo.processInfo.arguments.contains("-ui-testing-airplay-hardware") { AirPlayFixtureCounters.requested() }
+            #endif
             guard let requestURL = request.url, let audioURL = lyricPlaybackURL else {
                 return json(#"{"message":"本地音频夹具不可用"}"#, statusCode: 500)
             }
@@ -753,6 +756,10 @@ private enum SetuPreviewAPI {
             return json(#"{"data":{"id":99,"name":"预览 MV","brs":[{"br":480},{"br":720}]}}"#)
         case "/user/music/mv/url":
             return json(#"{"data":null}"#)
+        case "/user/music/lyric" where ProcessInfo.processInfo.arguments.contains("-ui-testing-airplay-hardware"):
+            let text = (0..<900).map { String(format: "[%02d:%02d.00]隔空播放验收歌词 %d", $0 / 60, $0 % 60, $0) }.joined(separator: "\n")
+            let data = try! JSONSerialization.data(withJSONObject: ["lrc": ["lyric": text], "tlyric": NSNull()])
+            return Fixture(statusCode: 200, data: data)
         case "/user/music/lyric":
             return json("{\"lrc\":{\"lyric\":\"[00:00.00] 夏夜微风\\n[00:12.00] 沿着星光慢慢回家\"},\"tlyric\":null}")
         default:
@@ -767,11 +774,22 @@ private enum SetuPreviewAPI {
             var little = value.littleEndian
             withUnsafeBytes(of: &little) { data.append(contentsOf: $0) }
         }
-        let bytes = 8_000 * 2 * 180
+        let seconds = ProcessInfo.processInfo.arguments.contains("-ui-testing-airplay-hardware") ? 900 : 180
+        let bytes = 8_000 * 2 * seconds
         data.append(Data("RIFF".utf8)); append(UInt32(36 + bytes)); data.append(Data("WAVEfmt ".utf8))
         append(UInt32(16)); append(UInt16(1)); append(UInt16(1)); append(UInt32(8_000))
         append(UInt32(16_000)); append(UInt16(2)); append(UInt16(16))
-        data.append(Data("data".utf8)); append(UInt32(bytes)); data.append(Data(repeating: 0, count: bytes))
+        data.append(Data("data".utf8)); append(UInt32(bytes))
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-airplay-hardware") {
+            // A quiet generated melody, exclusively for real-output hardware acceptance.
+            let notes = [220.0, 261.63, 329.63, 293.66, 261.63, 220.0, 196.0, 220.0]
+            for sample in 0..<(bytes / 2) {
+                let t = Double(sample) / 8000
+                let frequency = notes[Int(t * 2) % notes.count]
+                let envelope = min(1, (t * 2).truncatingRemainder(dividingBy: 1) * 20)
+                append(Int16(sin(2 * .pi * frequency * t) * 900 * envelope))
+            }
+        } else { data.append(Data(repeating: 0, count: bytes)) }
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("setu-lyrics-playback.wav")
         do { try data.write(to: url, options: .atomic); return url }
         catch { return nil }

@@ -128,6 +128,7 @@
 		733FFF134E18C164772E9F10 /* SetuSkeleton.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB1A10CDB5283D71DADB5C1D /* SetuSkeleton.swift */; };
 		750A54160CF4293580B5214C /* ApiKeyListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF20EAE938A450CBFCD46498 /* ApiKeyListView.swift */; };
 		75381A03F90CD18A238276CA /* MusicHomeFeedContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83CDF84E7D9DB5E3AD54128C /* MusicHomeFeedContent.swift */; };
+		75D3AEE6972EA3025E3E735D /* AirPlayHardwareUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70371048502B97E9B048C88F /* AirPlayHardwareUITests.swift */; };
 		75F7B3BB5D6B377705BFE8A0 /* MusicRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE4709E5B5D978FFE2698E88 /* MusicRepositoryTests.swift */; };
 		767BDF23E9FD1218169F1016 /* MusicV2Client.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7DD39032D2D2A70EAFF6C83 /* MusicV2Client.swift */; };
 		779E1C676A01686AE36F5985 /* MusicPlaylistsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 310C7E5EBEFDF066EB928A02 /* MusicPlaylistsView.swift */; };
@@ -207,6 +208,7 @@
 		B4B27B6FD570CC5AEBEB75C3 /* RemoteCommandCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDBBE48F16E3F518E4A18840 /* RemoteCommandCoordinator.swift */; };
 		B59A4B003147397F3AEC2E75 /* MusicPlaybackIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FED98443043D6A799821456 /* MusicPlaybackIntent.swift */; };
 		B5BBD0D5F6E26F5282289BC1 /* MusicSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 921947F19A7E30783AFEF887 /* MusicSearchView.swift */; };
+		B674B36C808E9A1C18EA5B58 /* AirPlayHardwareAudit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E99056BAB4DEE245C4435C5 /* AirPlayHardwareAudit.swift */; };
 		B6BE4F68DA7A6C00EE72A502 /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2857F3CC3E109FBB670BD711 /* AppConfig.swift */; };
 		B704B85D37D9971A84F63482 /* MusicMvSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75FD60F96BD849C0C15CDF9E /* MusicMvSheet.swift */; };
 		B785758D4D3BFB129828CC7D /* DailyExampleCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F5E185DAE983B491963DE5 /* DailyExampleCard.swift */; };
@@ -433,6 +435,7 @@
 		3D3851FC55716DE6BC9FDADF /* MusicPlaybackControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicPlaybackControllerTests.swift; sourceTree = "<group>"; };
 		3DA7870C016F691706DB5139 /* MusicHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicHistoryView.swift; sourceTree = "<group>"; };
 		3E7E77B6F663EAF577F2308A /* SetuSectionHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuSectionHeader.swift; sourceTree = "<group>"; };
+		3E99056BAB4DEE245C4435C5 /* AirPlayHardwareAudit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AirPlayHardwareAudit.swift; sourceTree = "<group>"; };
 		3FBDC18E4CD4C4EC426A43C4 /* SetuStatTile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuStatTile.swift; sourceTree = "<group>"; };
 		3FED98443043D6A799821456 /* MusicPlaybackIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicPlaybackIntent.swift; sourceTree = "<group>"; };
 		40052E5EE3A7E7D3A5B887E1 /* AdminUsersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminUsersView.swift; sourceTree = "<group>"; };
@@ -496,6 +499,7 @@
 		6F7E7E48ABF53B91D7B3ECAA /* SetuLoadMoreFooter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuLoadMoreFooter.swift; sourceTree = "<group>"; };
 		6FBFACA80CC1273BC475A055 /* PlatformClipboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformClipboard.swift; sourceTree = "<group>"; };
 		703416B5A4968F7D613D86F8 /* ApiKeyModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApiKeyModels.swift; sourceTree = "<group>"; };
+		70371048502B97E9B048C88F /* AirPlayHardwareUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AirPlayHardwareUITests.swift; sourceTree = "<group>"; };
 		72E5308109C7DA93931FD731 /* FavoriteListUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoriteListUITests.swift; sourceTree = "<group>"; };
 		72EF12F591E29337D773A5C8 /* SetuAppAppearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuAppAppearance.swift; sourceTree = "<group>"; };
 		73DB094D1C3A00C6C958DBEB /* AdminOperationLogsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminOperationLogsView.swift; sourceTree = "<group>"; };
@@ -724,6 +728,7 @@
 		15EE17E261C224088C93B3CD /* Player */ = {
 			isa = PBXGroup;
 			children = (
+				3E99056BAB4DEE245C4435C5 /* AirPlayHardwareAudit.swift */,
 				B788EAB21F1DFAC6808B1B34 /* AirPlayRouteButton.swift */,
 				05F935DC491A08656BC5A39F /* MusicMiniPlayerBar.swift */,
 				F7429ED81CBCCD99E845B963 /* MusicQueueDrawerView.swift */,
@@ -815,6 +820,7 @@
 			isa = PBXGroup;
 			children = (
 				BC8CB12C3A8824F2DBFBF08E /* AiDrawDraftUITests.swift */,
+				70371048502B97E9B048C88F /* AirPlayHardwareUITests.swift */,
 				72E5308109C7DA93931FD731 /* FavoriteListUITests.swift */,
 				9BE2D5C82A74CB5471E7C21C /* MusicArchitectureUITests.swift */,
 				84DFE488F44FD80ACB839432 /* MusicCacheUITests.swift */,
@@ -1472,6 +1478,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				043D764B89F275E523B9325B /* AiDrawDraftUITests.swift in Sources */,
+				75D3AEE6972EA3025E3E735D /* AirPlayHardwareUITests.swift in Sources */,
 				48A9D03A04613EF62355EE52 /* FavoriteListUITests.swift in Sources */,
 				70C20C830C14DA7493F4BA40 /* MusicArchitectureUITests.swift in Sources */,
 				2E1500854A390AFBDAE14EC6 /* MusicCacheUITests.swift in Sources */,
@@ -1518,6 +1525,7 @@
 				4886AAA6701358FE34B9882A /* AiGenerationLiveActivityCenter.swift in Sources */,
 				3D50376C6502C6F4002E7058 /* AiHistoryView.swift in Sources */,
 				DDD723F3F98621DFBE84741D /* AiSquareView.swift in Sources */,
+				B674B36C808E9A1C18EA5B58 /* AirPlayHardwareAudit.swift in Sources */,
 				BDB9D77ED0F7F88F2F61745E /* AirPlayRouteButton.swift in Sources */,
 				AED93C31482DF70820569BB1 /* AlbumDetailView.swift in Sources */,
 				750A54160CF4293580B5214C /* ApiKeyListView.swift in Sources */,

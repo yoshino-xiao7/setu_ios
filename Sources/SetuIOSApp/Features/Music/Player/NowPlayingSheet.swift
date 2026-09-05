@@ -78,6 +78,9 @@ struct NowPlayingSheet: View {
                     .padding()
             }
         }
+        #if DEBUG && os(iOS)
+        .modifier(AirPlayHardwareAudit(player: player, lyrics: lyrics))
+        #endif
         .overlay(alignment: .top) {
             if let feedback {
                 SetuFeedbackBanner(feedback: feedback)

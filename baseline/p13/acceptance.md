@@ -61,3 +61,8 @@ Evidence bundles: `/private/tmp/setu-p13-ui.xcresult` (initial hosted layouts pl
 ## Follow-up: Instruments connection check
 
 The existing implementation and clean feature checkout were revalidated without another full suite or build. `devicectl device info processes` successfully contacted the paired physical iPhone; this is not a general claim that the device was disconnected. In contrast, `xctrace list devices` twice listed it offline. A process-scoped `Animation Hitches` recording against the existing test app then waited for the device and terminated with exit 13: `Timed out waiting for device to boot`. No completed rendering trace was produced, and M-9 remains unverified. The attempted trace did not change any feature flag. Together with the confirmed absence of an AirPlay receiver, remaining physical acceptance needs an external-state change; it cannot be closed by repeating the passing fixture tests.
+
+
+## AirPlay hardware follow-up — 2026-09-05
+
+The earlier receiver-availability blocker is superseded: the current Mac was used as a real AirPlay Receiver. M-4 physical v1/default-off AirPlay round-trip acceptance now passes, with one initial user output selection followed by automated Mac → iPhone → Mac and playback/system remote controls. See [hardware evidence](airplay/acceptance.md). Word-by-word flags remain off; this run verifies line-level LRC timing. Other outstanding P13 manual/120-Hz gates are unchanged, and P14 has not started.
