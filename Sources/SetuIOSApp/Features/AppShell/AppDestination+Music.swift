@@ -10,6 +10,20 @@ extension RootAppView {
         switch route {
         case .musicSearch(let initialQuery):
             MusicSearchView(environment: environment, player: musicPlayer, initialQuery: initialQuery)
+        case .rankings:
+            if environment.config.musicFeatureFlags.rankingsEnabled {
+                RankingsView(environment: environment).environment(musicStore)
+            }
+        case .newReleases(let albums):
+            if environment.config.musicFeatureFlags.newReleasesEnabled {
+                NewReleasesView(environment: environment, albums: albums).environment(musicStore)
+                    .environment(\.musicPlaybackIntent, MusicPlaybackIntent(player: musicPlayer, store: musicStore))
+            }
+        case .dailyRecommend:
+            if environment.config.musicFeatureFlags.usesV2Home {
+                DailyRecommendView(environment: environment).environment(musicStore)
+                    .environment(\.musicPlaybackIntent, MusicPlaybackIntent(player: musicPlayer, store: musicStore))
+            }
         case .musicHistory:
             MusicHistoryView(environment: environment, player: musicPlayer)
                 .environment(musicStore)

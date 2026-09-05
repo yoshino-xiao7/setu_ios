@@ -1,0 +1,101 @@
+{
+  "phase": "P12",
+  "date": "2026-09-05",
+  "mergeBaseline": "b4cf091b25fba685e369fe62335582de35ab34dc",
+  "environment": "Connected physical iPhone, Debug app, isolated in-process fixtures; real client cutover remains off",
+  "warmHome": {
+    "method": "Cached HomeFeed to UIHostingController window drawHierarchy; first warm-up sample excluded; five retained samples",
+    "samplesMs": [
+      63.41579166473821,
+      66.1184583150316,
+      58.319166681030765,
+      66.03237497620285,
+      61.37729165493511
+    ],
+    "p50Ms": 63.41579166473821,
+    "budgetMs": 100,
+    "result": "PASS"
+  },
+  "scroll": {
+    "method": "XCTOSSignpostMetric.scrollingAndDecelerationMetric; three iterations of swipeUp/swipeDown on Home",
+    "metrics": [
+      {
+        "displayName": "Hitches Total Duration (Scroll_DraggingAndDeceleration)",
+        "identifier": "com.apple.dt.XCTMetric_OSSignpost-Scroll_DraggingAndDeceleration.animation.hitches.total.duration",
+        "unitOfMeasurement": "ms",
+        "measurements": [
+          8.334749,
+          8.334749,
+          50.00849699999999
+        ]
+      },
+      {
+        "displayName": "Duration (Scroll_DraggingAndDeceleration)",
+        "identifier": "com.apple.dt.XCTMetric_OSSignpost-Scroll_DraggingAndDeceleration.duration",
+        "unitOfMeasurement": "s",
+        "measurements": [
+          2.375934083,
+          2.392756459,
+          2.425548458
+        ]
+      },
+      {
+        "displayName": "Hitch Time Ratio (Scroll_DraggingAndDeceleration)",
+        "identifier": "com.apple.dt.XCTMetric_OSSignpost-Scroll_DraggingAndDeceleration.animation.hitch.time.ratio",
+        "unitOfMeasurement": "ms per s",
+        "measurements": [
+          3.507988735237429,
+          3.4833256727705346,
+          20.617398851871354
+        ]
+      },
+      {
+        "displayName": "Frame Count (Scroll_DraggingAndDeceleration)",
+        "identifier": "com.apple.dt.XCTMetric_OSSignpost-Scroll_DraggingAndDeceleration.animation.frame.count",
+        "unitOfMeasurement": "frames",
+        "measurements": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "displayName": "Frame Rate (Scroll_DraggingAndDeceleration)",
+        "identifier": "com.apple.dt.XCTMetric_OSSignpost-Scroll_DraggingAndDeceleration.animation.frame.rate",
+        "unitOfMeasurement": "fps",
+        "measurements": [
+          83.75653076171875,
+          84.00353240966797,
+          72.97318267822266
+        ]
+      },
+      {
+        "displayName": "Number of Hitches (Scroll_DraggingAndDeceleration)",
+        "identifier": "com.apple.dt.XCTMetric_OSSignpost-Scroll_DraggingAndDeceleration.animation.hitch.number",
+        "unitOfMeasurement": "hitches",
+        "measurements": [
+          1,
+          1,
+          3
+        ]
+      }
+    ],
+    "notes": [
+      "Frame Count was reported as zero by XCTest despite nonzero FPS and hitch metrics. Values are preserved; frame counts were not reconstructed.",
+      "These samples do not establish sustained 120 fps."
+    ]
+  },
+  "historicalComparison": {
+    "result": "UNAVAILABLE",
+    "reference": "music-architecture/baseline/2026-09-03-ios.md and performance-baseline.md",
+    "reason": "P0 explicitly lacks cold/warm Home and FPS measurements. No regression or improvement relative to P0 is claimed."
+  },
+  "evidence": {
+    "warmAndLayout": "/private/tmp/p12-ui-final.xcresult",
+    "scroll": "/private/tmp/p12-ui-wired.xcresult"
+  },
+  "scope": [
+    "No production network latency or backend availability is inferred from fixtures.",
+    "Rankings/Daily 401 task-key correction after collection does not change Home rendering or scroll code."
+  ]
+}

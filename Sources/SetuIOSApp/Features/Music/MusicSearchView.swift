@@ -316,26 +316,38 @@ struct MusicSearchView: View {
 struct MusicRecentHistoryCard: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    let record: MusicHistoryRecord
+    let title: String
+    let artist: String
+    let artwork: String?
+    let identity: String
+
+    init(record: MusicHistoryRecord, onPlay: @escaping () -> Void) {
+        title = record.songName; artist = record.artistName; artwork = record.coverUrl
+        identity = String(record.id); self.onPlay = onPlay
+    }
+    init(track: MusicV2Track, onPlay: @escaping () -> Void) {
+        title = track.title; artist = track.artists.map(\.name).joined(separator: " / ")
+        artwork = track.artwork?.url; identity = track.id.rawValue; self.onPlay = onPlay
+    }
     let onPlay: () -> Void
 
     var body: some View {
         Button(action: onPlay) {
             VStack(alignment: .leading, spacing: SetuSpacing.sm) {
                 MusicArtworkView(
-                    urlString: record.coverUrl,
+                    urlString: artwork,
                     width: dynamicTypeSize.isAccessibilitySize ? 168 : 116,
                     height: dynamicTypeSize.isAccessibilitySize ? 168 : 116,
                     cornerRadius: SetuRadius.md,
                     allowsTapToRetry: false
                 )
                 VStack(alignment: .leading, spacing: SetuSpacing.xs) {
-                    Text(record.songName)
+                    Text(title)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(SetuColor.textPrimary)
                         .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
                         .truncationMode(.tail)
-                    Text(record.artistName)
+                    Text(artist)
                         .font(.caption)
                         .foregroundStyle(SetuColor.textSecondary)
                         .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
@@ -349,22 +361,33 @@ struct MusicRecentHistoryCard: View {
         .buttonStyle(.plain)
         .frame(minWidth: 44, minHeight: 44)
         .setuButtonFeedback()
-        .accessibilityLabel("播放 \(record.songName)，歌手 \(record.artistName)")
-        .accessibilityIdentifier("music.history.\(record.id)")
+        .accessibilityLabel("播放 \(title)，歌手 \(artist)")
+        .accessibilityIdentifier("music.history.\(identity)")
     }
 }
 
 struct MusicPlaylistCompactRow: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    let playlist: UserMusicPlaylist
+    let title: String
+    let artwork: String?
+    let countLabel: String?
+    let playCount: Int?
+    init(playlist: UserMusicPlaylist) {
+        title = playlist.name; artwork = playlist.coverUrl
+        countLabel = "\(playlist.songCount ?? 0) 首"; playCount = playlist.playCount
+    }
+    init(playlist: MusicV2LocalPlaylist) {
+        title = playlist.title; artwork = playlist.artwork?.url
+        countLabel = playlist.trackCount.map { "\($0) 首" }; playCount = playlist.playCount
+    }
 
     var body: some View {
         HStack(spacing: SetuSpacing.sm) {
-            MusicArtworkView(urlString: playlist.coverUrl, width: 64, height: 64, cornerRadius: SetuRadius.sm)
+            MusicArtworkView(urlString: artwork, width: 64, height: 64, cornerRadius: SetuRadius.sm)
 
             VStack(alignment: .leading, spacing: SetuSpacing.xs) {
-                Text(playlist.name)
+                Text(title)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(SetuColor.textPrimary)
                     .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
@@ -402,12 +425,13 @@ struct MusicPlaylistCompactRow: View {
 
     @ViewBuilder
     private var playlistStats: some View {
-        HStack(spacing: SetuSpacing.xs) {
-            Image(systemName: "music.note").accessibilityHidden(true)
-            Text("\(playlist.songCount ?? 0) 首")
-                .fixedSize(horizontal: false, vertical: true)
+        if let countLabel {
+            HStack(spacing: SetuSpacing.xs) {
+                Image(systemName: "music.note").accessibilityHidden(true)
+                Text(countLabel).fixedSize(horizontal: false, vertical: true)
+            }
         }
-        if let playCount = playlist.playCount {
+        if let playCount {
             HStack(spacing: SetuSpacing.xs) {
                 Image(systemName: "play.circle").accessibilityHidden(true)
                 Text("播放 \(playCount) 次")

@@ -44,12 +44,18 @@ struct MusicHomeView: View {
                 }
                 .setuListRow()
             }
-            recentHistoryContent
-            myPlaylistContent
-            dailySongsContent
-            newSongsContent
-            recommendedPlaylistSection
-            hotSearchContent
+            if environment.config.musicFeatureFlags.usesV2Home {
+                MusicHomeFeedContent(resource: store.homeFeed, flags: environment.config.musicFeatureFlags,
+                                     userID: store.userID, retry: { await loadLandingContent(force: true) })
+                    .environment(\.musicPlaybackIntent, MusicPlaybackIntent(player: player, store: store))
+            } else {
+                recentHistoryContent
+                myPlaylistContent
+                dailySongsContent
+                newSongsContent
+                recommendedPlaylistSection
+                hotSearchContent
+            }
         }
         .listStyle(.plain)
         .setuBackground()
@@ -99,7 +105,7 @@ struct MusicHomeView: View {
                 player.showFeedback(fileShareFeedback(result))
             }
         }
-        .task { await loadLandingContent() }
+        .task(id: store.sessionToken) { await loadLandingContent() }
         .refreshable { await loadLandingContent(force: true) }
     }
 
@@ -137,19 +143,7 @@ struct MusicHomeView: View {
                                     Button {
                                         router.navigate(to: .musicSearch(item.first))
                                     } label: {
-                                        HStack(spacing: SetuSpacing.xs) {
-                                            Image(systemName: index < 3 ? "flame.fill" : "magnifyingglass")
-                                                .accessibilityHidden(true)
-                                            Text(item.first)
-                                                .fixedSize(horizontal: false, vertical: true)
-                                        }
-                                            .font(.caption.weight(.semibold))
-                                            .foregroundStyle(index < 3 ? SetuColor.brandInk : SetuColor.textPrimary)
-                                            .fixedSize(horizontal: false, vertical: true)
-                                            .frame(maxWidth: .infinity, minHeight: 44)
-                                            .padding(.vertical, SetuSpacing.xs)
-                                            .padding(.horizontal, SetuSpacing.sm)
-                                            .background(SetuColor.surfaceMuted, in: Capsule())
+                                        MusicHomeKeywordLabel(query: item.first, index: index)
                                     }
                                     .setuButtonFeedback(cornerRadius: 22)
                                     .accessibilityIdentifier("music.hot.\(index)")
@@ -434,7 +428,11 @@ struct MusicHomeView: View {
     }
 
     private func loadLandingContent(force: Bool = false) async {
-        await store.loadHome(force: force)
+        if environment.config.musicFeatureFlags.usesV2Home {
+            await store.loadHomeV2(client: environment.musicV2Client, force: force)
+        } else {
+            await store.loadHome(force: force)
+        }
     }
 
     private func play(_ song: MusicSong, context: PlaybackContext? = nil, queueTracks: [MusicPlaybackTrack] = []) async {
@@ -573,24 +571,34 @@ struct MusicMetadataRow: View {
     }
 }
 
-private struct RecommendedPlaylistRow: View {
-    let playlist: MusicRecommendedPlaylist
+struct RecommendedPlaylistRow: View {
+    let title: String
+    let artwork: String?
+    let description: String?
+    let playCount: Int?
+    init(playlist: MusicRecommendedPlaylist) {
+        title = playlist.name; artwork = playlist.picUrl
+        description = playlist.description; playCount = playlist.playCount
+    }
+    init(title: String, artwork: String?, description: String?, playCount: Int?) {
+        self.title = title; self.artwork = artwork; self.description = description; self.playCount = playCount
+    }
 
     var body: some View {
         HStack(spacing: SetuSpacing.md) {
-            MusicArtworkView(urlString: playlist.picUrl)
+            MusicArtworkView(urlString: artwork)
             VStack(alignment: .leading, spacing: SetuSpacing.xs) {
-                Text(playlist.name)
+                Text(title)
                     .font(SetuTypography.headline)
                     .foregroundStyle(SetuColor.textPrimary)
                     .lineLimit(2)
-                if let description = playlist.description, !description.isEmpty {
+                if let description, !description.isEmpty {
                     Text(description)
                         .font(SetuTypography.caption)
                         .foregroundStyle(SetuColor.textSecondary)
                         .lineLimit(2)
                 }
-                if let playCount = playlist.playCount {
+                if let playCount {
                     HStack(spacing: SetuSpacing.xs) {
                         Image(systemName: "play.circle")
                             .accessibilityHidden(true)

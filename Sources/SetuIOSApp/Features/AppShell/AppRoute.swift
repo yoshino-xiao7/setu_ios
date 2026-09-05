@@ -34,6 +34,9 @@ enum AppRoute: Hashable {
     case artistDetail(String)
     case albumDetail(String)
     case playlistDetailV2(String)
+    case rankings
+    case newReleases(albums: Bool)
+    case dailyRecommend
     case notifications
     case favorites
     case imageDeleteRequests
