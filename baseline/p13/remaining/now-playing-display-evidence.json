@@ -1,0 +1,38 @@
+{
+  "status": "PASS",
+  "method": "Apple devicectl physical screenshot; no XCTest system UI operation",
+  "manualAction": "User opened lock-screen Now Playing once",
+  "displayedTrack": {
+    "title": "勇气",
+    "artist": "棉子",
+    "album": "勇气",
+    "duration": "4:02"
+  },
+  "comparison": "System artwork/title/artist match subsequent unchanged-session App artwork/title/artist; public display identity, no opaque track-ID extraction claimed",
+  "progress": [
+    "system 0:01 / -4:01",
+    "system 0:17 / -3:45",
+    "App 1:06 / 4:02"
+  ],
+  "controls": "Previous, pause, next and route controls visible; pause glyph agrees with advancing playback",
+  "note": "Initial preparation used Guang Liang version; queue changed before system capture. Accepted comparison uses only Mian Zi version. First system frame has pending artwork, second displays populated artwork. Black screen-off third capture is excluded. Earlier accepted remote controls evidence remains unchanged.",
+  "artifacts": [
+    {
+      "path": "/private/tmp/p13-real-app-playing.png",
+      "sha256": "b0e51b35d9319c2e2db82e15cd3fbfe04c76723aea500fdd17b729bd1e8a78b9"
+    },
+    {
+      "path": "/private/tmp/p13-lock-artwork-a.png",
+      "sha256": "5cd8c09ea02dd0e6542c10df97fb784751d171e99c56a873d88c88729e0ed02c"
+    },
+    {
+      "path": "/private/tmp/p13-lock-artwork-b.png",
+      "sha256": "2b0d1593d4b3955c11c153838854b00774af7b2a0b4b739b26c754490ee3ce20"
+    },
+    {
+      "path": "/private/tmp/p13-current-app-match.png",
+      "sha256": "67a20efb984785135dfc7cc8040335cb44bd852e15372459787ada56e9b209ac"
+    }
+  ],
+  "privacy": "Raw screenshots contain unrelated system chrome and remain temporary, not committed."
+}

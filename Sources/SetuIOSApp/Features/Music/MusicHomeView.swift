@@ -572,11 +572,14 @@ struct MusicMetadataRow: View {
 }
 
 struct RecommendedPlaylistRow: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    var expanded = false
     let title: String
     let artwork: String?
     let description: String?
     let playCount: Int?
-    init(playlist: MusicRecommendedPlaylist) {
+    init(playlist: MusicRecommendedPlaylist, expanded: Bool = false) {
+        self.expanded = expanded
         title = playlist.name; artwork = playlist.picUrl
         description = playlist.description; playCount = playlist.playCount
     }
@@ -591,12 +594,14 @@ struct RecommendedPlaylistRow: View {
                 Text(title)
                     .font(SetuTypography.headline)
                     .foregroundStyle(SetuColor.textPrimary)
-                    .lineLimit(2)
+                    .lineLimit(expanded && dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                    .fixedSize(horizontal: false, vertical: expanded && dynamicTypeSize.isAccessibilitySize)
                 if let description, !description.isEmpty {
                     Text(description)
                         .font(SetuTypography.caption)
                         .foregroundStyle(SetuColor.textSecondary)
-                        .lineLimit(2)
+                        .lineLimit(expanded && dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                        .fixedSize(horizontal: false, vertical: expanded && dynamicTypeSize.isAccessibilitySize)
                 }
                 if let playCount {
                     HStack(spacing: SetuSpacing.xs) {
@@ -645,7 +650,7 @@ private struct RecommendedPlaylistSheet: View {
                     SetuCard {
                         VStack(alignment: .leading, spacing: SetuSpacing.md) {
                             SetuSectionHeader(title: "歌单")
-                            RecommendedPlaylistRow(playlist: playlist)
+                            RecommendedPlaylistRow(playlist: playlist, expanded: true)
                         }
                     }
                     .setuListRow()

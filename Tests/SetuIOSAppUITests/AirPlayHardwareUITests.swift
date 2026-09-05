@@ -162,6 +162,22 @@ final class AirPlayHardwareUITests: XCTestCase {
         try exercise(app, label: "post_lock")
     }
 
+    func testPrepareRealArtworkDisplay() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["SETU_P13_REAL_ARTWORK"] == "1")
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        XCTAssertNotEqual(app.state, .notRunning)
+        app.activate()
+        let open = app.buttons["打开正在播放：勇气"]
+        XCTAssertTrue(open.waitForExistence(timeout: 10))
+        open.tap()
+        if !app.buttons["暂停"].isHittable { try tapVisible("播放", in: app) }
+        XCTAssertTrue(app.buttons["暂停"].waitForExistence(timeout: 15))
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "p13-real-artwork-app"; shot.lifetime = .keepAlways; add(shot)
+        print("P13_REAL_ARTWORK_READY")
+    }
+
     func testPrepareManualRemoteWindow() throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["SETU_P13_MANUAL_REMOTE"] == "1", "Opt-in native-console manual remote evidence")
         continueAfterFailure = false

@@ -150,6 +150,13 @@ final class P13PageAX5AuditUITests: XCTestCase {
     func testSearchArtists() throws { try audit("searchArtists") }
     func testCreatePlaylist() throws { try audit("createPlaylist") }
 
+    func testAddPlaylistModal() throws { try audit("addPlaylist") }
+    func testMVModal() throws { try audit("mvModal") }
+    func testRecommendedPlaylistModal() throws { try audit("recommendedModal") }
+    func testMoreMenu() throws { try audit("moreMenu") }
+    func testSleepMenu() throws { try audit("sleepMenu") }
+    func testQualityMenu() throws { try audit("qualityMenu") }
+
     private func audit(_ page: String) throws {
         continueAfterFailure = false
         let app = XCUIApplication()
@@ -158,11 +165,12 @@ final class P13PageAX5AuditUITests: XCTestCase {
             args += ["-ui-testing-music-discover", "-ui-testing-discover-page", page == "releaseAlbums" ? "newReleases" : page]
         } else if ["playlist", "album", "artist"].contains(page) {
             args += ["-ui-testing-music-details", "-ui-testing-detail-page", page]
-        } else if ["player", "lyrics", "queue"].contains(page) {
+        } else if ["player", "lyrics", "queue", "moreMenu", "sleepMenu", "qualityMenu"].contains(page) {
             args = ["-ui-testing-root-player"]
         } else if page.hasPrefix("search") {
             args += ["-ui-testing-music-search-pages"]
         } else { args = ["-ui-testing-root-music"] }
+        if page == "mvModal" { args += ["-ui-testing-music-mv"] }
         app.launchArguments = args + ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityExtraExtraExtraLarge"]
         app.launch(); defer { app.terminate() }
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10))
@@ -200,6 +208,28 @@ final class P13PageAX5AuditUITests: XCTestCase {
             XCTAssertTrue(open.waitForExistence(timeout: 10)); open.tap()
             if page == "lyrics" { app.buttons["歌曲封面，点击查看歌词"].tap() }
         }
+        if page == "addPlaylist" || page == "mvModal" {
+            let field = app.textFields["搜索歌曲、歌手或专辑"].firstMatch
+            XCTAssertTrue(field.waitForExistence(timeout: 10)); field.tap(); field.typeText("测试\n")
+            XCTAssertTrue(app.navigationBars["搜索音乐"].waitForExistence(timeout: 10))
+            let target = app.buttons[page == "addPlaylist" ? "将《夏夜微风》加入歌单" : "播放《夏夜微风》的 MV"]
+            for _ in 0..<6 where !target.isHittable { app.swipeUp() }
+            XCTAssertTrue(target.isHittable); target.tap()
+            if page == "addPlaylist" { XCTAssertTrue(app.navigationBars["加入歌单"].waitForExistence(timeout: 10)) }
+            else { XCTAssertTrue(app.staticTexts["预览 MV"].waitForExistence(timeout: 10)) }
+        } else if page == "recommendedModal" {
+            let target = app.buttons.matching(NSPredicate(format: "label CONTAINS '粉色云层下的通勤歌单'")).firstMatch
+            for _ in 0..<10 where !target.isHittable { app.swipeUp() }
+            XCTAssertTrue(target.isHittable); target.tap()
+            XCTAssertTrue(app.navigationBars["粉色云层下的通勤歌单"].waitForExistence(timeout: 10))
+        } else if ["moreMenu", "sleepMenu", "qualityMenu"].contains(page) {
+            app.buttons["打开正在播放：夏夜微风"].tap()
+            if page == "qualityMenu" { app.buttons["music.quality"].tap() }
+            else {
+                app.buttons["更多操作"].tap()
+                if page == "sleepMenu" { app.buttons["睡眠定时"].tap() }
+            }
+        }
         for viewport in 0..<3 {
             print("P13_AX5_AUDIT_BEGIN page=\(page) viewport=\(viewport)")
             let shot = XCTAttachment(screenshot: app.screenshot())
@@ -208,7 +238,7 @@ final class P13PageAX5AuditUITests: XCTestCase {
             // audit actual AX5 clipping/elements without treating that harness limit as a pass.
             try app.performAccessibilityAudit(for: [.textClipped, .elementDetection])
             print("P13_AX5_AUDIT_PASS page=\(page) viewport=\(viewport)")
-            if page == "player" { break }
+            if page == "player" || page.hasSuffix("Menu") { break }
             app.swipeUp()
         }
     }
