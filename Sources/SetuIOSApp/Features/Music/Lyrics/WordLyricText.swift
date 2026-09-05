@@ -27,18 +27,19 @@ struct WordLyricText: View {
                     TimelineView(.animation(minimumInterval: 1.0 / 120, paused: !isPlaying || reduceMotion)) { _ in
                         let time = isPlaying ? sampleTime() : currentTime
                         let progress = LyricParser.syllableProgress(in: line, at: milliseconds(time))
-                        Canvas { context, size in
-                            context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(.white.opacity(0.45)))
+                        Path { path in
                             for (index, segments) in rects.enumerated() {
                                 let ratio = progress.map { index < $0.index ? 1 : (index == $0.index ? $0.ratio : 0) } ?? 0
                                 var remaining = segments.reduce(0) { $0 + $1.width } * ratio
                                 for segment in segments {
                                     let width = min(segment.width, max(0, remaining))
-                                    context.fill(Path(CGRect(x: segment.minX, y: segment.minY, width: width, height: segment.height)), with: .color(.white))
+                                    path.addRect(CGRect(x: segment.minX, y: segment.minY, width: width, height: segment.height))
                                     remaining -= segment.width
                                 }
                             }
                         }
+                        .fill(.white)
+                        .background(.white.opacity(0.45))
                     }
                     .onAppear { rects = glyphRects(size: proxy.size) }
                     .onChange(of: proxy.size) { _, size in rects = glyphRects(size: size) }

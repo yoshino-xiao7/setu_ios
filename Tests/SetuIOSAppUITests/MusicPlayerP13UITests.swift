@@ -81,6 +81,7 @@ final class MusicPlayerP13UITests: XCTestCase {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["SETU_P13_RENDER_METRICS"] == "1", "Opt-in physical rendered-frame metrics")
         let app = XCUIApplication()
         app.launchArguments = ["-ui-testing-p13-word-scroll"]
+        if ProcessInfo.processInfo.environment["SETU_P13_FIXED_LINE"] == "1" { app.launchArguments.append("-ui-testing-p13-fixed-line") }
         if ProcessInfo.processInfo.environment["SETU_P13_STATIC_WORD"] == "1" { app.launchArguments.append("-ui-testing-p13-static-word") }
         if ProcessInfo.processInfo.environment["SETU_P13_LINE_CONTROL"] == "1" { app.launchArguments.append("-ui-testing-p13-line-control") }
         app.launch()
@@ -88,8 +89,10 @@ final class MusicPlayerP13UITests: XCTestCase {
         let scroll = app.scrollViews.firstMatch
         XCTAssertTrue(scroll.waitForExistence(timeout: 10))
         let options = XCTMeasureOptions()
-        options.iterationCount = 3
-        measure(metrics: [XCTOSSignpostMetric.scrollingAndDecelerationMetric], options: options) {
+        options.iterationCount = Int(ProcessInfo.processInfo.environment["SETU_P13_METRIC_ITERATIONS"] ?? "3") ?? 3
+        var metrics: [any XCTMetric] = [XCTOSSignpostMetric.scrollingAndDecelerationMetric]
+        if ProcessInfo.processInfo.environment["SETU_P13_CPU_TRACE"] == "1" { metrics.append(XCTCPUMetric(application: app)) }
+        measure(metrics: metrics, options: options) {
             scroll.swipeUp(velocity: .slow)
             scroll.swipeDown(velocity: .slow)
         }

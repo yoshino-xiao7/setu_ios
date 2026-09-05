@@ -1,0 +1,113 @@
+[
+  {
+    "testIdentifier": "MusicPlayerP13UITests/testPhysicalWordScrollPresentedMetrics()",
+    "testRuns": [
+      {
+        "metrics": [
+          {
+            "baselineAverage": 0,
+            "baselineName": "",
+            "displayName": "Hitches Total Duration (Scroll_DraggingAndDeceleration)",
+            "identifier": "com.apple.dt.XCTMetric_OSSignpost-Scroll_DraggingAndDeceleration.animation.hitches.total.duration",
+            "maxPercentRegression": 10,
+            "maxPercentRelativeStandardDeviation": 10,
+            "maxRegression": 0,
+            "maxStandardDeviation": 10,
+            "measurements": [
+              16.669498,
+              41.673745000000004,
+              75.01112
+            ],
+            "polarity": "prefers smaller",
+            "unitOfMeasurement": "ms"
+          },
+          {
+            "baselineAverage": 0,
+            "baselineName": "",
+            "displayName": "Duration (Scroll_DraggingAndDeceleration)",
+            "identifier": "com.apple.dt.XCTMetric_OSSignpost-Scroll_DraggingAndDeceleration.duration",
+            "maxPercentRegression": 10,
+            "maxPercentRelativeStandardDeviation": 10,
+            "maxRegression": 0,
+            "maxStandardDeviation": 10,
+            "measurements": [
+              2.256956875,
+              2.32363725,
+              2.256388791
+            ],
+            "polarity": "prefers smaller",
+            "unitOfMeasurement": "s"
+          },
+          {
+            "baselineAverage": 0,
+            "baselineName": "",
+            "displayName": "Hitch Time Ratio (Scroll_DraggingAndDeceleration)",
+            "identifier": "com.apple.dt.XCTMetric_OSSignpost-Scroll_DraggingAndDeceleration.animation.hitch.time.ratio",
+            "maxPercentRegression": 10,
+            "maxPercentRelativeStandardDeviation": 10,
+            "maxRegression": 0,
+            "maxStandardDeviation": 10,
+            "measurements": [
+              7.385830090351194,
+              17.934705600024273,
+              33.24388300324499
+            ],
+            "polarity": "prefers smaller",
+            "unitOfMeasurement": "ms per s"
+          },
+          {
+            "baselineAverage": 0,
+            "baselineName": "",
+            "displayName": "Frame Count (Scroll_DraggingAndDeceleration)",
+            "identifier": "com.apple.dt.XCTMetric_OSSignpost-Scroll_DraggingAndDeceleration.animation.frame.count",
+            "maxPercentRegression": 10,
+            "maxPercentRelativeStandardDeviation": 10,
+            "maxRegression": 0,
+            "maxStandardDeviation": 10,
+            "measurements": [
+              0,
+              0,
+              0
+            ],
+            "polarity": "prefers larger",
+            "unitOfMeasurement": "frames"
+          },
+          {
+            "baselineAverage": 0,
+            "baselineName": "",
+            "displayName": "Frame Rate (Scroll_DraggingAndDeceleration)",
+            "identifier": "com.apple.dt.XCTMetric_OSSignpost-Scroll_DraggingAndDeceleration.animation.frame.rate",
+            "maxPercentRegression": 10,
+            "maxPercentRelativeStandardDeviation": 10,
+            "maxRegression": 0,
+            "maxStandardDeviation": 10,
+            "measurements": [
+              81.96878051757812,
+              81.76835632324219,
+              78.8871078491211
+            ],
+            "polarity": "prefers larger",
+            "unitOfMeasurement": "fps"
+          },
+          {
+            "baselineAverage": 0,
+            "baselineName": "",
+            "displayName": "Number of Hitches (Scroll_DraggingAndDeceleration)",
+            "identifier": "com.apple.dt.XCTMetric_OSSignpost-Scroll_DraggingAndDeceleration.animation.hitch.number",
+            "maxPercentRegression": 10,
+            "maxPercentRelativeStandardDeviation": 10,
+            "maxRegression": 0,
+            "maxStandardDeviation": 10,
+            "measurements": [
+              2,
+              5,
+              9
+            ],
+            "polarity": "prefers smaller",
+            "unitOfMeasurement": "hitches"
+          }
+        ]
+      }
+    ]
+  }
+]

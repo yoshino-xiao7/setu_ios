@@ -23,3 +23,14 @@ Ranked hypotheses tested/remaining:
 Next diagnosis should keep one variable at a time, use this same failing command/fixture, avoid the forbidden LyricScrollView scrolling-algorithm rewrite, and recheck the full original word workload before accepting any fix. No rendering fix is claimed. No additional Swift full suite was run. Four targeted physical metric invocations were performed; build/test budget deviations remain explicitly recorded.
 
 Result bundles are `/private/tmp/setu-p13-render-metrics-1.xcresult`, `/private/tmp/setu-p13-render-line-control-1.xcresult`, `/private/tmp/setu-p13-render-async-1.xcresult`, and `/private/tmp/setu-p13-render-static-1.xcresult`. Checked-in metrics omit device identifiers and names.
+
+
+## Follow-up: combined Path mask
+
+Fixed active-line/continuing animation control: 2/5/9 hitches. Active-line changes are not necessary to trigger the symptom. Pausing offscreen word animation via scroll visibility still yielded 3/2/8; that experiment was reverted. CPU diagnostic collection yielded numeric CPU metrics but no exported ktrace in either attachment or diagnostic export, so no call-stack localization is claimed. No memgraph was collected.
+
+The retained change replaces repeated Canvas fills with one combined Path fill plus the same 45%-opacity background, preserving single Text + mask + GeometryReader, cached glyph coordinates, word timing and all scrolling logic. The original full word workload then measured 0/0/1 hitches in three iterations. An expanded ten-iteration run measured 0 hitches, 0 hitch duration and 0 hitch ratio in every iteration. Its FPS values span 82.329–83.227, **not stable 120 fps**. Both datasets are retained in path-3.json and path-10.json; neither earlier nonzero samples nor the unavailable frame-count metric are discarded. The strict existing checker therefore still refuses a full PASS on the zero frame-count field.
+
+Long Unicode/wrapping/translation physical rendering test PASS. The unchanged glyph boundaries and complete mask coverage were visually checked in path-mask-AX5.png. This follow-up establishes a validated local rendering simplification and ten observed hitch-free iterations, not an unconditional zero-dropped-frame guarantee. M-9's remaining measurement limitations are explicit. No other manual gate is closed here.
+
+Production experiments for asynchronous Canvas and scroll visibility were reverted. Only the combined Path mask remains. DEBUG-only diagnostic controls are retained for the unresolved measurements; no production client flag is enabled. No second Swift full suite was run.

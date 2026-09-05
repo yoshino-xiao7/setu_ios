@@ -85,3 +85,8 @@ M-10 actual VoiceOver speech now passes on device. M-12 actual light/dark/light 
 ## Presented-rendering metrics follow-up — 2026-09-05
 
 XCTest system scroll metrics now provide stronger evidence than the earlier display-link cadence: original word rendering reports 5/1/5 hitches across three iterations, so M-9 is **not passed**. The line-only control reports zero hitches; further isolation of P13 rendering is in progress. An async-Canvas experiment failed to eliminate hitches and was reverted. See [diagnostic evidence and failing checker](render/diagnosis.md). Do not treat performance-test execution success as performance acceptance.
+
+
+## Word mask rendering follow-up — 2026-09-05
+
+The P13 mask now batches its syllable rectangles into a single Path fill instead of repeated Canvas fills. Physical long-text/translation render test and screenshot review pass. The full scrolling workload measured 0/0/1 hitches in the first three iterations and zero hitches in all ten expanded iterations. Observed FPS remains about 82–83, and frame-count telemetry is unavailable; no stable-120-fps or unconditional M-9 PASS is asserted. See [all retained measurements](render/diagnosis.md). Playback, activeIndex and scrolling algorithms remain unchanged.

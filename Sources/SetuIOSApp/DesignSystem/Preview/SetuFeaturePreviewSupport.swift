@@ -8,6 +8,7 @@ import SwiftUI
 struct SetuP13WordScrollScenario: View {
     private let started = Date()
     @State private var elapsed = 0.0
+    private var fixedLine: Bool { ProcessInfo.processInfo.arguments.contains("-ui-testing-p13-fixed-line") }
     private let lines: [LyricLine] = {
         let body: [String: Any] = ["trackId": "netease:track:1", "kind": ProcessInfo.processInfo.arguments.contains("-ui-testing-p13-line-control") ? "line" : "word", "hasTranslation": true,
             "contributors": [], "lines": (0..<120).map { index in
@@ -22,11 +23,11 @@ struct SetuP13WordScrollScenario: View {
     }()
     var body: some View {
         LyricScrollView(lines: lines, currentTime: elapsed, expands: true, isPlaying: !ProcessInfo.processInfo.arguments.contains("-ui-testing-p13-static-word"),
-                        sampleTime: { Date().timeIntervalSince(started) }, onSeek: { elapsed = $0 })
+                        sampleTime: { fixedLine ? Date().timeIntervalSince(started).truncatingRemainder(dividingBy: 4) : Date().timeIntervalSince(started) }, onSeek: { elapsed = $0 })
             .accessibilityIdentifier("p13.word-scroll")
             .task {
                 while !Task.isCancelled {
-                    elapsed = Date().timeIntervalSince(started)
+                    elapsed = fixedLine ? 0.5 : Date().timeIntervalSince(started)
                     try? await Task.sleep(nanoseconds: 100_000_000)
                 }
             }
