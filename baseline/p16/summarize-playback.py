@@ -13,7 +13,7 @@ import statistics
 import sys
 
 HERE = Path(__file__).resolve().parent
-legacy_summarize = runpy.run_path(str(HERE.parent / "summarize-signposts.py"))["summarize"]
+legacy_summarize = runpy.run_path(str(HERE / "summarize-signposts.py"))["summarize"]
 
 
 def stats(values):
