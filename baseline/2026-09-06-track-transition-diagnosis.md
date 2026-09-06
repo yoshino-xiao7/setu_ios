@@ -4,7 +4,14 @@
 
 **20 个当前真机 prepared-hit 完整样本：P50 157.086 ms、P90 201.880 ms、P95 260.556 ms、最大 302.878 ms。当前采样场景已满足 P50 < 200 ms / P90 < 400 ms，未复现历史 Issue 3。没有实施播放代码优化，也没有声称代码性能改善。**
 
-这是一份诊断交付，不将“优化后 20 次对比”、完整 P16 回归或历史根因定位标为 PASS。正式 P16 的优化完成定义要求有数据支持真实瓶颈；当前数据不足以证明应修改哪条路径。建议以零播放代码变更提交诊断评审，明确裁决是否按当前场景未复现结项；在此之前保留 P16 未正式完成状态。
+**正式裁决：P16 ACCEPTED / ZERO-CODE CLOSURE。** 用户批准 measurement → evaluate evidence → optimize only if required。当前正式 prepared-hit 目标已满足；Optimization Required = NO，optimization stage = NOT ENTERED，before/after optimization comparison = NOT APPLICABLE。Production playback code：NONE changed。
+
+P16 DIAGNOSIS COMPLETE
+TARGET SATISFIED
+OPTIMIZATION NOT JUSTIFIED BY CURRENT EVIDENCE
+ZERO-CODE CLOSURE ACCEPTED
+
+T-BUG-2/3 要求分段样本和 prepared-hit 指标，没有要求真实声学输出测量。声学 latency 未测属于 limitation，不是本次 P16 blocker。所有下述采集保留偏差、非因果对比及观测边界继续成立。
 
 ## 正式范围与依赖
 
@@ -57,7 +64,7 @@
 
 建议保留当前实现，不调整 buffer，不预热已激活 session，不引入 AVQueuePlayer，不碰 PlaybackQueue/URLResolver/MusicStore 或视图。当前数据没有足够的因果证据证明这些改变必要，也无法把当前达标归功于本任务。
 
-P16 写明先诊断、方案 PR 获批后才进入优化。本次未进入优化，未产生方案获批后的代码或优化后 A/B 队列。需要明确的零代码结项裁决；不得将本诊断冒充完整 P16 IMPLEMENTED。
+P16 写明先诊断、方案 PR 获批后才进入优化。本次不需要优化，因此没有优化代码或优化后 A/B 队列。用户已批准零代码结项；未进入 optimization stage，优化后对比为 NOT APPLICABLE。此结项不表示播放器算法已被优化。
 
 ## 验证与重算
 

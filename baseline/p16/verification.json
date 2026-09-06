@@ -27,14 +27,23 @@
   "applicationTests": "NOT RUN: no implementation/optimization; accepted P15 tests preserved",
   "physicalBuild": "NOT RUN: reused accepted build for measurement, no P15 rebuild",
   "UI": "NOT RUN: no view changes",
-  "postOptimization20": "NOT RUN: no optimization justified",
+  "postOptimization20": "NOT APPLICABLE: optimization stage not entered",
   "M13": "DEFERRED; no retry",
   "realClientFlagsChanged": false,
-  "formalClosure": "PENDING explicit no-code disposition",
+  "formalClosure": "P16 ACCEPTED / ZERO-CODE CLOSURE",
   "logs": {
     "/private/tmp/p16-final-verifier.log": "0fed11428971455f7dd528bb9f7f404e3ab4d27a6a2f48fc3a7d35c929035598",
     "/private/tmp/p16-frozen-verifier.json": "d7dfc0c3f719045178c83aa68607391cf733f1906893cb655029f20c6fe8a6b2",
     "/private/tmp/p16-final-diagnostic-check.log": "a5e8d52e5fb1ed86c7883bab1cd5a7c39a255d94a0c3e219987d960f6e66357f"
   },
-  "diffCheck": "PASS"
+  "diffCheck": "PASS",
+  "optimizationRequired": false,
+  "optimizationStage": "NOT ENTERED",
+  "closureStatements": [
+    "P16 DIAGNOSIS COMPLETE",
+    "TARGET SATISFIED",
+    "OPTIMIZATION NOT JUSTIFIED BY CURRENT EVIDENCE",
+    "ZERO-CODE CLOSURE ACCEPTED"
+  ],
+  "acousticLatency": "NOT MEASURED; limitation, not required by T-BUG-2/3"
 }
