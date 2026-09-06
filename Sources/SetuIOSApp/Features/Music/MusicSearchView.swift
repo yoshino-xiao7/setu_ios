@@ -7,6 +7,19 @@ import UIKit
 
 
 struct MusicSearchView: View {
+    let environment: AppEnvironment
+    let player: MusicPlaybackController
+    let initialQuery: String?
+    var body: some View {
+        if environment.config.musicFeatureFlags.usesV2Search {
+            MusicCutoverSearchView(environment: environment, initialQuery: initialQuery)
+        } else {
+            LegacyMusicSearchView(environment: environment, player: player, initialQuery: initialQuery)
+        }
+    }
+}
+
+struct LegacyMusicSearchView: View {
     @Environment(MusicStore.self) private var store
     @Environment(RouterPath.self) private var router
     @Bindable var environment: AppEnvironment

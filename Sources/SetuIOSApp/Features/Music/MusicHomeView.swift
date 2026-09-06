@@ -434,6 +434,13 @@ struct MusicHomeView: View {
     }
 
     private func loadLandingContent(force: Bool = false) async {
+        let started = ProcessInfo.processInfo.systemUptime
+        defer {
+            let v2 = environment.config.musicFeatureFlags.usesV2Home
+            if v2 ? store.homeFeed.value != nil : store.recommendedPlaylists.value != nil {
+                MusicClientObservation.emit("home.ready", start: started, v2: v2)
+            }
+        }
         if environment.config.musicFeatureFlags.usesV2Home {
             await store.loadHomeV2(client: environment.musicV2Client, force: force)
         } else {

@@ -147,12 +147,28 @@ struct RootAppView: View {
     /// Lets the playback controller fetch a fresh URL for the next track on its own, so
     /// end-of-track auto-play and lock-screen/headphone skip work without a visible view.
     private func configureMusicPlayerResolver() {
-        musicPlayer.urlResolver = PlaybackURLResolver(client: environment.musicClient, v2: environment.musicV2Client)
+        #if os(iOS)
+        _ = MusicCrashObservation.shared
+        #endif
+        MusicClientObservation.client = environment.musicV2Client
+        MusicClientObservation.playbackV2 = environment.config.musicFeatureFlags.usesV2Playback
+        MusicClientObservation.emit("session", v2: environment.config.musicFeatureFlags.usesV2Playback)
+        musicPlayer.urlResolver = PlaybackURLResolver(client: environment.musicClient, v2: environment.musicV2Client, usesV2Playback: environment.config.musicFeatureFlags.usesV2Playback)
         let store = musicStore
         let v2 = environment.musicV2Client
+        let config = environment.config
         musicPlayer.recordPlaybackHistory = { track in
             if case .canonical(let id) = track.id {
-                try? await v2.recordHistory(trackID: id)
+                store.pinHistory(config: config)
+                try? await store.recordCanonicalHistory(id: id, client: v2)
+                return
+            }
+            if store.usesCanonicalHistory(config: config) || config.musicFeatureFlags.usesV2Playback, let legacy = track.id.legacyID, legacy > 0 {
+                let owner = store.sessionToken
+                let id = MusicV2TrackID(rawValue: "netease:track:\(legacy)")
+                guard let detail = try? await v2.track(id), detail.id == id, owner == store.sessionToken else { return }
+                store.pinHistory(config: config)
+                try? await store.recordCanonicalHistory(id: id, client: v2)
                 return
             }
             guard let legacyID = track.id.legacyID else { return }

@@ -65,6 +65,7 @@ public struct MusicFeatureFlags: Equatable, Sendable {
     public var usesV2Search = false
     public var usesV2Playback = false
     public var usesV2Lyrics = false
+    public var usesV2History = false
     public var usesV2Home = false
     public var usesV2PlaylistDetail = false
     public var artistDetailEnabled = false
@@ -85,6 +86,7 @@ public struct MusicFeatureFlags: Equatable, Sendable {
         flags.usesV2Search = defaults.musicFlag("SETU_MUSIC_USES_V2_SEARCH")
         flags.usesV2Playback = defaults.musicFlag("SETU_MUSIC_USES_V2_PLAYBACK")
         flags.usesV2Lyrics = defaults.musicFlag("SETU_MUSIC_USES_V2_LYRICS")
+        flags.usesV2History = defaults.musicFlag("SETU_MUSIC_USES_V2_HISTORY")
         flags.usesV2Home = defaults.musicFlag("SETU_MUSIC_USES_V2_HOME")
         flags.usesV2PlaylistDetail = defaults.musicFlag("SETU_MUSIC_USES_V2_PLAYLIST_DETAIL")
         flags.artistDetailEnabled = defaults.musicFlag("SETU_MUSIC_ARTIST_DETAIL_ENABLED")

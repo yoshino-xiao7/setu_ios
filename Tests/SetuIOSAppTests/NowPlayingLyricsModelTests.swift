@@ -27,7 +27,7 @@ final class NowPlayingLyricsModelTests: XCTestCase {
         let capture = MusicV2RequestCapture()
         MusicV2URLProtocol.handler = { request in capture.append(request); return .init(body: Data(p13WordJSON.utf8)) }
         let model = NowPlayingLyricsModel()
-        await model.load(identity: .canonical(.init(rawValue: "netease:track:1")), environment: p13Environment(word: false))
+        await model.load(identity: .canonical(.init(rawValue: "netease:track:1")), environment: p13Environment(word: false, transport: false))
         XCTAssertTrue(capture.requests.isEmpty)
         guard case .failed = model.state else { return XCTFail("Disabled entry must be explicit") }
     }
@@ -64,10 +64,11 @@ final class NowPlayingLyricsModelTests: XCTestCase {
 let p13WordJSON = #"{"trackId":"netease:track:1","kind":"word","lines":[{"text":"你好世界","words":[{"text":"你好","startMs":1000,"durationMs":200},{"text":"世界","startMs":1300,"durationMs":400}],"startMs":1000,"durationMs":700,"translation":"Hello world"}],"hasTranslation":true,"contributors":[]}"#
 
 @MainActor
-func p13Environment(word: Bool = true, airPlay: Bool = false) -> AppEnvironment {
+func p13Environment(word: Bool = true, transport: Bool = true, airPlay: Bool = false) -> AppEnvironment {
     let base = SetuPreviewEnvironment.make()
     var flags = MusicFeatureFlags()
     flags.wordByWordLyricsEnabled = word
+    flags.usesV2Lyrics = transport
     flags.airPlayPickerEnabled = airPlay
     return AppEnvironment(config: AppConfig(apiBaseURL: base.config.apiBaseURL, siteBaseURL: base.config.siteBaseURL, musicFeatureFlags: flags),
         keychain: base.keychain,

@@ -54,6 +54,7 @@
 		27B9A90549877188669C6346 /* SetuSectionHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E7E77B6F663EAF577F2308A /* SetuSectionHeader.swift */; };
 		29FF60F63554A8DF969E675C /* CollectionEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F2070C4A4D02C29BDD28CBB /* CollectionEditorSheet.swift */; };
 		2B1377E77D9A51F4A4D76253 /* PlaybackContract3Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38E21A24D3AF649D7D949CB4 /* PlaybackContract3Tests.swift */; };
+		2BE147BBBBBC87B45A7A2146 /* MusicCanonicalHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4454C2EE547282AEBD0B22E6 /* MusicCanonicalHistoryView.swift */; };
 		2C5259939DD90917501AC644 /* SetuEmptyState.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A94A9CF926A3383B2A4B27 /* SetuEmptyState.swift */; };
 		2E1500854A390AFBDAE14EC6 /* MusicCacheUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84DFE488F44FD80ACB839432 /* MusicCacheUITests.swift */; };
 		2E6B6785B9F85C3AC38598AF /* SetuDesignSystemPreviewGallery.swift in Sources */ = {isa = PBXBuildFile; fileRef = C57E09A02A23EB6EC07DE452 /* SetuDesignSystemPreviewGallery.swift */; };
@@ -116,6 +117,7 @@
 		623981B9D2174BC2BDD17374 /* SetuIOSCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E83FF3E83093A6F76A280DD8 /* SetuIOSCore.framework */; };
 		65062E3F68096B3FB5C268FA /* DownloadClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD312917C35027AFF27C39FC /* DownloadClient.swift */; };
 		66420715149C490CA6506627 /* PlaybackPhaseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2413A225F8EDC740B6BFAFA1 /* PlaybackPhaseTests.swift */; };
+		664891BA0BD1A9EF404A7629 /* MusicCutoverSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D9A64995E290602D24B3D44 /* MusicCutoverSearchView.swift */; };
 		66A42635D9C44F19113DA8DE /* AppDestination+Account.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65CDD615B649B55BE8C0621B /* AppDestination+Account.swift */; };
 		66AD6B5483FFD29E03C81331 /* AdminAiGenerationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A218B63E6B35A6E75F92766 /* AdminAiGenerationsView.swift */; };
 		67806650C775ECE370D258B5 /* AppDestination+Content.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05A5E926D0BB4D2A556CCEE9 /* AppDestination+Content.swift */; };
@@ -156,6 +158,7 @@
 		85E02A7ADDEA08B12CA49EFA /* AiDrawDraftStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 548F9CFC8424F16CB224B613 /* AiDrawDraftStoreTests.swift */; };
 		86E06AA136713B6A22511779 /* PasskeyModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 635C7BEB7700E335A502536F /* PasskeyModels.swift */; };
 		87092D6EAA0BFA25229170C2 /* AiDrawView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C81906E773027AE55EE8628 /* AiDrawView.swift */; };
+		89592A5EA02FC805C22ACD5F /* MusicCutoverLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE08D96C952D7832D2B7B17 /* MusicCutoverLayoutTests.swift */; };
 		89B5B62C3E047C53B7482570 /* GalleryUploadClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1D22CE331F0ADD65C4E3113 /* GalleryUploadClientTests.swift */; };
 		89C3F3AE8EA3F8D0FC889505 /* StatusClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D158678413750E76CB24D96 /* StatusClient.swift */; };
 		8B2A2EAB5A88FD8915C2188E /* MusicDataLayerRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 535597ACF71DA26FF3CD7440 /* MusicDataLayerRouter.swift */; };
@@ -170,6 +173,7 @@
 		91057A38AB3021E80A4EDC68 /* MusicV2DataLayerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 744D04DDDFC5A9D11A32F72E /* MusicV2DataLayerTests.swift */; };
 		9133E4D363ECDEC3F97EFE7F /* ApiKeyClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0108E10626523C9CDE6E2A4 /* ApiKeyClientTests.swift */; };
 		919C0C27259C01C31A172934 /* MusicDetailTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24AA32F3B26259DCE00B5EA4 /* MusicDetailTests.swift */; };
+		9631BBDF3DD4E9B63B5F71E1 /* MusicCutoverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62A83243C0C9397229ED88A0 /* MusicCutoverTests.swift */; };
 		96ADBD716CF66E09DCB08E26 /* PagingControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43B4FFBEEED327F60BF42AF0 /* PagingControllerTests.swift */; };
 		978F7678CB812EF798B205F6 /* MusicRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E6923D27BB22092B9B2749C /* MusicRepository.swift */; };
 		97F937E35F4EE72E03B974A9 /* MusicSearchRowLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 534DC7E12C066A675D056D81 /* MusicSearchRowLayoutTests.swift */; };
@@ -202,6 +206,7 @@
 		AB19454CE18653A4F611CF53 /* NowPlayingSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34AC47F665C6431650FF17A3 /* NowPlayingSheet.swift */; };
 		AB95D2DDCB3743F8CA65A896 /* MusicDiscoverComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAC98A5671A6A592E8A9E795 /* MusicDiscoverComponents.swift */; };
 		ABA3986065B2A94542C94040 /* SetuErrorRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0066F38927990C853F1F305 /* SetuErrorRecovery.swift */; };
+		AD1F19AC5A41AD2BED385601 /* MusicClientObservation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74D7C96977152692F16A1502 /* MusicClientObservation.swift */; };
 		AD4268A32F1C5EBF09950520 /* SetuFeaturePreviewSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69020B96D9AE75A4862132A6 /* SetuFeaturePreviewSupport.swift */; };
 		AED93C31482DF70820569BB1 /* AlbumDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B295653F72D514BF383C813 /* AlbumDetailView.swift */; };
 		AEE28EA396CA0EB4B14086BB /* MusicDiscoverPreviewFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C2D255EC50DD03AFCF97504 /* MusicDiscoverPreviewFixtures.swift */; };
@@ -214,6 +219,7 @@
 		B2698CA2C532052DCB2A178F /* NowPlayingControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B5737B33BB06964F6480D09 /* NowPlayingControls.swift */; };
 		B2955E3221081DC1974EA70C /* AppleAuthorizationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 605417D95696189037E79B71 /* AppleAuthorizationService.swift */; };
 		B3810632FDC7AFEF38CE35E1 /* ImageDeleteRequestModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B8D2B61956968291B599B43 /* ImageDeleteRequestModels.swift */; };
+		B3D0150B6FBED0C02BD352E0 /* MusicCutoverPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E40FC36CAB7429C321749F1E /* MusicCutoverPolicy.swift */; };
 		B4B27B6FD570CC5AEBEB75C3 /* RemoteCommandCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDBBE48F16E3F518E4A18840 /* RemoteCommandCoordinator.swift */; };
 		B59A4B003147397F3AEC2E75 /* MusicPlaybackIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FED98443043D6A799821456 /* MusicPlaybackIntent.swift */; };
 		B5BBD0D5F6E26F5282289BC1 /* MusicSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 921947F19A7E30783AFEF887 /* MusicSearchView.swift */; };
@@ -294,6 +300,7 @@
 		F8A6904F10CCBF91D4045C5D /* AddSongToPlaylistSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 012B4CA4F43A5C77E3C9A3CD /* AddSongToPlaylistSheet.swift */; };
 		FA1597436BF30928A65C3D94 /* ImageDeleteRequestDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EC7E0DF25FB6902D5BD525E /* ImageDeleteRequestDetailView.swift */; };
 		FA305A7FED3CD3AEC2419BD0 /* AdminPixivCrawlView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D65CD600EB96DA067D349D7E /* AdminPixivCrawlView.swift */; };
+		FAC31E1711C5AC4E71F5D337 /* MusicCutoverSearchSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2B479084A880738A91FB086 /* MusicCutoverSearchSession.swift */; };
 		FAD73840F6FAC39D66876740 /* SystemStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA263C6C60D6DAEBF1EDADA9 /* SystemStatusView.swift */; };
 		FBF1B84FA78DA4B5034DC4B1 /* RadioFMFeederTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29E5256D2CFDF5D727D23B75 /* RadioFMFeederTests.swift */; };
 		FE273EC908BFB74560257D20 /* AdminAiDeleteRequestsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5680B80541513C9C12C1AFE6 /* AdminAiDeleteRequestsView.swift */; };
@@ -452,6 +459,7 @@
 		3D3851FC55716DE6BC9FDADF /* MusicPlaybackControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicPlaybackControllerTests.swift; sourceTree = "<group>"; };
 		3E7E77B6F663EAF577F2308A /* SetuSectionHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuSectionHeader.swift; sourceTree = "<group>"; };
 		3E99056BAB4DEE245C4435C5 /* AirPlayHardwareAudit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AirPlayHardwareAudit.swift; sourceTree = "<group>"; };
+		3EE08D96C952D7832D2B7B17 /* MusicCutoverLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicCutoverLayoutTests.swift; sourceTree = "<group>"; };
 		3FBDC18E4CD4C4EC426A43C4 /* SetuStatTile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuStatTile.swift; sourceTree = "<group>"; };
 		3FED98443043D6A799821456 /* MusicPlaybackIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicPlaybackIntent.swift; sourceTree = "<group>"; };
 		40052E5EE3A7E7D3A5B887E1 /* AdminUsersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminUsersView.swift; sourceTree = "<group>"; };
@@ -462,6 +470,7 @@
 		43837D03E176664A8872C81D /* SetuColor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuColor.swift; sourceTree = "<group>"; };
 		43B4FFBEEED327F60BF42AF0 /* PagingControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PagingControllerTests.swift; sourceTree = "<group>"; };
 		43BD5EDA8AA5A779B0C7D48C /* SetuRemoteImageLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuRemoteImageLoader.swift; sourceTree = "<group>"; };
+		4454C2EE547282AEBD0B22E6 /* MusicCanonicalHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicCanonicalHistoryView.swift; sourceTree = "<group>"; };
 		458F606A0F9777C1977BC071 /* CollectionSquareView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollectionSquareView.swift; sourceTree = "<group>"; };
 		4628048B88428D4D7D7D7EF3 /* RandomImageSwipeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RandomImageSwipeView.swift; sourceTree = "<group>"; };
 		46645BD9029ED9291437406B /* SetuPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuPill.swift; sourceTree = "<group>"; };
@@ -499,6 +508,7 @@
 		60B2CE0BCDBBCEB45AE1D006 /* SetuBottomCTA.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuBottomCTA.swift; sourceTree = "<group>"; };
 		60DE3281FDD95B32F5D4DB63 /* SetuPermissionPrompt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuPermissionPrompt.swift; sourceTree = "<group>"; };
 		61CE8941C16597E05C269F27 /* UserHubViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserHubViews.swift; sourceTree = "<group>"; };
+		62A83243C0C9397229ED88A0 /* MusicCutoverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicCutoverTests.swift; sourceTree = "<group>"; };
 		635C7BEB7700E335A502536F /* PasskeyModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasskeyModels.swift; sourceTree = "<group>"; };
 		63C0A0A1993D02EE7373EFDC /* PublicUserProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicUserProfileView.swift; sourceTree = "<group>"; };
 		63F0EA684A32F3BCD26B8F83 /* LyricParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LyricParserTests.swift; sourceTree = "<group>"; };
@@ -524,6 +534,7 @@
 		73DB094D1C3A00C6C958DBEB /* AdminOperationLogsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminOperationLogsView.swift; sourceTree = "<group>"; };
 		744D04DDDFC5A9D11A32F72E /* MusicV2DataLayerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicV2DataLayerTests.swift; sourceTree = "<group>"; };
 		7465AF189DDBA2C42D037DF0 /* MusicHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicHistoryView.swift; sourceTree = "<group>"; };
+		74D7C96977152692F16A1502 /* MusicClientObservation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicClientObservation.swift; sourceTree = "<group>"; };
 		7562E6545A9C3CFDDC3E01A6 /* AiHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AiHistoryView.swift; sourceTree = "<group>"; };
 		75FD60F96BD849C0C15CDF9E /* MusicMvSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicMvSheet.swift; sourceTree = "<group>"; };
 		78955181FE4CCC8543D34D25 /* CollectionModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollectionModels.swift; sourceTree = "<group>"; };
@@ -562,6 +573,7 @@
 		9B54E7B0273F0A02B89981E1 /* AdminClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminClientTests.swift; sourceTree = "<group>"; };
 		9BE2D5C82A74CB5471E7C21C /* MusicArchitectureUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicArchitectureUITests.swift; sourceTree = "<group>"; };
 		9D765FDE0C516B6934F117B4 /* ImageFeedClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageFeedClient.swift; sourceTree = "<group>"; };
+		9D9A64995E290602D24B3D44 /* MusicCutoverSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicCutoverSearchView.swift; sourceTree = "<group>"; };
 		9E6923D27BB22092B9B2749C /* MusicRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicRepository.swift; sourceTree = "<group>"; };
 		9ECF9EB7B7BC37A568A019CF /* MobileAppClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileAppClient.swift; sourceTree = "<group>"; };
 		9EE2B37F69E3C40990952658 /* RootAppView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootAppView.swift; sourceTree = "<group>"; };
@@ -634,7 +646,9 @@
 		E01087E519C93EB5AC1DBCF1 /* PlaybackSnapshotStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackSnapshotStoreTests.swift; sourceTree = "<group>"; };
 		E10DB368795C37640444A789 /* AppDestination+Admin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppDestination+Admin.swift"; sourceTree = "<group>"; };
 		E27172444BA4EC2BCAEC6557 /* MusicLibraryButtons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicLibraryButtons.swift; sourceTree = "<group>"; };
+		E2B479084A880738A91FB086 /* MusicCutoverSearchSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicCutoverSearchSession.swift; sourceTree = "<group>"; };
 		E33CB6CD8E1C15CC7ABDEE45 /* LoadState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadState.swift; sourceTree = "<group>"; };
+		E40FC36CAB7429C321749F1E /* MusicCutoverPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicCutoverPolicy.swift; sourceTree = "<group>"; };
 		E5A94A9CF926A3383B2A4B27 /* SetuEmptyState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuEmptyState.swift; sourceTree = "<group>"; };
 		E5D7F1C05CA9466757553E2D /* MusicDiscoverLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicDiscoverLayoutTests.swift; sourceTree = "<group>"; };
 		E77F0F45C76E431F3955422D /* PublicAiWorkUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicAiWorkUITests.swift; sourceTree = "<group>"; };
@@ -956,6 +970,9 @@
 				15EE17E261C224088C93B3CD /* Player */,
 				012B4CA4F43A5C77E3C9A3CD /* AddSongToPlaylistSheet.swift */,
 				A40B0A67BF9321A1D0E120C1 /* MusicArtworkView.swift */,
+				74D7C96977152692F16A1502 /* MusicClientObservation.swift */,
+				E2B479084A880738A91FB086 /* MusicCutoverSearchSession.swift */,
+				9D9A64995E290602D24B3D44 /* MusicCutoverSearchView.swift */,
 				C9D3419CDE37B276AEA2AEA2 /* MusicHomeView.swift */,
 				75FD60F96BD849C0C15CDF9E /* MusicMvSheet.swift */,
 				0AAC0F2646CCCB2AE0854E7B /* MusicPerformanceProbe.swift */,
@@ -1018,6 +1035,7 @@
 			isa = PBXGroup;
 			children = (
 				1CE9A942F3CB7C78A4E8F64A /* LikedTracksView.swift */,
+				4454C2EE547282AEBD0B22E6 /* MusicCanonicalHistoryView.swift */,
 				7465AF189DDBA2C42D037DF0 /* MusicHistoryView.swift */,
 				E27172444BA4EC2BCAEC6557 /* MusicLibraryButtons.swift */,
 				B50AE6E8336E57DC4D7ED206 /* MusicLibraryModels.swift */,
@@ -1173,6 +1191,7 @@
 			isa = PBXGroup;
 			children = (
 				0C7F242D5B50143A4E42A21F /* LyricStore.swift */,
+				E40FC36CAB7429C321749F1E /* MusicCutoverPolicy.swift */,
 				535597ACF71DA26FF3CD7440 /* MusicDataLayerRouter.swift */,
 				43093CECB3DE4F64FDFB0109 /* MusicPlaybackIdentity.swift */,
 				9E6923D27BB22092B9B2749C /* MusicRepository.swift */,
@@ -1211,6 +1230,8 @@
 				7FCF7C9E1BE43DD455302ED7 /* ImageUnlockPolicyTests.swift */,
 				63F0EA684A32F3BCD26B8F83 /* LyricParserTests.swift */,
 				EF1C1518FF7D3BD0FE0172B9 /* MusicClientTests.swift */,
+				3EE08D96C952D7832D2B7B17 /* MusicCutoverLayoutTests.swift */,
+				62A83243C0C9397229ED88A0 /* MusicCutoverTests.swift */,
 				33D5BB3A26F211B716F298B2 /* MusicDetailLayoutTests.swift */,
 				24AA32F3B26259DCE00B5EA4 /* MusicDetailTests.swift */,
 				E5D7F1C05CA9466757553E2D /* MusicDiscoverLayoutTests.swift */,
@@ -1487,6 +1508,8 @@
 				78EA7F03727B07DE46380D33 /* ImageUnlockPolicyTests.swift in Sources */,
 				12A531A03F12A79A55312F2E /* LyricParserTests.swift in Sources */,
 				BD0512146583851CC08E3FFE /* MusicClientTests.swift in Sources */,
+				89592A5EA02FC805C22ACD5F /* MusicCutoverLayoutTests.swift in Sources */,
+				9631BBDF3DD4E9B63B5F71E1 /* MusicCutoverTests.swift in Sources */,
 				C4CDE376E31B0469F6881517 /* MusicDetailLayoutTests.swift in Sources */,
 				919C0C27259C01C31A172934 /* MusicDetailTests.swift in Sources */,
 				DD8FC20D69FD9789378FFA5B /* MusicDiscoverLayoutTests.swift in Sources */,
@@ -1614,6 +1637,10 @@
 				B9214BED5669CF2F7E5A01E9 /* LyricParser.swift in Sources */,
 				1646A9C95B63DA59F9D2E456 /* LyricScrollView.swift in Sources */,
 				0BF9C1F37DDD2D1FE868653E /* MusicArtworkView.swift in Sources */,
+				2BE147BBBBBC87B45A7A2146 /* MusicCanonicalHistoryView.swift in Sources */,
+				AD1F19AC5A41AD2BED385601 /* MusicClientObservation.swift in Sources */,
+				FAC31E1711C5AC4E71F5D337 /* MusicCutoverSearchSession.swift in Sources */,
+				664891BA0BD1A9EF404A7629 /* MusicCutoverSearchView.swift in Sources */,
 				9D0CCD9CA67D1CBAA5DFA052 /* MusicDetailComponents.swift in Sources */,
 				10DDD41B40E31AB0BC0CBE31 /* MusicDetailModels.swift in Sources */,
 				AA214EDF1DC53C319F0745A7 /* MusicDetailPreviewFixtures.swift in Sources */,
@@ -1762,6 +1789,7 @@
 				4DEBA835FE429435E15B7480 /* MobileAppClient.swift in Sources */,
 				3677B9E24AB9D2B0E2ACFA77 /* MobileModels.swift in Sources */,
 				C2CC71974EDCA93EA14B46BA /* MusicClient.swift in Sources */,
+				B3D0150B6FBED0C02BD352E0 /* MusicCutoverPolicy.swift in Sources */,
 				8B2A2EAB5A88FD8915C2188E /* MusicDataLayerRouter.swift in Sources */,
 				F7453ABEBC9E56BCD6C2FA9C /* MusicModels.swift in Sources */,
 				C8DEBFF7A036510F1318A592 /* MusicPlaybackIdentity.swift in Sources */,
@@ -1888,7 +1916,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 7G6J4S76PN;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -2064,7 +2092,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = 7G6J4S76PN;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

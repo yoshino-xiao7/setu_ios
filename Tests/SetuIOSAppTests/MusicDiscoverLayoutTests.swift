@@ -78,7 +78,7 @@ final class MusicDiscoverLayoutTests: XCTestCase {
         [("home", AnyView(List { MusicHomeFeedContent(resource: store.homeFeed, flags: MusicFeatureFlags(), userID: 1, retry: {}) }.listStyle(.plain).setuBackground())),
          ("rankings", AnyView(RankingsView(environment: environment))),
          ("newReleases", AnyView(NewReleasesView(environment: environment))),
-         ("dailyRecommend", AnyView(DailyRecommendView(environment: environment)))]
+         ("dailyRecommend", AnyView(DailyRecommendView(environment: environment, player: MusicPlaybackController())))]
     }
     private func assertHorizontalBounds(_ view: UIView, width: Double) {
         // Horizontal carousels intentionally have wider content; vertical list viewport must not.

@@ -76,6 +76,9 @@ struct MusicHistoryPage: Sendable {
 @MainActor @Observable
 final class MusicStore {
     let searchSession: MusicSearchSession
+    let v2SearchSession: MusicCutoverSearchSession
+    let canonicalHistory = MusicResource<MusicLibraryPage<MusicHistoryItem>>()
+    private(set) var historyCohortPinned = false
     let hotSearch = MusicResource<[MusicHotSearchItem]>()
     let recommendedPlaylists = MusicResource<[MusicRecommendedPlaylist]>()
     let newSongs = MusicResource<[MusicSong]>()
@@ -127,6 +130,7 @@ final class MusicStore {
         let repository = MusicRepository(client: client, now: now)
         self.repository = repository
         searchSession = MusicSearchSession(repository: repository, now: now)
+        v2SearchSession = MusicCutoverSearchSession(repository: repository)
     }
 
     var sessionToken: UUID { generation }
@@ -164,6 +168,8 @@ final class MusicStore {
         let previous = repository
         repository = MusicRepository(client: client, now: now)
         searchSession.reset(repository: repository)
+        v2SearchSession.reset(repository: repository)
+        canonicalHistory.reset(); historyCohortPinned = false
         Task { await previous.reset() }
     }
 
@@ -206,6 +212,8 @@ final class MusicStore {
     func loadRankings(client: MusicV2Client, force: Bool = false) async {
         await load(rankings, .rankings(client: client), force: force)
     }
+
+    func loadLegacyDaily(force: Bool = false) async { await load(dailySongs, .dailySongs, force: force) }
 
     func loadDailyRecommendations(client: MusicV2Client, force: Bool = false) async {
         // MusicResource has a duration TTL; apply P9's day boundary before entering it.
@@ -389,6 +397,55 @@ final class MusicStore {
         } catch {
             guard owner == generation, ticket == historyRevision else { return }
             if !(error is CancellationError) { historyMoreError = UserFacingErrorMapper.map(error) }
+        }
+    }
+
+    func usesCanonicalHistory(config: AppConfig) -> Bool {
+        historyCohortPinned || MusicHistoryCohort.usesV2(base: config.apiBaseURL, owner: userID,
+                                                       flag: config.musicFeatureFlags.usesV2History)
+    }
+    func pinHistory(config: AppConfig) {
+        guard let userID else { return }
+        MusicHistoryCohort.pin(base: config.apiBaseURL, owner: userID)
+        historyCohortPinned = true
+    }
+    func loadCanonicalHistory(client: MusicV2Client, force: Bool = false, more: Bool = false) async {
+        await loadLibraryPage(canonicalHistory, name: "history", force: force, more: more,
+            query: { .historyV2(client: client, offset: $0) },
+            project: { MusicLibraryPage(items: $0.items.map(MusicHistoryItem.init), nextOffset: $0.nextOffset, total: $0.total) })
+    }
+    func recordCanonicalHistory(id: MusicV2TrackID, client: MusicV2Client) async throws {
+        let owner = generation
+        try await write(keys: libraryKeys) { _ in try await client.recordHistory(trackID: id) }
+        guard generation == owner else { throw CancellationError() }
+        canonicalHistory.invalidate(); library.invalidate()
+        Task { [weak self] in
+            guard let self, self.generation == owner else { return }
+            await self.loadCanonicalHistory(client: client, force: true)
+        }
+    }
+    func clearCanonicalHistory(client: MusicV2Client) async throws {
+        guard !libraryWriting else { throw UserFacingError(message: "请等待当前操作完成") }
+        let before = canonicalHistory.value, owner = generation
+        beginLibraryWrite()
+        canonicalHistory.update { $0 = .init(items: [], nextOffset: nil, total: 0) }
+        defer {
+            if generation == owner {
+                libraryWriting = false
+                Task { [weak self] in
+                    guard let self, self.generation == owner else { return }
+                    await self.loadCanonicalHistory(client: client, force: true)
+                }
+            }
+        }
+        do {
+            try await write(keys: libraryKeys, historyChanged: true) { _ in try await client.clearHistory() }
+            guard generation == owner else { throw CancellationError() }
+            history.reset(); recentHistory.reset(); library.invalidate()
+        } catch {
+            guard generation == owner else { throw CancellationError() }
+            canonicalHistory.update { $0 = before }
+            throw error
         }
     }
 

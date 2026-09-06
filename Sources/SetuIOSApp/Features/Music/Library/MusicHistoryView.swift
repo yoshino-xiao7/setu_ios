@@ -2,6 +2,17 @@ import SetuIOSCore
 import SwiftUI
 
 struct MusicHistoryView: View {
+    @Environment(MusicStore.self) private var store
+    let environment: AppEnvironment
+    let player: MusicPlaybackController
+    var body: some View {
+        if store.usesCanonicalHistory(config: environment.config) {
+            MusicCanonicalHistoryView(environment: environment)
+        } else { LegacyMusicHistoryView(environment: environment, player: player) }
+    }
+}
+
+struct LegacyMusicHistoryView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var environment: AppEnvironment
     @Bindable var player: MusicPlaybackController

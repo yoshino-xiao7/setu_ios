@@ -217,6 +217,9 @@ public struct APIClient: Sendable {
         urlRequest.httpShouldHandleCookies = true
         urlRequest.setValue("application/json", forHTTPHeaderField: "Accept")
         urlRequest.setValue(requestID, forHTTPHeaderField: "X-Request-Id")
+        if path.hasPrefix("/user/music/") || path.hasPrefix("/user/playlists") {
+            urlRequest.setValue(MusicClientRelease.current, forHTTPHeaderField: "X-Setu-Client")
+        }
         if body != nil {
             urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
