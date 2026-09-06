@@ -362,17 +362,8 @@ struct NowPlayingSheet: View {
         showFeedback(.info("正在准备下载"))
         defer { isDownloading = false }
         do {
-            let urlString: String
-            if let id = track.id.legacyID {
-                let response = try await environment.musicClient.url(songID: id, level: "standard")
-                guard let item = response.data?.first, let url = item.playableURLString else {
-                    showFeedback(.error(response.unavailableMessage)); return
-                }
-                urlString = url
-            } else {
-                guard let resolver = player.urlResolver else { throw UserFacingError(message: "播放器尚未准备好") }
-                urlString = try await resolver.resolve(trackID: track.id, quality: .standard).url.absoluteString
-            }
+            guard let resolver = player.urlResolver else { throw UserFacingError(message: "播放器尚未准备好") }
+            let urlString = try await resolver.resolve(trackID: track.id, quality: .standard).url.absoluteString
             let filename = "\(track.title) - \(track.artist).mp3"
             let signed = try await environment.downloadClient.sign(url: urlString, filename: filename)
             guard let url = URL(string: signed.downloadUrl) else {

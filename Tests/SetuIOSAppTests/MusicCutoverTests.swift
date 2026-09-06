@@ -6,6 +6,34 @@ import XCTest
 @MainActor
 final class MusicCutoverTests: XCTestCase {
     override func tearDown() { MusicV2URLProtocol.handler = nil; super.tearDown() }
+    func testDownloadEntriesUseFlagAwareResolver() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        for file in ["MusicHomeView.swift", "MusicSearchView.swift", "Player/NowPlayingSheet.swift"] {
+            let source = try String(contentsOf: root.appendingPathComponent("Sources/SetuIOSApp/Features/Music/\(file)"), encoding: .utf8)
+            XCTAssertFalse(source.contains("environment.musicClient.url("), "\(file) must not bypass playback routing for downloads")
+        }
+    }
+
+    func testLegacyDownloadIdentityUsesV2WhenPlaybackCutoverIsEnabled() async throws {
+        let legacy = MusicTestServer(), capture = MusicV2RequestCapture()
+        MusicV2URLProtocol.handler = { request in
+            capture.append(request)
+            if request.url!.path == "/user/music/rollout/capabilities" {
+                return .init(body: Data(#"{"version":1,"admitNewPlaybackSession":true,"validForSeconds":30}"#.utf8))
+            }
+            if request.url!.path == "/user/music/v2/tracks" {
+                return .init(body: Data("{\"items\":[\(MusicV2Fixtures.track)]}".utf8))
+            }
+            return .init(body: typedSourceResponse(request), headers: ["X-Setu-Playback-Contract": "3.0.0"])
+        }
+        let resolver = PlaybackURLResolver(client: musicTestClient(server: legacy), v2: makeMusicV2Client(), usesV2Playback: true)
+        let value = try await resolver.resolve(trackID: 1, quality: .exhigh)
+        XCTAssertEqual(value.trackID, .legacy(1))
+        XCTAssertEqual(capture.requests.map { $0.url!.path }, ["/user/music/rollout/capabilities", "/user/music/v2/tracks", "/user/music/v2/tracks/netease:track:1/playback"])
+        let legacyRequests = await legacy.requests
+        XCTAssertTrue(legacyRequests.isEmpty)
+    }
+
     func testLegacyHomeUsesCanonicalHistoryWithoutLegacyHistoryRequest() async {
         let legacy = MusicTestServer()
         let capture = MusicV2RequestCapture()

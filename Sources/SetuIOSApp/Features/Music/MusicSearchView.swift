@@ -304,11 +304,8 @@ struct LegacyMusicSearchView: View {
     private func download(_ song: MusicSong) async {
         feedback = .info("正在准备下载")
         do {
-            let response = try await environment.musicClient.url(songID: song.id, level: "exhigh")
-            guard let item = response.data?.first, let urlString = item.playableURLString else {
-                feedback = .error(response.unavailableMessage)
-                return
-            }
+            guard let resolver = player.urlResolver else { throw UserFacingError(message: "播放器尚未准备好") }
+            let urlString = try await resolver.resolve(trackID: song.id, quality: .exhigh).url.absoluteString
             let artists = song.artistNames.isEmpty ? "未知歌手" : song.artistNames.replacingOccurrences(of: " / ", with: ", ")
             let signed = try await environment.downloadClient.sign(url: urlString, filename: "\(song.name) - \(artists).mp3")
             guard let url = URL(string: signed.downloadUrl) else {
