@@ -23,8 +23,8 @@ struct MusicHomeFeedContent: View {
                             HStack(alignment: .top, spacing: SetuSpacing.md) {
                                 Image(systemName: "arrow.clockwise.circle").foregroundStyle(SetuColor.textSecondary)
                                 VStack(alignment: .leading, spacing: SetuSpacing.xs) {
-                                    Text("部分推荐暂未加载").font(.subheadline.weight(.semibold))
-                                    Text(unavailable.joined(separator: "、"))
+                                    Text("未能加载：" + unavailable.joined(separator: "、")).font(.subheadline.weight(.semibold))
+                                    Text("请稍后重试。")
                                         .font(SetuTypography.caption).foregroundStyle(SetuColor.textSecondary)
                                 }
                                 Spacer(minLength: 0)

@@ -723,12 +723,33 @@ final class MusicStore {
     }
 
     func add(_ request: AddSongToPlaylistRequest, toPlaylist id: Int) async throws {
+        let owner = generation
         try await write(keys: [.playlists, .playlist(id)]) { try await $0.add(request, toPlaylist: id) }
+        let localDetails = playlistDetailsV2.filter { $0.value.value?.ownedLocal(by: userID) != nil }
+        var detailKeys = Set<MusicCacheKey>()
+        for (key, resource) in localDetails {
+            detailKeys.insert(.providerPlaylist(key, offset: 0, limit: 50))
+            for offset in resource.value?.loadedOffsets ?? [] {
+                detailKeys.insert(.providerPlaylistTracks(key, offset: offset, limit: 50))
+            }
+        }
+        await repository.invalidate(detailKeys)
+        guard owner == generation else { throw CancellationError() }
+        for resource in localDetails.values { resource.invalidate() }
+        if request.songId == nil {
+            // The server owns canonical-to-legacy identity translation. Refresh rather than invent a local numeric ID.
+            playlists.invalidate(); playlistDetails[id]?.invalidate()
+            if let resource = playlistDetails[id] { await load(resource, .playlist(id), force: true) }
+            guard owner == generation else { throw CancellationError() }
+            await loadPlaylists(force: true)
+            guard owner == generation else { throw CancellationError() }
+            return
+        }
         let knownSongs = playlistDetails[id]?.value?.songs
         let knownCount = knownSongs.map { songs in songs.count + (songs.contains { $0.songId == request.songId } ? 0 : 1) }
         patchPlaylist(id, list: { $0.songCount = knownCount ?? (($0.songCount ?? 0) + 1) }, detail: {
             var songs = $0.songs ?? []
-            if !songs.contains(where: { $0.songId == request.songId }) { songs.append(PlaylistSong(local: request)) }
+            if !songs.contains(where: { $0.songId == request.songId }), let song = PlaylistSong(local: request) { songs.append(song) }
             $0.songs = songs
             $0.songCount = songs.count
         })

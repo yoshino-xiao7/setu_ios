@@ -34,7 +34,7 @@ struct MusicCanonicalHistoryView: View {
                                     Text("歌曲信息暂不可用").foregroundStyle(.secondary)
                                 }
                             }
-                            Label(item.entry.lastPlayedAt, systemImage: "clock")
+                            Label(MusicHistoryDateLabel.text(item.entry.lastPlayedAt), systemImage: "clock")
                                 .font(SetuTypography.caption)
                                 .foregroundStyle(SetuColor.textTertiary)
                         }
@@ -55,4 +55,22 @@ struct MusicCanonicalHistoryView: View {
         .refreshable { await load(force: true) }
     }
     private func load(force: Bool = false, more: Bool = false) async { await store.loadCanonicalHistory(client: environment.musicV2Client, force: force, more: more) }
+}
+
+enum MusicHistoryDateLabel {
+    static func text(_ value: String, now: Date = Date(), calendar: Calendar = .current) -> String {
+        let parser = ISO8601DateFormatter()
+        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let fractional = parser.date(from: value)
+        parser.formatOptions = [.withInternetDateTime]
+        guard let date = fractional ?? parser.date(from: value) else { return "时间未知" }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.timeZone = calendar.timeZone
+        if calendar.isDate(date, inSameDayAs: now) { formatter.dateFormat = "今天 HH:mm" }
+        else if let yesterday = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(date, inSameDayAs: yesterday) { formatter.dateFormat = "昨天 HH:mm" }
+        else if calendar.component(.year, from: date) == calendar.component(.year, from: now) { formatter.dateFormat = "M月d日 HH:mm" }
+        else { formatter.dateFormat = "yyyy年M月d日 HH:mm" }
+        return formatter.string(from: date)
+    }
 }

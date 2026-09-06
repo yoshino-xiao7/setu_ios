@@ -76,11 +76,13 @@ struct MusicDiscoverMore: View {
 struct MusicDiscoverPlaylistCard: View {
     @Environment(RouterPath.self) private var router
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    private let width: CGFloat
     private let title: String
     private let artwork: String?
     private let route: AppRoute?
 
-    init(playlist: MusicV2Playlist, flags: MusicFeatureFlags) {
+    init(playlist: MusicV2Playlist, flags: MusicFeatureFlags, width: CGFloat = 144) {
+        self.width = width
         let id: MusicV2PlaylistID
         switch playlist {
         case .provider(let value):
@@ -94,13 +96,13 @@ struct MusicDiscoverPlaylistCard: View {
     var body: some View {
         Button { if let route { router.navigate(to: route) } } label: {
             VStack(alignment: .leading, spacing: SetuSpacing.sm) {
-                MusicArtworkView(urlString: artwork, width: 144, height: 144, cornerRadius: 16, artworkSize: .lockScreen)
+                MusicArtworkView(urlString: artwork, width: width, height: width, cornerRadius: 16, artworkSize: .lockScreen)
                 Text(title).font(.subheadline.weight(.medium))
                     .foregroundStyle(SetuColor.textPrimary)
                     .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
-            }.frame(width: 144, alignment: .topLeading).contentShape(Rectangle())
+            }.frame(width: width, alignment: .topLeading).contentShape(Rectangle())
         }.setuButtonFeedback(cornerRadius: 16).disabled(route == nil)
     }
 }

@@ -38,6 +38,7 @@ struct NowPlayingSheet: View {
     @State var scrubTime: Double = 0
     @State var isScrubbing = false
     @State var isDownloading = false
+    @State var showingQueue = false
     @State var playlistTrack: MusicPlaybackTrack?
     @State var mvTrack: MusicPlaybackTrack?
     @State var loadedArtworkAccent: (key: SetuImageKey, color: Color)?
@@ -60,11 +61,6 @@ struct NowPlayingSheet: View {
             if let track = player.currentTrack {
                 VStack(spacing: SetuSpacing.md) {
                     detailHeader
-                    if environment.config.musicFeatureFlags.likedTracksEnabled,
-                       case .canonical(let id) = track.id {
-                        MusicLikeButton(id: id, environment: environment)
-                    }
-
                     nowPlayingPageContent(for: track)
 
                     bottomPanel(for: track)
@@ -94,6 +90,10 @@ struct NowPlayingSheet: View {
             }
         }
         .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.86), value: feedback)
+        .sheet(isPresented: $showingQueue) {
+            MusicQueueDrawerView(player: player, onDismiss: { showingQueue = false })
+                .presentationDetents([.medium, .large])
+        }
         .sheet(item: $playlistTrack) { track in
             AddPlaybackTrackToPlaylistSheet(environment: environment, track: track) { result in
                 showFeedback(result)

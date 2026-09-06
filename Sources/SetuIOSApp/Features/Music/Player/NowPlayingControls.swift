@@ -66,11 +66,6 @@ extension NowPlayingSheet {
                     .padding(.horizontal, SetuSpacing.lg)
             }
 
-            if environment.config.musicFeatureFlags.airPlayPickerEnabled {
-                AirPlayRouteButton()
-                    .frame(width: 44, height: 44)
-            }
-
             playbackScrubber
                 .padding(.horizontal, SetuSpacing.lg)
 
@@ -127,9 +122,25 @@ extension NowPlayingSheet {
                 }
 
                 Spacer(minLength: 4)
-                moreMenu(for: track)
+                NowPlayingRoundButton(systemImage: "list.bullet", label: "播放列表", tint: SetuColor.brandInk) {
+                    showingQueue = true
+                }
             }
             .padding(.horizontal, SetuSpacing.lg)
+
+            HStack {
+                if environment.config.musicFeatureFlags.likedTracksEnabled,
+                   case .canonical(let id) = track.id {
+                    MusicLikeButton(id: id, environment: environment)
+                }
+                Spacer()
+                if environment.config.musicFeatureFlags.airPlayPickerEnabled {
+                    AirPlayRouteButton().frame(width: 44, height: 44)
+                }
+                Spacer()
+                moreMenu(for: track)
+            }
+            .padding(.horizontal, SetuSpacing.xl)
         }
     }
 
@@ -310,11 +321,7 @@ struct AddPlaybackTrackToPlaylistSheet: View {
     let onFeedback: (SetuFeedback) -> Void
 
     var body: some View {
-        if let legacyID = track.id.legacyID {
-        PlaylistSelectionSheet(presentation: .playback, requests: [
-            AddSongToPlaylistRequest(songId: legacyID, songName: track.title, artistName: track.artist,
-                                     albumName: track.album, coverUrl: track.coverURLString, duration: track.durationMilliseconds)
-        ]) { playlist in
+        PlaylistSelectionSheet(presentation: .playback, requests: [request]) { playlist in
             onFeedback(.success("已加入 \(playlist.name)"))
         } summary: {
             HStack(spacing: SetuSpacing.md) {
@@ -325,8 +332,16 @@ struct AddPlaybackTrackToPlaylistSheet: View {
                 }
             }
         }
-        } else {
-            ContentUnavailableView("暂不支持此操作", systemImage: "music.note.list", description: Text("此歌曲的加入歌单入口尚未启用"))
+    }
+
+    private var request: AddSongToPlaylistRequest {
+        switch track.id {
+        case .legacy(let id):
+            return AddSongToPlaylistRequest(songId: id, songName: track.title, artistName: track.artist,
+                albumName: track.album, coverUrl: track.coverURLString, duration: track.durationMilliseconds)
+        case .canonical(let id):
+            return AddSongToPlaylistRequest(trackId: id, songName: track.title, artistName: track.artist,
+                albumName: track.album, coverUrl: track.coverURLString, duration: track.durationMilliseconds)
         }
     }
 }

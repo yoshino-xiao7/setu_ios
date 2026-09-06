@@ -7,6 +7,39 @@ import XCTest
 final class MusicLibraryTests: XCTestCase {
     override func tearDown() { MusicV2URLProtocol.handler = nil; super.tearDown() }
 
+    func testLikedTrackMetadataIsHydratedAndWarmReadIsCached() async {
+        let capture = MusicV2RequestCapture()
+        MusicV2URLProtocol.handler = { request in
+            capture.append(request)
+            if request.url?.path.hasSuffix("/tracks") == true {
+                return .init(body: Data("{\"items\":[\(MusicV2Fixtures.track)],\"missingIds\":[]}".utf8))
+            }
+            return .init(body: Self.page(ids: ["1"]))
+        }
+        let store = MusicStore(client: musicTestClient(), userID: 1)
+        await store.loadLikedTracks(client: makeMusicV2Client())
+        XCTAssertNotNil(store.likedTracks.value?.items.first?.track)
+        await store.loadLikedTracks(client: makeMusicV2Client())
+        XCTAssertEqual(capture.requests.count, 2)
+    }
+
+    func testHistoryDateUsesLocalDayAndReadableTime() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 8 * 3600)!
+        let now = ISO8601DateFormatter().date(from: "2026-09-06T02:00:00Z")!
+        XCTAssertEqual(MusicHistoryDateLabel.text("2026-09-06T01:05:00.123Z", now: now, calendar: calendar), "今天 09:05")
+        XCTAssertEqual(MusicHistoryDateLabel.text("2026-09-04T23:30:00Z", now: now, calendar: calendar), "昨天 07:30")
+        XCTAssertEqual(MusicHistoryDateLabel.text("bad", now: now, calendar: calendar), "时间未知")
+    }
+
+    func testCanonicalPlaylistRequestPreservesOpaqueIdentity() throws {
+        let request = AddSongToPlaylistRequest(trackId: .init(rawValue: "netease:track:opaque%2Fpart"), songName: "Song", artistName: "Artist", albumName: nil, coverUrl: nil, duration: 1)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(request)) as? [String: Any])
+        XCTAssertEqual(json["trackId"] as? String, "netease:track:opaque%2Fpart")
+        XCTAssertNil(json["songId"])
+        XCTAssertNil(PlaylistSong(local: request))
+    }
+
     func testPaginationNullSnapshotsAndUnknownAbsence() async throws {
         let capture = MusicV2RequestCapture()
         MusicV2URLProtocol.handler = { request in
@@ -22,7 +55,7 @@ final class MusicLibraryTests: XCTestCase {
         await store.loadLikedTracks(client: client, more: true)
         XCTAssertEqual(store.likedTrackIDs.count, 2)
         XCTAssertEqual(store.likedState(.init(rawValue: "netease:track:3")), false)
-        XCTAssertEqual(capture.requests.count, 2)
+        XCTAssertEqual(capture.requests.filter { $0.url?.path.hasSuffix("liked-tracks") == true }.count, 2)
     }
 
     func testOptimisticLikeVisibleBeforeResponseAndFailureRollsBack() async throws {

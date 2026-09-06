@@ -689,9 +689,10 @@ public struct PlaylistSong: Decodable, Identifiable, Sendable {
     }
 
     /// Negative IDs are local placeholders until a detail refresh resolves the DB relation ID.
-    public init(local request: AddSongToPlaylistRequest) {
-        id = -request.songId
-        songId = request.songId
+    public init?(local request: AddSongToPlaylistRequest) {
+        guard let legacyID = request.songId else { return nil }
+        id = -legacyID
+        songId = legacyID
         songName = request.songName
         artistName = request.artistName
         albumName = request.albumName
@@ -787,7 +788,8 @@ public struct CreateMusicPlaylistRequest: Encodable, Sendable {
 }
 
 public struct AddSongToPlaylistRequest: Encodable, Sendable {
-    public let songId: Int
+    public let songId: Int?
+    public var trackId: MusicV2TrackID? = nil
     public let songName: String
     public let artistName: String
     public let albumName: String?
@@ -827,6 +829,17 @@ public struct AddSongToPlaylistRequest: Encodable, Sendable {
         self.coverUrl = coverUrl
         self.duration = duration
     }
+    public init(trackId: MusicV2TrackID, songName: String, artistName: String,
+                albumName: String?, coverUrl: String?, duration: Int) {
+        self.songId = nil
+        self.trackId = trackId
+        self.songName = songName
+        self.artistName = artistName
+        self.albumName = albumName
+        self.coverUrl = coverUrl
+        self.duration = duration
+    }
+
 }
 
 public struct AddMusicHistoryRequest: Encodable, Sendable {

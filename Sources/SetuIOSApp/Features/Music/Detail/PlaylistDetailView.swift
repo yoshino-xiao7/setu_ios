@@ -15,9 +15,14 @@ struct PlaylistDetailView: View {
     var body: some View {
         List {
             if let feedback { Section { SetuFeedbackBanner(feedback: feedback) } }
+            if store.playlistDetailV2(playlistID.rawValue).value == nil, let preview = previewPlaylist {
+                Section {
+                    MusicPlaylistHero(title: preview.title, description: preview.description, artwork: preview.artwork?.url)
+                }
+            }
             MusicDetailState(resource: store.playlistDetailV2(playlistID.rawValue), retry: { await load(force: true) }) { data in
                 Section {
-                    MusicDetailHeader(title: data.title, description: data.description, artwork: data.artwork)
+                    MusicPlaylistHero(title: data.title, description: data.description, artwork: data.artwork)
                     if let local = data.ownedLocal(by: store.userID) {
                         Button("重命名") { name = local.title; editingName = true }.disabled(writing)
                         Menu("默认播放模式") {
@@ -77,6 +82,10 @@ struct PlaylistDetailView: View {
             }
     }
 
+    private var previewPlaylist: MusicV2ProviderPlaylist? {
+        store.v2RecommendedPlaylists.value?.items.first { $0.id.rawValue == playlistID.rawValue }
+    }
+
     private func load(force: Bool = false) async {
         guard flags.usesV2PlaylistDetail else { return }
         await store.loadPlaylistDetailV2(playlistID, client: environment.musicV2Client, force: force)
@@ -119,5 +128,27 @@ struct PlaylistDetailView: View {
             let relationPath = try MusicLocalPlaylistBridge.path(member.relationId)
             let _: String = try await environment.apiClient.requestWithoutBody("/user/playlists/\(playlistPath)/songs/\(relationPath)", method: "DELETE")
         }
+    }
+}
+
+private struct MusicPlaylistHero: View {
+    let title: String
+    let description: String?
+    let artwork: String?
+    @State private var expanded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SetuSpacing.md) {
+            MusicArtworkView(urlString: artwork, width: 208, height: 208, cornerRadius: 24, artworkSize: .lockScreen)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, SetuSpacing.md)
+            Text(title).font(.title2.weight(.bold)).foregroundStyle(SetuColor.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let description, !description.isEmpty {
+                Text(description).font(.subheadline).foregroundStyle(SetuColor.textSecondary)
+                    .lineLimit(expanded ? nil : 3)
+                Button(expanded ? "收起简介" : "展开简介") { expanded.toggle() }.frame(minHeight: 44)
+            }
+        }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, SetuSpacing.sm)
     }
 }
