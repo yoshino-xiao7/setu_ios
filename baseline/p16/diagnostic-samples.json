@@ -1,0 +1,941 @@
+{
+  "phase": "P16",
+  "sample_count": 20,
+  "minimum_samples": 20,
+  "sample_gate": true,
+  "percentiles": "P50 median; P90/P95 nearest rank; milliseconds",
+  "boundary": "TrackTransition begin to first TrackPlaying callback; not acoustic output",
+  "historical_samples_included": false,
+  "cohorts": {
+    "prepared_hit": {
+      "transition": {
+        "samples": 20,
+        "min_ms": 113.488791,
+        "p50_ms": 157.0861875,
+        "p90_ms": 201.879708,
+        "p95_ms": 260.556125,
+        "max_ms": 302.878209
+      },
+      "segments": {
+        "transition_to_lookup_result": {
+          "samples": 20,
+          "min_ms": 0.551167,
+          "p50_ms": 0.8177915,
+          "p90_ms": 1.606083,
+          "p95_ms": 1.760084,
+          "max_ms": 4.735917
+        },
+        "lookup_result_to_playing": {
+          "samples": 20,
+          "min_ms": 112.7715,
+          "p50_ms": 156.273,
+          "p90_ms": 200.632083,
+          "p95_ms": 259.349,
+          "max_ms": 302.070666
+        },
+        "request_to_queue_resolved": {
+          "samples": 20,
+          "min_ms": 0.037958,
+          "p50_ms": 0.058124999999999996,
+          "p90_ms": 0.163208,
+          "p95_ms": 0.459917,
+          "max_ms": 0.604667
+        },
+        "queue_lookup": {
+          "samples": 20,
+          "min_ms": 0.027541,
+          "p50_ms": 0.0411455,
+          "p90_ms": 0.087375,
+          "p95_ms": 0.089542,
+          "max_ms": 0.144833
+        },
+        "prepared_lookup": {
+          "samples": 20,
+          "min_ms": 0.018292,
+          "p50_ms": 0.02625,
+          "p90_ms": 0.067417,
+          "p95_ms": 0.070583,
+          "max_ms": 0.077875
+        },
+        "lookup_result_to_source_ready": {
+          "samples": 20,
+          "min_ms": 0.002083,
+          "p50_ms": 0.003083,
+          "p90_ms": 0.003958,
+          "p95_ms": 0.004791,
+          "max_ms": 0.00875
+        },
+        "source_resolve_await": {
+          "samples": 0,
+          "min_ms": null,
+          "p50_ms": null,
+          "p90_ms": null,
+          "p95_ms": null,
+          "max_ms": null
+        },
+        "item_create_or_reuse": {
+          "samples": 20,
+          "min_ms": 0.001292,
+          "p50_ms": 0.0021245,
+          "p90_ms": 0.003417,
+          "p95_ms": 0.003584,
+          "max_ms": 0.011666
+        },
+        "clear_old_item": {
+          "samples": 20,
+          "min_ms": 0.228792,
+          "p50_ms": 0.369104,
+          "p90_ms": 0.6865,
+          "p95_ms": 1.2985,
+          "max_ms": 3.839625
+        },
+        "install_new_item": {
+          "samples": 20,
+          "min_ms": 0.492625,
+          "p50_ms": 0.7615835,
+          "p90_ms": 1.120583,
+          "p95_ms": 1.268375,
+          "max_ms": 2.621042
+        },
+        "session_activation_task": {
+          "samples": 0,
+          "min_ms": null,
+          "p50_ms": null,
+          "p90_ms": null,
+          "p95_ms": null,
+          "max_ms": null
+        },
+        "request_to_player_ready": {
+          "samples": 19,
+          "min_ms": 98.75,
+          "p50_ms": 113.09775,
+          "p90_ms": 170.083792,
+          "p95_ms": 250.600375,
+          "max_ms": 250.600375
+        },
+        "first_ready_relative_to_install_end": {
+          "samples": 19,
+          "min_ms": 96.808084,
+          "p50_ms": 110.402625,
+          "p90_ms": 167.771667,
+          "p95_ms": 248.443458,
+          "max_ms": 248.443458
+        },
+        "install_end_to_playing": {
+          "samples": 20,
+          "min_ms": 111.978833,
+          "p50_ms": 155.516042,
+          "p90_ms": 199.737833,
+          "p95_ms": 258.512459,
+          "max_ms": 300.797708
+        },
+        "ready_to_playing": {
+          "samples": 19,
+          "min_ms": 0.024542,
+          "p50_ms": 31.966166,
+          "p90_ms": 69.959833,
+          "p95_ms": 142.312667,
+          "max_ms": 142.312667
+        },
+        "request_to_playing": {
+          "samples": 20,
+          "min_ms": 113.548,
+          "p50_ms": 157.168188,
+          "p90_ms": 202.049958,
+          "p95_ms": 261.037459,
+          "max_ms": 302.954625
+        }
+      }
+    },
+    "prepared_miss": {
+      "transition": {
+        "samples": 0,
+        "min_ms": null,
+        "p50_ms": null,
+        "p90_ms": null,
+        "p95_ms": null,
+        "max_ms": null
+      },
+      "segments": {}
+    }
+  },
+  "windows": [
+    {
+      "recording": "baseline-01-events",
+      "events": 200,
+      "diagnostic_events": 184,
+      "legacy_excluded": []
+    },
+    {
+      "recording": "baseline-02-events",
+      "events": 147,
+      "diagnostic_events": 132,
+      "legacy_excluded": []
+    },
+    {
+      "recording": "baseline-03-events",
+      "events": 100,
+      "diagnostic_events": 92,
+      "legacy_excluded": []
+    },
+    {
+      "recording": "baseline-04-events",
+      "events": 148,
+      "diagnostic_events": 136,
+      "legacy_excluded": []
+    },
+    {
+      "recording": "baseline-05-events",
+      "events": 150,
+      "diagnostic_events": 138,
+      "legacy_excluded": []
+    },
+    {
+      "recording": "baseline-06-events",
+      "events": 148,
+      "diagnostic_events": 136,
+      "legacy_excluded": []
+    },
+    {
+      "recording": "baseline-07-events",
+      "events": 50,
+      "diagnostic_events": 46,
+      "legacy_excluded": []
+    },
+    {
+      "recording": "baseline-08-events",
+      "events": 0,
+      "diagnostic_events": 0,
+      "legacy_excluded": []
+    },
+    {
+      "recording": "baseline-09-events",
+      "events": 43,
+      "diagnostic_events": 36,
+      "legacy_excluded": []
+    }
+  ],
+  "samples": [
+    {
+      "recording": "baseline-01-events",
+      "id": "0x1e",
+      "kind": "prepared_hit",
+      "legacy_id": "0x1f",
+      "legacy_transition_ms": 124.261083,
+      "legacy_begin_to_hit_ms": 0.702167,
+      "legacy_hit_to_playing_ms": 123.558916,
+      "request_ns": 186410393125,
+      "transition_ns": 186410469250,
+      "playing_ns": 186534718708,
+      "item_reused": true,
+      "session_already_ready": true,
+      "waiting_states": [
+        "WaitingEvaluatingBuffering",
+        "WaitingToMinimizeStalls"
+      ],
+      "segments_ms": {
+        "transition_to_lookup_result": 0.68825,
+        "lookup_result_to_playing": 123.561208,
+        "request_to_queue_resolved": 0.049625,
+        "queue_lookup": 0.035709,
+        "prepared_lookup": 0.023125,
+        "lookup_result_to_source_ready": 0.00275,
+        "source_resolve_await": null,
+        "item_create_or_reuse": 0.003334,
+        "clear_old_item": 0.29325,
+        "install_new_item": 0.8505,
+        "session_activation_task": null,
+        "request_to_player_ready": 119.154875,
+        "first_ready_relative_to_install_end": 117.339125,
+        "install_end_to_playing": 122.509833,
+        "ready_to_playing": 5.170708,
+        "request_to_playing": 124.325583
+      }
+    },
+    {
+      "recording": "baseline-01-events",
+      "id": "0x20",
+      "kind": "prepared_hit",
+      "legacy_id": "0x21",
+      "legacy_transition_ms": 149.39975,
+      "legacy_begin_to_hit_ms": 0.55425,
+      "legacy_hit_to_playing_ms": 148.8455,
+      "request_ns": 204045364958,
+      "transition_ns": 204045433583,
+      "playing_ns": 204194832625,
+      "item_reused": true,
+      "session_already_ready": true,
+      "waiting_states": [
+        "WaitingEvaluatingBuffering",
+        "WaitingToMinimizeStalls"
+      ],
+      "segments_ms": {
+        "transition_to_lookup_result": 0.551167,
+        "lookup_result_to_playing": 148.847875,
+        "request_to_queue_resolved": 0.053583,
+        "queue_lookup": 0.041583,
+        "prepared_lookup": 0.018292,
+        "lookup_result_to_source_ready": 0.002875,
+        "source_resolve_await": null,
+        "item_create_or_reuse": 0.001875,
+        "clear_old_item": 0.233916,
+        "install_new_item": 0.607458,
+        "session_activation_task": null,
+        "request_to_player_ready": 107.069667,
+        "first_ready_relative_to_install_end": 105.778709,
+        "install_end_to_playing": 148.176709,
+        "ready_to_playing": 42.398,
+        "request_to_playing": 149.467667
+      }
+    },
+    {
+      "recording": "baseline-01-events",
+      "id": "0x22",
+      "kind": "prepared_hit",
+      "legacy_id": "0x23",
+      "legacy_transition_ms": 166.608125,
+      "legacy_begin_to_hit_ms": 0.776916,
+      "legacy_hit_to_playing_ms": 165.831209,
+      "request_ns": 222632582500,
+      "transition_ns": 222632636458,
+      "playing_ns": 222799253291,
+      "item_reused": true,
+      "session_already_ready": true,
+      "waiting_states": [
+        "WaitingEvaluatingBuffering",
+        "WaitingToMinimizeStalls"
+      ],
+      "segments_ms": {
+        "transition_to_lookup_result": 0.774167,
+        "lookup_result_to_playing": 165.842666,
+        "request_to_queue_resolved": 0.039458,
+        "queue_lookup": 0.031083,
+        "prepared_lookup": 0.029959,
+        "lookup_result_to_source_ready": 0.002791,
+        "source_resolve_await": null,
+        "item_create_or_reuse": 0.002,
+        "clear_old_item": 0.358083,
+        "install_new_item": 0.810667,
+        "session_activation_task": null,
+        "request_to_player_ready": 104.442875,
+        "first_ready_relative_to_install_end": 102.720792,
+        "install_end_to_playing": 164.948708,
+        "ready_to_playing": 62.227916,
+        "request_to_playing": 166.670791
+      }
+    },
+    {
+      "recording": "baseline-01-events",
+      "id": "0x24",
+      "kind": "prepared_hit",
+      "legacy_id": "0x25",
+      "legacy_transition_ms": 113.488791,
+      "legacy_begin_to_hit_ms": 0.719625,
+      "legacy_hit_to_playing_ms": 112.769166,
+      "request_ns": 240969075791,
+      "transition_ns": 240969135333,
+      "playing_ns": 241082623791,
+      "item_reused": true,
+      "session_already_ready": true,
+      "waiting_states": [
+        "WaitingEvaluatingBuffering",
+        "WaitingToMinimizeStalls"
+      ],
+      "segments_ms": {
+        "transition_to_lookup_result": 0.716958,
+        "lookup_result_to_playing": 112.7715,
+        "request_to_queue_resolved": 0.04525,
+        "queue_lookup": 0.034875,
+        "prepared_lookup": 0.023041,
+        "lookup_result_to_source_ready": 0.003084,
+        "source_resolve_await": null,
+        "item_create_or_reuse": 0.001292,
+        "clear_old_item": 0.323,
+        "install_new_item": 0.718208,
+        "session_activation_task": null,
+        "request_to_player_ready": 101.393167,
+        "first_ready_relative_to_install_end": 99.824,
+        "install_end_to_playing": 111.978833,
+        "ready_to_playing": 12.154833,
+        "request_to_playing": 113.548
+      }
+    },
+    {
+      "recording": "baseline-02-events",
+      "id": "0x26",
+      "kind": "prepared_hit",
+      "legacy_id": "0x27",
+      "legacy_transition_ms": 164.772625,
+      "legacy_begin_to_hit_ms": 1.077417,
+      "legacy_hit_to_playing_ms": 163.695208,
+      "request_ns": 24562171166,
+      "transition_ns": 24562268416,
+      "playing_ns": 24727039875,
+      "item_reused": true,
+      "session_already_ready": true,
+      "waiting_states": [
+        "WaitingEvaluatingBuffering",
+        "WaitingToMinimizeStalls"
+      ],
+      "segments_ms": {
+        "transition_to_lookup_result": 1.073334,
+        "lookup_result_to_playing": 163.698125,
+        "request_to_queue_resolved": 0.0675,
+        "queue_lookup": 0.051833,
+        "prepared_lookup": 0.034167,
+        "lookup_result_to_source_ready": 0.003083,
+        "source_resolve_await": null,
+        "item_create_or_reuse": 0.001709,
+        "clear_old_item": 0.418625,
+        "install_new_item": 0.764209,
+        "session_activation_task": null,
+        "request_to_player_ready": 99.977584,
+        "first_ready_relative_to_install_end": 97.96425,
+        "install_end_to_playing": 162.855375,
+        "ready_to_playing": 64.891125,
+        "request_to_playing": 164.868709
+      }
+    },
+    {
+      "recording": "baseline-02-events",
+      "id": "0x28",
+      "kind": "prepared_hit",
+      "legacy_id": "0x29",
+      "legacy_transition_ms": 115.722958,
+      "legacy_begin_to_hit_ms": 0.831916,
+      "legacy_hit_to_playing_ms": 114.891042,
+      "request_ns": 42641334041,
+      "transition_ns": 42641401625,
+      "playing_ns": 42757123750,
+      "item_reused": true,
+      "session_already_ready": true,
+      "waiting_states": [
+        "WaitingEvaluatingBuffering",
+        "WaitingToMinimizeStalls"
+      ],
+      "segments_ms": {
+        "transition_to_lookup_result": 0.828166,
+        "lookup_result_to_playing": 114.893959,
+        "request_to_queue_resolved": 0.049084,
+        "queue_lookup": 0.036042,
+        "prepared_lookup": 0.023458,
+        "lookup_result_to_source_ready": 0.003292,
+        "source_resolve_await": null,
+        "item_create_or_reuse": 0.001833,
+        "clear_old_item": 0.303917,
+        "install_new_item": 0.758958,
+        "session_activation_task": null,
+        "request_to_player_ready": 115.765167,
+        "first_ready_relative_to_install_end": 114.045167,
+        "install_end_to_playing": 114.069709,
+        "ready_to_playing": 0.024542,
+        "request_to_playing": 115.789709
+      }
+    },
+    {
+      "recording": "baseline-02-events",
+      "id": "0x2a",
+      "kind": "prepared_hit",
+      "legacy_id": "0x2b",
+      "legacy_transition_ms": 128.457458,
+      "legacy_begin_to_hit_ms": 0.811292,
+      "legacy_hit_to_playing_ms": 127.646166,
+      "request_ns": 61512341875,
+      "transition_ns": 61512530125,
+      "playing_ns": 61640986750,
+      "item_reused": true,
+      "session_already_ready": true,
+      "waiting_states": [
+        "WaitingEvaluatingBuffering",
+        "WaitingToMinimizeStalls"
+      ],
+      "segments_ms": {
+        "transition_to_lookup_result": 0.807333,
+        "lookup_result_to_playing": 127.649292,
+        "request_to_queue_resolved": 0.163208,
+        "queue_lookup": 0.144833,
+        "prepared_lookup": 0.067417,
+        "lookup_result_to_source_ready": 0.003958,
+        "source_resolve_await": null,
+        "item_create_or_reuse": 0.011666,
+        "clear_old_item": 0.297959,
+        "install_new_item": 0.827375,
+        "session_activation_task": null,
+        "request_to_player_ready": 98.75,
+        "first_ready_relative_to_install_end": 96.808084,
+        "install_end_to_playing": 126.702959,
+        "ready_to_playing": 29.894875,
+        "request_to_playing": 128.644875
+      }
+    },
+    {
+      "recording": "baseline-03-events",
+      "id": "0x2c",
+      "kind": "prepared_hit",
+      "legacy_id": "0x2d",
+      "legacy_transition_ms": 174.946083,
+      "legacy_begin_to_hit_ms": 0.633541,
+      "legacy_hit_to_playing_ms": 174.312542,
+      "request_ns": 16240627000,
+      "transition_ns": 16240710833,
+      "playing_ns": 16415656166,
+      "item_reused": true,
+      "session_already_ready": true,
+      "waiting_states": [
+        "WaitingEvaluatingBuffering",
+        "WaitingToMinimizeStalls"
+      ],
+      "segments_ms": {
+        "transition_to_lookup_result": 0.63,
+        "lookup_result_to_playing": 174.315333,
+        "request_to_queue_resolved": 0.060416,
+        "queue_lookup": 0.040708,
+        "prepared_lookup": 0.026,
+        "lookup_result_to_source_ready": 0.003542,
+        "source_resolve_await": null,
+        "item_create_or_reuse": 0.003417,
+        "clear_old_item": 0.228792,
+        "install_new_item": 0.70875,
+        "session_activation_task": null,
+        "request_to_player_ready": 114.776791,
+        "first_ready_relative_to_install_end": 112.974625,
+        "install_end_to_playing": 173.227,
+        "ready_to_playing": 60.252375,
+        "request_to_playing": 175.029166
+      }
+    },
+    {
+      "recording": "baseline-03-events",
+      "id": "0x2e",
+      "kind": "prepared_hit",
+      "legacy_id": "0x2f",
+      "legacy_transition_ms": 118.693583,
+      "legacy_begin_to_hit_ms": 0.918208,
+      "legacy_hit_to_playing_ms": 117.775375,
+      "request_ns": 42948480875,
+      "transition_ns": 42948538500,
+      "playing_ns": 43067231625,
+      "item_reused": true,
+      "session_already_ready": true,
+      "waiting_states": [
+        "WaitingEvaluatingBuffering",
+        "WaitingToMinimizeStalls"
+      ],
+      "segments_ms": {
+        "transition_to_lookup_result": 0.915333,
+        "lookup_result_to_playing": 117.777792,
+        "request_to_queue_resolved": 0.040666,
+        "queue_lookup": 0.031083,
+        "prepared_lookup": 0.023458,
+        "lookup_result_to_source_ready": 0.003083,
+        "source_resolve_await": null,
+        "item_create_or_reuse": 0.002083,
+        "clear_old_item": 0.464125,
+        "install_new_item": 1.268375,
+        "session_activation_task": null,
+        "request_to_player_ready": 104.033541,
+        "first_ready_relative_to_install_end": 101.702916,
+        "install_end_to_playing": 116.420125,
+        "ready_to_playing": 14.717209,
+        "request_to_playing": 118.75075
+      }
+    },
+    {
+      "recording": "baseline-04-events",
+      "id": "0x32",
+      "kind": "prepared_hit",
+      "legacy_id": "0x33",
+      "legacy_transition_ms": 302.878209,
+      "legacy_begin_to_hit_ms": 0.811167,
+      "legacy_hit_to_playing_ms": 302.067042,
+      "request_ns": 10862571666,
+      "transition_ns": 10862648208,
+      "playing_ns": 11165526291,
+      "item_reused": true,
+      "session_already_ready": true,
+      "waiting_states": [
+        "WaitingEvaluatingBuffering",
+        "WaitingToMinimizeStalls"
+      ],
+      "segments_ms": {
+        "transition_to_lookup_result": 0.807417,
+        "lookup_result_to_playing": 302.070666,
+        "request_to_queue_resolved": 0.055834,
+        "queue_lookup": 0.040375,
+        "prepared_lookup": 0.036459,
+        "lookup_result_to_source_ready": 0.004791,
+        "source_resolve_await": null,
+        "item_create_or_reuse": 0.003584,
+        "clear_old_item": 0.267041,
+        "install_new_item": 1.120583,
+        "session_activation_task": null,
+        "request_to_player_ready": 250.600375,
+        "first_ready_relative_to_install_end": 248.443458,
+        "install_end_to_playing": 300.797708,
+        "ready_to_playing": 52.35425,
+        "request_to_playing": 302.954625
+      }
+    },
+    {
+      "recording": "baseline-04-events",
+      "id": "0x34",
+      "kind": "prepared_hit",
+      "legacy_id": "0x35",
+      "legacy_transition_ms": 260.556125,
+      "legacy_begin_to_hit_ms": 1.210042,
+      "legacy_hit_to_playing_ms": 259.346083,
+      "request_ns": 31549789666,
+      "transition_ns": 31550271833,
+      "playing_ns": 31810827125,
+      "item_reused": true,
+      "session_already_ready": true,
+      "waiting_states": [
+        "WaitingEvaluatingBuffering",
+        "WaitingToMinimizeStalls"
+      ],
+      "segments_ms": {
+        "transition_to_lookup_result": 1.206292,
+        "lookup_result_to_playing": 259.349,
+        "request_to_queue_resolved": 0.459917,
+        "queue_lookup": 0.060583,
+        "prepared_lookup": 0.030084,
+        "lookup_result_to_source_ready": 0.003333,
+        "source_resolve_await": null,
+        "item_create_or_reuse": 0.003,
+        "clear_old_item": 0.66,
+        "install_new_item": 0.673416,
+        "session_activation_task": null,
+        "request_to_player_ready": 118.724792,
+        "first_ready_relative_to_install_end": 116.199792,
+        "install_end_to_playing": 258.512459,
+        "ready_to_playing": 142.312667,
+        "request_to_playing": 261.037459
+      }
+    },
+    {
+      "recording": "baseline-04-events",
+      "id": "0x36",
+      "kind": "prepared_hit",
+      "legacy_id": "0x37",
+      "legacy_transition_ms": 169.041459,
+      "legacy_begin_to_hit_ms": 0.653542,
+      "legacy_hit_to_playing_ms": 168.387917,
+      "request_ns": 49919205541,
+      "transition_ns": 49919270166,
+      "playing_ns": 50088311625,
+      "item_reused": true,
+      "session_already_ready": true,
+      "waiting_states": [
+        "WaitingEvaluatingBuffering",
+        "WaitingToMinimizeStalls"
+      ],
+      "segments_ms": {
+        "transition_to_lookup_result": 0.6505,
+        "lookup_result_to_playing": 168.390959,
+        "request_to_queue_resolved": 0.047709,
+        "queue_lookup": 0.038459,
+        "prepared_lookup": 0.070583,
+        "lookup_result_to_source_ready": 0.003,
+        "source_resolve_await": null,
+        "item_create_or_reuse": 0.001667,
+        "clear_old_item": 0.280084,
+        "install_new_item": 0.526375,
+        "session_activation_task": null,
+        "request_to_player_ready": 101.932709,
+        "first_ready_relative_to_install_end": 100.6065,
+        "install_end_to_playing": 167.779875,
+        "ready_to_playing": 67.173375,
+        "request_to_playing": 169.106084
+      }
+    },
+    {
+      "recording": "baseline-05-events",
+      "id": "0x3a",
+      "kind": "prepared_hit",
+      "legacy_id": "0x3b",
+      "legacy_transition_ms": 118.838375,
+      "legacy_begin_to_hit_ms": 1.608375,
+      "legacy_hit_to_playing_ms": 117.23,
+      "request_ns": 7826341083,
+      "transition_ns": 7826393375,
+      "playing_ns": 7945231458,
+      "item_reused": true,
+      "session_already_ready": true,
+      "waiting_states": [
+        "WaitingEvaluatingBuffering",
+        "WaitingToMinimizeStalls"
+      ],
+      "segments_ms": {
+        "transition_to_lookup_result": 1.606083,
+        "lookup_result_to_playing": 117.232,
+        "request_to_queue_resolved": 0.037958,
+        "queue_lookup": 0.027541,
+        "prepared_lookup": 0.019458,
+        "lookup_result_to_source_ready": 0.002083,
+        "source_resolve_await": null,
+        "item_create_or_reuse": 0.001333,
+        "clear_old_item": 1.2985,
+        "install_new_item": 0.492625,
+        "session_activation_task": null,
+        "request_to_player_ready": 112.13325,
+        "first_ready_relative_to_install_end": 109.906458,
+        "install_end_to_playing": 116.663583,
+        "ready_to_playing": 6.757125,
+        "request_to_playing": 118.890375
+      }
+    },
+    {
+      "recording": "baseline-05-events",
+      "id": "0x3c",
+      "kind": "prepared_hit",
+      "legacy_id": "0x3d",
+      "legacy_transition_ms": 130.025792,
+      "legacy_begin_to_hit_ms": 1.20475,
+      "legacy_hit_to_playing_ms": 128.821042,
+      "request_ns": 30014398125,
+      "transition_ns": 30014545250,
+      "playing_ns": 30144569500,
+      "item_reused": true,
+      "session_already_ready": true,
+      "waiting_states": [
+        "WaitingEvaluatingBuffering",
+        "WaitingToMinimizeStalls"
+      ],
+      "segments_ms": {
+        "transition_to_lookup_result": 1.195041,
+        "lookup_result_to_playing": 128.829209,
+        "request_to_queue_resolved": 0.111333,
+        "queue_lookup": 0.089542,
+        "prepared_lookup": 0.077875,
+        "lookup_result_to_source_ready": 0.00875,
+        "source_resolve_await": null,
+        "item_create_or_reuse": 0.003083,
+        "clear_old_item": 0.416,
+        "install_new_item": 0.932167,
+        "session_activation_task": null,
+        "request_to_player_ready": 104.016291,
+        "first_ready_relative_to_install_end": 101.450833,
+        "install_end_to_playing": 127.605917,
+        "ready_to_playing": 26.155084,
+        "request_to_playing": 130.171375
+      }
+    },
+    {
+      "recording": "baseline-05-events",
+      "id": "0x3e",
+      "kind": "prepared_hit",
+      "legacy_id": "0x3f",
+      "legacy_transition_ms": 167.780125,
+      "legacy_begin_to_hit_ms": 1.763209,
+      "legacy_hit_to_playing_ms": 166.016916,
+      "request_ns": 54518373750,
+      "transition_ns": 54518463041,
+      "playing_ns": 54686243083,
+      "item_reused": true,
+      "session_already_ready": true,
+      "waiting_states": [
+        "WaitingEvaluatingBuffering",
+        "WaitingToMinimizeStalls"
+      ],
+      "segments_ms": {
+        "transition_to_lookup_result": 1.760084,
+        "lookup_result_to_playing": 166.019958,
+        "request_to_queue_resolved": 0.065666,
+        "queue_lookup": 0.0465,
+        "prepared_lookup": 0.0265,
+        "lookup_result_to_source_ready": 0.003375,
+        "source_resolve_await": null,
+        "item_create_or_reuse": 0.002166,
+        "clear_old_item": 0.513667,
+        "install_new_item": 0.74325,
+        "session_activation_task": null,
+        "request_to_player_ready": 113.09775,
+        "first_ready_relative_to_install_end": 110.402625,
+        "install_end_to_playing": 165.174208,
+        "ready_to_playing": 54.771583,
+        "request_to_playing": 167.869333
+      }
+    },
+    {
+      "recording": "baseline-06-events",
+      "id": "0x42",
+      "kind": "prepared_hit",
+      "legacy_id": "0x43",
+      "legacy_transition_ms": 119.513416,
+      "legacy_begin_to_hit_ms": 1.108333,
+      "legacy_hit_to_playing_ms": 118.405083,
+      "request_ns": 9002396541,
+      "transition_ns": 9002565458,
+      "playing_ns": 9122078333,
+      "item_reused": true,
+      "session_already_ready": true,
+      "waiting_states": [
+        "WaitingEvaluatingBuffering",
+        "WaitingToMinimizeStalls"
+      ],
+      "segments_ms": {
+        "transition_to_lookup_result": 1.105542,
+        "lookup_result_to_playing": 118.407333,
+        "request_to_queue_resolved": 0.116625,
+        "queue_lookup": 0.087375,
+        "prepared_lookup": 0.021125,
+        "lookup_result_to_source_ready": 0.002833,
+        "source_resolve_await": null,
+        "item_create_or_reuse": 0.002209,
+        "clear_old_item": 0.5715,
+        "install_new_item": 0.746375,
+        "session_activation_task": null,
+        "request_to_player_ready": 116.538959,
+        "first_ready_relative_to_install_end": 114.424167,
+        "install_end_to_playing": 117.567,
+        "ready_to_playing": 3.142833,
+        "request_to_playing": 119.681792
+      }
+    },
+    {
+      "recording": "baseline-06-events",
+      "id": "0x44",
+      "kind": "prepared_hit",
+      "legacy_id": "0x45",
+      "legacy_transition_ms": 201.879708,
+      "legacy_begin_to_hit_ms": 1.249958,
+      "legacy_hit_to_playing_ms": 200.62975,
+      "request_ns": 32601912333,
+      "transition_ns": 32602084583,
+      "playing_ns": 32803962291,
+      "item_reused": true,
+      "session_already_ready": true,
+      "waiting_states": [
+        "WaitingEvaluatingBuffering",
+        "WaitingToMinimizeStalls"
+      ],
+      "segments_ms": {
+        "transition_to_lookup_result": 1.245625,
+        "lookup_result_to_playing": 200.632083,
+        "request_to_queue_resolved": 0.101917,
+        "queue_lookup": 0.086375,
+        "prepared_lookup": 0.02,
+        "lookup_result_to_source_ready": 0.002625,
+        "source_resolve_await": null,
+        "item_create_or_reuse": 0.001958,
+        "clear_old_item": 0.6865,
+        "install_new_item": 0.807208,
+        "session_activation_task": null,
+        "request_to_player_ready": 170.083792,
+        "first_ready_relative_to_install_end": 167.771667,
+        "install_end_to_playing": 199.737833,
+        "ready_to_playing": 31.966166,
+        "request_to_playing": 202.049958
+      }
+    },
+    {
+      "recording": "baseline-06-events",
+      "id": "0x46",
+      "kind": "prepared_hit",
+      "legacy_id": "0x47",
+      "legacy_transition_ms": 192.664667,
+      "legacy_begin_to_hit_ms": 0.698292,
+      "legacy_hit_to_playing_ms": 191.966375,
+      "request_ns": 51090742041,
+      "transition_ns": 51090873083,
+      "playing_ns": 51283531833,
+      "item_reused": true,
+      "session_already_ready": true,
+      "waiting_states": [
+        "WaitingEvaluatingBuffering",
+        "WaitingToMinimizeStalls"
+      ],
+      "segments_ms": {
+        "transition_to_lookup_result": 0.69025,
+        "lookup_result_to_playing": 191.9685,
+        "request_to_queue_resolved": 0.087125,
+        "queue_lookup": 0.055791,
+        "prepared_lookup": 0.02125,
+        "lookup_result_to_source_ready": 0.002625,
+        "source_resolve_await": null,
+        "item_create_or_reuse": 0.001959,
+        "clear_old_item": 0.290542,
+        "install_new_item": 0.619334,
+        "session_activation_task": null,
+        "request_to_player_ready": 122.829959,
+        "first_ready_relative_to_install_end": 121.32525,
+        "install_end_to_playing": 191.285083,
+        "ready_to_playing": 69.959833,
+        "request_to_playing": 192.789792
+      }
+    },
+    {
+      "recording": "baseline-07-events",
+      "id": "0x4c",
+      "kind": "prepared_hit",
+      "legacy_id": "0x4d",
+      "legacy_transition_ms": 123.65525,
+      "legacy_begin_to_hit_ms": 0.747167,
+      "legacy_hit_to_playing_ms": 122.908083,
+      "request_ns": 34551190875,
+      "transition_ns": 34551253416,
+      "playing_ns": 34674908375,
+      "item_reused": true,
+      "session_already_ready": true,
+      "waiting_states": [
+        "WaitingEvaluatingBuffering",
+        "WaitingToMinimizeStalls"
+      ],
+      "segments_ms": {
+        "transition_to_lookup_result": 0.744459,
+        "lookup_result_to_playing": 122.9105,
+        "request_to_queue_resolved": 0.046,
+        "queue_lookup": 0.032875,
+        "prepared_lookup": 0.0305,
+        "lookup_result_to_source_ready": 0.00325,
+        "source_resolve_await": null,
+        "item_create_or_reuse": 0.002292,
+        "clear_old_item": 0.380125,
+        "install_new_item": 0.849875,
+        "session_activation_task": null,
+        "request_to_player_ready": 119.185416,
+        "first_ready_relative_to_install_end": 117.422791,
+        "install_end_to_playing": 121.954875,
+        "ready_to_playing": 4.532084,
+        "request_to_playing": 123.7175
+      }
+    },
+    {
+      "recording": "baseline-09-events",
+      "id": "0x4e",
+      "kind": "prepared_hit",
+      "legacy_id": "0x4f",
+      "legacy_transition_ms": 173.787166,
+      "legacy_begin_to_hit_ms": 4.740166,
+      "legacy_hit_to_playing_ms": 169.047,
+      "request_ns": 13502408166,
+      "transition_ns": 13503480833,
+      "playing_ns": 13677266416,
+      "item_reused": true,
+      "session_already_ready": true,
+      "waiting_states": [
+        "WaitingEvaluatingBuffering"
+      ],
+      "segments_ms": {
+        "transition_to_lookup_result": 4.735917,
+        "lookup_result_to_playing": 169.049666,
+        "request_to_queue_resolved": 0.604667,
+        "queue_lookup": 0.04775,
+        "prepared_lookup": 0.028917,
+        "lookup_result_to_source_ready": 0.003041,
+        "source_resolve_await": null,
+        "item_create_or_reuse": 0.002333,
+        "clear_old_item": 3.839625,
+        "install_new_item": 2.621042,
+        "session_activation_task": null,
+        "request_to_player_ready": null,
+        "first_ready_relative_to_install_end": null,
+        "install_end_to_playing": 165.771458,
+        "ready_to_playing": null,
+        "request_to_playing": 174.85825
+      }
+    }
+  ],
+  "excluded": [],
+  "latency_gate": true
+}

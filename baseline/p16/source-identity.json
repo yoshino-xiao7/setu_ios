@@ -1,0 +1,16 @@
+{
+  "phase": "P16",
+  "stage": "20 current formal prepared-hit samples; no playback code change",
+  "mainSHA": "df1bdb51ceeeca509d66b08773a281aa3fd2b963",
+  "p15MergeTreeEqualsAccepted": true,
+  "deviceBuild": "/private/tmp/p15-device-derived/Build/Products/Debug-iphoneos/SetuIOSApp.app",
+  "deviceBuildScope": "accepted P15 build before two final P15-only UI corrections; no final-tree binary identity claim",
+  "files": {
+    "Sources/SetuIOSApp/Features/Music/MusicPlaybackController.swift": "19a7bffaec84b9ee14c556614f619d05b2c7266c63843424e6c1eeab4ce24443",
+    "Sources/SetuIOSApp/Features/Music/NextItemPreparer.swift": "3e25a33ee0e7c9d14b5b1dd562a19f35b951fd04ce6feca0880f3677defb43a6",
+    "Sources/SetuIOSApp/Features/Music/MusicPerformanceProbe.swift": "951e0730ba620be71adad3139edc98e61011e5e07a65d66571259d1ed96d2fb7",
+    "Sources/SetuIOSCore/Core/AppConfig.swift": "f4b39a7256b735e019432b3e57c9b9de5613e37ad7ab0a13b7788c8d4218af81"
+  },
+  "M13": "EXTERNAL EVIDENCE DEFERRED; not retried",
+  "sampleCount": 20
+}
