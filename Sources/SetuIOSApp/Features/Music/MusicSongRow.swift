@@ -40,7 +40,7 @@ struct MusicSongRow: View {
         title = track.title
         artist = track.artists.map(\.name).joined(separator: " / ")
         album = track.album?.title ?? "未知专辑"
-        coverURLString = track.artwork?.url; hasMV = track.mvId != nil
+        coverURLString = track.artwork?.url ?? track.album?.artwork?.url; hasMV = track.mvId != nil
         self.onPlay = onPlay; self.onArtist = onArtist; self.onAlbum = onAlbum
     }
     var isLiked = false

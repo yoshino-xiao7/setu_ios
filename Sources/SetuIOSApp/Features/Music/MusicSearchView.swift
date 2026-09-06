@@ -337,7 +337,7 @@ struct MusicRecentHistoryCard: View {
     }
     init(track: MusicV2Track, onPlay: @escaping () -> Void) {
         title = track.title; artist = track.artists.map(\.name).joined(separator: " / ")
-        artwork = track.artwork?.url; identity = track.id.rawValue; self.onPlay = onPlay
+        artwork = track.artwork?.url ?? track.album?.artwork?.url; identity = track.id.rawValue; self.onPlay = onPlay
     }
     let onPlay: () -> Void
 

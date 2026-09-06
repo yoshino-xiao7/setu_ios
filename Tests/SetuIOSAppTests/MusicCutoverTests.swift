@@ -6,6 +6,13 @@ import XCTest
 @MainActor
 final class MusicCutoverTests: XCTestCase {
     override func tearDown() { MusicV2URLProtocol.handler = nil; super.tearDown() }
+    func testAlbumArtworkIsUsedWhenTrackArtworkIsMissing() throws {
+        let json = MusicV2Fixtures.track.replacingOccurrences(of: "\"album\":null", with: #""album":{"id":null,"title":"Album","artwork":{"url":"https://example.test/cover.jpg"}}"#)
+        let track = try JSONDecoder().decode(MusicV2Track.self, from: Data(json.utf8))
+        XCTAssertEqual(MusicPlaybackTrack(track: track).coverURLString, "https://example.test/cover.jpg")
+        XCTAssertEqual(MusicRecentHistoryCard(track: track, onPlay: {}).artwork, "https://example.test/cover.jpg")
+    }
+
     func testDownloadEntriesUseFlagAwareResolver() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         for file in ["MusicHomeView.swift", "MusicSearchView.swift", "Player/NowPlayingSheet.swift"] {

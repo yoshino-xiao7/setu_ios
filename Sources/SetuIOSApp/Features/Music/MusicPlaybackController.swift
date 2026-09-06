@@ -1417,7 +1417,7 @@ struct MusicPlaybackTrack: Identifiable, Sendable, Codable {
         title = track.title
         artist = track.artists.map(\.name).joined(separator: " / ")
         album = track.album?.title ?? "未知专辑"
-        coverURLString = track.artwork?.url
+        coverURLString = track.artwork?.url ?? track.album?.artwork?.url
         durationMilliseconds = track.durationMs ?? 0
         // V2 MV summaries have no playback operation. Do not invent legacy IDs.
         mvID = nil
