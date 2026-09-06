@@ -217,11 +217,13 @@ final class MusicClientTests: XCTestCase {
     }
 
     func testAddPlaylistSongToAnotherPlaylistPostsSongPayload() async throws {
+        let captured = expectation(description: "request captured")
         let capturedRequests = MusicClientRequestProbe()
         let session = URLSession(
             configuration: .musicClientMock { request in
                 Task {
                     await capturedRequests.capture(request)
+                    captured.fulfill()
                 }
                 return #""ok""#
             }
@@ -234,6 +236,7 @@ final class MusicClientTests: XCTestCase {
 
         try await client.add(song: song, toPlaylist: 9)
 
+        await fulfillment(of: [captured], timeout: 2)
         let requests = await capturedRequests.requests
         XCTAssertEqual(requests.first?.method, "POST")
         XCTAssertEqual(requests.first?.url, "https://api.example.com/user/playlists/9/songs")

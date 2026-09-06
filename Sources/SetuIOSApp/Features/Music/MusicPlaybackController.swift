@@ -113,6 +113,7 @@ final class MusicPlaybackController {
     @ObservationIgnored private var radioBlocked: Set<MusicV2TrackID> = []
     @ObservationIgnored private var radioBlocksInFlight: Set<MusicV2TrackID> = []
 
+    @ObservationIgnored private var observationStart: TimeInterval?
     @ObservationIgnored var urlResolver: PlaybackURLResolver?
     /// An explicit quality change must not silently fall back on a failed request.
     @ObservationIgnored var resolveQualityURL: (@MainActor (MusicPlaybackTrack, MusicAudioQuality) async -> MusicURLResolution)?
@@ -307,6 +308,8 @@ final class MusicPlaybackController {
     @discardableResult
     func play(track: MusicPlaybackTrack, in tracks: [MusicPlaybackTrack] = [],
               context: PlaybackContext? = nil, playMode: MusicPlayMode? = nil) async -> Bool {
+        do { try await urlResolver?.authorizeNewSession(canonical: track.id.legacyID == nil) }
+        catch { showFeedback(.error(UserFacingErrorMapper.map(error))); return false }
         if context?.isInfinite != true { endRadioSession() }
         self.context = context ?? .singleTrack(trackID: track.contextTrackID, label: nil)
         updateRemoteCapabilities()
@@ -333,6 +336,7 @@ final class MusicPlaybackController {
     }
 
     private func beginTransition() {
+        observationStart = ProcessInfo.processInfo.systemUptime
         transitionID = UUID()
         resumeTask?.cancel(); resumeTask = nil
         cancelPendingQualityChange()
@@ -998,6 +1002,10 @@ final class MusicPlaybackController {
             #if DEBUG // P0.1 instrumentation
             playbackDiagnostics.playing()
             #endif // P0.1 instrumentation
+            if let observationStart {
+                MusicClientObservation.emit("playback.started", start: observationStart, v2: MusicClientObservation.playbackV2 || currentTrack?.id.legacyID == nil)
+                self.observationStart = nil
+            }
             endTransitionMeasurement()
         } else if isBuffering, let item = player.currentItem, loadingTimeout == nil {
             startLoadingTimeout(for: item)
@@ -1090,6 +1098,8 @@ final class MusicPlaybackController {
     }
 
     private func failPlayback(_ error: UserFacingError) {
+        MusicClientObservation.emit("playback.failed", start: observationStart, v2: MusicClientObservation.playbackV2 || currentTrack?.id.legacyID == nil)
+        observationStart = nil
         #if DEBUG // P0.1 instrumentation
         playbackDiagnostics.finish("DiagnosticFailed")
         #endif // P0.1 instrumentation

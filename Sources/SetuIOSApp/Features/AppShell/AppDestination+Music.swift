@@ -10,6 +10,7 @@ extension RootAppView {
         switch route {
         case .musicSearch(let initialQuery):
             MusicSearchView(environment: environment, player: musicPlayer, initialQuery: initialQuery)
+                .environment(\.musicPlaybackIntent, MusicPlaybackIntent(player: musicPlayer, store: musicStore))
         case .radioFM:
             if environment.config.musicFeatureFlags.radioFMEnabled {
                 RadioFMView(environment: environment, player: musicPlayer).environment(musicStore)
@@ -25,7 +26,7 @@ extension RootAppView {
             }
         case .dailyRecommend:
             if environment.config.musicFeatureFlags.usesV2Home {
-                DailyRecommendView(environment: environment).environment(musicStore)
+                DailyRecommendView(environment: environment, player: musicPlayer).environment(musicStore)
                     .environment(\.musicPlaybackIntent, MusicPlaybackIntent(player: musicPlayer, store: musicStore, libraryClient: environment.musicV2Client, libraryEnabled: environment.config.musicFeatureFlags.likedTracksEnabled))
             }
         case .likedTracks:
@@ -39,6 +40,7 @@ extension RootAppView {
             }
         case .musicHistory:
             MusicHistoryView(environment: environment, player: musicPlayer)
+                .environment(\.musicPlaybackIntent, MusicPlaybackIntent(player: musicPlayer, store: musicStore))
                 .environment(musicStore)
         case .playlists:
             MusicPlaylistsView(environment: environment, player: musicPlayer)

@@ -46,6 +46,8 @@ public actor PlaybackURLResolver {
     }
     private let fetch: @Sendable ([Int], MusicAudioQuality) async throws -> MusicUrlResponse
     private let v2: MusicV2Client?
+    private let usesV2Playback: Bool
+    private var admitted = false
     private let uptime: @Sendable () -> TimeInterval
     private let now: @Sendable () -> Date
     private var cache: [Key: ResolvedPlaybackURL] = [:]
@@ -53,10 +55,11 @@ public actor PlaybackURLResolver {
     private var generation = UUID()
     private var epochs: [Key: UUID] = [:]
 
-    public init(client: MusicClient, v2: MusicV2Client? = nil, now: @escaping @Sendable () -> Date = { Date() },
+    public init(client: MusicClient, v2: MusicV2Client? = nil, usesV2Playback: Bool = false, now: @escaping @Sendable () -> Date = { Date() },
                 uptime: @escaping @Sendable () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
         fetch = { try await client.url(songIDs: $0, level: $1.rawValue) }
         self.v2 = v2
+        self.usesV2Playback = usesV2Playback
         self.now = now
         self.uptime = uptime
     }
@@ -66,6 +69,7 @@ public actor PlaybackURLResolver {
         self.now = now
         self.fetch = fetch
         self.v2 = nil
+        self.usesV2Playback = false
         self.uptime = { ProcessInfo.processInfo.systemUptime }
     }
 
@@ -92,8 +96,10 @@ public actor PlaybackURLResolver {
                         allowsFallback: Bool = true) async throws -> [MusicPlaybackIdentity: Outcome] {
         try Task.checkCancellation()
         let owner = generation
+        if usesV2Playback && !admitted { try await authorizeNewSession() }
+        guard owner == generation else { throw CancellationError() }
         let keys = Array(Set(ids)).sorted().map { Key(id: $0, quality: quality, allowsFallback: allowsFallback, generation: owner,
-                                                     contractVersion: $0.legacyID == nil ? "3.0.0" : "legacy") }
+                                                     contractVersion: usesV2Playback || $0.legacyID == nil ? "3.0.0" : "legacy") }
         var result: [MusicPlaybackIdentity: Outcome] = [:]
         var pending: [Key: Flight] = [:]
         var missing: [Key] = []
@@ -114,9 +120,9 @@ public actor PlaybackURLResolver {
         }
         if !missing.isEmpty {
             let requested = missing.map(\.id)
-            let fetch = self.fetch, now = self.now, v2 = self.v2, uptime = self.uptime
+            let fetch = self.fetch, now = self.now, v2 = self.v2, uptime = self.uptime, cutover = usesV2Playback
             let flight = Flight(token: UUID(), forced: force, task: Task {
-                await Self.fetchIdentities(ids: requested, quality: quality, allowsFallback: allowsFallback, now: now, uptime: uptime, fetch: fetch, v2: v2)
+                await Self.fetchIdentities(ids: requested, cutover: cutover, quality: quality, allowsFallback: allowsFallback, now: now, uptime: uptime, fetch: fetch, v2: v2)
             })
             for key in missing { flights[key] = flight; pending[key] = flight; epochs[key] = flight.token }
         }
@@ -143,8 +149,20 @@ public actor PlaybackURLResolver {
         }
     }
 
+    /// Called only for a user-started queue. Remote closure must not interrupt active preparation/retry.
+    public func authorizeNewSession(canonical: Bool = false) async throws {
+        guard usesV2Playback || canonical else { return }
+        let owner = generation
+        guard let v2, try await v2.rolloutCapabilities().permitsAdmission else {
+            throw UserFacingError(message: "当前版本暂未开放新的 v2 播放会话")
+        }
+        guard owner == generation, !Task.isCancelled else { throw CancellationError() }
+        admitted = true
+    }
+
     public func reset() {
         generation = UUID()
+        admitted = false
         for flight in flights.values { flight.task.cancel() }
         flights.removeAll()
         cache.removeAll()
@@ -153,7 +171,7 @@ public actor PlaybackURLResolver {
 
     /// Identity selects the route. Legacy callers stay on v1 while gated detail pages may use canonical IDs.
     /// V2 failures/denials never fall back to v1 or manufacture a lifetime/quality.
-    private static func fetchIdentities(ids: [MusicPlaybackIdentity], quality: MusicAudioQuality,
+    private static func fetchIdentities(ids: [MusicPlaybackIdentity], cutover: Bool = false, quality: MusicAudioQuality,
                                         allowsFallback: Bool, now: @Sendable () -> Date,
                                         uptime: @escaping @Sendable () -> TimeInterval,
                                         fetch: @Sendable ([Int], MusicAudioQuality) async throws -> MusicUrlResponse,
@@ -161,8 +179,29 @@ public actor PlaybackURLResolver {
         var results: [MusicPlaybackIdentity: Outcome] = [:]
         let legacy = ids.compactMap(\.legacyID)
         if !legacy.isEmpty {
-            let values = await fetchURLs(ids: legacy, quality: quality, allowsFallback: allowsFallback, now: now, fetch: fetch)
-            for (id, value) in values { results[.legacy(id)] = value }
+            if cutover, let v2 {
+                do {
+                    guard legacy.allSatisfy({ $0 > 0 }) else { throw UserFacingError(message: "歌曲标识无效") }
+                    // Explicit Netease adapter lookup validates the token before changing transport.
+                    let tokens = legacy.map { MusicV2TrackID(rawValue: "netease:track:\($0)") }
+                    let tracks = try await v2.tracks(tokens).items
+                    guard Set(tracks.map(\.id)) == Set(tokens) else { throw UserFacingError(message: "歌曲来源不匹配") }
+                    let mapped = await fetchIdentities(ids: tokens.map(MusicPlaybackIdentity.canonical), quality: quality,
+                        allowsFallback: allowsFallback, now: now, uptime: uptime, fetch: fetch, v2: v2)
+                    for (id, token) in zip(legacy, tokens) {
+                        results[.legacy(id)] = mapped[.canonical(token)].map { outcome in outcome.map { value in
+                            ResolvedPlaybackURL(trackID: .legacy(id), url: value.url, effectiveLevel: value.effectiveLevel,
+                                resolvedAt: value.resolvedAt, expiresAt: value.refreshAt, notice: value.notice,
+                                usedFallback: value.usedFallback, sourceExpiresAt: value.sourceExpiresAt, uptime: uptime)
+                        } }
+                    }
+                } catch {
+                    for id in legacy { results[.legacy(id)] = .failure(UserFacingErrorMapper.map(error)) }
+                }
+            } else {
+                let values = await fetchURLs(ids: legacy, quality: quality, allowsFallback: allowsFallback, now: now, fetch: fetch)
+                for (id, value) in values { results[.legacy(id)] = value }
+            }
         }
         let canonical = ids.compactMap { if case .canonical(let id) = $0 { return id }; return nil as MusicV2TrackID? }
         guard !canonical.isEmpty else { return results }

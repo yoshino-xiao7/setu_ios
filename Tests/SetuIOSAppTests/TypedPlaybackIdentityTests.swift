@@ -63,7 +63,13 @@ final class TypedPlaybackIdentityTests: XCTestCase {
 
     func testTypedPlayerEntryQualitySkipRetryAndUserReset() async throws {
         let capture = MusicV2RequestCapture()
-        MusicV2URLProtocol.handler = { request in capture.append(request); return .init(body: typedSourceResponse(request), headers: ["X-Setu-Playback-Contract": "3.0.0"]) }
+        MusicV2URLProtocol.handler = { request in
+            capture.append(request)
+            if request.url?.path == "/user/music/rollout/capabilities" {
+                return .init(body: Data(#"{"version":1,"admitNewPlaybackSession":true,"validForSeconds":30}"#.utf8))
+            }
+            return .init(body: typedSourceResponse(request), headers: ["X-Setu-Playback-Contract": "3.0.0"])
+        }
         let player = MusicPlaybackController(persistsPlayback: false)
         defer { player.stop() }
         player.urlResolver = PlaybackURLResolver(client: musicTestClient(), v2: makeMusicV2Client())
@@ -91,7 +97,8 @@ final class TypedPlaybackIdentityTests: XCTestCase {
         XCTAssertEqual(player.currentTrack?.id, tracks[1].id)
         await player.retryCurrent(); player.pause()
         XCTAssertTrue(player.player === engine)
-        XCTAssertTrue(capture.requests.allSatisfy { $0.url!.path.contains("/user/music/v2/tracks/") })
+        XCTAssertTrue(capture.requests.allSatisfy { $0.url!.path.contains("/user/music/v2/tracks/") || $0.url!.path == "/user/music/rollout/capabilities" })
+        XCTAssertEqual(capture.requests.filter { $0.url!.path == "/user/music/rollout/capabilities" }.count, 1, "Skip/retry must not re-admit the existing queue")
         XCTAssertTrue(capture.requests.contains { $0.url!.path.contains("opaque:B") })
         player.resetForUserChange()
         XCTAssertNil(player.currentTrack)

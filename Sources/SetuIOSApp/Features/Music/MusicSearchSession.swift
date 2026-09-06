@@ -113,8 +113,10 @@ final class MusicSearchSession {
     }
 
     func submit() async {
+        let started = ProcessInfo.processInfo.systemUptime
         let work = startSearch()
         await work?.value
+        if work != nil, pager.initialError == nil { MusicClientObservation.emit("search.ready", start: started, v2: false) }
     }
 
     private func startSearch() -> Task<Void, Never>? {

@@ -18,6 +18,16 @@ public struct MusicV2Client: Sendable {
 
     public init(apiClient: APIClient) { self.apiClient = apiClient }
 
+    public func rolloutCapabilities() async throws -> MusicRolloutCapabilities {
+        try await apiClient.get("/user/music/rollout/capabilities", signed: false)
+    }
+
+    public func observe(event: String, durationMs: Double, transport: String, count: Int = 1) async {
+        struct Event: Encodable, Sendable { let event: String; let durationMs: Double; let transport: String; let count: Int }
+        let _: EmptyResponse? = try? await apiClient.post("/user/music/rollout/events",
+            body: Event(event: event, durationMs: durationMs, transport: transport, count: count), signed: false)
+    }
+
     public func home() async throws -> MusicV2HomeFeed {
         try await get("/home")
     }
