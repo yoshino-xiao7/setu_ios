@@ -24,65 +24,59 @@ struct CollectionDetailView: View {
     private let pageSize = 24
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: SetuSpacing.lg) {
-                if let feedback {
-                    SetuFeedbackBanner(feedback: feedback)
-                }
+        SetuBoard {
+            if let feedback {
+                SetuFeedbackBanner(feedback: feedback)
+            }
 
-                if let initialError, !items.isEmpty {
-                    SetuLoadMoreFooter(state: .failed(initialError)) {
-                        Task { await loadFirstPage() }
-                    }
-                }
-
-                switch infoState {
-                case .idle, .loading:
-                    SetuCard {
-                        SetuEmptyState(title: "正在加载收藏夹", systemImage: "rectangle.stack", isLoading: true)
-                    }
-                case .failed(let message):
-                    SetuCard {
-                        SetuEmptyState(title: "收藏夹加载失败", message: message, systemImage: "rectangle.stack.badge.minus")
-                    }
-                case .loaded(let info):
-                    infoSection(info)
-                    actionSection(info)
-                }
-
-                if isInitialLoading {
-                    SetuCard {
-                        SetuEmptyState(title: "正在加载图片", systemImage: "photo.on.rectangle", isLoading: true)
-                    }
-                } else if items.isEmpty {
-                    itemEmptyState
-                } else {
-                    SetuSectionHeader(title: "收藏图片", subtitle: "共 \(total) 张")
-                    LazyVGrid(columns: gridColumns, spacing: SetuSpacing.md) {
-                        ForEach(items) { item in
-                            CollectionItemTile(item: item) {
-                                previewItem = UserImagePreviewItem(collectionItem: item)
-                            } onSetCover: {
-                                Task { await setCover(item) }
-                            } onMove: {
-                                moveContext = CollectionItemMoveContext(currentCollectionID: collectionID, item: item)
-                            } onRemove: {
-                                Task { await remove(item) }
-                            }
-                            .onAppear {
-                                if item.id == items.last?.id {
-                                    Task { await loadMore() }
-                                }
-                            }
-                        }
-                    }
-                    SetuLoadMoreFooter(state: loadMoreFooterState) {
-                        Task { await loadMore() }
-                    }
+            if let initialError, !items.isEmpty {
+                SetuLoadMoreFooter(state: .failed(initialError)) {
+                    Task { await loadFirstPage() }
                 }
             }
-            .padding(.horizontal, SetuSpacing.lg)
-            .padding(.vertical, SetuSpacing.md)
+
+            switch infoState {
+            case .idle, .loading:
+                SetuCard {
+                    SetuEmptyState(title: "正在加载收藏夹", systemImage: "rectangle.stack", isLoading: true)
+                }
+            case .failed(let message):
+                SetuCard {
+                    SetuEmptyState(title: "收藏夹加载失败", message: message, systemImage: "rectangle.stack.badge.minus")
+                }
+            case .loaded(let info):
+                infoSection(info)
+                actionSection(info)
+            }
+
+            if isInitialLoading {
+                SetuCard {
+                    SetuEmptyState(title: "正在加载图片", systemImage: "photo.on.rectangle", isLoading: true)
+                }
+            } else if items.isEmpty {
+                itemEmptyState
+            } else {
+                SetuSectionHeader(title: "收藏图片", subtitle: "共 \(total) 张")
+                SetuMosaic(items: items, aspectRatio: { CGFloat($0.image?.width ?? 1) / CGFloat(max($0.image?.height ?? 1, 1)) }) { item in
+                    CollectionItemTile(item: item) {
+                        previewItem = UserImagePreviewItem(collectionItem: item)
+                    } onSetCover: {
+                        Task { await setCover(item) }
+                    } onMove: {
+                        moveContext = CollectionItemMoveContext(currentCollectionID: collectionID, item: item)
+                    } onRemove: {
+                        Task { await remove(item) }
+                    }
+                    .onAppear {
+                        if item.id == items.last?.id {
+                            Task { await loadMore() }
+                        }
+                    }
+                }
+                SetuLoadMoreFooter(state: loadMoreFooterState) {
+                    Task { await loadMore() }
+                }
+            }
         }
         .setuBackground()
         .setuFeedbackPresentation($feedback)
@@ -150,13 +144,6 @@ struct CollectionDetailView: View {
                 SetuEmptyState(title: "暂无图片", message: "收藏夹加入图片后会显示在这里。", systemImage: "photo")
             }
         }
-    }
-
-    private var gridColumns: [GridItem] {
-        if dynamicTypeSize.isAccessibilitySize {
-            return [GridItem(.flexible())]
-        }
-        return [GridItem(.adaptive(minimum: 156), spacing: SetuSpacing.md)]
     }
 
     private var hasMore: Bool { pager.hasMore }
@@ -371,7 +358,8 @@ private struct CollectionItemTile: View {
                 Button(action: onPreview) {
                     ContentGridImageView(
                         urlString: item.image?.urlSmall ?? item.image?.urlRegular ?? item.image?.urlOriginal,
-                        accessibilityLabel: item.image?.title ?? "未命名作品"
+                        accessibilityLabel: item.image?.title ?? "未命名作品",
+                        aspectRatio: CGFloat(item.image?.width ?? 1) / CGFloat(max(item.image?.height ?? 1, 1))
                     )
                 }
                 .buttonStyle(.plain)
@@ -488,7 +476,7 @@ private struct CollectionItemMoveSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            SetuBoard {
                 Section {
                     SetuCard {
                         VStack(alignment: .leading, spacing: SetuSpacing.md) {
@@ -549,8 +537,7 @@ private struct CollectionItemMoveSheet: View {
                     }
                 }
             }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
+
             .setuBackground()
             .navigationTitle("移动/复制")
             .toolbar {

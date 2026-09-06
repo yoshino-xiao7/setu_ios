@@ -24,62 +24,59 @@ struct CollectionSquareView: View {
     private let pageSize = 20
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: SetuSpacing.lg) {
-                adaptiveSortPicker
+        SetuBoard {
+            adaptiveSortPicker
                 .onChange(of: sort) {
                     Task { await loadFirstPage(clearExisting: true) }
                 }
 
-                if let feedback {
-                    SetuFeedbackBanner(feedback: feedback)
-                }
+            if let feedback {
+                SetuFeedbackBanner(feedback: feedback)
+            }
 
-                if let initialError, !collections.isEmpty {
-                    SetuLoadMoreFooter(state: .failed(initialError)) {
-                        Task { await loadFirstPage() }
-                    }
-                }
-
-                if isInitialLoading {
-                    SetuCard {
-                        SetuEmptyState(
-                            title: "正在加载收藏夹广场",
-                            message: "正在整理公开收藏夹。",
-                            systemImage: "globe.asia.australia",
-                            isLoading: true
-                        )
-                    }
-                } else if collections.isEmpty {
-                    emptyState
-                } else {
-                    SetuSectionHeader(title: "公开收藏夹", subtitle: "共 \(total) 个")
-                        .accessibilityIdentifier("collections.square.loaded")
-                    LazyVGrid(columns: gridColumns, spacing: SetuSpacing.md) {
-                        ForEach(collections) { collection in
-                            CollectionSquareTile(collection: collection) {
-                                router.navigate(to: .publicCollectionDetail(collection.id))
-                            } onLike: {
-                                Task { await like(collection) }
-                            } onFavorite: {
-                                Task { await favorite(collection) }
-                            } onOwner: {
-                                router.navigate(to: .publicUserProfile(collection.userId))
-                            }
-                            .onAppear {
-                                if collection.id == collections.last?.id {
-                                    Task { await loadMore() }
-                                }
-                            }
-                        }
-                    }
-                    SetuLoadMoreFooter(state: loadMoreFooterState) {
-                        Task { await loadMore() }
-                    }
+            if let initialError, !collections.isEmpty {
+                SetuLoadMoreFooter(state: .failed(initialError)) {
+                    Task { await loadFirstPage() }
                 }
             }
-            .padding(.horizontal, SetuSpacing.lg)
-            .padding(.vertical, SetuSpacing.md)
+
+            if isInitialLoading {
+                SetuCard {
+                    SetuEmptyState(
+                        title: "正在加载收藏夹广场",
+                        message: "正在整理公开收藏夹。",
+                        systemImage: "globe.asia.australia",
+                        isLoading: true
+                    )
+                }
+            } else if collections.isEmpty {
+                emptyState
+            } else {
+                SetuSectionHeader(title: "公开收藏夹", subtitle: "共 \(total) 个")
+                    .accessibilityIdentifier("collections.square.loaded")
+                SetuMosaic(
+                    items: collections,
+                    aspectRatio: { CGFloat($0.previewImages?.first?.width ?? 1) / CGFloat(max($0.previewImages?.first?.height ?? 1, 1)) }
+                ) { collection in
+                    CollectionSquareTile(collection: collection) {
+                        router.navigate(to: .publicCollectionDetail(collection.id))
+                    } onLike: {
+                        Task { await like(collection) }
+                    } onFavorite: {
+                        Task { await favorite(collection) }
+                    } onOwner: {
+                        router.navigate(to: .publicUserProfile(collection.userId))
+                    }
+                    .onAppear {
+                        if collection.id == collections.last?.id {
+                            Task { await loadMore() }
+                        }
+                    }
+                }
+                SetuLoadMoreFooter(state: loadMoreFooterState) {
+                    Task { await loadMore() }
+                }
+            }
         }
         .setuBackground()
         .setuFeedbackPresentation($feedback)
@@ -103,19 +100,9 @@ struct CollectionSquareView: View {
 
     @ViewBuilder
     private var adaptiveSortPicker: some View {
-        if dynamicTypeSize.isAccessibilitySize {
-            sortPicker.pickerStyle(.menu)
-        } else {
-            sortPicker.pickerStyle(.segmented)
-        }
-    }
-
-    private var sortPicker: some View {
-        Picker("排序", selection: $sort) {
-            Text("热门").tag("hot")
-            Text("最新").tag("new")
-            Text("点赞").tag("like")
-        }
+        SetuFilterBar(
+            options: [.init(value: "hot", title: "热门"), .init(value: "new", title: "最新"), .init(value: "like", title: "点赞")],
+            selection: $sort)
     }
 
     @ViewBuilder
@@ -135,13 +122,6 @@ struct CollectionSquareView: View {
                 SetuEmptyState(title: "暂无公开收藏夹", message: "换个关键词或排序方式再试试。", systemImage: "rectangle.stack")
             }
         }
-    }
-
-    private var gridColumns: [GridItem] {
-        if dynamicTypeSize.isAccessibilitySize {
-            return [GridItem(.flexible())]
-        }
-        return [GridItem(.adaptive(minimum: 156), spacing: SetuSpacing.md)]
     }
 
     private var hasMore: Bool { pager.hasMore }
@@ -230,7 +210,9 @@ private struct CollectionSquareTile: View {
                     VStack(alignment: .leading, spacing: 0) {
                         ContentGridImageView(
                             urlString: collection.coverUrl ?? collection.previewImages?.first?.bestURLString,
-                            accessibilityLabel: collection.name
+                            accessibilityLabel: collection.name,
+                            aspectRatio: CGFloat(collection.previewImages?.first?.width ?? 1)
+                                / CGFloat(max(collection.previewImages?.first?.height ?? 1, 1))
                         )
 
                         Text(collection.name)

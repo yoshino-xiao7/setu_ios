@@ -50,18 +50,18 @@ struct GalleryUploadBatchesView: View {
     private let pageSize = 10
 
     var body: some View {
-        List {
+        SetuBoard {
             createSection
 
             if let actionFeedback {
                 SetuFeedbackBanner(feedback: actionFeedback)
-                .setuListRow()
+
             }
 
             SetuCard {
                 adaptiveStatusPicker
             }
-            .setuListRow()
+
             .onChange(of: statusFilter) {
                 Task { await loadFirstPage(clearExisting: true) }
             }
@@ -79,53 +79,42 @@ struct GalleryUploadBatchesView: View {
                             action: { Task { await loadFirstPage() } }
                         )
                     }
-                    .setuListRow()
+
                 } else {
                     ContentImageStateSection(title: "暂无投稿记录", message: "选择图片并提交后，审核进度会显示在这里。", systemImage: "tray")
                 }
             } else {
-                SetuCard {
-                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                        SetuSectionHeader(title: "共 \(total) 条投稿", subtitle: "投稿记录")
-                        ForEach(Array(batches.enumerated()), id: \.element.id) { index, batch in
-                            if index > 0 {
-                                Divider()
-                                    .overlay(SetuColor.separator)
-                            }
-                            Button {
-                                router.navigate(to: .galleryUploadDetail(batch.batchId))
+                SetuSectionHeader(title: "共 \(total) 条投稿", subtitle: "投稿记录")
+                SetuRecordBoard(items: batches) { batch in
+                    SetuRecordCard(
+                        headline: (batch.title?.isEmpty == false ? batch.title : nil) ?? "未命名投稿", supporting: batch.author ?? "未知作者",
+                        status: .init(
+                            batch.statusTitle, tone: batch.status == "PUBLISHED" ? .success : batch.status == "REJECTED" ? .danger : .info),
+                        fields: [.init("图片", "\(batch.itemCount)"), .init("已上传", "\(batch.uploadedCount)"),
+                                 .init("已发布", "\(batch.publishedCount)"),
+                                 .init("创建时间", SetuDateFormatter.string(from: batch.createdAt), isNumeric: false)],
+                        onTap: { router.navigate(to: .galleryUploadDetail(batch.batchId)) }
+                    ) {
+                        if canCancel(batch) {
+                            Button(role: .destructive) {
+                                cancellationCandidate = batch
                             } label: {
-                                GalleryUploadBatchRow(batch: batch)
-                            }
-                            .buttonStyle(.plain)
-                            .onAppear {
-                                if batch.id == batches.last?.id {
-                                    Task { await loadMore() }
-                                }
-                            }
-
-                            if canCancel(batch) {
-                                Button(role: .destructive) {
-                                    cancellationCandidate = batch
-                                } label: {
-                                    Label("取消投稿", systemImage: "xmark.circle")
-                                        .frame(minHeight: 44, alignment: .leading)
-                                }
-                                .font(SetuTypography.caption)
-                                .buttonStyle(.borderless)
+                                Label("取消投稿", systemImage: "xmark.circle").frame(minHeight: 44)
                             }
                         }
                     }
+                    .onAppear {
+                        if batch.id == batches.last?.id { Task { await loadMore() } }
+                    }
                 }
-                .setuListRow()
 
                 SetuLoadMoreFooter(state: loadMoreFooterState) {
                     Task { await loadMore() }
                 }
-                .setuListRow()
+
             }
         }
-        .listStyle(.plain)
+
         .setuBackground()
         .navigationTitle("图库投稿")
         .navigationBarBackButtonHidden(hasMeaningfulDraft)
@@ -187,21 +176,12 @@ struct GalleryUploadBatchesView: View {
 
     @ViewBuilder
     private var adaptiveStatusPicker: some View {
-        if dynamicTypeSize.isAccessibilitySize {
-            statusPicker.pickerStyle(.menu)
-        } else {
-            statusPicker.pickerStyle(.segmented)
-        }
-    }
-
-    private var statusPicker: some View {
-        Picker("状态", selection: $statusFilter) {
-            Text("全部").tag("ALL")
-            Text("上传中").tag("UPLOADING")
-            Text("待审核").tag("WAITING_MANUAL_REVIEW")
-            Text("已发布").tag("PUBLISHED")
-            Text("已拒绝").tag("REJECTED")
-        }
+        SetuFilterBar(
+            options: [
+                .init(value: "ALL", title: "全部"), .init(value: "UPLOADING", title: "上传中"),
+                .init(value: "WAITING_MANUAL_REVIEW", title: "待审核"), .init(value: "PUBLISHED", title: "已发布"),
+                .init(value: "REJECTED", title: "已拒绝"),
+            ], selection: $statusFilter)
     }
 
     private var createSection: some View {
@@ -227,7 +207,7 @@ struct GalleryUploadBatchesView: View {
                 }
             }
         }
-        .setuListRow()
+
     }
 
     private var imageSelectionStep: some View {

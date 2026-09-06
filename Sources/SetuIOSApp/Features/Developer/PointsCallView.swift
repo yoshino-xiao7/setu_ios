@@ -27,23 +27,23 @@ struct PointsCallView: View {
     private let costPerCall = 20
 
     var body: some View {
-        List {
+        SetuBoard {
             overviewSection
             requestSection
             if let userFacingError {
                 Section {
                     SetuFeedbackBanner(error: userFacingError, onAction: handleErrorAction)
                 }
-                .setuListRow()
+
             } else if let feedback {
                 Section {
                     SetuFeedbackBanner(feedback: feedback)
                 }
-                .setuListRow()
+
             }
             resultsSection
         }
-        .listStyle(.plain)
+
         .setuBackground()
         .setuFeedbackPresentation($feedback)
         .accessibilityIdentifier("points.page")
@@ -114,7 +114,7 @@ struct PointsCallView: View {
                 }
             }
         }
-        .setuListRow()
+
     }
 
     private var statLayout: AnyLayout {
@@ -149,13 +149,13 @@ struct PointsCallView: View {
                     Stepper("数量：\(num)", value: $num, in: 1...20)
                     TextField("关键词", text: $keyword)
                         #if os(iOS)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
                         #endif
                     TextField("标签，逗号分隔", text: $tagText)
                         #if os(iOS)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
                         #endif
                     Toggle("排除 AI 图片", isOn: $excludeAI)
                         .tint(SetuColor.brandPink)
@@ -177,7 +177,7 @@ struct PointsCallView: View {
                 }
             }
         }
-        .setuListRow()
+
     }
 
     @ViewBuilder
@@ -186,25 +186,23 @@ struct PointsCallView: View {
             Section {
                 SetuEmptyState(title: "暂无图片", message: "设置参数后获取图片", systemImage: "photo.on.rectangle")
             }
-            .setuListRow()
+
         } else {
             Section {
                 SetuSectionHeader(title: "获取结果", subtitle: "\(results.count) 张图片")
                     .padding(.horizontal, SetuSpacing.lg)
-                    .setuListRow()
-                ForEach(results) { item in
-                    SetuCard {
-                        PointsResultRow(item: item, favoriteState: favoriteStates[item.id] ?? .idle) {
-                            previewTarget = UserImagePreviewItem(image: item)
-                        } onFavorite: {
-                            favoriteTarget = item
-                        } onRetryFavoriteStatus: {
-                            Task { await retryDefaultFavoriteStatus(for: item) }
-                        } onDeleteRequest: {
-                            deleteTarget = item
-                        }
+
+                SetuRecordBoard(items: results) { item in
+                    PointsResultRow(item: item, favoriteState: favoriteStates[item.id] ?? .idle) {
+                        previewTarget = UserImagePreviewItem(image: item)
+                    } onFavorite: {
+                        favoriteTarget = item
+                    } onRetryFavoriteStatus: {
+                        Task { await retryDefaultFavoriteStatus(for: item) }
+                    } onDeleteRequest: {
+                        deleteTarget = item
                     }
-                    .setuListRow()
+
                 }
             }
         }
@@ -390,43 +388,19 @@ private struct PointsResultRow: View {
     let onDeleteRequest: () -> Void
 
     var body: some View {
-        let layout =
-            dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
-            : AnyLayout(HStackLayout(spacing: 12))
-        return layout {
-            SetuRemoteImage(
-                urlString: item.previewURLString,
-                accessibilityLabel: "图片：\(item.title)",
-                onActivate: onPreview,
-                activationHint: "打开预览，可保存或分享"
-            )
-            VStack(alignment: .leading, spacing: 6) {
-                Text(item.title)
-                    .font(SetuTypography.headline)
-                    .foregroundStyle(SetuColor.textPrimary)
-                    .lineLimit(2)
-                Text(item.author)
-                    .font(.footnote)
-                    .foregroundStyle(SetuColor.textSecondary)
-                ViewThatFits(in: .horizontal) {
-                    metadata
-                }
-                .font(.caption)
-                .foregroundStyle(SetuColor.textSecondary)
-
-                if case .failed = favoriteState {
-                    Button("重试收藏状态", action: onRetryFavoriteStatus)
-                        .buttonStyle(.bordered)
-                        .frame(minHeight: 44)
-                        .accessibilityIdentifier("points.favorite.retry.\(item.id)")
-                }
+        SetuRecordCard(
+            headline: item.title, supporting: item.author,
+            thumbnailURLString: item.previewURLString,
+            fields: [.init("画幅", "\(item.width) × \(item.height)")], onTap: onPreview
+        ) {
+            metadata
+            if case .failed = favoriteState {
+                Button("重试收藏状态", action: onRetryFavoriteStatus)
+                    .buttonStyle(.bordered).frame(minHeight: 44)
+                    .accessibilityIdentifier("points.favorite.retry.\(item.id)")
             }
-            Spacer()
             actionsMenu
         }
-        .padding(.vertical, 4)
-        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("points.result.\(item.id)")
     }
 
@@ -506,7 +480,7 @@ private struct PointsFavoriteSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            SetuBoard {
                 Section {
                     SetuCard {
                         VStack(alignment: .leading, spacing: SetuSpacing.md) {
@@ -526,16 +500,15 @@ private struct PointsFavoriteSheet: View {
                         }
                     }
                 }
-                .setuListRow()
 
                 if let feedback {
                     Section {
                         SetuFeedbackBanner(feedback: feedback)
                     }
-                    .setuListRow()
+
                 }
             }
-            .listStyle(.plain)
+
             .setuBackground()
             .navigationTitle("收藏图片")
             .toolbar {
@@ -598,7 +571,7 @@ private struct PointsDeleteRequestSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            SetuBoard {
                 Section {
                     SetuCard {
                         VStack(alignment: .leading, spacing: SetuSpacing.md) {
@@ -609,13 +582,12 @@ private struct PointsDeleteRequestSheet: View {
                         }
                     }
                 }
-                .setuListRow()
 
                 if let feedback {
                     Section {
                         SetuFeedbackBanner(feedback: feedback)
                     }
-                    .setuListRow()
+
                 }
 
                 Section {
@@ -628,9 +600,9 @@ private struct PointsDeleteRequestSheet: View {
                         }
                     }
                 }
-                .setuListRow()
+
             }
-            .listStyle(.plain)
+
             .setuBackground()
             .navigationTitle("申请删除")
             .toolbar {

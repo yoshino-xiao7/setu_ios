@@ -16,11 +16,11 @@ struct MusicHistoryView: View {
     @State private var showingClearConfirmation = false
 
     var body: some View {
-        List {
+        SetuBoard {
             if let feedback {
                 Section {
                     SetuFeedbackBanner(feedback: feedback)
-                    .setuListRow()
+
                 }
             }
 
@@ -44,14 +44,14 @@ struct MusicHistoryView: View {
                                 .buttonStyle(.borderedProminent)
                             }
                         }
-                        .setuListRow()
+
                     }
                 } else {
                     MusicHistoryStateSection(title: "播放历史", stateTitle: "暂无播放历史", systemImage: "clock.arrow.circlepath")
                 }
             } else {
                 Section {
-                    ForEach(records) { record in
+                    SetuRecordBoard(items: records) { record in
                         MusicHistoryRow(record: record) {
                             Task {
                                 await play(
@@ -78,7 +78,7 @@ struct MusicHistoryView: View {
                 }
             }
         }
-        .listStyle(.plain)
+
         .setuBackground()
         .setuFeedbackPresentation($feedback)
         .navigationTitle("播放历史")
@@ -140,7 +140,7 @@ struct MusicHistoryView: View {
                         }
                     }
                 }
-                .setuListRow()
+
             }
         }
     }
@@ -245,31 +245,16 @@ private struct MusicHistoryRow: View {
     let onAddToPlaylist: () -> Void
 
     var body: some View {
-        Group {
-            if dynamicTypeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: SetuSpacing.sm) {
-                    HStack(alignment: .top, spacing: SetuSpacing.md) {
-                        MusicArtworkView(urlString: record.coverUrl, onTap: onPlay)
-                        recordSummary
-                    }
-                    HStack(spacing: SetuSpacing.sm) {
-                        Spacer(minLength: 0)
-                        rowActions
-                    }
-                }
-            } else {
-                HStack(spacing: SetuSpacing.md) {
-                    MusicArtworkView(urlString: record.coverUrl, onTap: onPlay)
-                    recordSummary
-                    Spacer()
-                    VStack(spacing: SetuSpacing.xs) {
-                        rowActions
-                    }
-                }
-            }
+        SetuRecordCard(
+            headline: record.songName, supporting: record.artistName,
+            thumbnailURLString: record.coverUrl,
+            fields: [
+                .init("专辑", record.albumName ?? "暂无专辑", isNumeric: false),
+                .init("播放时间", record.playTime, isNumeric: false),
+            ], onTap: onPlay
+        ) {
+            HStack(spacing: SetuSpacing.md) { rowActions }
         }
-        .padding(.vertical, SetuSpacing.sm)
-        .contentShape(Rectangle())
     }
 
     private var recordSummary: some View {

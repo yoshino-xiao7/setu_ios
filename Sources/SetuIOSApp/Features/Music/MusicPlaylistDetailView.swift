@@ -22,7 +22,7 @@ struct MusicPlaylistDetailView: View {
     @State private var showingBulkAddSheet = false
 
     var body: some View {
-        List {
+        SetuBoard {
             if let feedback {
                 Section {
                     SetuFeedbackBanner(feedback: feedback)
@@ -52,8 +52,10 @@ struct MusicPlaylistDetailView: View {
             case .loaded(let playlist):
                 Section {
                     SetuCard {
-                        HStack(spacing: SetuSpacing.md) {
-                            MusicArtworkView(urlString: playlist.coverUrl)
+                        VStack(alignment: .leading, spacing: SetuSpacing.lg) {
+                            MusicArtworkView(
+                                urlString: playlist.coverUrl, width: nil, height: 220,
+                                cornerRadius: SetuRadius.xl, artworkSize: .custom(width: 640, height: 640))
                             VStack(alignment: .leading, spacing: SetuSpacing.sm) {
                                 Text(playlist.name)
                                     .font(SetuTypography.title)
@@ -90,7 +92,7 @@ struct MusicPlaylistDetailView: View {
                         VStack(alignment: .leading, spacing: SetuSpacing.md) {
                             SetuSectionHeader(title: "播放模式")
                             adaptivePlaybackModePicker
-                            .tint(SetuColor.brandPink)
+                                .tint(SetuColor.brandPink)
                         }
                     }
                 }
@@ -126,34 +128,31 @@ struct MusicPlaylistDetailView: View {
                                 .frame(minHeight: 44)
                             }
                         }
-                        ForEach(songs) { song in
-                            SetuCard(hasShadow: false) {
-                                PlaylistSongRow(
-                                    song: song,
-                                    isSelectionMode: isSelectionMode,
-                                    isSelected: selectedSongIDs.contains(song.songId)
-                                ) {
-                                    toggleSelection(song)
-                                } onPlay: {
-                                    Task {
-                                        await play(
-                                            song,
-                                            context: .playlist(id: .local(.legacy(playlist.id)), label: playlist.name),
-                                            queueTracks: songs.map { MusicPlaybackTrack(song: $0) }
-                                        )
-                                    }
-                                } onRemove: {
-                                    songPendingRemoval = song
-                                    showingRemoveConfirmation = true
+                        SetuRecordBoard(items: songs) { song in
+                            PlaylistSongRow(
+                                song: song,
+                                isSelectionMode: isSelectionMode,
+                                isSelected: selectedSongIDs.contains(song.songId)
+                            ) {
+                                toggleSelection(song)
+                            } onPlay: {
+                                Task {
+                                    await play(
+                                        song,
+                                        context: .playlist(id: .local(.legacy(playlist.id)), label: playlist.name),
+                                        queueTracks: songs.map { MusicPlaybackTrack(song: $0) }
+                                    )
                                 }
+                            } onRemove: {
+                                songPendingRemoval = song
+                                showingRemoveConfirmation = true
                             }
                         }
                     }
                 }
             }
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
+
         .setuBackground()
         .setuFeedbackPresentation($feedback)
         .navigationTitle("歌单详情")
@@ -218,13 +217,7 @@ struct MusicPlaylistDetailView: View {
         }
         .task { await load() }
         .refreshable { await load(force: true) }
-        .safeAreaInset(edge: .bottom) {
-            if isSelectionMode {
-                playlistBatchActionBar
-                    .padding(.horizontal)
-                    .padding(.top, 6)
-            }
-        }
+        .setuActionDock(isPresented: isSelectionMode) { playlistBatchActionBar }
     }
 
     private var selectedSongsForBulkAction: [PlaylistSong] {
@@ -233,52 +226,44 @@ struct MusicPlaylistDetailView: View {
     }
 
     private var playlistBatchActionBar: some View {
-        HStack(spacing: SetuSpacing.sm) {
-            Text("已选 \(selectedSongIDs.count) 首")
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(SetuColor.textPrimary)
-            Spacer()
-            Button {
-                showingBulkAddSheet = true
-            } label: {
-                Label("加入歌单", systemImage: "text.badge.plus")
+        VStack(alignment: .leading, spacing: SetuSpacing.sm) {
+            Text("已选 \(selectedSongIDs.count) 首").font(SetuTypography.label)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: SetuSpacing.md) { batchActions }
+                VStack(alignment: .leading, spacing: SetuSpacing.sm) { batchActions }
             }
-            .disabled(selectedSongIDs.isEmpty)
-            Button(role: .destructive) {
-                showingBulkRemoveConfirmation = true
-            } label: {
-                Label("移除", systemImage: "trash")
-            }
-            .disabled(selectedSongIDs.isEmpty)
         }
-        .font(.caption.weight(.semibold))
-        .padding(.horizontal, SetuSpacing.md)
-        .padding(.vertical, SetuSpacing.sm)
-        .background(SetuColor.surface, in: Capsule())
-        .padding(.horizontal)
-        .shadow(color: SetuColor.brandPink.opacity(0.16), radius: 14, y: 8)
+    }
+
+    @ViewBuilder
+    private var batchActions: some View {
+        Button {
+            showingBulkAddSheet = true
+        } label: {
+            Label("加入歌单", systemImage: "text.badge.plus").frame(minHeight: 44)
+        }
+        .disabled(selectedSongIDs.isEmpty)
+        Button(role: .destructive) {
+            showingBulkRemoveConfirmation = true
+        } label: {
+            Label("移除", systemImage: "trash").frame(minHeight: 44)
+        }
+        .disabled(selectedSongIDs.isEmpty)
     }
 
     @ViewBuilder
     private var adaptivePlaybackModePicker: some View {
-        if dynamicTypeSize.isAccessibilitySize {
-            playbackModePicker.pickerStyle(.menu)
-        } else {
-            playbackModePicker.pickerStyle(.segmented)
-        }
+        SetuFilterBar(
+            options: [
+                .init(value: "sequence", title: "顺序"), .init(value: "random", title: "随机"),
+                .init(value: "loop", title: "循环"), .init(value: "single", title: "单曲"),
+            ],
+            selection: Binding(
+                get: { store.playlistDetails[playlistID]?.value?.playMode ?? "sequence" },
+                set: { mode in Task { await setMode(mode) } }), accessibilityTitle: "播放模式")
     }
 
-    private var playbackModePicker: some View {
-        Picker("播放模式", selection: Binding(
-            get: { store.playlistDetails[playlistID]?.value?.playMode ?? "sequence" },
-            set: { mode in Task { await setMode(mode) } }
-        )) {
-            Text("顺序").tag("sequence")
-            Text("随机").tag("random")
-            Text("循环").tag("loop")
-            Text("单曲").tag("single")
-        }
-    }
+
 
     @ViewBuilder
     private var nowPlayingSection: some View {
@@ -438,7 +423,7 @@ private struct EditMusicPlaylistSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            SetuBoard {
                 Section {
                     SetuCard {
                         VStack(alignment: .leading, spacing: SetuSpacing.md) {
@@ -450,7 +435,7 @@ private struct EditMusicPlaylistSheet: View {
                                 .textFieldStyle(.roundedBorder)
                             TextField("封面图片地址", text: $coverUrl)
                                 #if os(iOS)
-                                .textInputAutocapitalization(.never)
+                                    .textInputAutocapitalization(.never)
                                 #endif
                                 .textFieldStyle(.roundedBorder)
                             Toggle(isOn: $isPublic) {
@@ -467,8 +452,7 @@ private struct EditMusicPlaylistSheet: View {
                     }
                 }
             }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
+
             .setuBackground()
             .navigationTitle("编辑歌单")
             .toolbar {
@@ -529,64 +513,34 @@ private struct PlaylistSongRow: View {
     let onRemove: () -> Void
 
     var body: some View {
-        HStack(spacing: SetuSpacing.md) {
+        SetuRecordCard(
+            headline: song.songName, supporting: song.artistName,
+            status: isSelectionMode ? .init(isSelected ? "已选中" : "未选中", tone: isSelected ? .brand : .muted) : nil,
+            thumbnailURLString: song.coverUrl,
+            fields: [.init("专辑", song.albumName ?? "暂无专辑", isNumeric: false)],
+            onTap: isSelectionMode ? onToggleSelection : onPlay
+        ) {
             if isSelectionMode {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.title3)
-                    .foregroundStyle(isSelected ? SetuColor.brandPink : SetuColor.textTertiary)
-                    .frame(width: 44, height: 44)
-                    .accessibilityLabel(isSelected ? "已选中" : "未选中")
-            }
-            MusicArtworkView(urlString: song.coverUrl)
-            Button {
-                if isSelectionMode {
-                    onToggleSelection()
-                } else {
-                    onPlay()
+                Button(action: onToggleSelection) {
+                    Label(isSelected ? "取消选择" : "选择歌曲", systemImage: isSelected ? "checkmark.circle.fill" : "circle")
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                 }
-            } label: {
-                VStack(alignment: .leading, spacing: SetuSpacing.xs) {
-                    Text(song.songName)
-                        .font(SetuTypography.headline)
-                        .foregroundStyle(SetuColor.textPrimary)
-                        .lineLimit(2)
-                    Text(song.artistName)
-                        .font(SetuTypography.caption)
-                        .foregroundStyle(SetuColor.textSecondary)
-                    if let albumName = song.albumName, !albumName.isEmpty {
-                        Text(albumName)
-                            .font(.caption)
-                            .foregroundStyle(SetuColor.textSecondary)
-                    }
+                .accessibilityLabel("选择 \(song.songName)")
+            } else {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: SetuSpacing.md) { songActions }
+                    VStack(alignment: .leading, spacing: SetuSpacing.sm) { songActions }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-            }
-            .setuButtonFeedback()
-            .accessibilityLabel(isSelectionMode ? "选择 \(song.songName)" : "播放 \(song.songName)")
-            if !isSelectionMode {
-                Button(action: onPlay) {
-                    Image(systemName: "play.circle")
-                        .font(.title3)
-                        .foregroundStyle(SetuColor.brandPink)
-                        .frame(width: 44, height: 44)
-                }
-                .buttonStyle(.borderless)
-                Button(role: .destructive, action: onRemove) {
-                    Image(systemName: "minus.circle")
-                        .font(.title3)
-                        .foregroundStyle(SetuColor.danger)
-                        .frame(width: 44, height: 44)
-                }
-                .buttonStyle(.borderless)
             }
         }
-        .padding(.vertical, SetuSpacing.xs)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            if isSelectionMode {
-                onToggleSelection()
-            }
-        }
+    }
+}
+
+private extension PlaylistSongRow {
+    @ViewBuilder var songActions: some View {
+        Button(action: onPlay) { Label("播放", systemImage: "play.circle").frame(minWidth: 44, minHeight: 44) }
+            .accessibilityLabel("播放 \(song.songName)")
+        Button(role: .destructive, action: onRemove) { Label("移除", systemImage: "minus.circle").frame(minWidth: 44, minHeight: 44) }
+            .accessibilityLabel("移除 \(song.songName)")
     }
 }

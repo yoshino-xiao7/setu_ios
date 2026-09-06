@@ -13,7 +13,7 @@ struct ApiKeyListView: View {
     @State private var renameTarget: ApiKeyItem?
 
     var body: some View {
-        List {
+        SetuBoard {
             Section {
                 SetuCard {
                     VStack(alignment: .leading, spacing: SetuSpacing.md) {
@@ -24,7 +24,7 @@ struct ApiKeyListView: View {
                             .foregroundStyle(SetuColor.textPrimary)
                         TextField("总调用配额（留空为无限制）", text: $totalQuotaText)
                             #if os(iOS)
-                            .keyboardType(.numberPad)
+                                .keyboardType(.numberPad)
                             #endif
                             .textFieldStyle(.roundedBorder)
                         SetuPrimaryButton {
@@ -43,7 +43,8 @@ struct ApiKeyListView: View {
                                     .textSelection(.enabled)
                                     .padding(SetuSpacing.md)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                    .background(SetuColor.surfaceMuted, in: RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous))
+                                    .background(
+                                        SetuColor.surfaceMuted, in: RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous))
 
                                 Button {
                                     copyCreatedKey(createdKey)
@@ -70,8 +71,7 @@ struct ApiKeyListView: View {
 
             content
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
+
         .setuBackground()
         .setuFeedbackPresentation($feedback)
         .navigationTitle("API Keys")
@@ -148,15 +148,13 @@ struct ApiKeyListView: View {
                     }
                 }
                 Section {
-                    ForEach(keys) { key in
-                        SetuCard {
-                            ApiKeyRow(key: key) {
-                                Task { await toggle(key) }
-                            } onRename: {
-                                renameTarget = key
-                            } onDelete: {
-                                Task { await delete(key) }
-                            }
+                    SetuRecordBoard(items: keys) { key in
+                        ApiKeyRow(key: key) {
+                            Task { await toggle(key) }
+                        } onRename: {
+                            renameTarget = key
+                        } onDelete: {
+                            Task { await delete(key) }
                         }
                     }
                 }
@@ -241,44 +239,27 @@ private struct ApiKeyRow: View {
     let onDelete: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(key.name)
-                    .font(SetuTypography.headline)
-                    .foregroundStyle(SetuColor.textPrimary)
-                Spacer()
-                SetuPill(
-                    text: key.isEnabled ? "启用" : "禁用",
-                    systemImage: key.isEnabled ? "checkmark.circle" : "pause.circle",
-                    tone: key.isEnabled ? .success : .muted
-                )
+        SetuRecordCard(
+            headline: key.name,
+            status: .init(key.isEnabled ? "启用" : "禁用", tone: key.isEnabled ? .success : .muted),
+            fields: [
+                .init("今日调用", "\(key.callsToday)"), .init("历史总量", "\(key.totalCalls)"),
+                .init("每日限额", "\(key.dailyQuota)"), .init("总限额", key.totalQuota.map(String.init) ?? "∞"),
+            ]
+        ) {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: SetuSpacing.md) { keyActions }
+                VStack(alignment: .leading, spacing: SetuSpacing.sm) { keyActions }
             }
-            HStack {
-                Label("今日 \(key.callsToday)", systemImage: "calendar")
-                Spacer()
-                Label("总计 \(key.totalCalls)", systemImage: "sum")
-            }
-            .font(.footnote)
-            .foregroundStyle(SetuColor.textSecondary)
-            HStack {
-                Label("每日限额 \(key.dailyQuota)", systemImage: "speedometer")
-                Spacer()
-                Label("总限额 \(key.totalQuota.map(String.init) ?? "∞")", systemImage: "chart.bar")
-            }
-            .font(.footnote)
-            .foregroundStyle(SetuColor.textSecondary)
-            HStack {
-                Button(key.isEnabled ? "禁用" : "启用", action: onToggle)
-                    .frame(minWidth: 44, minHeight: 44)
-                Button("重命名", action: onRename)
-                    .frame(minWidth: 44, minHeight: 44)
-                Spacer()
-                Button("删除", role: .destructive, action: onDelete)
-                    .frame(minWidth: 44, minHeight: 44)
-            }
-            .buttonStyle(.borderless)
         }
-        .padding(.vertical, SetuSpacing.xs)
+    }
+}
+
+private extension ApiKeyRow {
+    @ViewBuilder var keyActions: some View {
+        Button(key.isEnabled ? "禁用" : "启用", action: onToggle).frame(minWidth: 44, minHeight: 44)
+        Button("重命名", action: onRename).frame(minWidth: 44, minHeight: 44)
+        Button("删除", role: .destructive, action: onDelete).frame(minWidth: 44, minHeight: 44)
     }
 }
 
@@ -300,7 +281,7 @@ private struct ApiKeyRenameSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            SetuBoard {
                 Section {
                     SetuCard {
                         VStack(alignment: .leading, spacing: SetuSpacing.md) {
@@ -318,8 +299,7 @@ private struct ApiKeyRenameSheet: View {
                     }
                 }
             }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
+
             .setuBackground()
             .navigationTitle("重命名 API Key")
             .toolbar {

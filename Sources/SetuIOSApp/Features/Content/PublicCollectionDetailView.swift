@@ -21,69 +21,63 @@ struct PublicCollectionDetailView: View {
     private let pageSize = 24
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: SetuSpacing.lg) {
-                if let feedback {
-                    SetuFeedbackBanner(feedback: feedback)
-                }
+        SetuBoard {
+            if let feedback {
+                SetuFeedbackBanner(feedback: feedback)
+            }
 
-                if let initialError, !items.isEmpty {
-                    SetuLoadMoreFooter(state: .failed(initialError)) {
-                        Task { await loadFirstPage() }
-                    }
-                }
-
-                switch infoState {
-                case .idle, .loading:
-                    SetuCard {
-                        SetuEmptyState(
-                            title: "正在加载公开收藏夹",
-                            message: "正在同步收藏夹信息与分享状态。",
-                            systemImage: "rectangle.stack",
-                            isLoading: true
-                        )
-                    }
-                case .failed(let message):
-                    SetuCard {
-                        SetuEmptyState(title: "公开收藏夹加载失败", message: message, systemImage: "rectangle.stack.badge.minus")
-                    }
-                case .loaded(let info):
-                    headerSection(info)
-                    publicActionSection(info)
-                }
-
-                if isInitialLoading {
-                    SetuCard {
-                        SetuEmptyState(
-                            title: "正在加载图片",
-                            message: "图片列表马上就好。",
-                            systemImage: "photo.on.rectangle",
-                            isLoading: true
-                        )
-                    }
-                } else if items.isEmpty {
-                    itemEmptyState
-                } else {
-                    SetuSectionHeader(title: "公开图片", subtitle: "共 \(total) 张")
-                    LazyVGrid(columns: gridColumns, spacing: SetuSpacing.md) {
-                        ForEach(items) { item in
-                            PublicCollectionImageTile(item: item) {
-                                previewItem = UserImagePreviewItem(collectionItem: item)
-                            }
-                            .onAppear {
-                                if item.id == items.last?.id {
-                                    Task { await loadMore() }
-                                }
-                            }
-                        }
-                    }
-                    SetuLoadMoreFooter(state: loadMoreFooterState) {
-                        Task { await loadMore() }
-                    }
+            if let initialError, !items.isEmpty {
+                SetuLoadMoreFooter(state: .failed(initialError)) {
+                    Task { await loadFirstPage() }
                 }
             }
-            .padding(.horizontal, SetuSpacing.lg)
-            .padding(.vertical, SetuSpacing.md)
+
+            switch infoState {
+            case .idle, .loading:
+                SetuCard {
+                    SetuEmptyState(
+                        title: "正在加载公开收藏夹",
+                        message: "正在同步收藏夹信息与分享状态。",
+                        systemImage: "rectangle.stack",
+                        isLoading: true
+                    )
+                }
+            case .failed(let message):
+                SetuCard {
+                    SetuEmptyState(title: "公开收藏夹加载失败", message: message, systemImage: "rectangle.stack.badge.minus")
+                }
+            case .loaded(let info):
+                headerSection(info)
+                publicActionSection(info)
+            }
+
+            if isInitialLoading {
+                SetuCard {
+                    SetuEmptyState(
+                        title: "正在加载图片",
+                        message: "图片列表马上就好。",
+                        systemImage: "photo.on.rectangle",
+                        isLoading: true
+                    )
+                }
+            } else if items.isEmpty {
+                itemEmptyState
+            } else {
+                SetuSectionHeader(title: "公开图片", subtitle: "共 \(total) 张")
+                SetuMosaic(items: items, aspectRatio: { CGFloat($0.image?.width ?? 1) / CGFloat(max($0.image?.height ?? 1, 1)) }) { item in
+                    PublicCollectionImageTile(item: item) {
+                        previewItem = UserImagePreviewItem(collectionItem: item)
+                    }
+                    .onAppear {
+                        if item.id == items.last?.id {
+                            Task { await loadMore() }
+                        }
+                    }
+                }
+                SetuLoadMoreFooter(state: loadMoreFooterState) {
+                    Task { await loadMore() }
+                }
+            }
         }
         .setuBackground()
         .setuFeedbackPresentation($feedback)
@@ -112,13 +106,6 @@ struct PublicCollectionDetailView: View {
                 SetuEmptyState(title: "暂无图片", message: "这个公开收藏夹还没有可展示的图片。", systemImage: "photo")
             }
         }
-    }
-
-    private var gridColumns: [GridItem] {
-        if dynamicTypeSize.isAccessibilitySize {
-            return [GridItem(.flexible())]
-        }
-        return [GridItem(.adaptive(minimum: 156), spacing: SetuSpacing.md)]
     }
 
     private var hasMore: Bool { pager.hasMore }
@@ -304,7 +291,8 @@ private struct PublicCollectionImageTile: View {
                 VStack(alignment: .leading, spacing: 0) {
                     ContentGridImageView(
                         urlString: item.image?.urlSmall ?? item.image?.urlRegular ?? item.image?.urlOriginal,
-                        accessibilityLabel: item.image?.title ?? "未命名作品"
+                        accessibilityLabel: item.image?.title ?? "未命名作品",
+                        aspectRatio: CGFloat(item.image?.width ?? 1) / CGFloat(max(item.image?.height ?? 1, 1))
                     )
 
                     VStack(alignment: .leading, spacing: SetuSpacing.xs) {

@@ -8,7 +8,7 @@ struct ImageDeleteRequestDetailView: View {
     @State private var state: LoadState<ImageDeleteRequestDetail> = .idle
 
     var body: some View {
-        List {
+        SetuBoard {
             switch state {
             case .idle, .loading:
                 ImageDeleteStateSection(title: "申请详情", stateTitle: "正在加载申请详情", systemImage: "trash", isLoading: true)
@@ -30,7 +30,7 @@ struct ImageDeleteRequestDetailView: View {
                 }
             }
         }
-        .listStyle(.plain)
+
         .setuBackground()
         .navigationTitle("申请详情")
         .task { await load() }
@@ -39,22 +39,13 @@ struct ImageDeleteRequestDetailView: View {
 
     @ViewBuilder
     private func statusSection(_ detail: ImageDeleteRequestDetail) -> some View {
-        Section {
-            SetuCard {
-                VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                    SetuSectionHeader(title: "申请状态")
-                    HStack {
-                        RequestStatusBadge(title: detail.statusTitle, status: detail.status)
-                        Spacer()
-                        Label(SetuDateFormatter.string(from: detail.createdAt), systemImage: "calendar")
-                            .font(SetuTypography.caption)
-                            .foregroundStyle(SetuColor.textSecondary)
-                    }
-                    ImageDeleteMetadataRow(title: "申请人", value: detail.userNickname.isEmpty ? detail.userEmail : detail.userNickname)
-                }
-            }
-            .setuListRow()
-        }
+        SetuRecordCard(
+            headline: "申请状态",
+            status: .init(detail.statusTitle, tone: detail.status == 0 ? .warning : detail.status == 1 ? .success : .danger),
+            fields: [
+                .init("申请人", detail.userNickname.isEmpty ? detail.userEmail : detail.userNickname, isNumeric: false),
+                .init("申请时间", SetuDateFormatter.string(from: detail.createdAt), isNumeric: false),
+            ])
     }
 
     @ViewBuilder
@@ -89,42 +80,20 @@ struct ImageDeleteRequestDetailView: View {
                     }
                 }
             }
-            .setuListRow()
+
         }
     }
 
     @ViewBuilder
     private func reasonSection(_ detail: ImageDeleteRequestDetail) -> some View {
-        Section {
-            SetuCard {
-                VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                    SetuSectionHeader(title: "申请原因")
-                    Text(detail.reason.isEmpty ? "无" : detail.reason)
-                        .font(SetuTypography.body)
-                        .foregroundStyle(detail.reason.isEmpty ? SetuColor.textSecondary : SetuColor.textPrimary)
-                }
-            }
-            .setuListRow()
-        }
+        SetuRecordCard(headline: "申请原因", supporting: detail.reason.isEmpty ? "无" : detail.reason)
     }
 
     @ViewBuilder
     private func reviewSection(_ detail: ImageDeleteRequestDetail) -> some View {
-        Section {
-            SetuCard {
-                VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                    SetuSectionHeader(title: "处理结果")
-                    ImageDeleteMetadataRow(
-                        title: "处理时间",
-                        value: detail.reviewedAt.map { SetuDateFormatter.string(from: $0, style: .full) } ?? "尚未处理"
-                    )
-                    if let remark = detail.adminRemark, !remark.isEmpty {
-                        ImageDeleteMetadataRow(title: "备注", value: remark)
-                    }
-                }
-            }
-            .setuListRow()
-        }
+        SetuRecordCard(
+            headline: "处理结果", supporting: detail.adminRemark,
+            fields: [.init("处理时间", detail.reviewedAt.map { SetuDateFormatter.string(from: $0, style: .full) } ?? "尚未处理", isNumeric: false)])
     }
 
     private func load() async {

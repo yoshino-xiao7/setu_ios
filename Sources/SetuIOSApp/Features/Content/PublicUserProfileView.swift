@@ -9,7 +9,7 @@ struct PublicUserProfileView: View {
     @State private var state: LoadState<PublicUserProfileContent> = .idle
 
     var body: some View {
-        List {
+        SetuBoard {
             switch state {
             case .idle, .loading:
                 PublicUserStateSection(title: "用户主页", stateTitle: "正在加载用户主页", systemImage: "person.crop.circle", isLoading: true)
@@ -28,18 +28,11 @@ struct PublicUserProfileView: View {
                 collectionsSection(content.collections, total: content.profile.publicCollectionCount)
             }
         }
-        .listStyle(.plain)
+
         .setuBackground()
         .navigationTitle("用户主页")
         .task { await load() }
         .refreshable { await load() }
-    }
-
-    private var aiGridColumns: [GridItem] {
-        if dynamicTypeSize.isAccessibilitySize {
-            return [GridItem(.flexible())]
-        }
-        return [GridItem(.adaptive(minimum: 156), spacing: SetuSpacing.md)]
     }
 
     private func load() async {
@@ -88,7 +81,7 @@ struct PublicUserProfileView: View {
                     Spacer(minLength: 0)
                 }
             }
-            .setuListRow()
+
         }
     }
 
@@ -120,19 +113,17 @@ struct PublicUserProfileView: View {
                 SetuCard {
                     VStack(alignment: .leading, spacing: SetuSpacing.md) {
                         SetuSectionHeader(title: "公开 AI 作品", subtitle: sectionCountText(loaded: works.count, total: total, unit: "件"))
-                        LazyVGrid(columns: aiGridColumns, spacing: SetuSpacing.md) {
-                            ForEach(works) { work in
-                                AiGenerationGridTile(
-                                    work: work,
-                                    footerTitle: SetuDateFormatter.string(from: work.createdAt)
-                                ) {
-                                    router.navigate(to: .publicAiWork(PublicAiWorkSnapshot(work: work)))
-                                }
+                        SetuMosaic(items: works, aspectRatio: { CGFloat($0.width) / CGFloat(max($0.height, 1)) }) { work in
+                            AiGenerationGridTile(
+                                work: work,
+                                footerTitle: SetuDateFormatter.string(from: work.createdAt)
+                            ) {
+                                router.navigate(to: .publicAiWork(PublicAiWorkSnapshot(work: work)))
                             }
                         }
                     }
                 }
-                .setuListRow()
+
             }
         }
     }
@@ -151,23 +142,24 @@ struct PublicUserProfileView: View {
                 SetuCard {
                     VStack(alignment: .leading, spacing: SetuSpacing.md) {
                         SetuSectionHeader(title: "公开收藏夹", subtitle: sectionCountText(loaded: collections.count, total: total, unit: "个"))
-                        VStack(spacing: 0) {
-                            ForEach(Array(collections.enumerated()), id: \.element.id) { index, collection in
-                                Button {
-                                    router.navigate(to: .publicCollectionDetail(collection.id))
-                                } label: {
+                        SetuMosaic(
+                            items: collections,
+                            aspectRatio: {
+                                CGFloat($0.previewImages?.first?.width ?? 1) / CGFloat(max($0.previewImages?.first?.height ?? 1, 1))
+                            }
+                        ) { collection in
+                            Button {
+                                router.navigate(to: .publicCollectionDetail(collection.id))
+                            } label: {
+                                SetuCard {
                                     PublicUserCollectionRow(collection: collection)
                                 }
-                                .buttonStyle(.plain)
-
-                                if index < collections.count - 1 {
-                                    Divider().overlay(SetuColor.separator)
-                                }
                             }
+                            .buttonStyle(SetuSurfaceButtonStyle())
                         }
                     }
                 }
-                .setuListRow()
+
             }
         }
     }

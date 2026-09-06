@@ -78,7 +78,7 @@ struct AiGenerationGridTile: View {
     }
 
     private var imageAspectRatio: CGFloat {
-        guard height > 0 else {
+        guard width > 0, height > 0 else {
             return 1
         }
         return CGFloat(width) / CGFloat(height)

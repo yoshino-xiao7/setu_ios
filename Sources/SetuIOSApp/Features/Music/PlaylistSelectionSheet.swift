@@ -25,20 +25,21 @@ struct PlaylistSelectionSheet<Summary: View>: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            SetuBoard {
                 Section {
-                    SetuCard { summary() }.setuListRow()
+                    SetuCard { summary() }
                 }
                 if let feedback {
-                    Section { SetuFeedbackBanner(feedback: feedback).setuListRow() }
+                    Section { SetuFeedbackBanner(feedback: feedback) }
                 }
                 switch store.playlists.state {
                 case .idle, .loading:
                     MusicStateSection(title: "选择歌单", stateTitle: "正在加载歌单", systemImage: "music.note.list", isLoading: true)
                 case .failed(let error):
                     Section {
-                        SetuEmptyState(title: "歌单加载失败", message: error, systemImage: "exclamationmark.triangle",
-                                       actionTitle: "重试", action: { Task { await store.loadPlaylists(force: true) } })
+                        SetuEmptyState(
+                            title: "歌单加载失败", message: error, systemImage: "exclamationmark.triangle",
+                            actionTitle: "重试", action: { Task { await store.loadPlaylists(force: true) } })
                     }
                 case .loaded(let playlists):
                     let targets = playlists.filter { $0.id != excludingPlaylistID }
@@ -52,29 +53,13 @@ struct PlaylistSelectionSheet<Summary: View>: View {
                                 systemImage: "music.note.list"
                             )
                         }
-                    } else if presentation == .song {
-                        Section {
-                            SetuCard {
-                                VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                                    SetuSectionHeader(title: "选择歌单")
-                                    VStack(spacing: 0) {
-                                        ForEach(Array(targets.enumerated()), id: \.element.id) { index, playlist in
-                                            selectionButton(playlist)
-                                            if index < targets.count - 1 { Divider().overlay(SetuColor.separator) }
-                                        }
-                                    }
-                                }
-                            }.setuListRow()
-                        }
                     } else {
-                        Section(presentation == .bulk ? "选择目标歌单" : "选择歌单") {
-                            ForEach(targets) { selectionButton($0) }
-                        }
+                        SetuSectionHeader(title: presentation == .bulk ? "选择目标歌单" : "选择歌单")
+                        SetuRecordBoard(items: targets) { selectionButton($0) }
                     }
                 }
             }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
+
             .setuBackground()
             .navigationTitle(title)
             .toolbar {
@@ -87,39 +72,10 @@ struct PlaylistSelectionSheet<Summary: View>: View {
     }
 
     private func selectionButton(_ playlist: UserMusicPlaylist) -> some View {
-        Button {
-            Task { await add(to: playlist) }
-        } label: {
-            HStack(spacing: SetuSpacing.md) {
-                if presentation == .song {
-                    Image(systemName: "music.note.list")
-                        .foregroundStyle(SetuColor.brandPink)
-                        .frame(width: 36, height: 36)
-                        .background(SetuColor.brandSoft.opacity(0.18), in: RoundedRectangle(cornerRadius: SetuRadius.sm))
-                    Text(playlist.name)
-                        .font(SetuTypography.body)
-                        .foregroundStyle(SetuColor.textPrimary)
-                        .lineLimit(2)
-                } else {
-                    MusicArtworkView(urlString: playlist.coverUrl)
-                    VStack(alignment: .leading, spacing: SetuSpacing.xs) {
-                        Text(playlist.name)
-                            .font(SetuTypography.headline)
-                            .foregroundStyle(SetuColor.textPrimary)
-                            .lineLimit(1)
-                        Text("\(playlist.songCount ?? 0) 首")
-                            .font(SetuTypography.caption)
-                            .foregroundStyle(SetuColor.textSecondary)
-                    }
-                }
-                Spacer()
-                Image(systemName: "plus.circle.fill")
-                    .foregroundStyle(presentation == .song ? SetuColor.brandInk : SetuColor.brandPink)
-            }
-            .frame(minHeight: presentation == .song ? 44 : 56)
-            .contentShape(Rectangle())
-        }
-        .setuButtonFeedback()
+        SetuRecordCard(
+            headline: playlist.name, supporting: "\(playlist.songCount ?? 0) 首歌曲",
+            thumbnailURLString: playlist.coverUrl, onTap: { Task { await add(to: playlist) } }
+        )
         .disabled(isAdding || requests.isEmpty)
     }
 

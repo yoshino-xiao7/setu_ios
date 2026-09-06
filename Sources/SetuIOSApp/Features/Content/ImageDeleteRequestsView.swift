@@ -19,7 +19,7 @@ struct ImageDeleteRequestsView: View {
     private let pageSize = 10
 
     var body: some View {
-        List {
+        SetuBoard {
             if isInitialLoading {
                 ImageDeleteStateSection(title: "删除申请", stateTitle: "正在加载删除申请", systemImage: "trash", isLoading: true)
             } else if requests.isEmpty {
@@ -37,40 +37,30 @@ struct ImageDeleteRequestsView: View {
                 }
             } else {
                 Section {
-                    SetuCard {
-                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                            SetuSectionHeader(title: "删除申请", subtitle: "共 \(total) 条")
-                            VStack(spacing: 0) {
-                                ForEach(Array(requests.enumerated()), id: \.element.id) { index, request in
-                                    Button {
-                                        router.navigate(to: .imageDeleteRequestDetail(request.id))
-                                    } label: {
-                                        ImageDeleteRequestRow(request: request)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .onAppear {
-                                        if request.id == requests.last?.id {
-                                            Task { await loadMore() }
-                                        }
-                                    }
 
-                                    if index < requests.count - 1 {
-                                        Divider().overlay(SetuColor.separator)
-                                    }
-                                }
+                    SetuSectionHeader(title: "删除申请", subtitle: "共 \(total) 条")
+                    SetuRecordBoard(items: requests) { request in
+                        Button {
+                            router.navigate(to: .imageDeleteRequestDetail(request.id))
+                        } label: {
+                            ImageDeleteRequestRow(request: request)
+                        }
+                        .buttonStyle(.plain)
+                        .onAppear {
+                            if request.id == requests.last?.id {
+                                Task { await loadMore() }
                             }
                         }
                     }
-                    .setuListRow()
 
                     SetuLoadMoreFooter(state: loadMoreFooterState) {
                         Task { await loadMore() }
                     }
-                    .setuListRow()
+
                 }
             }
         }
-        .listStyle(.plain)
+
         .setuBackground()
         .navigationTitle("我的删除申请")
         .task { await loadFirstPage() }
@@ -110,36 +100,14 @@ struct ImageDeleteRequestRow: View {
     let request: ImageDeleteRequestItem
 
     var body: some View {
-        Group {
-            if dynamicTypeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: SetuSpacing.sm) {
-                    HStack(alignment: .top, spacing: SetuSpacing.md) {
-                        thumbnail
-                        titleText
-                    }
-                    RequestStatusBadge(title: request.statusTitle, status: request.status)
-                    requestDetails
-                }
-            } else {
-                HStack(alignment: .top, spacing: SetuSpacing.md) {
-                    thumbnail
-                    VStack(alignment: .leading, spacing: SetuSpacing.xs) {
-                        HStack(alignment: .top) {
-                            titleText
-                            Spacer()
-                            RequestStatusBadge(title: request.statusTitle, status: request.status)
-                        }
-                        requestDetails
-                    }
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(SetuColor.textTertiary)
-                        .accessibilityHidden(true)
-                }
-            }
-        }
-        .padding(.vertical, SetuSpacing.sm)
-        .contentShape(Rectangle())
+        SetuRecordCard(
+            headline: request.imageTitle ?? "未命名作品", supporting: request.reason,
+            status: .init(request.statusTitle, tone: request.status == 0 ? .warning : request.status == 1 ? .success : .danger),
+            thumbnailURLString: request.thumbnailUrl,
+            fields: [
+                .init("作者", request.imageAuthor ?? "未知作者", isNumeric: false),
+                .init("申请时间", SetuDateFormatter.string(from: request.createdAt), isNumeric: false),
+            ])
     }
 
     private var thumbnail: some View {

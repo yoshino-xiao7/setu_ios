@@ -22,23 +22,23 @@ struct AiDeleteRequestsView: View {
     private let pageSize = 20
 
     var body: some View {
-        List {
+        SetuBoard {
             Section {
                 SetuCard {
                     VStack(alignment: .leading, spacing: SetuSpacing.md) {
                         SetuSectionHeader(title: "筛选")
                         adaptiveStatusPicker
-                        .onChange(of: statusFilter) {
-                            Task { await loadFirstPage(clearExisting: true) }
-                        }
+                            .onChange(of: statusFilter) {
+                                Task { await loadFirstPage(clearExisting: true) }
+                            }
                     }
                 }
-                .setuListRow()
+
             }
 
             content
         }
-        .listStyle(.plain)
+
         .setuBackground()
         .navigationTitle("AI 删除申请")
         .toolbar {
@@ -64,20 +64,11 @@ struct AiDeleteRequestsView: View {
 
     @ViewBuilder
     private var adaptiveStatusPicker: some View {
-        if dynamicTypeSize.isAccessibilitySize {
-            statusPicker.pickerStyle(.menu)
-        } else {
-            statusPicker.pickerStyle(.segmented)
-        }
-    }
-
-    private var statusPicker: some View {
-        Picker("状态", selection: $statusFilter) {
-            Text("全部").tag("ALL")
-            Text("待审核").tag("WAITING")
-            Text("已通过").tag("APPROVED")
-            Text("已拒绝").tag("REJECTED")
-        }
+        SetuFilterBar(
+            options: [
+                .init(value: "ALL", title: "全部"), .init(value: "WAITING", title: "待审核"), .init(value: "APPROVED", title: "已通过"),
+                .init(value: "REJECTED", title: "已拒绝"),
+            ], selection: $statusFilter)
     }
 
     @ViewBuilder
@@ -104,31 +95,21 @@ struct AiDeleteRequestsView: View {
             }
         } else {
             Section {
-                SetuCard {
-                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                        SetuSectionHeader(title: "删除申请", subtitle: "共 \(total) 条")
-                        VStack(spacing: 0) {
-                            ForEach(Array(requests.enumerated()), id: \.element.id) { index, request in
-                                UserAiDeleteRequestRow(request: request)
-                                    .onAppear {
-                                        if request.id == requests.last?.id {
-                                            Task { await loadMore() }
-                                        }
-                                    }
 
-                                if index < requests.count - 1 {
-                                    Divider().overlay(SetuColor.separator)
-                                }
+                SetuSectionHeader(title: "删除申请", subtitle: "共 \(total) 条")
+                SetuRecordBoard(items: requests) { request in
+                    UserAiDeleteRequestRow(request: request)
+                        .onAppear {
+                            if request.id == requests.last?.id {
+                                Task { await loadMore() }
                             }
                         }
-                    }
                 }
-                .setuListRow()
 
                 SetuLoadMoreFooter(state: loadMoreFooterState) {
                     Task { await loadMore() }
                 }
-                .setuListRow()
+
             }
         }
     }
@@ -167,42 +148,16 @@ private struct UserAiDeleteRequestRow: View {
     let request: AiGenerationDeleteRequest
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SetuSpacing.md) {
-            HStack(alignment: .top, spacing: SetuSpacing.md) {
-                AiDeleteRequestThumbnail(urlString: request.job?.imageUrl, status: request.job?.statusTitle)
-                VStack(alignment: .leading, spacing: SetuSpacing.xs) {
-                    Text(request.job?.promptCn ?? "删除申请")
-                        .font(SetuTypography.headline)
-                        .foregroundStyle(SetuColor.textPrimary)
-                    Text("图片删除申请")
-                        .font(SetuTypography.caption)
-                        .foregroundStyle(SetuColor.textSecondary)
-                    HStack(spacing: 8) {
-                        StatusBadge(title: request.statusTitle, status: request.status)
-                        if let createdAt = request.createdAt {
-                            Label(SetuDateFormatter.string(from: createdAt), systemImage: "calendar")
-                                .font(SetuTypography.caption)
-                                .foregroundStyle(SetuColor.textSecondary)
-                        }
-                    }
-                }
-            }
-
-            if let reason = request.reason, !reason.isEmpty {
-                Text("申请原因：\(reason)")
-                    .font(SetuTypography.caption)
-                    .foregroundStyle(SetuColor.textSecondary)
-            }
-            if let rejectReason = request.rejectReason, !rejectReason.isEmpty {
-                SetuPill(text: "拒绝原因：\(rejectReason)", systemImage: "xmark.circle", tone: .danger)
-            }
-            if let reviewedAt = request.reviewedAt {
-                Label("审核时间：\(SetuDateFormatter.string(from: reviewedAt))", systemImage: "checkmark.seal")
-                    .font(SetuTypography.caption)
-                    .foregroundStyle(SetuColor.textSecondary)
-            }
-        }
-        .padding(.vertical, SetuSpacing.sm)
+        SetuRecordCard(
+            headline: request.job?.promptCn ?? "删除申请", supporting: request.reason,
+            status: .init(
+                request.statusTitle, tone: request.status == "WAITING" ? .warning : request.status == "APPROVED" ? .success : .danger),
+            thumbnailURLString: request.job?.imageUrl,
+            fields: [
+                .init("创建时间", request.createdAt.map { SetuDateFormatter.string(from: $0) } ?? "暂无", isNumeric: false),
+                .init("审核时间", request.reviewedAt.map { SetuDateFormatter.string(from: $0) } ?? "尚未审核", isNumeric: false),
+                .init("拒绝原因", request.rejectReason ?? "无", isNumeric: false),
+            ])
     }
 }
 

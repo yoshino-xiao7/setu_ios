@@ -19,17 +19,15 @@ struct AiAssetBrowserView: View {
     @State private var feedback: SetuFeedback?
 
     var body: some View {
-        List {
+        SetuBoard {
             Section {
                 SetuCard {
                     VStack(alignment: .leading, spacing: SetuSpacing.md) {
                         SetuSectionHeader(title: "风格与角色", subtitle: "选择附加画风、角色或风格预设，应用到当前创作")
-                        Picker("内容类型", selection: $activeKind) {
-                            ForEach(AiAssetKind.allCases) { kind in
-                                Text(kind.title).tag(kind)
-                            }
-                        }
-                        .pickerStyle(.menu)
+                        SetuFilterBar(
+                            options: AiAssetKind.allCases.map { .init(value: $0, title: $0.title) },
+                            selection: $activeKind, accessibilityTitle: "内容类型"
+                        )
                         .onChange(of: activeKind) {
                             categoryFilter = "ALL"
                             applyDefaultRecommendedCheckpointFilter()
@@ -46,7 +44,6 @@ struct AiAssetBrowserView: View {
                     }
                 }
             }
-            .setuListRow()
 
             if activeKind == .style {
                 currentStylesSection
@@ -56,7 +53,7 @@ struct AiAssetBrowserView: View {
                 Section {
                     SetuFeedbackBanner(feedback: feedback)
                 }
-                .setuListRow()
+
             }
 
             switch state {
@@ -69,7 +66,7 @@ struct AiAssetBrowserView: View {
                         isLoading: true
                     )
                 }
-                .setuListRow()
+
             case .failed(let message):
                 Section {
                     SetuEmptyState(
@@ -80,7 +77,7 @@ struct AiAssetBrowserView: View {
                         action: { Task { await load() } }
                     )
                 }
-                .setuListRow()
+
             case .loaded(let capabilities):
                 let items = activeKind.items(from: capabilities)
                 let categories = categories(for: items)
@@ -93,8 +90,8 @@ struct AiAssetBrowserView: View {
                             SetuSectionHeader(title: "筛选", subtitle: "\(activeKind.title) 共 \(items.count) 个可用选项")
                             TextField("搜索名称、分类或画面关键词", text: $searchText)
                                 #if os(iOS)
-                                .textInputAutocapitalization(.never)
-                                .autocorrectionDisabled()
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
                                 #endif
 
                             Picker("内容分级", selection: $audienceFilter) {
@@ -120,7 +117,6 @@ struct AiAssetBrowserView: View {
                         }
                     }
                 }
-                .setuListRow()
 
                 Section {
                     SetuSectionHeader(
@@ -129,7 +125,6 @@ struct AiAssetBrowserView: View {
                     )
                     .padding(.horizontal, SetuSpacing.lg)
                     .padding(.top, SetuSpacing.xs)
-                    .setuListRow()
 
                     if items.isEmpty {
                         SetuEmptyState(
@@ -139,7 +134,7 @@ struct AiAssetBrowserView: View {
                             actionTitle: "刷新",
                             action: { Task { await load() } }
                         )
-                        .setuListRow()
+
                     } else if filteredItems.isEmpty {
                         SetuEmptyState(
                             title: "暂无匹配选项",
@@ -148,9 +143,9 @@ struct AiAssetBrowserView: View {
                             actionTitle: "清除筛选",
                             action: clearFilters
                         )
-                        .setuListRow()
+
                     } else {
-                        ForEach(filteredItems) { asset in
+                        SetuMosaic(items: filteredItems, aspectRatio: { _ in 1 }) { asset in
                             SetuCard {
                                 AiAssetActionRow(
                                     asset: asset,
@@ -159,23 +154,23 @@ struct AiAssetBrowserView: View {
                                     onDetail: { selectedAsset = asset }
                                 )
                             }
-                            .setuListRow()
+
                         }
                     }
                 }
             }
         }
-        .listStyle(.plain)
+
         .setuBackground()
         .navigationTitle("风格与角色")
         .setuFeedbackPresentation($feedback)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            SetuBottomCTA {
-                Button("应用并返回（已选 \(selectedAssetCount) 项）") { dismiss() }
-                    .buttonStyle(.borderedProminent)
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                    .accessibilityIdentifier("ai.assets.apply")
-            }
+        .setuActionDock {
+
+            Button("应用并返回（已选 \(selectedAssetCount) 项）") { dismiss() }
+                .buttonStyle(.borderedProminent)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .accessibilityIdentifier("ai.assets.apply")
+
         }
         .onAppear { restoreCacheIfNeeded() }
         .onChange(of: searchText) { saveCache() }
@@ -243,7 +238,7 @@ struct AiAssetBrowserView: View {
                 }
             }
         }
-        .setuListRow()
+
     }
 
     private func load() async {
@@ -980,7 +975,7 @@ private struct AiAssetDetailSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            SetuBoard {
                 Section {
                     SetuCard {
                         HStack(spacing: 14) {
@@ -998,7 +993,6 @@ private struct AiAssetDetailSheet: View {
                         }
                     }
                 }
-                .setuListRow()
 
                 Section {
                     SetuCard {
@@ -1030,7 +1024,6 @@ private struct AiAssetDetailSheet: View {
                         }
                     }
                 }
-                .setuListRow()
 
                 Section {
                     SetuCard {
@@ -1045,9 +1038,9 @@ private struct AiAssetDetailSheet: View {
                         .buttonStyle(.plain)
                     }
                 }
-                .setuListRow()
+
             }
-            .listStyle(.plain)
+
             .setuBackground()
             .navigationTitle("风格与角色详情")
             .toolbar {

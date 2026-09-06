@@ -10,8 +10,10 @@ final class MusicSearchUITests: XCTestCase {
         XCTAssertFalse(app.buttons["播放 分页 歌曲 11"].exists, "首屏不得自动加载第二页")
         let firstRow = app.buttons["播放 分页 歌曲 1"]
         XCTAssertTrue(firstRow.exists)
-        // Real rows should be independently accessible in List, not one giant card cell.
-        XCTAssertGreaterThan(app.cells.count, 3)
+        // Track records keep independent identifiers within the lazy board.
+        let cards = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "music.search.song."))
+        XCTAssertGreaterThan(cards.count, 0)
+        XCTAssertLessThan(cards.count, 100, "初始页面不应实例化完整结果集")
         for _ in 0..<4 {
             if app.buttons["播放 分页 歌曲 11"].exists { break }
             app.swipeUp()
@@ -30,7 +32,7 @@ final class MusicSearchUITests: XCTestCase {
         defer { app.terminate() }
         openSearch(app, keyword: "恢复")
         XCTAssertTrue(app.staticTexts["10/100"].waitForExistence(timeout: 5))
-        app.segmentedControls.buttons["专辑"].tap()
+        app.buttons["专辑"].tap()
         XCTAssertTrue(app.staticTexts["分页专辑"].waitForExistence(timeout: 5))
         app.navigationBars["搜索音乐"].buttons.firstMatch.tap()
         let homeSearch = app.searchFields.firstMatch
@@ -39,7 +41,7 @@ final class MusicSearchUITests: XCTestCase {
         homeSearch.typeText("恢复\n")
         XCTAssertTrue(app.navigationBars["搜索音乐"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.textFields["歌曲、歌手或专辑"].value as? String, "恢复")
-        XCTAssertTrue(app.segmentedControls.buttons["专辑"].isSelected)
+        XCTAssertTrue(app.buttons["专辑"].isSelected)
         XCTAssertTrue(app.staticTexts["分页专辑"].exists)
         XCTAssertFalse(app.staticTexts["正在搜索"].exists)
         attach(app, name: "music-search-restored-session")
@@ -58,9 +60,9 @@ final class MusicSearchUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["搜索历史"].exists)
         // Dismiss keyboard using Search; session must deduplicate the submission.
         field.typeText("\n")
-        app.segmentedControls.buttons["歌手"].tap()
+        app.buttons["歌手"].tap()
         XCTAssertTrue(app.staticTexts["10 首相关歌曲"].waitForExistence(timeout: 5))
-        app.segmentedControls.buttons["歌曲"].tap()
+        app.buttons["歌曲"].tap()
         XCTAssertTrue(app.buttons["播放 周杰伦 歌曲 1"].exists)
         XCTAssertTrue(app.staticTexts["10/100"].exists)
         XCTAssertTrue(app.tabBars.buttons["创作"].exists)

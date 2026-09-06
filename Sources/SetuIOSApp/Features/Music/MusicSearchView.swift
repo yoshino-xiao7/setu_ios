@@ -5,7 +5,6 @@ import SwiftUI
 import UIKit
 #endif
 
-
 struct MusicSearchView: View {
     @Environment(MusicStore.self) private var store
     @Bindable var environment: AppEnvironment
@@ -18,7 +17,6 @@ struct MusicSearchView: View {
     @State private var feedback: SetuFeedback?
     @State private var fileSharePayload: SystemFileSharePayload?
 
-
     // Presentation-only viewport state; all query/results/paging live in MusicStore.
     @State private var scrolledKeyword: String?
     @State private var visibleNearEndIDs: Set<Int> = []
@@ -27,7 +25,7 @@ struct MusicSearchView: View {
 
     var body: some View {
         @Bindable var session = session
-        List {
+        SetuBoard {
             Section {
                 SetuCard {
                     VStack(alignment: .leading, spacing: SetuSpacing.md) {
@@ -48,25 +46,31 @@ struct MusicSearchView: View {
                         .disabled(session.normalizedQuery.isEmpty)
                     }
                 }
-                .setuListRow()
+
             }
 
             if let feedback {
                 Section {
                     SetuFeedbackBanner(feedback: feedback)
-                    .setuListRow()
+
                 }
             }
 
             historySection
             resultSection
         }
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { viewport = $0 }
-        .simultaneousGesture(DragGesture(minimumDistance: 8).onChanged { _ in
-            scrolledKeyword = session.resultKeyword
-            requestVisiblePage()
-        })
-        .listStyle(.plain)
+        .onGeometryChange(for: CGRect.self) {
+            $0.frame(in: .global)
+        } action: {
+            viewport = $0
+        }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 8).onChanged { _ in
+                scrolledKeyword = session.resultKeyword
+                requestVisiblePage()
+            }
+        )
+
         .setuBackground()
         .setuFeedbackPresentation($feedback)
         .navigationTitle("搜索音乐")
@@ -157,7 +161,7 @@ struct MusicSearchView: View {
                         .setuButtonFeedback()
                     }
                 }
-                .setuListRow()
+
             }
         }
     }
@@ -169,10 +173,11 @@ struct MusicSearchView: View {
                 SetuCard {
                     VStack(alignment: .leading, spacing: SetuSpacing.md) {
                         SetuSectionHeader(title: "搜索结果", subtitle: "\(session.pager.items.count)/\(session.pager.total)")
-                        Picker("搜索分类", selection: Binding(get: { session.selectedSegment }, set: { session.selectedSegment = $0 })) {
-                            ForEach(MusicSearchSegment.allCases) { segment in Text(segment.title).tag(segment) }
-                        }
-                        .pickerStyle(.segmented)
+                        SetuFilterBar(
+                            options: MusicSearchSegment.allCases.map { .init(value: $0, title: $0.title) },
+                            selection: Binding(get: { session.selectedSegment }, set: { session.selectedSegment = $0 }),
+                            accessibilityTitle: "搜索分类"
+                        )
                         .accessibilityLabel("搜索分类")
                         if session.isSearching { ProgressView("正在搜索") }
                         if let error = session.pager.initialError {
@@ -181,33 +186,36 @@ struct MusicSearchView: View {
                         }
                     }
                 }
-                .setuListRow()
+
             }
-            // Each ForEach element is a real List row. There is no wrapping VStack/card row.
+            // The record board virtualizes each track; viewport guards still own page requests.
             Section {
                 switch session.selectedSegment {
                 case .songs:
-                    ForEach(session.pager.items) { row in
-                        MusicSongRow(model: row, onPlay: {
-                            Task { await play(row.song, queueTracks: session.pager.items.map { MusicPlaybackTrack(song: $0.song) }) }
-                        }, onPlayMv: { mvSong = row.song }, onAddToPlaylist: { selectedSong = row.song }, onDownload: {
-                            Task { await download(row.song) }
-                        })
+                    SetuRecordBoard(items: session.pager.items) { row in
+                        MusicTrackRecordCard(
+                            song: row.song,
+                            onPlay: {
+                                Task { await play(row.song, queueTracks: session.pager.items.map { MusicPlaybackTrack(song: $0.song) }) }
+                            }, onPlayMv: { mvSong = row.song }, onAddToPlaylist: { selectedSong = row.song },
+                            onDownload: {
+                                Task { await download(row.song) }
+                            }
+                        )
                         .background {
                             if session.pager.items.suffix(3).contains(where: { $0.id == row.id }) {
                                 Color.clear
                                     .onGeometryChange(for: Bool.self) { proxy in
                                         proxy.frame(in: .global).intersects(viewport)
                                     } action: { visible in
-                                        if visible { visibleNearEndIDs.insert(row.id) }
-                                        else { visibleNearEndIDs.remove(row.id) }
+                                        if visible { visibleNearEndIDs.insert(row.id) } else { visibleNearEndIDs.remove(row.id) }
                                         requestVisiblePage()
                                     }
                                     .onDisappear { visibleNearEndIDs.remove(row.id) }
                             }
                         }
                         .accessibilityIdentifier("music.search.song.\(row.id)")
-                        .listRowBackground(SetuColor.surface)
+
                     }
                 case .artists:
                     aggregateRows(session.artistItems, systemImage: "music.mic", emptyTitle: "当前结果暂无歌手信息")
@@ -219,10 +227,10 @@ struct MusicSearchView: View {
                 if session.canLoadMore, session.pager.phase == .idle {
                     Button("加载更多歌曲") { Task { await session.loadMore() } }
                         .frame(minHeight: 44)
-                        .setuListRow()
+
                 }
                 SetuLoadMoreFooter(state: loadMoreState) { Task { await session.loadMore() } }
-                    .setuListRow()
+
             }
         } else if session.showsSkeleton {
             MusicStateSection(title: "搜索结果", stateTitle: "正在搜索", systemImage: "magnifyingglass", isLoading: true)
@@ -237,25 +245,14 @@ struct MusicSearchView: View {
 
     @ViewBuilder
     private func aggregateRows(_ items: [MusicSearchAggregateItem], systemImage: String, emptyTitle: String) -> some View {
-        if items.isEmpty { SetuEmptyState(title: emptyTitle, systemImage: systemImage).setuListRow() }
-        ForEach(items) { item in
-            Button {
-                session.query = item.title
-                Task { await session.submit() }
-            } label: {
-                HStack(spacing: SetuSpacing.md) {
-                    Image(systemName: systemImage).foregroundStyle(SetuColor.brandPink).frame(width: 44, height: 44)
-                    VStack(alignment: .leading, spacing: SetuSpacing.xs) {
-                        Text(item.title).font(SetuTypography.headline).foregroundStyle(SetuColor.textPrimary)
-                        Text("\(item.count) 首相关歌曲").font(SetuTypography.caption).foregroundStyle(SetuColor.textSecondary)
-                    }
-                    Spacer()
-                    Image(systemName: "magnifyingglass").foregroundStyle(SetuColor.textTertiary)
-                }
-                .frame(minHeight: 56)
-            }
-            .setuButtonFeedback()
-            .listRowBackground(SetuColor.surface)
+        if items.isEmpty { SetuEmptyState(title: emptyTitle, systemImage: systemImage) }
+        SetuRecordBoard(items: items) { item in
+            SetuRecordCard(
+                headline: item.title, supporting: "\(item.count) 首相关歌曲",
+                onTap: {
+                    session.query = item.title
+                    Task { await session.submit() }
+                })
         }
     }
 

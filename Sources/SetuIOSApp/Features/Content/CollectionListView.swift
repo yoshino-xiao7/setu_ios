@@ -8,7 +8,7 @@ struct CollectionListView: View {
     @State private var editor: CollectionEditorContext?
 
     var body: some View {
-        List {
+        SetuBoard {
             Section {
                 SetuCard {
                     Button {
@@ -18,7 +18,9 @@ struct CollectionListView: View {
                             Image(systemName: "heart.fill")
                                 .foregroundStyle(SetuColor.brandPink)
                                 .frame(width: 40, height: 40)
-                                .background(SetuColor.brandSoft.opacity(0.22), in: RoundedRectangle(cornerRadius: SetuRadius.md, style: .continuous))
+                                .background(
+                                    SetuColor.brandSoft.opacity(0.22), in: RoundedRectangle(cornerRadius: SetuRadius.md, style: .continuous)
+                                )
                             VStack(alignment: .leading, spacing: SetuSpacing.xs) {
                                 Text("默认收藏")
                                     .font(SetuTypography.headline)
@@ -76,7 +78,12 @@ struct CollectionListView: View {
                         }
                     }
                     Section {
-                        ForEach(collections) { collection in
+                        SetuMosaic(
+                            items: collections,
+                            aspectRatio: {
+                                CGFloat($0.previewImages?.first?.width ?? 1) / CGFloat(max($0.previewImages?.first?.height ?? 1, 1))
+                            }
+                        ) { collection in
                             Button {
                                 router.navigate(to: .collectionDetail(collection.id))
                             } label: {
@@ -90,8 +97,7 @@ struct CollectionListView: View {
                 }
             }
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
+
         .setuBackground()
         .navigationTitle("我的收藏夹")
         .toolbar {
@@ -125,7 +131,12 @@ private struct CollectionRow: View {
     let collection: CollectionInfo
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: SetuSpacing.md) {
+            ContentGridImageView(
+                urlString: collection.coverUrl ?? collection.previewImages?.first?.bestURLString,
+                accessibilityLabel: collection.name,
+                aspectRatio: CGFloat(collection.previewImages?.first?.width ?? 1)
+                    / CGFloat(max(collection.previewImages?.first?.height ?? 1, 1)))
             HStack {
                 Text(collection.name)
                     .font(SetuTypography.headline)

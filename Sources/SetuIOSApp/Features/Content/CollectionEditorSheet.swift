@@ -45,34 +45,33 @@ struct CollectionEditorSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            SetuBoard {
                 SetuCard {
                     VStack(alignment: .leading, spacing: SetuSpacing.md) {
                         SetuSectionHeader(title: "收藏夹信息", subtitle: visibility.title)
-                    TextField("名称", text: $name)
+                        TextField("名称", text: $name)
                             .textFieldStyle(.roundedBorder)
-                    TextField("描述", text: $description, axis: .vertical)
-                        .lineLimit(3...6)
+                        TextField("描述", text: $description, axis: .vertical)
+                            .lineLimit(3...6)
                             .textFieldStyle(.roundedBorder)
-                    Picker("可见性", selection: $visibility) {
-                        ForEach(CollectionVisibility.allCases, id: \.self) { value in
-                            Label(value.title, systemImage: value == .publicVisible ? "eye" : "lock")
-                                .tag(value)
+                        Picker("可见性", selection: $visibility) {
+                            ForEach(CollectionVisibility.allCases, id: \.self) { value in
+                                Label(value.title, systemImage: value == .publicVisible ? "eye" : "lock")
+                                    .tag(value)
+                            }
                         }
-                    }
                         .pickerStyle(.segmented)
+                    }
                 }
-                }
-                .setuListRow()
 
                 if let feedback {
                     SetuFeedbackBanner(feedback: feedback)
-                    .setuListRow()
+
                 }
             }
-            .listStyle(.plain)
+
             .setuBackground()
-        .setuFeedbackPresentation($feedback)
+            .setuFeedbackPresentation($feedback)
             .navigationTitle(title)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

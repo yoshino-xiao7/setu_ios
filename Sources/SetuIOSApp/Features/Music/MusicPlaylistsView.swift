@@ -14,7 +14,7 @@ struct MusicPlaylistsView: View {
     @State private var showingDeleteConfirmation = false
 
     var body: some View {
-        List {
+        SetuBoard {
             if let feedback {
                 Section {
                     SetuFeedbackBanner(feedback: feedback)
@@ -56,31 +56,27 @@ struct MusicPlaylistsView: View {
                 } else {
                     statsSection(playlists)
                     Section {
-                        ForEach(playlists) { playlist in
-                            Button {
-                                router.navigate(to: .playlistDetail(playlist.id))
-                            } label: {
-                                SetuCard {
-                                    MusicPlaylistRow(playlist: playlist)
-                                }
-                            }
-                            .setuButtonFeedback()
-                            .accessibilityIdentifier("music.playlists.row.\(playlist.id)")
-                            .swipeActions {
+                        SetuRecordBoard(items: playlists) { playlist in
+                            SetuRecordCard(
+                                headline: playlist.name, supporting: playlist.description,
+                                thumbnailURLString: playlist.coverUrl,
+                                fields: [.init("歌曲", "\(playlist.songCount ?? 0) 首"), .init("播放", "\(playlist.playCount ?? 0)")],
+                                onTap: { router.navigate(to: .playlistDetail(playlist.id)) }
+                            ) {
                                 Button(role: .destructive) {
                                     playlistPendingDeletion = playlist
                                     showingDeleteConfirmation = true
                                 } label: {
-                                    Label("删除", systemImage: "trash")
+                                    Label("删除", systemImage: "trash").frame(minHeight: 44)
                                 }
                             }
+                            .accessibilityIdentifier("music.playlists.row.\(playlist.id)")
                         }
                     }
                 }
             }
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
+
         .setuBackground()
         .setuFeedbackPresentation($feedback)
         .navigationTitle("我的歌单")
@@ -197,7 +193,7 @@ private struct CreatePlaylistSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            SetuBoard {
                 Section {
                     SetuCard {
                         VStack(alignment: .leading, spacing: SetuSpacing.md) {
@@ -222,8 +218,7 @@ private struct CreatePlaylistSheet: View {
                     }
                 }
             }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
+
             .setuBackground()
             .navigationTitle("新建歌单")
             .toolbar {

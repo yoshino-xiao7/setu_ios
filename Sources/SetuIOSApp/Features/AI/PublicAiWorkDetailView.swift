@@ -29,7 +29,7 @@ struct PublicAiWorkDetailView: View {
     }
 
     private var detailContent: some View {
-        List {
+        SetuBoard {
             if let feedback {
                 Section {
                     SetuFeedbackBanner(
@@ -38,7 +38,7 @@ struct PublicAiWorkDetailView: View {
                         action: feedbackAllowsRefresh ? { Task { await refreshWork() } } : nil
                     )
                 }
-                .setuListRow()
+
             }
             artworkSection
             interactionSection
@@ -46,18 +46,18 @@ struct PublicAiWorkDetailView: View {
             creatorSection
             detailsSection
         }
-        .listStyle(.plain)
+
         .setuBackground()
         .setuFeedbackPresentation($feedback)
         .navigationTitle("公开作品")
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            SetuBottomCTA {
-                SetuPrimaryButton {
-                    reuseInspiration()
-                } label: {
-                    Label("以此为灵感创作", systemImage: "wand.and.sparkles")
-                }
+        .setuActionDock {
+
+            SetuPrimaryButton {
+                reuseInspiration()
+            } label: {
+                Label("以此为灵感创作", systemImage: "wand.and.sparkles")
             }
+
         }
         .toolbar {
             if imageURL != nil {
@@ -119,11 +119,11 @@ struct PublicAiWorkDetailView: View {
                         message: "图片可能已过期，你仍可使用下方创作灵感开始新的作品。",
                         systemImage: "photo"
                     )
-                        .frame(minHeight: 280)
+                    .frame(minHeight: 280)
                 }
             }
         }
-        .setuListRow()
+
     }
 
     private var interactionSection: some View {
@@ -161,7 +161,7 @@ struct PublicAiWorkDetailView: View {
                 }
             }
         }
-        .setuListRow()
+
     }
 
     @ViewBuilder
@@ -222,7 +222,7 @@ struct PublicAiWorkDetailView: View {
                     }
                 }
             }
-            .setuListRow()
+
         }
     }
 
@@ -238,26 +238,32 @@ struct PublicAiWorkDetailView: View {
                 }
             }
         }
-        .setuListRow()
+
     }
 
     private var detailsSection: some View {
-        Section {
-            SetuCard {
-                VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                    SetuSectionHeader(title: "作品信息")
-                    detailRow(title: "画幅", value: "\(work.width) × \(work.height)")
-                        .accessibilityIdentifier("ai.public.dimensions")
-                    if let createdAt = work.createdAt, !createdAt.isEmpty {
-                        detailRow(title: "发布时间", value: SetuDateFormatter.string(from: createdAt, style: .full))
-                    }
-                    if work.category == "R18" {
-                        SetuPill(text: "成人内容", systemImage: "eye.slash", tone: .danger)
-                    }
+        let parameters = [AiDetailParameter(title: "画幅", value: "\(work.width) × \(work.height)")]
+        return VStack(alignment: .leading, spacing: SetuSpacing.lg) {
+            SetuBento(items: parameters, span: { _ in .wide }) { parameter in
+                SetuRecordCard(headline: parameter.title, fields: [.init("尺寸", parameter.value)])
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("画幅")
+                    .accessibilityValue(parameter.value)
+                    .accessibilityIdentifier("ai.public.dimensions")
+            }
+            if let createdAt = work.createdAt, !createdAt.isEmpty {
+                SetuCard {
+                    SetuTimeline(events: [
+                        .init(
+                            id: "published", title: "发布时间",
+                            timestamp: SetuDateFormatter.string(from: createdAt, style: .full), tone: .success, isCurrent: true)
+                    ])
                 }
             }
+            if work.category == "R18" {
+                SetuPill(text: "成人内容", systemImage: "eye.slash", tone: .danger)
+            }
         }
-        .setuListRow()
     }
 
     @ViewBuilder

@@ -6,7 +6,7 @@ struct PointsLogsView: View {
     @State private var pager = PagingController<PointsLogItem>(pageSize: 10)
 
     var body: some View {
-        List {
+        SetuBoard {
             if pager.phase == .loadingInitial {
                 Section {
                     SetuCard {
@@ -38,15 +38,13 @@ struct PointsLogsView: View {
                     }
                 }
                 Section {
-                    ForEach(pager.items) { item in
-                        SetuCard {
-                            PointsLogRow(item: item)
-                        }
-                        .onAppear {
-                            if item.id == pager.items.last?.id {
-                                Task { await loadMore() }
+                    SetuRecordBoard(items: pager.items) { item in
+                        PointsLogRow(item: item)
+                            .onAppear {
+                                if item.id == pager.items.last?.id {
+                                    Task { await loadMore() }
+                                }
                             }
-                        }
                     }
                 }
                 Section {
@@ -56,8 +54,7 @@ struct PointsLogsView: View {
                 }
             }
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
+
         .setuBackground()
         .navigationTitle("积分明细")
         .task { await loadFirstPage() }
@@ -98,26 +95,13 @@ private struct PointsLogRow: View {
     let item: PointsLogItem
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(displayTitle)
-                    .font(SetuTypography.headline)
-                    .foregroundStyle(SetuColor.textPrimary)
-                Spacer()
-                Text(deltaText)
-                    .font(.headline.monospacedDigit())
-                    .foregroundStyle(deltaColor)
-            }
-            if let createdAt = item.createdAt {
-                Label(SetuDateFormatter.string(from: createdAt), systemImage: "clock")
-                    .font(.caption)
-                    .foregroundStyle(SetuColor.textSecondary)
-            }
-            Text(displayDescription)
-                .font(SetuTypography.caption)
-                .foregroundStyle(SetuColor.textSecondary)
-        }
-        .padding(.vertical, SetuSpacing.xs)
+        SetuRecordCard(
+            headline: displayTitle, supporting: displayDescription,
+            status: .init(deltaText, tone: item.delta >= 0 ? .success : .warning),
+            fields: [
+                .init("积分变动", deltaText),
+                .init("时间", item.createdAt.map { SetuDateFormatter.string(from: $0) } ?? "暂无", isNumeric: false),
+            ])
     }
 
     private var displayTitle: String {

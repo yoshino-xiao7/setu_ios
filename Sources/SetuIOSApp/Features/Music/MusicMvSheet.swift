@@ -5,7 +5,6 @@ import SwiftUI
 import UIKit
 #endif
 
-
 struct MusicMvSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var environment: AppEnvironment
@@ -16,15 +15,15 @@ struct MusicMvSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            SetuBoard {
                 urlSection
                 detailSection
             }
             .accessibilityIdentifier("music.mv")
             #if DEBUG
-            .accessibilityValue("details=\(MusicPerformanceProbe.shared.mvDetailCount)")
+                .accessibilityValue("details=\(MusicPerformanceProbe.shared.mvDetailCount)")
             #endif
-            .listStyle(.plain)
+
             .setuBackground()
             .navigationTitle("MV")
             .toolbar {
@@ -50,33 +49,18 @@ struct MusicMvSheet: View {
             MusicStateSection(title: "MV 详情", stateTitle: "MV 详情加载失败", message: message, systemImage: "exclamationmark.triangle")
         case .loaded(let detail):
             Section {
-                SetuCard {
-                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                        SetuSectionHeader(title: "MV 详情")
-                        if let cover = detail.cover {
-                            MusicMvCoverView(urlString: cover)
-                        }
-                        VStack(spacing: SetuSpacing.sm) {
-                            MusicMetadataRow(title: "标题", value: detail.name)
-                            MusicMetadataRow(title: "艺人", value: detail.artistName ?? detail.artists?.map(\.name).joined(separator: " / ") ?? song.artistNames)
-                            if let publishTime = detail.publishTime {
-                                MusicMetadataRow(title: "发布时间", value: publishTime)
-                            }
-                            if let playCount = detail.playCount {
-                                MusicMetadataRow(title: "播放量", value: "\(playCount)")
-                            }
-                            if let duration = detail.duration {
-                                MusicMetadataRow(title: "时长", value: formatDuration(duration))
-                            }
-                        }
-                        if let description = detail.desc ?? detail.briefDesc, !description.isEmpty {
-                            Text(description)
-                                .font(SetuTypography.caption)
-                                .foregroundStyle(SetuColor.textSecondary)
-                        }
-                    }
-                }
-                .setuListRow()
+                SetuRecordCard(
+                    headline: detail.name, supporting: detail.desc ?? detail.briefDesc,
+                    thumbnailURLString: detail.cover,
+                    fields: [
+                        .init(
+                            "艺人", detail.artistName ?? detail.artists?.map(\.name).joined(separator: " / ") ?? song.artistNames,
+                            isNumeric: false),
+                        .init("发布时间", detail.publishTime ?? "暂无", isNumeric: false),
+                        .init("播放量", detail.playCount.map(String.init) ?? "暂无"),
+                        .init("时长", detail.duration.map(formatDuration) ?? "暂无", isNumeric: false),
+                    ])
+
             }
         }
     }
@@ -93,7 +77,7 @@ struct MusicMvSheet: View {
                         }
                     }
                 }
-                .setuListRow()
+
             }
         } else {
             MusicStateSection(title: "播放 MV", stateTitle: "暂无 MV", message: "该歌曲没有可播放的 MV", systemImage: "play.rectangle")

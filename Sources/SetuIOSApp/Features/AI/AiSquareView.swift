@@ -21,14 +21,11 @@ struct AiSquareView: View {
     private let pageSize = 16
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: SetuSpacing.lg) {
-            Picker("分类", selection: $category) {
-                Text("全部").tag("")
-                Text("全年龄").tag("GENERAL")
-                Text("成人内容").tag("R18")
-            }
-            .pickerStyle(.segmented)
+        SetuBoard {
+            SetuFilterBar(
+                options: [.init(value: "", title: "全部"), .init(value: "GENERAL", title: "全年龄"), .init(value: "R18", title: "成人内容")],
+                selection: $category
+            )
             .onChange(of: category) {
                 Task { await loadFirstPage(clearExisting: true) }
             }
@@ -60,24 +57,19 @@ struct AiSquareView: View {
             } else {
                 VStack(alignment: .leading, spacing: SetuSpacing.md) {
                     SetuSectionHeader(title: "广场作品")
-                    LazyVGrid(columns: gridColumns, spacing: SetuSpacing.md) {
-                        ForEach(jobs) { job in
-                            AiGenerationGridTile(work: job, footerTitle: SetuDateFormatter.string(from: job.createdAt)) {
-                                router.navigate(to: .publicAiWork(PublicAiWorkSnapshot(work: job)))
-                            }
-                            .onAppear {
-                                if job.id == jobs.last?.id {
-                                    Task { await loadMore() }
-                                }
+                    SetuMosaic(items: jobs, aspectRatio: { CGFloat($0.width) / CGFloat(max($0.height, 1)) }) { job in
+                        AiGenerationGridTile(work: job, footerTitle: SetuDateFormatter.string(from: job.createdAt)) {
+                            router.navigate(to: .publicAiWork(PublicAiWorkSnapshot(work: job)))
+                        }
+                        .onAppear {
+                            if job.id == jobs.last?.id {
+                                Task { await loadMore() }
                             }
                         }
                     }
                     loadMoreFooter
                 }
             }
-        }
-            .padding(.horizontal, SetuSpacing.lg)
-            .padding(.vertical, SetuSpacing.md)
         }
         .setuBackground()
         .navigationTitle("AI 绘画广场")
@@ -100,12 +92,6 @@ struct AiSquareView: View {
     }
 
     private var hasMore: Bool { pager.hasMore }
-
-    private var gridColumns: [GridItem] {
-        dynamicTypeSize.isAccessibilitySize
-            ? [GridItem(.flexible())]
-            : [GridItem(.adaptive(minimum: 148), spacing: SetuSpacing.md)]
-    }
 
     private func loadFirstPage(clearExisting: Bool = false) async {
         let filter = category

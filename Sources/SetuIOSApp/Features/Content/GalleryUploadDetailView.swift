@@ -10,10 +10,10 @@ struct GalleryUploadDetailView: View {
     @State private var isCancelling = false
 
     var body: some View {
-        List {
+        SetuBoard {
             if let feedback {
                 SetuFeedbackBanner(feedback: feedback)
-                .setuListRow()
+
             }
 
             switch state {
@@ -56,24 +56,22 @@ struct GalleryUploadDetailView: View {
                         }
                     }
                 }
-                .setuListRow()
 
-                SetuCard {
-                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                        SetuSectionHeader(title: "图片 \(batch.items.count)", subtitle: "投稿明细")
-                        ForEach(Array(batch.items.enumerated()), id: \.element.id) { index, item in
-                            if index > 0 {
-                                Divider()
-                                    .overlay(SetuColor.separator)
-                            }
-                            GalleryUploadItemRow(item: item, order: index + 1)
-                        }
-                    }
+                SetuSectionHeader(title: "图片 \(batch.items.count)", subtitle: "投稿明细")
+                SetuRecordBoard(items: batch.items) { item in
+                    SetuRecordCard(
+                        headline: item.title ?? "投稿图片", supporting: item.author ?? "未知作者",
+                        status: .init(item.statusTitle, tone: item.rejectReason == nil ? .info : .danger),
+                        thumbnailURLString: item.previewUrl,
+                        fields: [
+                            .init("顺序", "\((batch.items.firstIndex(where: { $0.id == item.id }) ?? 0) + 1)"),
+                            .init("拒绝原因", item.rejectReason ?? "无", isNumeric: false),
+                        ])
                 }
-                .setuListRow()
+
             }
         }
-        .listStyle(.plain)
+
         .setuBackground()
         .setuFeedbackPresentation($feedback)
         .navigationTitle("投稿详情")

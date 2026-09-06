@@ -13,54 +13,49 @@ struct FavoriteListView: View {
     @State private var undoDismissTask: Task<Void, Never>?
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: SetuSpacing.lg) {
-                if let feedback {
-                    SetuFeedbackBanner(feedback: feedback)
-                }
+        SetuBoard {
+            if let feedback {
+                SetuFeedbackBanner(feedback: feedback)
+            }
 
-                if let initialError = pager.initialError, !pager.items.isEmpty {
-                    SetuLoadMoreFooter(state: .failed(initialError)) {
-                        Task { await loadFirstPage() }
-                    }
-                }
-
-                if pager.phase == .loadingInitial {
-                    SetuCard {
-                        SetuEmptyState(
-                            title: "正在加载收藏",
-                            message: "默认收藏会按最新顺序展示。",
-                            systemImage: "heart",
-                            isLoading: true
-                        )
-                    }
-                } else if pager.items.isEmpty {
-                    emptyState
-                } else {
-                    SetuSectionHeader(title: "默认收藏", subtitle: "共 \(pager.total) 张")
-                    LazyVGrid(columns: gridColumns, spacing: SetuSpacing.md) {
-                        ForEach(pager.items) { item in
-                            FavoriteImageTile(item: item) {
-                                previewItem = UserImagePreviewItem(favorite: item)
-                            } onMove: {
-                                movingItem = item
-                            } onRemove: {
-                                Task { await remove(item) }
-                            }
-                            .onAppear {
-                                if item.id == pager.items.last?.id {
-                                    Task { await loadMore() }
-                                }
-                            }
-                        }
-                    }
-                    SetuLoadMoreFooter(state: loadMoreFooterState) {
-                        Task { await loadMore() }
-                    }
+            if let initialError = pager.initialError, !pager.items.isEmpty {
+                SetuLoadMoreFooter(state: .failed(initialError)) {
+                    Task { await loadFirstPage() }
                 }
             }
-            .padding(.horizontal, SetuSpacing.lg)
-            .padding(.vertical, SetuSpacing.md)
+
+            if pager.phase == .loadingInitial {
+                SetuCard {
+                    SetuEmptyState(
+                        title: "正在加载收藏",
+                        message: "默认收藏会按最新顺序展示。",
+                        systemImage: "heart",
+                        isLoading: true
+                    )
+                }
+            } else if pager.items.isEmpty {
+                emptyState
+            } else {
+                SetuSectionHeader(title: "默认收藏", subtitle: "共 \(pager.total) 张")
+                SetuMosaic(items: pager.items, aspectRatio: { CGFloat($0.image?.width ?? 1) / CGFloat(max($0.image?.height ?? 1, 1)) }) {
+                    item in
+                    FavoriteImageTile(item: item) {
+                        previewItem = UserImagePreviewItem(favorite: item)
+                    } onMove: {
+                        movingItem = item
+                    } onRemove: {
+                        Task { await remove(item) }
+                    }
+                    .onAppear {
+                        if item.id == pager.items.last?.id {
+                            Task { await loadMore() }
+                        }
+                    }
+                }
+                SetuLoadMoreFooter(state: loadMoreFooterState) {
+                    Task { await loadMore() }
+                }
+            }
         }
         .setuBackground()
         .setuFeedbackPresentation($feedback)
@@ -105,13 +100,6 @@ struct FavoriteListView: View {
                 SetuEmptyState(title: "暂无默认收藏", message: "收藏图片后会显示在这里。", systemImage: "heart")
             }
         }
-    }
-
-    private var gridColumns: [GridItem] {
-        if dynamicTypeSize.isAccessibilitySize {
-            return [GridItem(.flexible())]
-        }
-        return [GridItem(.adaptive(minimum: 156), spacing: SetuSpacing.md)]
     }
 
     private var hasMore: Bool { pager.hasMore }
@@ -206,7 +194,8 @@ private struct FavoriteImageTile: View {
                 Button(action: onPreview) {
                     ContentGridImageView(
                         urlString: item.image?.urlSmall ?? item.image?.urlRegular ?? item.image?.urlOriginal,
-                        accessibilityLabel: item.image?.title ?? "未命名作品"
+                        accessibilityLabel: item.image?.title ?? "未命名作品",
+                        aspectRatio: CGFloat(item.image?.width ?? 1) / CGFloat(max(item.image?.height ?? 1, 1))
                     )
                 }
                 .buttonStyle(.plain)
@@ -256,6 +245,7 @@ private struct FavoriteImageTile: View {
 struct ContentGridImageView: View {
     let urlString: String?
     let accessibilityLabel: String
+    var aspectRatio: CGFloat = 1
 
     var body: some View {
         SetuRemoteImage(
@@ -267,7 +257,7 @@ struct ContentGridImageView: View {
             allowsTapToRetry: false
         )
         .frame(maxWidth: .infinity)
-        .aspectRatio(1, contentMode: .fit)
+        .aspectRatio(SetuMosaicLayout.validAspectRatio(aspectRatio), contentMode: .fit)
         .clipped()
     }
 }
@@ -285,7 +275,7 @@ private struct FavoriteMoveSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            SetuBoard {
                 Section {
                     SetuCard {
                         VStack(alignment: .leading, spacing: SetuSpacing.md) {
@@ -312,16 +302,15 @@ private struct FavoriteMoveSheet: View {
                         }
                     }
                 }
-                .setuListRow()
 
                 if let feedback {
                     Section {
                         SetuFeedbackBanner(feedback: feedback)
                     }
-                    .setuListRow()
+
                 }
             }
-            .listStyle(.plain)
+
             .setuBackground()
             .navigationTitle("移动收藏")
             .toolbar {
@@ -378,20 +367,19 @@ struct ContentImageStateSection: View {
             if let error {
                 SetuEmptyState(error: error, retry: action)
             } else {
-            SetuEmptyState(
-                title: title,
-                message: message,
-                systemImage: systemImage,
-                isLoading: isLoading,
-                actionTitle: actionTitle,
-                action: action
-            )
+                SetuEmptyState(
+                    title: title,
+                    message: message,
+                    systemImage: systemImage,
+                    isLoading: isLoading,
+                    actionTitle: actionTitle,
+                    action: action
+                )
             }
         }
-        .setuListRow()
+
     }
 }
-
 
 extension ContentImageStateSection {
     init(title: String, message: UserFacingError, systemImage: String, isLoading: Bool = false, actionTitle: String? = nil, action: (() -> Void)? = nil) {

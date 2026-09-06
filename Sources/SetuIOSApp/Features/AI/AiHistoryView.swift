@@ -29,16 +29,15 @@ struct AiHistoryView: View {
     private let pageSize = 12
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: SetuSpacing.lg) {
+        SetuBoard {
             if let feedback {
                 SetuFeedbackBanner(feedback: feedback)
             }
 
             adaptiveStatusPicker
-            .onChange(of: statusFilter) {
-                Task { await loadFirstPage(clearExisting: true) }
-            }
+                .onChange(of: statusFilter) {
+                    Task { await loadFirstPage(clearExisting: true) }
+                }
 
             if isInitialLoading {
                 SetuCard {
@@ -65,43 +64,38 @@ struct AiHistoryView: View {
             } else {
                 VStack(alignment: .leading, spacing: SetuSpacing.md) {
                     SetuSectionHeader(title: "我的作品")
-                    LazyVGrid(columns: gridColumns, spacing: SetuSpacing.md) {
-                        ForEach(jobs) { job in
-                            AiGenerationGridTile(job: job, footerTitle: SetuDateFormatter.string(from: job.createdAt)) {
-                                router.navigate(to: .aiGenerationDetail(job.id))
+                    SetuMosaic(items: jobs, aspectRatio: { CGFloat($0.width) / CGFloat(max($0.height, 1)) }) { job in
+                        AiGenerationGridTile(job: job, footerTitle: SetuDateFormatter.string(from: job.createdAt)) {
+                            router.navigate(to: .aiGenerationDetail(job.id))
+                        }
+                        .contextMenu {
+                            Button {
+                                reuse(job)
+                            } label: {
+                                Label("复用参数", systemImage: "arrow.triangle.2.circlepath")
                             }
-                            .contextMenu {
+                            Button {
+                                copyPrompt(job)
+                            } label: {
+                                Label("复制提示词", systemImage: "doc.on.doc")
+                            }
+                            if job.status == "COMPLETED" {
                                 Button {
-                                    reuse(job)
+                                    previewSelection = AiHistoryPreviewSelection(job: job)
                                 } label: {
-                                    Label("复用参数", systemImage: "arrow.triangle.2.circlepath")
-                                }
-                                Button {
-                                    copyPrompt(job)
-                                } label: {
-                                    Label("复制提示词", systemImage: "doc.on.doc")
-                                }
-                                if job.status == "COMPLETED" {
-                                    Button {
-                                        previewSelection = AiHistoryPreviewSelection(job: job)
-                                    } label: {
-                                        Label("查看图片", systemImage: "eye")
-                                    }
+                                    Label("查看图片", systemImage: "eye")
                                 }
                             }
-                            .onAppear {
-                                if job.id == jobs.last?.id {
-                                    Task { await loadMore() }
-                                }
+                        }
+                        .onAppear {
+                            if job.id == jobs.last?.id {
+                                Task { await loadMore() }
                             }
                         }
                     }
                     loadMoreFooter
                 }
             }
-        }
-            .padding(.horizontal, SetuSpacing.lg)
-            .padding(.vertical, SetuSpacing.md)
         }
         .setuBackground()
         .setuFeedbackPresentation($feedback)
@@ -135,21 +129,11 @@ struct AiHistoryView: View {
 
     @ViewBuilder
     private var adaptiveStatusPicker: some View {
-        if dynamicTypeSize.isAccessibilitySize {
-            statusPicker.pickerStyle(.menu)
-        } else {
-            statusPicker.pickerStyle(.segmented)
-        }
-    }
-
-    private var statusPicker: some View {
-        Picker("状态", selection: $statusFilter) {
-            Text("全部").tag("")
-            Text("排队中").tag("QUEUED")
-            Text("生成中").tag("RUNNING")
-            Text("已完成").tag("COMPLETED")
-            Text("失败").tag("FAILED")
-        }
+        SetuFilterBar(
+            options: [
+                .init(value: "", title: "全部"), .init(value: "QUEUED", title: "排队中"), .init(value: "RUNNING", title: "生成中"),
+                .init(value: "COMPLETED", title: "已完成"), .init(value: "FAILED", title: "失败"),
+            ], selection: $statusFilter)
     }
 
     @ViewBuilder
@@ -167,12 +151,6 @@ struct AiHistoryView: View {
     }
 
     private var hasMore: Bool { pager.hasMore }
-
-    private var gridColumns: [GridItem] {
-        dynamicTypeSize.isAccessibilitySize
-            ? [GridItem(.flexible())]
-            : [GridItem(.adaptive(minimum: 148), spacing: SetuSpacing.md)]
-    }
 
     private func loadFirstPage(clearExisting: Bool = false) async {
         let filter = statusFilter

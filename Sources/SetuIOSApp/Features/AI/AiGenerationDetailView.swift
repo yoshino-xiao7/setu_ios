@@ -22,10 +22,10 @@ struct AiGenerationDetailView: View {
     @State private var fileSharePayload: SystemFileSharePayload?
 
     var body: some View {
-        List {
+        SetuBoard {
             if let feedback {
                 SetuFeedbackBanner(feedback: feedback)
-                .setuListRow()
+
             }
 
             switch state {
@@ -43,22 +43,24 @@ struct AiGenerationDetailView: View {
             case .loaded(let job):
                 previewSection(job)
                 imageActionsSection(job)
+                parameterSection(job)
+                progressSection(job)
                 infoSection(job)
                 promptSection(job)
                 reviewSection(job)
                 deleteRequestSection(job)
             }
         }
-        .listStyle(.plain)
+
         .setuBackground()
         #if os(iOS)
-        .fullScreenCover(item: $fullscreenImage) { item in
-            FullscreenImageViewer(url: item.url)
-        }
+            .fullScreenCover(item: $fullscreenImage) { item in
+                FullscreenImageViewer(url: item.url)
+            }
         #else
-        .sheet(item: $fullscreenImage) { item in
-            FullscreenImageViewer(url: item.url)
-        }
+            .sheet(item: $fullscreenImage) { item in
+                FullscreenImageViewer(url: item.url)
+            }
         #endif
         .sheet(item: $fileSharePayload) { payload in
             SystemFileShareSheet(fileURL: payload.fileURL) { result in
@@ -74,20 +76,20 @@ struct AiGenerationDetailView: View {
         }
         .navigationTitle("作品详情")
         .setuFeedbackPresentation($feedback)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        .setuActionDock(isPresented: isJobLoaded) {
             if case .loaded(let job) = state {
-                SetuBottomCTA {
-                    Button {
-                        AiDrawDraftStore.applyHistoryJob(job)
-                        navigation.navigate(to: .ai, reset: true)
-                    } label: {
-                        Text("再画一张（沿用这次参数）")
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .accessibilityIdentifier("ai.detail.create-again")
+
+                Button {
+                    AiDrawDraftStore.applyHistoryJob(job)
+                    navigation.navigate(to: .ai, reset: true)
+                } label: {
+                    Text("再画一张（沿用这次参数）")
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, minHeight: 44)
                 }
+                .buttonStyle(.borderedProminent)
+                .accessibilityIdentifier("ai.detail.create-again")
+
             }
         }
         .task(id: jobID) {
@@ -97,35 +99,41 @@ struct AiGenerationDetailView: View {
         .refreshable { await load(showLoading: false) }
     }
 
+    private var isJobLoaded: Bool {
+        if case .loaded = state { return true }
+        return false
+    }
+
     @ViewBuilder
     private func previewSection(_ job: AiGenerationJob) -> some View {
         SetuCard {
             VStack(alignment: .leading, spacing: SetuSpacing.md) {
                 SetuSectionHeader(title: "预览", subtitle: job.statusTitle)
-                    let urlString = imageURL?.url ?? job.imageUrl
-                    if let urlString, let url = URL(string: urlString) {
-                        SetuRemoteImage(
-                            urlString: urlString,
-                            accessibilityLabel: "AI 作品：\(job.promptCn)",
-                            width: nil,
-                            height: nil,
-                            cornerRadius: SetuRadius.md,
-                            contentMode: .fit,
-                            onActivate: { fullscreenImage = FullscreenImageItem(url: url) },
-                            activationHint: "打开全屏图片预览"
-                        )
-                        .frame(maxWidth: .infinity, minHeight: 280)
-                    } else {
-                        SetuEmptyState(
-                            title: "暂无图片",
-                            message: job.status == "COMPLETED" ? "可以尝试刷新图片。" : "作品生成完成后会显示预览。",
-                            systemImage: "photo"
-                        )
-                        .frame(maxWidth: .infinity, minHeight: 280)
-                    }
+                let urlString = imageURL?.url ?? job.imageUrl
+                if let urlString, let url = URL(string: urlString) {
+                    SetuRemoteImage(
+                        urlString: urlString,
+                        accessibilityLabel: "AI 作品：\(job.promptCn)",
+                        width: nil,
+                        height: nil,
+                        cornerRadius: SetuRadius.md,
+                        contentMode: .fit,
+                        onActivate: { fullscreenImage = FullscreenImageItem(url: url) },
+                        activationHint: "打开全屏图片预览"
+                    )
+                    .frame(maxWidth: .infinity)
+                    .aspectRatio(SetuMosaicLayout.validAspectRatio(CGFloat(job.width) / CGFloat(max(job.height, 1))), contentMode: .fit)
+                } else {
+                    SetuEmptyState(
+                        title: "暂无图片",
+                        message: job.status == "COMPLETED" ? "可以尝试刷新图片。" : "作品生成完成后会显示预览。",
+                        systemImage: "photo"
+                    )
+                    .frame(maxWidth: .infinity, minHeight: 280)
+                }
             }
         }
-        .setuListRow()
+
     }
 
     private func imageActionsSection(_ job: AiGenerationJob) -> some View {
@@ -148,7 +156,7 @@ struct AiGenerationDetailView: View {
 
             }
         }
-        .setuListRow()
+
     }
 
     private func infoSection(_ job: AiGenerationJob) -> some View {
@@ -164,13 +172,9 @@ struct AiGenerationDetailView: View {
                 if let lastRefreshedAt {
                     LabeledContent("最近刷新", value: lastRefreshedAt.formatted(date: .omitted, time: .standard))
                 }
-                LabeledContent("画幅", value: "\(job.width) × \(job.height)")
                 LabeledContent("图片保留", value: imageRetentionTitle(job.privateOssStatus))
                 if let expiresAt = job.privateOssExpiresAt, !expiresAt.isEmpty {
                     LabeledContent("预计清理", value: SetuDateFormatter.string(from: expiresAt, style: .full))
-                }
-                if let cost = job.pointsCost {
-                    LabeledContent("本次消耗", value: "\(cost) 积分")
                 }
                 if let createdAt = job.createdAt {
                     LabeledContent("创建时间", value: SetuDateFormatter.string(from: createdAt, style: .full))
@@ -187,8 +191,6 @@ struct AiGenerationDetailView: View {
                 }
 
                 DisclosureGroup("高级参数") {
-                    LabeledContent("细节质量", value: "\(job.steps) 步")
-                    LabeledContent("描述遵循程度", value: job.cfg.formatted(.number.precision(.fractionLength(1))))
                     LabeledContent("随机种子", value: job.seed.map(String.init) ?? "随机")
                     LabeledContent("角色模式", value: job.generationMode == "DUAL" ? "双角色" : "单角色")
                     LabeledContent("基础模型", value: checkpointDisplayName(job.checkpoint))
@@ -205,7 +207,32 @@ struct AiGenerationDetailView: View {
 
             }
         }
-        .setuListRow()
+
+    }
+
+    private func parameterSection(_ job: AiGenerationJob) -> some View {
+        let values: [AiDetailParameter] = [
+            .init(title: "画幅", value: "\(job.width) × \(job.height)"),
+            .init(title: "本次消耗", value: job.pointsCost.map { "\($0) 积分" } ?? "暂无记录"),
+            .init(title: "细节质量", value: "\(job.steps) 步"),
+            .init(title: "描述遵循程度", value: job.cfg.formatted(.number.precision(.fractionLength(1)))),
+        ]
+        return SetuBento(items: values, span: { _ in .small }) { value in
+            SetuRecordCard(headline: value.title, fields: [.init("参数", value.value)])
+        }
+    }
+
+    private func progressSection(_ job: AiGenerationJob) -> some View {
+        let events: [SetuTimelineEvent] = [
+            .init(
+                id: "created", title: "创建作品", timestamp: job.createdAt.map { SetuDateFormatter.string(from: $0, style: .full) },
+                tone: .brand),
+            .init(
+                id: "status", title: job.statusTitle, detail: job.userErrorMessage,
+                timestamp: job.completedAt.map { SetuDateFormatter.string(from: $0, style: .full) },
+                tone: job.status == "FAILED" ? .danger : job.status == "COMPLETED" ? .success : .info, isCurrent: true),
+        ]
+        return SetuCard { SetuTimeline(events: events) }
     }
 
     private func imageRetentionTitle(_ status: String?) -> String {
@@ -256,7 +283,7 @@ struct AiGenerationDetailView: View {
 
             }
         }
-        .setuListRow()
+
     }
 
     private func copyPrompt(_ job: AiGenerationJob) {
@@ -285,7 +312,7 @@ struct AiGenerationDetailView: View {
 
             }
         }
-        .setuListRow()
+
     }
 
     private func deleteRequestSection(_ job: AiGenerationJob) -> some View {
@@ -304,7 +331,7 @@ struct AiGenerationDetailView: View {
 
             }
         }
-        .setuListRow()
+
     }
 
     private func load(showLoading: Bool = true) async {
@@ -484,4 +511,10 @@ private struct FullscreenImageViewer: View {
             }
         }
     }
+}
+
+struct AiDetailParameter: Identifiable {
+    let title: String
+    let value: String
+    var id: String { title }
 }

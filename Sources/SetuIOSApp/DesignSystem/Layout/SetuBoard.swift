@@ -60,8 +60,8 @@ struct SetuActionDock<Content: View>: View {
 }
 
 extension View {
-    func setuActionDock<Dock: View>(@ViewBuilder content: () -> Dock) -> some View {
-        modifier(SetuActionDockModifier(dock: content()))
+    func setuActionDock<Dock: View>(isPresented: Bool = true, @ViewBuilder content: () -> Dock) -> some View {
+        modifier(SetuActionDockModifier(isPresented: isPresented, dock: content()))
     }
 }
 
@@ -96,17 +96,20 @@ private struct SetuActionDockPresenceKey: PreferenceKey {
 
 private struct SetuActionDockModifier<Dock: View>: ViewModifier {
     @Environment(\.setuBottomAccessory) private var accessory
+    let isPresented: Bool
     let dock: Dock
 
     func body(content: Content) -> some View {
         content
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                VStack(spacing: 0) {
-                    accessory
-                    SetuActionDock { dock }
+                if isPresented {
+                    VStack(spacing: 0) {
+                        accessory
+                        SetuActionDock { dock }
+                    }
                 }
             }
-            .preference(key: SetuActionDockPresenceKey.self, value: true)
+            .preference(key: SetuActionDockPresenceKey.self, value: isPresented)
     }
 }
 
