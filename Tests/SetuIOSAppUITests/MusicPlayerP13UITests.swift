@@ -111,7 +111,7 @@ final class MusicPlayerP13UITests: XCTestCase {
         XCTAssertEqual(visiblePlayButtons.count, 1, "Only the presented player is interactive")
         guard let play = visiblePlayButtons.first else { return }
         let controls = [app.buttons.matching(NSPredicate(format: "label BEGINSWITH '播放模式：'")).firstMatch,
-                        app.buttons["上一首"], play, app.buttons["下一首"], app.buttons["更多操作"]]
+                        app.buttons["上一首"], play, app.buttons["下一首"], app.buttons["播放列表"]]
         for control in controls {
             XCTAssertTrue(control.exists)
             XCTAssertGreaterThanOrEqual(control.frame.width, 44)
@@ -125,7 +125,12 @@ final class MusicPlayerP13UITests: XCTestCase {
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = "p13-controls-\(name)"; screenshot.lifetime = .keepAlways; add(screenshot)
         app.buttons["更多操作"].tap()
-        XCTAssertTrue(app.buttons["睡眠定时"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["更多操作"].waitForExistence(timeout: 5))
+        if !app.buttons["睡眠定时"].exists { app.swipeUp() }
+        XCTAssertTrue(app.buttons["睡眠定时"].exists)
+        if !app.buttons["收藏到歌单"].isHittable { app.swipeDown() }
+        app.buttons["收藏到歌单"].tap()
+        XCTAssertTrue(app.navigationBars["收藏到歌单"].waitForExistence(timeout: 5))
     }
 }
 

@@ -61,6 +61,25 @@ extension NowPlayingSheet {
 
     func bottomPanel(for track: MusicPlaybackTrack) -> some View {
         VStack(spacing: SetuSpacing.md) {
+            HStack(spacing: SetuSpacing.md) {
+                VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+                    Text(track.title)
+                        .font(.title2.weight(.semibold))
+                        .foregroundStyle(SetuColor.textPrimary)
+                        .lineLimit(2)
+                    Text(track.artist)
+                        .font(.subheadline)
+                        .foregroundStyle(SetuColor.textSecondary)
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                if environment.config.musicFeatureFlags.likedTracksEnabled,
+                   case .canonical(let id) = track.id {
+                    MusicLikeButton(id: id, environment: environment, iconOnly: true)
+                }
+            }
+            .padding(.horizontal, SetuSpacing.lg)
+
             if player.playbackError != nil || player.isBuffering {
                 playbackStatusRow
                     .padding(.horizontal, SetuSpacing.lg)
@@ -128,83 +147,85 @@ extension NowPlayingSheet {
             }
             .padding(.horizontal, SetuSpacing.lg)
 
-            HStack {
-                if environment.config.musicFeatureFlags.likedTracksEnabled,
-                   case .canonical(let id) = track.id {
-                    MusicLikeButton(id: id, environment: environment)
-                }
-                Spacer()
-                if environment.config.musicFeatureFlags.airPlayPickerEnabled {
-                    AirPlayRouteButton().frame(width: 44, height: 44)
-                }
-                Spacer()
-                moreMenu(for: track)
-            }
-            .padding(.horizontal, SetuSpacing.xl)
         }
     }
 
-    func moreMenu(for track: MusicPlaybackTrack) -> some View {
-        Menu {
-            if track.hasMV {
+    // Present follow-up sheets only after More has finished dismissing.
+    func afterMoreDismisses(_ action: @escaping () -> Void) {
+        pendingMoreAction = action
+        showingMore = false
+    }
+
+    func moreActions(for track: MusicPlaybackTrack) -> some View {
+        NavigationStack {
+            List {
+                if environment.config.musicFeatureFlags.airPlayPickerEnabled {
+                    HStack {
+                        Text("隔空播放")
+                        Spacer()
+                        AirPlayRouteButton().frame(width: 44, height: 44)
+                    }
+                }
+                MusicQualityMenu(player: player)
+                if track.hasMV {
+                    Button {
+                        afterMoreDismisses { mvTrack = track }
+                    } label: {
+                        Label("观看 MV", systemImage: "play.rectangle")
+                    }
+                }
+
                 Button {
-                    mvTrack = track
+                    afterMoreDismisses { playlistTrack = track }
                 } label: {
-                    Label("观看 MV", systemImage: "play.rectangle")
+                    Label("收藏到歌单", systemImage: "text.badge.plus")
                 }
-            }
 
-            Button {
-                playlistTrack = track
-            } label: {
-                Label("收藏到歌单", systemImage: "text.badge.plus")
-            }
+                Button {
+                    afterMoreDismisses { Task { await download(track) } }
+                } label: {
+                    Label(isDownloading ? "正在准备下载…" : "下载", systemImage: "arrow.down.circle")
+                }
+                .disabled(isDownloading)
 
-            Button {
-                Task { await download(track) }
-            } label: {
-                Label(isDownloading ? "正在准备下载…" : "下载", systemImage: "arrow.down.circle")
-            }
-            .disabled(isDownloading)
+                ShareLink(item: "\(track.title) - \(track.artist)") {
+                    Label("分享", systemImage: "square.and.arrow.up")
+                }
 
-            ShareLink(item: "\(track.title) - \(track.artist)") {
-                Label("分享", systemImage: "square.and.arrow.up")
-            }
-
-            Menu {
-                ForEach(MusicSleepTimerOption.allCases) { option in
-                    Button(option.title) {
-                        player.startSleepTimer(option)
-                        showFeedback(.success("睡眠定时：\(option.title)"))
+                Menu {
+                    ForEach(MusicSleepTimerOption.allCases) { option in
+                        Button(option.title) {
+                            player.startSleepTimer(option)
+                            showFeedback(.success("睡眠定时：\(option.title)"))
+                        }
                     }
-                }
-                if player.sleepTimerTitle != nil {
-                    Divider()
-                    Button("取消定时", role: .destructive) {
-                        player.cancelSleepTimer()
-                        showFeedback(.success("已取消睡眠定时"))
+                    if player.sleepTimerTitle != nil {
+                        Divider()
+                        Button("取消定时", role: .destructive) {
+                            player.cancelSleepTimer()
+                            showFeedback(.success("已取消睡眠定时"))
+                        }
                     }
+                } label: {
+                    Label(player.sleepTimerTitle.map { "睡眠定时：\($0)" } ?? "睡眠定时", systemImage: "moon.zzz")
                 }
-            } label: {
-                Label(player.sleepTimerTitle.map { "睡眠定时：\($0)" } ?? "睡眠定时", systemImage: "moon.zzz")
-            }
 
-            Divider()
+                Divider()
 
-            Button(role: .destructive) {
-                player.stop()
-                dismiss()
-            } label: {
-                Label("停止播放", systemImage: "stop.circle")
+                Button(role: .destructive) {
+                    afterMoreDismisses {
+                        player.stop()
+                        dismiss()
+                    }
+                } label: {
+                    Label("停止播放", systemImage: "stop.circle")
+                }
             }
-        } label: {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(SetuColor.brandInk)
-                .frame(width: 50, height: 50)
-                .background(SetuColor.surfaceMuted, in: Circle())
+            .navigationTitle("更多操作")
+            .musicInlineNavigationTitle()
+            .toolbar { Button("完成") { showingMore = false } }
         }
-        .accessibilityLabel("更多操作")
+        .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
     }
 
     var playbackScrubber: some View {

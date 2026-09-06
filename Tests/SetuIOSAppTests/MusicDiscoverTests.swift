@@ -26,6 +26,41 @@ final class MusicDiscoverTests: XCTestCase {
         XCTAssertTrue(presentation.sections.first?.degraded == true)
     }
 
+    func testHomeRecoversNewTracksAfterSectionDeadlineWithoutWaitingForFiveMinuteCache() async throws {
+        let source = try json(MusicV2Fixtures.source)
+        let item: [String: Any] = ["kind": "track", "track": try json(MusicV2Fixtures.track)]
+        let empty = try JSONSerialization.data(withJSONObject: ["sections": [section("new-tracks", kind: "newTracks", items: [], source: source, degraded: true)], "generatedAt": "2026-09-06T00:00:00Z"])
+        let ready = try JSONSerialization.data(withJSONObject: ["sections": [section("new-tracks", kind: "newTracks", items: [item], source: source, degraded: false)], "generatedAt": "2026-09-06T00:00:03Z"])
+        let capture = MusicV2RequestCapture()
+        MusicV2URLProtocol.handler = { request in
+            capture.append(request)
+            return .init(body: capture.requests.count == 1 ? empty : ready)
+        }
+        let store = MusicStore(client: musicTestClient(server: MusicTestServer()), userID: 1, homeRecoverySleep: { _ in })
+        await store.loadHomeV2(client: makeMusicV2Client())
+        XCTAssertEqual(store.homeFeed.value?.sections.first?.items.count, 1)
+        XCTAssertEqual(capture.requests.count, 2)
+        await store.loadHomeV2(client: makeMusicV2Client())
+        XCTAssertEqual(capture.requests.count, 2, "Successful home keeps its regular cache")
+    }
+
+    func testHomeNewTracksRecoveryIsBoundedAndOwnerResetCancelsIt() async throws {
+        let source = try json(MusicV2Fixtures.source)
+        let empty = try JSONSerialization.data(withJSONObject: ["sections": [section("new-tracks", kind: "newTracks", items: [], source: source, degraded: true)], "generatedAt": "2026-09-06T00:00:00Z"])
+        let capture = MusicV2RequestCapture()
+        MusicV2URLProtocol.handler = { request in capture.append(request); return .init(body: empty) }
+        let bounded = MusicStore(client: musicTestClient(server: MusicTestServer()), userID: 1, homeRecoverySleep: { _ in })
+        await bounded.loadHomeV2(client: makeMusicV2Client())
+        XCTAssertEqual(capture.requests.count, 4, "One initial request and at most three recovery reads")
+        let store = MusicStore(client: musicTestClient(server: MusicTestServer()), userID: 1)
+        let loading = Task { await store.loadHomeV2(client: makeMusicV2Client()) }
+        while store.homeFeed.value == nil { await Task.yield() }
+        store.reset(for: 2)
+        await loading.value
+        XCTAssertNil(store.homeFeed.value)
+        XCTAssertEqual(capture.requests.count, 5, "No old-owner recovery may request or publish after reset")
+    }
+
     func testDashboardRecoversDegradedRecommendationThroughSupportedEndpoint() async throws {
         let source = try json(MusicV2Fixtures.source)
         let home = try JSONSerialization.data(withJSONObject: ["sections": [section("recommended", kind: "recommendedPlaylists", items: [], source: source, degraded: true)], "generatedAt": "2026-09-06T00:00:00Z"])

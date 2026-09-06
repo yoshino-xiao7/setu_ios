@@ -99,6 +99,8 @@ final class MusicStore {
     @ObservationIgnored private var likedPreparation: Task<Void, Never>?
     @ObservationIgnored private var savedPreparation: Task<Void, Never>?
     let homeFeed = MusicResource<MusicV2HomeFeed>()
+    @ObservationIgnored private var homeRecovery: Task<Void, Never>?
+    @ObservationIgnored private let homeRecoverySleep: @Sendable (UInt64) async throws -> Void
     let rankings = MusicResource<MusicV2Rankings>()
     let v2RecommendedPlaylists = MusicResource<MusicV2RecommendedPlaylists>()
     let dailyRecommendations = MusicResource<MusicV2RecommendedTracks>()
@@ -124,10 +126,12 @@ final class MusicStore {
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var historyRevision = UUID()
 
-    init(client: MusicClient, userID: Int? = nil, now: @escaping @Sendable () -> Date = { Date() }) {
+    init(client: MusicClient, userID: Int? = nil, now: @escaping @Sendable () -> Date = { Date() },
+         homeRecoverySleep: @escaping @Sendable (UInt64) async throws -> Void = { try await Task.sleep(nanoseconds: $0) }) {
         self.client = client
         self.userID = userID
         self.now = now
+        self.homeRecoverySleep = homeRecoverySleep
         let repository = MusicRepository(client: client, now: now)
         self.repository = repository
         searchSession = MusicSearchSession(repository: repository, now: now)
@@ -140,6 +144,7 @@ final class MusicStore {
         guard self.userID != userID else { return }
         self.userID = userID
         generation = UUID()
+        homeRecovery?.cancel(); homeRecovery = nil
         libraryRevision = UUID()
         likedPreparation?.cancel(); likedPreparation = nil
         savedPreparation?.cancel(); savedPreparation = nil
@@ -216,7 +221,37 @@ final class MusicStore {
     }
 
     func loadHomeV2(client: MusicV2Client, force: Bool = false) async {
+        let owner = generation
         await load(homeFeed, .home(client: client), force: force)
+        guard generation == owner else { return }
+        await recoverHomeNewTracks(client: client)
+    }
+
+    private func recoverHomeNewTracks(client: MusicV2Client) async {
+        let owner = generation
+        if let homeRecovery { await homeRecovery.value; return }
+        guard needsNewTracksRecovery else { return }
+        // Home returns before a cold source finishes. Re-read its late cache result,
+        // bypassing both client cache layers, while leaving other sections visible.
+        let recovery = Task { [weak self] in
+            guard let self else { return }
+            for delay: UInt64 in [2, 5, 10] {
+                do { try await homeRecoverySleep(delay * 1_000_000_000) }
+                catch { return }
+                guard !Task.isCancelled, generation == owner, needsNewTracksRecovery else { return }
+                await load(homeFeed, .home(client: client), force: true)
+                guard generation == owner, homeFeed.error == nil else { return }
+            }
+        }
+        homeRecovery = recovery
+        await recovery.value
+        if generation == owner { homeRecovery = nil }
+    }
+
+    private var needsNewTracksRecovery: Bool {
+        homeFeed.error == nil && (homeFeed.value?.sections.contains {
+            $0.kind == .newTracks && $0.degraded && $0.items.isEmpty
+        } ?? false)
     }
 
     /// The product dashboard owns history and retained capabilities separately from the v2 feed.
@@ -231,8 +266,9 @@ final class MusicStore {
 
     private func loadDashboardDiscovery(client: MusicV2Client, force: Bool) async {
         let owner = generation
-        await loadHomeV2(client: client, force: force)
+        await load(homeFeed, .home(client: client), force: force)
         guard generation == owner, homeFeed.error?.action != .signIn else { return }
+        async let newTracksRecovery: Void = recoverHomeNewTracks(client: client)
         let hasRecommendations = homeFeed.value?.sections.contains {
             $0.kind == .recommendedPlaylists && !$0.items.isEmpty
         } ?? false
@@ -241,6 +277,7 @@ final class MusicStore {
             // normal cached request, not an automatic retry loop or an unsupported v1 substitute.
             await loadRecommendedPlaylists(client: client, force: force)
         }
+        await newTracksRecovery
     }
 
     func loadRankings(client: MusicV2Client, force: Bool = false) async {

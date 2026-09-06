@@ -39,6 +39,8 @@ struct NowPlayingSheet: View {
     @State var isScrubbing = false
     @State var isDownloading = false
     @State var showingQueue = false
+    @State var showingMore = false
+    @State var pendingMoreAction: (() -> Void)?
     @State var playlistTrack: MusicPlaybackTrack?
     @State var mvTrack: MusicPlaybackTrack?
     @State var loadedArtworkAccent: (key: SetuImageKey, color: Color)?
@@ -90,6 +92,13 @@ struct NowPlayingSheet: View {
             }
         }
         .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.86), value: feedback)
+        .sheet(isPresented: $showingMore, onDismiss: {
+            let action = pendingMoreAction
+            pendingMoreAction = nil
+            action?()
+        }) {
+            if let track = player.currentTrack { moreActions(for: track) }
+        }
         .sheet(isPresented: $showingQueue) {
             MusicQueueDrawerView(player: player, onDismiss: { showingQueue = false })
                 .presentationDetents([.medium, .large])
@@ -171,13 +180,14 @@ struct NowPlayingSheet: View {
 
             Spacer()
 
-            VStack(alignment: .trailing, spacing: SetuSpacing.xs) {
-                MusicQualityMenu(player: player)
-                if let timerTitle = player.sleepTimerTitle {
-                    SetuPill(text: timerTitle, systemImage: "moon.zzz.fill", tone: .info)
-                        .accessibilityLabel("睡眠定时：\(timerTitle)")
-                }
+            Button { showingMore = true } label: {
+                Image(systemName: "ellipsis")
+                    .font(.title3.weight(.semibold))
+                    .frame(width: 44, height: 44)
             }
+            .accessibilityLabel("更多操作")
+            .setuButtonFeedback()
+
         }
         .padding(.horizontal, SetuSpacing.lg)
     }
@@ -205,7 +215,7 @@ struct NowPlayingSheet: View {
         // Artwork adapts to whatever the page area offers, so controls stay
         // on-screen for iPhone SE and the art still fills a Pro Max.
         GeometryReader { proxy in
-            let side = max(min(proxy.size.width - SetuSpacing.xxl * 2, proxy.size.height * 0.62, 360), 120)
+            let side = max(min(proxy.size.width - SetuSpacing.xxl * 2, proxy.size.height - SetuSpacing.xl * 2, 360), 120)
             let content = VStack(spacing: SetuSpacing.xl) {
                 Spacer(minLength: 0)
 
@@ -224,35 +234,6 @@ struct NowPlayingSheet: View {
                 .scaleEffect(player.isPlaying && !reduceMotion ? 1.0 : 0.92)
                 .animation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.78), value: player.isPlaying)
                 .accessibilityLabel("歌曲封面，点击查看歌词")
-
-                VStack(spacing: SetuSpacing.xs) {
-                    Text(track.title)
-                        .font(.title2.weight(.semibold))
-                        .foregroundStyle(SetuColor.textPrimary)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
-                    Text("\(track.artist) — \(track.album)")
-                        .font(.subheadline)
-                        .foregroundStyle(SetuColor.textSecondary)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(1)
-                }
-                .padding(.horizontal, SetuSpacing.xl)
-
-                if track.hasMV {
-                    Button {
-                        mvTrack = track
-                    } label: {
-                        Label("观看 MV", systemImage: "play.rectangle.fill")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(SetuColor.brandInk)
-                            .frame(minHeight: 44)
-                            .padding(.horizontal, SetuSpacing.lg)
-                            .background(SetuColor.brandSoft.opacity(0.24), in: Capsule())
-                    }
-                    .setuButtonFeedback(cornerRadius: 22)
-                    .accessibilityLabel("观看 \(track.title) 的 MV")
-                }
 
                 Spacer(minLength: 0)
             }
