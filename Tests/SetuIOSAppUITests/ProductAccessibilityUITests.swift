@@ -36,12 +36,12 @@ final class ProductAccessibilityUITests: XCTestCase {
 
     private let loggedInRoutes = [
         LoggedInRoute(
-            title: "图片 Tab", launchArgument: "-ui-testing-root-images",
+            title: "图库 Tab", launchArgument: "-ui-testing-root-images",
             rootIdentifier: "image.swipe.page", readyIdentifier: "image.unlock",
             landmarks: [], forwardScrollMode: .incremental
         ),
         LoggedInRoute(
-            title: "AI 绘画 Tab", launchArgument: "-ui-testing-root-ai",
+            title: "创作 Tab", launchArgument: "-ui-testing-root-ai",
             rootIdentifier: "ai.draw.page", readyIdentifier: "ai.draw.prompt",
             landmarks: [], forwardScrollMode: .incremental
         ),
@@ -81,7 +81,7 @@ final class ProductAccessibilityUITests: XCTestCase {
         defer { app.terminate() }
         XCTAssertTrue(app.buttons["image.unlock"].waitForExistence(timeout: 8))
         XCTAssertTrue(app.buttons["image.unlock"].isHittable)
-        app.tabBars.buttons["AI 绘画"].tap()
+        app.tabBars.buttons["创作"].tap()
         let prompt = app.textFields["ai.draw.prompt"].firstMatch
         XCTAssertTrue(prompt.waitForExistence(timeout: 8))
         XCTAssertTrue(prompt.isHittable)

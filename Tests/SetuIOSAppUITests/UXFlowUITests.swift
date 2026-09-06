@@ -11,7 +11,7 @@ final class UXFlowUITests: XCTestCase {
         }
         app.buttons["无损"].tap()
         XCTAssertEqual(quality.label, "优先音质：无损")
-        app.tabBars.buttons["图片"].tap()
+        app.tabBars.buttons["图库"].tap()
         app.tabBars.buttons["音乐"].tap()
         XCTAssertEqual(quality.label, "优先音质：无损")
         app.terminate()
@@ -233,7 +233,7 @@ final class UXFlowUITests: XCTestCase {
             if largeText { arguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityExtraExtraExtraLarge"] }
             let app = launch(arguments)
             defer { app.terminate() }
-            for tab in ["首页", "AI 绘画", "图片", "音乐", "广场"] {
+            for tab in ["首页", "创作", "图库", "音乐", "广场"] {
                 let tabButton = app.tabBars.buttons[tab]
                 XCTAssertTrue(tabButton.waitForExistence(timeout: 8))
                 tabButton.tap()
@@ -241,13 +241,13 @@ final class UXFlowUITests: XCTestCase {
                 XCTAssertTrue(bar.waitForExistence(timeout: 5))
                 XCTAssertLessThanOrEqual(bar.frame.maxY, app.tabBars.firstMatch.frame.minY + 1)
                 XCTAssertTrue(tabButton.isHittable)
-                let actionID = tab == "AI 绘画" ? "ai.draw.generate" : "image.unlock"
-                if tab == "AI 绘画" || tab == "图片" {
+                let actionID = tab == "创作" ? "ai.draw.generate" : "image.unlock"
+                if tab == "创作" || tab == "图库" {
                     let action = app.buttons[actionID]
                     XCTAssertTrue(action.isHittable)
                     XCTAssertLessThanOrEqual(action.frame.maxY, bar.frame.minY + 1)
                 }
-                if tab == "图片" {
+                if tab == "图库" {
                     XCTAssertTrue(app.buttons["image.balance"].staticTexts["86"].exists)
                     for (id, title) in [("image.favorite", "收藏"), ("image.share", "分享"), ("下一张", "下一张")] {
                         let button = app.buttons[id]
@@ -262,7 +262,7 @@ final class UXFlowUITests: XCTestCase {
                 screenshot.name = "player-\(tab)-\(largeText ? "AX5" : "default")"
                 screenshot.lifetime = .keepAlways
                 add(screenshot)
-                if tab == "AI 绘画" {
+                if tab == "创作" {
                     app.buttons["AI 绘画历史"].tap()
                     XCTAssertTrue(bar.waitForExistence(timeout: 5))
                     XCTAssertLessThanOrEqual(bar.frame.maxY, app.tabBars.firstMatch.frame.minY + 1)

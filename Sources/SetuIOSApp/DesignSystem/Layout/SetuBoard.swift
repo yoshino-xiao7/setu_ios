@@ -61,9 +61,7 @@ struct SetuActionDock<Content: View>: View {
 
 extension View {
     func setuActionDock<Dock: View>(@ViewBuilder content: () -> Dock) -> some View {
-        safeAreaInset(edge: .bottom, spacing: 0) {
-            SetuActionDock(content: content)
-        }
+        modifier(SetuActionDockModifier(dock: content()))
     }
 }
 
@@ -74,5 +72,64 @@ struct SetuSurfaceButtonStyle: ButtonStyle {
         configuration.label
             .opacity(configuration.isPressed ? 0.8 : 1)
             .animation(SetuMotion.resolved(SetuMotion.gentle, reduceMotion: reduceMotion), value: configuration.isPressed)
+    }
+}
+
+
+private struct SetuBottomAccessoryKey: EnvironmentKey {
+    static let defaultValue = AnyView(EmptyView())
+}
+
+private extension EnvironmentValues {
+    var setuBottomAccessory: AnyView {
+        get { self[SetuBottomAccessoryKey.self] }
+        set { self[SetuBottomAccessoryKey.self] = newValue }
+    }
+}
+
+private struct SetuActionDockPresenceKey: PreferenceKey {
+    static let defaultValue = false
+    static func reduce(value: inout Bool, nextValue: () -> Bool) {
+        value = value || nextValue()
+    }
+}
+
+private struct SetuActionDockModifier<Dock: View>: ViewModifier {
+    @Environment(\.setuBottomAccessory) private var accessory
+    let dock: Dock
+
+    func body(content: Content) -> some View {
+        content
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                VStack(spacing: 0) {
+                    accessory
+                    SetuActionDock { dock }
+                }
+            }
+            .preference(key: SetuActionDockPresenceKey.self, value: true)
+    }
+}
+
+private struct SetuPageBottomAccessoryModifier<Accessory: View>: ViewModifier {
+    @State private var hasDock = false
+    let accessory: Accessory
+
+    func body(content: Content) -> some View {
+        content
+            .environment(\.setuBottomAccessory, AnyView(accessory))
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if !hasDock { accessory }
+            }
+            .onPreferenceChange(SetuActionDockPresenceKey.self) { hasDock = $0 }
+            // Each navigation page owns its reservation; do not leak to parent pages.
+            .transformPreference(SetuActionDockPresenceKey.self) { $0 = false }
+    }
+}
+
+extension View {
+    /// A page with a Dock places this accessory above its action. Other pages
+    /// retain the regular bottom reservation, using the same accessory instance.
+    func setuPageBottomAccessory<Accessory: View>(@ViewBuilder content: () -> Accessory) -> some View {
+        modifier(SetuPageBottomAccessoryModifier(accessory: content()))
     }
 }

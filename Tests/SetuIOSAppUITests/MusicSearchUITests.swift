@@ -63,6 +63,8 @@ final class MusicSearchUITests: XCTestCase {
         app.segmentedControls.buttons["歌曲"].tap()
         XCTAssertTrue(app.buttons["播放 周杰伦 歌曲 1"].exists)
         XCTAssertTrue(app.staticTexts["10/100"].exists)
+        XCTAssertTrue(app.tabBars.buttons["创作"].exists)
+        XCTAssertTrue(app.tabBars.buttons["图库"].exists)
         app.tabBars.buttons["首页"].tap()
         app.tabBars.buttons["音乐"].tap()
         XCTAssertTrue(app.navigationBars["搜索音乐"].waitForExistence(timeout: 5))

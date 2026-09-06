@@ -137,9 +137,9 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .home:
             "首页"
         case .ai:
-            "AI 绘画"
+            "创作"
         case .images:
-            "图片"
+            "图库"
         case .music:
             "音乐"
         case .square:

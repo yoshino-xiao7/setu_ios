@@ -222,11 +222,11 @@ struct RootAppView: View {
     private func tabContent(for tab: AppTab) -> some View {
         NavigationStack(path: navigationCoordinator.binding(for: tab)) {
             content(for: tab)
+                .setuPageBottomAccessory { musicPlayerSpace(for: tab) }
                 .navigationDestination(for: AppRoute.self) { route in
                     destination(for: route)
-                        .safeAreaInset(edge: .bottom, spacing: 0) { musicPlayerSpace(for: tab) }
+                        .setuPageBottomAccessory { musicPlayerSpace(for: tab) }
                 }
-                .safeAreaInset(edge: .bottom, spacing: 0) { musicPlayerSpace(for: tab) }
         }
         .environment(navigationCoordinator.router(for: tab))
         .environment(\.setuRecoveryActions, SetuRecoveryActions(
@@ -243,7 +243,7 @@ struct RootAppView: View {
     private func musicPlayerSpace(for tab: AppTab) -> some View {
         if musicPlayer.currentTrack != nil {
             let isSelected = navigationCoordinator.selectedTab == tab
-            // Keep the original inset ordering relative to page-specific bottom actions.
+            // Dock pages reserve this space above their primary action; other pages keep the bottom inset.
             // These placeholders own no player, progress observation or artwork task.
             Color.clear
                 .frame(height: musicInsetHeight)
