@@ -219,6 +219,30 @@ final class MusicStore {
         await load(homeFeed, .home(client: client), force: force)
     }
 
+    /// The product dashboard owns history and retained capabilities separately from the v2 feed.
+    /// Each resource retains its existing cache, deduplication and owner-reset behavior.
+    func loadDashboard(client: MusicV2Client, force: Bool = false) async {
+        async let feed: Void = loadDashboardDiscovery(client: client, force: force)
+        async let history: Void = loadCanonicalHistory(client: client, force: force)
+        async let daily: Void = loadLegacyDaily(force: force)
+        async let hot: Void = load(hotSearch, .hotSearch, force: force)
+        _ = await (feed, history, daily, hot)
+    }
+
+    private func loadDashboardDiscovery(client: MusicV2Client, force: Bool) async {
+        let owner = generation
+        await loadHomeV2(client: client, force: force)
+        guard generation == owner, homeFeed.error?.action != .signIn else { return }
+        let hasRecommendations = homeFeed.value?.sections.contains {
+            $0.kind == .recommendedPlaylists && !$0.items.isEmpty
+        } ?? false
+        if !hasRecommendations {
+            // Home has a short section deadline. The standalone supported endpoint gets one
+            // normal cached request, not an automatic retry loop or an unsupported v1 substitute.
+            await loadRecommendedPlaylists(client: client, force: force)
+        }
+    }
+
     func loadRankings(client: MusicV2Client, force: Bool = false) async {
         await load(rankings, .rankings(client: client), force: force)
     }

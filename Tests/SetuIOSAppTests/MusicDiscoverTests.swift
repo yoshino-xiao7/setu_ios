@@ -7,6 +7,72 @@ import XCTest
 final class MusicDiscoverTests: XCTestCase {
     override func tearDown() { MusicV2URLProtocol.handler = nil; super.tearDown() }
 
+    func testHomeSuppressesFixedUnavailableModulesButKeepsRealFailuresAndStaleContent() throws {
+        let source = try json(MusicV2Fixtures.source)
+        let track: [String: Any] = ["kind": "track", "track": try json(MusicV2Fixtures.track)]
+        let sections = [
+            section("daily", kind: "dailyTracks", items: [], source: source, degraded: true),
+            section("hot", kind: "hotSearch", items: [], source: source, degraded: true),
+            section("rankings", kind: "rankings", items: [], source: source, degraded: true),
+            section("albums", kind: "newAlbums", items: [], source: source, degraded: true),
+            section("recommendations", kind: "recommendedPlaylists", items: [], source: source, degraded: true),
+            section("stale-tracks", kind: "newTracks", items: [track], source: source, degraded: true),
+        ]
+        let feed = try JSONDecoder().decode(MusicV2HomeFeed.self, from: JSONSerialization.data(withJSONObject: ["sections": sections, "generatedAt": "2026-09-06T00:00:00Z"]))
+        let presentation = MusicHomeFeedPresentation(feed: feed, flags: .development)
+        XCTAssertEqual(presentation.sections.map(\.id), ["stale-tracks"])
+        XCTAssertEqual(presentation.sections.first?.items.count, 1)
+        XCTAssertEqual(presentation.unavailableTitles, ["recommendations"])
+        XCTAssertTrue(presentation.sections.first?.degraded == true)
+    }
+
+    func testDashboardRecoversDegradedRecommendationThroughSupportedEndpoint() async throws {
+        let source = try json(MusicV2Fixtures.source)
+        let home = try JSONSerialization.data(withJSONObject: ["sections": [section("recommended", kind: "recommendedPlaylists", items: [], source: source, degraded: true)], "generatedAt": "2026-09-06T00:00:00Z"])
+        let capture = MusicV2RequestCapture()
+        MusicV2URLProtocol.handler = { request in
+            capture.append(request)
+            if request.url!.path == "/user/music/v2/home" { return .init(body: home) }
+            if request.url!.path == "/user/music/v2/recommend/playlists" {
+                return .init(body: Data("{\"items\":[\(MusicV2Fixtures.providerPlaylist)],\"source\":\(MusicV2Fixtures.source)}".utf8))
+            }
+            return MusicV2Fixtures.response(for: request)
+        }
+        let store = MusicStore(client: musicTestClient(server: MusicTestServer()), userID: 1)
+        await store.loadDashboard(client: makeMusicV2Client())
+        XCTAssertTrue(store.homeFeed.value?.sections.first?.degraded == true)
+        XCTAssertEqual(store.v2RecommendedPlaylists.value?.items.count, 1)
+        XCTAssertNil(store.v2RecommendedPlaylists.error)
+        XCTAssertEqual(capture.requests.filter { $0.url!.path == "/user/music/v2/recommend/playlists" }.count, 1)
+    }
+
+    func testDashboardLoadsCanonicalHistoryAndRetainedDailyHotWithoutStable503Endpoints() async {
+        let legacy = MusicTestServer(), capture = MusicV2RequestCapture()
+        MusicV2URLProtocol.handler = { request in
+            capture.append(request)
+            return MusicV2Fixtures.response(for: request)
+        }
+        let store = MusicStore(client: musicTestClient(server: legacy), userID: 1)
+        let client = makeMusicV2Client()
+        await store.loadDashboard(client: client)
+        XCTAssertEqual(Set(capture.requests.map { $0.url!.path }), ["/user/music/v2/home", "/user/music/v2/library/history", "/user/music/v2/recommend/playlists"])
+        let requests = await legacy.requests
+        XCTAssertEqual(Set(requests), ["GET /user/music/search/hot", "GET /user/music/recommend/songs"])
+        XCTAssertNotNil(store.canonicalHistory.value)
+        XCTAssertNotNil(store.dailySongs.value)
+        XCTAssertNotNil(store.hotSearch.value)
+        XCTAssertNil(store.recentHistory.value)
+        await store.loadDashboard(client: client)
+        XCTAssertEqual(capture.requests.count, 3)
+        let warmRequests = await legacy.requests
+        XCTAssertEqual(warmRequests.count, 2)
+        store.reset(for: 2)
+        XCTAssertNil(store.canonicalHistory.value)
+        XCTAssertNil(store.dailySongs.value)
+        XCTAssertNil(store.hotSearch.value)
+        XCTAssertNil(store.homeFeed.value)
+    }
+
     func testRecommendedPlaylistsLoadsOnlyOnNavigationAndResetsForOwner() async {
         let capture = MusicV2RequestCapture()
         MusicV2URLProtocol.handler = { request in

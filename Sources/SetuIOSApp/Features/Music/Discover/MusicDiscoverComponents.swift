@@ -72,3 +72,35 @@ struct MusicDiscoverMore: View {
         }
     }
 }
+
+struct MusicDiscoverPlaylistCard: View {
+    @Environment(RouterPath.self) private var router
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    private let title: String
+    private let artwork: String?
+    private let route: AppRoute?
+
+    init(playlist: MusicV2Playlist, flags: MusicFeatureFlags) {
+        let id: MusicV2PlaylistID
+        switch playlist {
+        case .provider(let value):
+            id = .provider(value.id); title = value.title; artwork = value.artwork?.url
+        case .local(let value):
+            id = .local(value.id); title = value.title; artwork = value.artwork?.url
+        }
+        route = MusicDiscoverRoutes.route(.resource(ref: .playlist(id), label: nil), flags: flags)
+    }
+
+    var body: some View {
+        Button { if let route { router.navigate(to: route) } } label: {
+            VStack(alignment: .leading, spacing: SetuSpacing.sm) {
+                MusicArtworkView(urlString: artwork, width: 144, height: 144, cornerRadius: 16, artworkSize: .lockScreen)
+                Text(title).font(.subheadline.weight(.medium))
+                    .foregroundStyle(SetuColor.textPrimary)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }.frame(width: 144, alignment: .topLeading).contentShape(Rectangle())
+        }.setuButtonFeedback(cornerRadius: 16).disabled(route == nil)
+    }
+}

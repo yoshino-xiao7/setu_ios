@@ -6,14 +6,82 @@ struct MusicHomeFeedContent: View {
     let flags: MusicFeatureFlags
     let userID: Int?
     let retry: () async -> Void
+    var recommendations: MusicResource<MusicV2RecommendedPlaylists>? = nil
+
     var body: some View {
-        MusicDetailState(resource: resource, retry: retry) { feed in
-            if feed.sections.isEmpty {
-                ContentUnavailableView("暂无音乐内容", systemImage: "music.note")
+        Group {
+            MusicDetailState(resource: resource, retry: retry) { feed in
+                let presentation = MusicHomeFeedPresentation(feed: feed, flags: flags)
+                let unavailable = presentation.unavailableTitles.filter { title in
+                    recommendations == nil || !feed.sections.contains {
+                        $0.title == title && $0.kind == .recommendedPlaylists
+                    }
+                }
+                if !unavailable.isEmpty {
+                    Section {
+                        SetuCard {
+                            HStack(alignment: .top, spacing: SetuSpacing.md) {
+                                Image(systemName: "arrow.clockwise.circle").foregroundStyle(SetuColor.textSecondary)
+                                VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+                                    Text("部分推荐暂未加载").font(.subheadline.weight(.semibold))
+                                    Text(unavailable.joined(separator: "、"))
+                                        .font(SetuTypography.caption).foregroundStyle(SetuColor.textSecondary)
+                                }
+                                Spacer(minLength: 0)
+                                Button("重试") { Task { await retry() } }.frame(minHeight: 44)
+                            }
+                        }.setuListRow()
+                    }.accessibilityIdentifier("music.home.discovery.retry")
+                }
+                ForEach(presentation.sections, id: \.id) { section in
+                    MusicHomeSectionView(model: .init(section, userID: userID), flags: flags, retry: retry)
+                }
             }
-            ForEach(feed.sections, id: \.id) { section in
-                MusicHomeSectionView(model: .init(section, userID: userID), flags: flags, retry: retry)
+            if let recommendations, flags.usesV2PlaylistDetail,
+               resource.error?.action != .signIn,
+               !(resource.value?.sections.contains { $0.kind == .recommendedPlaylists && !$0.items.isEmpty } ?? false) {
+                MusicRecommendedPlaylistsShelf(resource: recommendations, flags: flags, retry: retry)
             }
+        }
+    }
+}
+
+struct MusicRecommendedPlaylistsShelf: View {
+    @Environment(RouterPath.self) private var router
+    let resource: MusicResource<MusicV2RecommendedPlaylists>
+    let flags: MusicFeatureFlags
+    let retry: () async -> Void
+    var body: some View {
+        Section {
+            SetuCard {
+                VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                    SetuSectionHeader(title: "推荐歌单", actionTitle: "全部",
+                                      action: { router.navigate(to: .recommendedPlaylists) })
+                    if let value = resource.value {
+                        if value.items.isEmpty {
+                            Text("暂无推荐歌单").font(SetuTypography.caption).foregroundStyle(SetuColor.textSecondary)
+                        } else {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                LazyHStack(alignment: .top, spacing: SetuSpacing.md) {
+                                    ForEach(Array(value.items.prefix(8)), id: \.id) { playlist in
+                                        MusicDiscoverPlaylistCard(playlist: .provider(playlist), flags: flags)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if let error = resource.error {
+                        Text(error.message).font(SetuTypography.caption).foregroundStyle(SetuColor.textSecondary)
+                        if error.action == .signIn {
+                            NavigationLink("重新登录", value: AppRoute.account).frame(minHeight: 44)
+                        } else {
+                            Button("重新加载歌单") { Task { await retry() } }.frame(minHeight: 44)
+                        }
+                    } else if resource.value == nil {
+                        ProgressView("正在加载歌单").frame(maxWidth: .infinity, minHeight: 88)
+                    }
+                }
+            }.setuListRow()
         }
     }
 }
@@ -33,13 +101,14 @@ struct MusicHomeSectionView: View {
                     SetuSectionHeader(title: model.section.title, subtitle: model.section.subtitle,
                         actionTitle: showsRecommendationsEntry ? "查看全部" : nil,
                         action: showsRecommendationsEntry ? { router.navigate(to: .recommendedPlaylists) } : nil)
-                    if let source = model.section.source { MusicDiscoverSourceLabel(source: source) }
+                    if let label = model.section.source?.label {
+                        Text(label).font(SetuTypography.caption).foregroundStyle(SetuColor.textSecondary)
+                    }
                     if model.section.degraded {
-                        Text(model.section.items.isEmpty ? "内容暂时不可用" : "刷新暂不可用，正在显示已有内容")
+                        Text("部分内容暂未更新，保留已加载内容")
                             .font(SetuTypography.caption).foregroundStyle(SetuColor.textSecondary)
                         Button("重试") { Task { await retry() } }.frame(minHeight: 44)
-                    } else if model.section.items.isEmpty {
-                        Text("暂无内容").foregroundStyle(SetuColor.textSecondary)
+
                     }
                     switch model.section.kind {
                     case .continueListening:
@@ -48,6 +117,16 @@ struct MusicHomeSectionView: View {
                                 ForEach(model.tracks, id: \.id) { track in
                                     MusicRecentHistoryCard(track: track) {
                                         Task { await intent?.play(track, in: model.tracks, context: model.context) }
+                                    }
+                                }
+                            }
+                        }
+                    case .recommendedPlaylists, .favoritePlaylists, .rankings:
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            LazyHStack(alignment: .top, spacing: SetuSpacing.md) {
+                                ForEach(Array(model.section.items.prefix(8).enumerated()), id: \.offset) { _, item in
+                                    if case .playlist(let playlist) = item {
+                                        MusicDiscoverPlaylistCard(playlist: playlist, flags: flags)
                                     }
                                 }
                             }
@@ -83,7 +162,7 @@ struct MusicHomeSectionView: View {
         dynamicTypeSize.isAccessibilitySize ? [GridItem(.flexible())] : [GridItem(.adaptive(minimum: 96), spacing: SetuSpacing.sm)]
     }
     @ViewBuilder private var items: some View {
-        ForEach(model.section.items.indices, id: \.self) { index in
+        ForEach(Array(model.section.items.indices.prefix(5)), id: \.self) { index in
             switch model.section.items[index] {
             case .track(let track):
                 MusicDetailTrackRow(track: track, tracks: model.tracks, context: model.context, flags: flags)

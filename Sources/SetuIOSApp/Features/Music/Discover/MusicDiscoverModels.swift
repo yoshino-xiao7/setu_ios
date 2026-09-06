@@ -109,3 +109,24 @@ struct MusicHomeShortcut: Identifiable {
         return entries
     }
 }
+
+struct MusicHomeFeedPresentation {
+    let sections: [MusicV2HomeSection]
+    let unavailableTitles: [String]
+
+    init(feed: MusicV2HomeFeed, flags: MusicFeatureFlags) {
+        let supported = feed.sections.filter { section in
+            switch section.kind {
+            // These have dedicated local navigation or retained data sources on the dashboard.
+            case .quickEntries, .continueListening, .dailyTracks, .hotSearch: return false
+            case .rankings: return flags.rankingsEnabled && flags.usesV2PlaylistDetail
+            case .newAlbums: return flags.albumDetailEnabled
+            case .favoritePlaylists: return flags.favoritePlaylistsEnabled && flags.usesV2PlaylistDetail
+            case .recommendedPlaylists: return flags.usesV2PlaylistDetail
+            case .newTracks: return true
+            }
+        }
+        sections = supported.filter { !$0.items.isEmpty }
+        unavailableTitles = supported.filter { $0.degraded && $0.items.isEmpty }.map(\.title)
+    }
+}

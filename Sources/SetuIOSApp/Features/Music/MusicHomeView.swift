@@ -49,9 +49,13 @@ struct MusicHomeView: View {
                 .setuListRow()
             }
             if environment.config.musicFeatureFlags.usesV2Home {
+                canonicalRecentHistoryContent
+                dailySongsContent
                 MusicHomeFeedContent(resource: store.homeFeed, flags: environment.config.musicFeatureFlags,
-                                     userID: store.userID, retry: { await loadLandingContent(force: true) })
+                                     userID: store.userID, retry: { await loadLandingContent(force: true) },
+                                     recommendations: store.v2RecommendedPlaylists)
                     .environment(\.musicPlaybackIntent, MusicPlaybackIntent(player: player, store: store, libraryClient: environment.musicV2Client, libraryEnabled: environment.config.musicFeatureFlags.likedTracksEnabled))
+                hotSearchContent
             } else {
                 if store.usesCanonicalHistory(config: environment.config) {
                     canonicalRecentHistoryContent
@@ -120,21 +124,47 @@ struct MusicHomeView: View {
     private var shortcutContent: some View {
         Section {
             SetuCard {
-                LazyVGrid(columns: dynamicTypeSize.isAccessibilitySize
-                    ? [GridItem(.flexible())]
-                    : [GridItem(.adaptive(minimum: 130), spacing: SetuSpacing.sm)], spacing: SetuSpacing.sm) {
-                    ForEach(MusicHomeShortcut.entries(flags: environment.config.musicFeatureFlags)) { entry in
-                        Button { router.navigate(to: entry.route) } label: {
-                            Label(entry.title, systemImage: entry.symbol)
-                                .font(.subheadline.weight(.semibold))
+                VStack(spacing: SetuSpacing.lg) {
+                    if environment.config.musicFeatureFlags.radioFMEnabled {
+                        Button { router.navigate(to: .radioFM) } label: {
+                            HStack(spacing: SetuSpacing.md) {
+                                Image(systemName: "waveform")
+                                    .font(.system(size: 30, weight: .medium)).accessibilityHidden(true)
+                                VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+                                    Text("私人 FM").font(SetuTypography.headline)
+                                    Text("让下一首，带来一点惊喜")
+                                        .font(SetuTypography.caption).foregroundStyle(SetuColor.textSecondary)
+                                }
+                                Spacer(minLength: 0)
+                                Image(systemName: "play.circle.fill").font(.title).accessibilityHidden(true)
+                            }
+                            .foregroundStyle(SetuColor.brandInk)
+                            .padding(SetuSpacing.md)
+                            .frame(maxWidth: .infinity, minHeight: 88)
+                            .background(SetuColor.brandPink.opacity(0.10), in: RoundedRectangle(cornerRadius: 18))
+                            .contentShape(Rectangle())
+                        }.setuButtonFeedback(cornerRadius: 18)
+                            .accessibilityIdentifier("music.home.shortcut.fm")
+                    }
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: SetuSpacing.sm),
+                                             count: dynamicTypeSize.isAccessibilitySize ? 2 : 4), spacing: SetuSpacing.md) {
+                        ForEach(MusicHomeShortcut.entries(flags: environment.config.musicFeatureFlags)
+                            .filter { ["liked", "saved", "history", "playlists"].contains($0.id) }) { entry in
+                            Button { router.navigate(to: entry.route) } label: {
+                                VStack(spacing: SetuSpacing.sm) {
+                                    Image(systemName: entry.symbol).font(.title3)
+                                        .frame(width: 48, height: 48)
+                                        .background(SetuColor.surfaceMuted, in: Circle())
+                                        .accessibilityHidden(true)
+                                    Text(entry.title).font(SetuTypography.caption)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
                                 .foregroundStyle(SetuColor.brandInk)
-                                .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
-                                .padding(.horizontal, SetuSpacing.sm)
-                                .background(SetuColor.surfaceMuted, in: RoundedRectangle(cornerRadius: 12))
+                                .frame(maxWidth: .infinity, minHeight: 76)
                                 .contentShape(Rectangle())
+                            }.setuButtonFeedback(cornerRadius: 16)
+                                .accessibilityIdentifier("music.home.shortcut.\(entry.id)")
                         }
-                        .setuButtonFeedback(cornerRadius: 12)
-                        .accessibilityIdentifier("music.home.shortcut.\(entry.id)")
                     }
                 }
             }.setuListRow()
@@ -426,7 +456,9 @@ struct MusicHomeView: View {
                 Section {
                     SetuCard {
                         VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                            SetuSectionHeader(title: title)
+                            SetuSectionHeader(title: title,
+                                actionTitle: title == "每日推荐" ? "全部" : nil,
+                                action: title == "每日推荐" ? { router.navigate(to: .dailyRecommend) } : nil)
                             MusicSongList(songs: visibleSongs) { song in
                                 Task {
                                     await play(
@@ -515,7 +547,7 @@ struct MusicHomeView: View {
             }
         }
         if environment.config.musicFeatureFlags.usesV2Home {
-            await store.loadHomeV2(client: environment.musicV2Client, force: force)
+            await store.loadDashboard(client: environment.musicV2Client, force: force)
         } else {
             await store.loadHome(force: force, historyClient: store.usesCanonicalHistory(config: environment.config) ? environment.musicV2Client : nil)
         }
