@@ -1,0 +1,1156 @@
+[
+  {
+    "time_ns": 9002386625,
+    "type": "Begin",
+    "id": "0x42",
+    "name": "PlaybackSegments",
+    "category": "MusicPlaybackP01"
+  },
+  {
+    "time_ns": 9002396541,
+    "type": "Event",
+    "id": "0x42",
+    "name": "NextTrackRequested",
+    "category": "MusicPlaybackP01",
+    "value": 1
+  },
+  {
+    "time_ns": 9002425791,
+    "type": "Event",
+    "id": "0x42",
+    "name": "QueueLookupStarted",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 9002513166,
+    "type": "Event",
+    "id": "0x42",
+    "name": "QueueResolved",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 9002564500,
+    "type": "Begin",
+    "id": "0x43",
+    "name": "TrackTransition",
+    "category": "MusicPlayback"
+  },
+  {
+    "time_ns": 9002565458,
+    "type": "Event",
+    "id": "0x42",
+    "name": "TransitionStarted",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 9002566208,
+    "type": "Event",
+    "id": "0x42",
+    "name": "TransitionIntentCommitted",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 9002943250,
+    "type": "Event",
+    "id": "0x42",
+    "name": "ReplaceCurrentItemBegin",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 9002944333,
+    "type": "Begin",
+    "id": "0x42",
+    "name": "ReplaceCurrentItem",
+    "category": "MusicPlaybackP01"
+  },
+  {
+    "time_ns": 9003509500,
+    "type": "End",
+    "id": "0x42",
+    "name": "ReplaceCurrentItem",
+    "category": "MusicPlaybackP01"
+  },
+  {
+    "time_ns": 9003514750,
+    "type": "Event",
+    "id": "0x42",
+    "name": "ReplaceCurrentItemEnd",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 9003649875,
+    "type": "Event",
+    "id": "0x42",
+    "name": "PreparedLookupStarted",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 9003671000,
+    "type": "Event",
+    "id": "0x42",
+    "name": "PreparedHit",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 9003672833,
+    "type": "Event",
+    "id": "OS_SIGNPOST_ID_EXCLUSIVE",
+    "name": "PreparedItemHit",
+    "category": "MusicPlayback"
+  },
+  {
+    "time_ns": 9003673833,
+    "type": "Event",
+    "id": "0x42",
+    "name": "PlaybackSourceReady",
+    "category": "MusicPlaybackP01",
+    "value": 1
+  },
+  {
+    "time_ns": 9003760666,
+    "type": "Event",
+    "id": "0x42",
+    "name": "PlayerItemCreationStarted",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 9003762875,
+    "type": "Event",
+    "id": "0x42",
+    "name": "PlayerItemReady",
+    "category": "MusicPlaybackP01",
+    "value": 1
+  },
+  {
+    "time_ns": 9003763833,
+    "type": "Event",
+    "id": "0x42",
+    "name": "PlayerItemUnknown",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 9003764958,
+    "type": "Event",
+    "id": "0x42",
+    "name": "ReplaceCurrentItemBegin",
+    "category": "MusicPlaybackP01",
+    "value": 1
+  },
+  {
+    "time_ns": 9003765500,
+    "type": "Begin",
+    "id": "0x42",
+    "name": "ReplaceCurrentItem",
+    "category": "MusicPlaybackP01"
+  },
+  {
+    "time_ns": 9004507875,
+    "type": "End",
+    "id": "0x42",
+    "name": "ReplaceCurrentItem",
+    "category": "MusicPlaybackP01"
+  },
+  {
+    "time_ns": 9004511333,
+    "type": "Event",
+    "id": "0x42",
+    "name": "ReplaceCurrentItemEnd",
+    "category": "MusicPlaybackP01",
+    "value": 1
+  },
+  {
+    "time_ns": 9004851458,
+    "type": "Event",
+    "id": "0x42",
+    "name": "SessionGate",
+    "category": "MusicPlaybackP01",
+    "value": 1
+  },
+  {
+    "time_ns": 9005487416,
+    "type": "Event",
+    "id": "0x42",
+    "name": "PlayerWaiting",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 9005492541,
+    "type": "Event",
+    "id": "0x42",
+    "name": "WaitingEvaluatingBuffering",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 9005503875,
+    "type": "Event",
+    "id": "0x42",
+    "name": "PlayerWaiting",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 9005505833,
+    "type": "Event",
+    "id": "0x42",
+    "name": "WaitingEvaluatingBuffering",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 9015241500,
+    "type": "Event",
+    "id": "0x42",
+    "name": "PlayerWaiting",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 9015246666,
+    "type": "Event",
+    "id": "0x42",
+    "name": "WaitingEvaluatingBuffering",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 9015255833,
+    "type": "Event",
+    "id": "0x42",
+    "name": "PlayerWaiting",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 9015257125,
+    "type": "Event",
+    "id": "0x42",
+    "name": "WaitingEvaluatingBuffering",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 9015280625,
+    "type": "Event",
+    "id": "0x42",
+    "name": "PlayerItemUnknown",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 9015286708,
+    "type": "Event",
+    "id": "0x42",
+    "name": "PlayerWaiting",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 9015288000,
+    "type": "Event",
+    "id": "0x42",
+    "name": "WaitingEvaluatingBuffering",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 9076552583,
+    "type": "Event",
+    "id": "0x42",
+    "name": "PlayerPaused",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 9108403875,
+    "type": "Event",
+    "id": "0x42",
+    "name": "PlayerWaiting",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 9108405666,
+    "type": "Event",
+    "id": "0x42",
+    "name": "WaitingToMinimizeStalls",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 9118935500,
+    "type": "Event",
+    "id": "0x42",
+    "name": "PlayerReady",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 9118940791,
+    "type": "Event",
+    "id": "0x42",
+    "name": "PlayerWaiting",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 9118942375,
+    "type": "Event",
+    "id": "0x42",
+    "name": "WaitingEvaluatingBuffering",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 9118953416,
+    "type": "Event",
+    "id": "0x42",
+    "name": "PlayerWaiting",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 9118954000,
+    "type": "Event",
+    "id": "0x42",
+    "name": "WaitingEvaluatingBuffering",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 9118986541,
+    "type": "Event",
+    "id": "0x42",
+    "name": "PlayerWaiting",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 9118987041,
+    "type": "Event",
+    "id": "0x42",
+    "name": "WaitingToMinimizeStalls",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 9122069583,
+    "type": "Event",
+    "id": "0x42",
+    "name": "PlayerPlayingState",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 9122077916,
+    "type": "Event",
+    "id": "OS_SIGNPOST_ID_EXCLUSIVE",
+    "name": "TrackPlaying",
+    "category": "MusicPlayback"
+  },
+  {
+    "time_ns": 9122078333,
+    "type": "Event",
+    "id": "0x42",
+    "name": "TrackPlaying",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 9122078875,
+    "type": "Event",
+    "id": "0x42",
+    "name": "DiagnosticCompleted",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 9122079000,
+    "type": "End",
+    "id": "0x42",
+    "name": "PlaybackSegments",
+    "category": "MusicPlaybackP01"
+  },
+  {
+    "time_ns": 9122079416,
+    "type": "End",
+    "id": "0x43",
+    "name": "TrackTransition",
+    "category": "MusicPlayback"
+  },
+  {
+    "time_ns": 32601899458,
+    "type": "Begin",
+    "id": "0x44",
+    "name": "PlaybackSegments",
+    "category": "MusicPlaybackP01"
+  },
+  {
+    "time_ns": 32601912333,
+    "type": "Event",
+    "id": "0x44",
+    "name": "NextTrackRequested",
+    "category": "MusicPlaybackP01",
+    "value": 1
+  },
+  {
+    "time_ns": 32601927875,
+    "type": "Event",
+    "id": "0x44",
+    "name": "QueueLookupStarted",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 32602014250,
+    "type": "Event",
+    "id": "0x44",
+    "name": "QueueResolved",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 32602082000,
+    "type": "Begin",
+    "id": "0x45",
+    "name": "TrackTransition",
+    "category": "MusicPlayback"
+  },
+  {
+    "time_ns": 32602084583,
+    "type": "Event",
+    "id": "0x44",
+    "name": "TransitionStarted",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 32602085916,
+    "type": "Event",
+    "id": "0x44",
+    "name": "TransitionIntentCommitted",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 32602471708,
+    "type": "Event",
+    "id": "0x44",
+    "name": "ReplaceCurrentItemBegin",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 32602478375,
+    "type": "Begin",
+    "id": "0x44",
+    "name": "ReplaceCurrentItem",
+    "category": "MusicPlaybackP01"
+  },
+  {
+    "time_ns": 32603154500,
+    "type": "End",
+    "id": "0x44",
+    "name": "ReplaceCurrentItem",
+    "category": "MusicPlaybackP01"
+  },
+  {
+    "time_ns": 32603158208,
+    "type": "Event",
+    "id": "0x44",
+    "name": "ReplaceCurrentItemEnd",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 32603310208,
+    "type": "Event",
+    "id": "0x44",
+    "name": "PreparedLookupStarted",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 32603330208,
+    "type": "Event",
+    "id": "0x44",
+    "name": "PreparedHit",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 32603331958,
+    "type": "Event",
+    "id": "OS_SIGNPOST_ID_EXCLUSIVE",
+    "name": "PreparedItemHit",
+    "category": "MusicPlayback"
+  },
+  {
+    "time_ns": 32603332833,
+    "type": "Event",
+    "id": "0x44",
+    "name": "PlaybackSourceReady",
+    "category": "MusicPlaybackP01",
+    "value": 1
+  },
+  {
+    "time_ns": 32603413625,
+    "type": "Event",
+    "id": "0x44",
+    "name": "PlayerItemCreationStarted",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 32603415583,
+    "type": "Event",
+    "id": "0x44",
+    "name": "PlayerItemReady",
+    "category": "MusicPlaybackP01",
+    "value": 1
+  },
+  {
+    "time_ns": 32603416333,
+    "type": "Event",
+    "id": "0x44",
+    "name": "PlayerItemUnknown",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 32603417250,
+    "type": "Event",
+    "id": "0x44",
+    "name": "ReplaceCurrentItemBegin",
+    "category": "MusicPlaybackP01",
+    "value": 1
+  },
+  {
+    "time_ns": 32603417666,
+    "type": "Begin",
+    "id": "0x44",
+    "name": "ReplaceCurrentItem",
+    "category": "MusicPlaybackP01"
+  },
+  {
+    "time_ns": 32604219916,
+    "type": "End",
+    "id": "0x44",
+    "name": "ReplaceCurrentItem",
+    "category": "MusicPlaybackP01"
+  },
+  {
+    "time_ns": 32604224458,
+    "type": "Event",
+    "id": "0x44",
+    "name": "ReplaceCurrentItemEnd",
+    "category": "MusicPlaybackP01",
+    "value": 1
+  },
+  {
+    "time_ns": 32604594541,
+    "type": "Event",
+    "id": "0x44",
+    "name": "SessionGate",
+    "category": "MusicPlaybackP01",
+    "value": 1
+  },
+  {
+    "time_ns": 32605250000,
+    "type": "Event",
+    "id": "0x44",
+    "name": "PlayerWaiting",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 32605253375,
+    "type": "Event",
+    "id": "0x44",
+    "name": "WaitingEvaluatingBuffering",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 32605262208,
+    "type": "Event",
+    "id": "0x44",
+    "name": "PlayerWaiting",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 32605263541,
+    "type": "Event",
+    "id": "0x44",
+    "name": "WaitingEvaluatingBuffering",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 32617262750,
+    "type": "Event",
+    "id": "0x44",
+    "name": "PlayerWaiting",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 32617272375,
+    "type": "Event",
+    "id": "0x44",
+    "name": "WaitingEvaluatingBuffering",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 32617290750,
+    "type": "Event",
+    "id": "0x44",
+    "name": "PlayerWaiting",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 32617292166,
+    "type": "Event",
+    "id": "0x44",
+    "name": "WaitingEvaluatingBuffering",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 32617378458,
+    "type": "Event",
+    "id": "0x44",
+    "name": "PlayerItemUnknown",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 32617395125,
+    "type": "Event",
+    "id": "0x44",
+    "name": "PlayerWaiting",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 32617397541,
+    "type": "Event",
+    "id": "0x44",
+    "name": "WaitingEvaluatingBuffering",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 32675229500,
+    "type": "Event",
+    "id": "0x44",
+    "name": "PlayerPaused",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 32767388083,
+    "type": "Event",
+    "id": "0x44",
+    "name": "PlayerWaiting",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 32767391083,
+    "type": "Event",
+    "id": "0x44",
+    "name": "WaitingEvaluatingBuffering",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 32771996125,
+    "type": "Event",
+    "id": "0x44",
+    "name": "PlayerReady",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 32772000458,
+    "type": "Event",
+    "id": "0x44",
+    "name": "PlayerWaiting",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 32772001875,
+    "type": "Event",
+    "id": "0x44",
+    "name": "WaitingToMinimizeStalls",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 32772008458,
+    "type": "Event",
+    "id": "0x44",
+    "name": "PlayerWaiting",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 32772009000,
+    "type": "Event",
+    "id": "0x44",
+    "name": "WaitingToMinimizeStalls",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 32803947625,
+    "type": "Event",
+    "id": "0x44",
+    "name": "PlayerPlayingState",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 32803961708,
+    "type": "Event",
+    "id": "OS_SIGNPOST_ID_EXCLUSIVE",
+    "name": "TrackPlaying",
+    "category": "MusicPlayback"
+  },
+  {
+    "time_ns": 32803962291,
+    "type": "Event",
+    "id": "0x44",
+    "name": "TrackPlaying",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 32803962875,
+    "type": "Event",
+    "id": "0x44",
+    "name": "DiagnosticCompleted",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 32803963041,
+    "type": "End",
+    "id": "0x44",
+    "name": "PlaybackSegments",
+    "category": "MusicPlaybackP01"
+  },
+  {
+    "time_ns": 32803963958,
+    "type": "End",
+    "id": "0x45",
+    "name": "TrackTransition",
+    "category": "MusicPlayback"
+  },
+  {
+    "time_ns": 51090721833,
+    "type": "Begin",
+    "id": "0x46",
+    "name": "PlaybackSegments",
+    "category": "MusicPlaybackP01"
+  },
+  {
+    "time_ns": 51090742041,
+    "type": "Event",
+    "id": "0x46",
+    "name": "NextTrackRequested",
+    "category": "MusicPlaybackP01",
+    "value": 1
+  },
+  {
+    "time_ns": 51090773375,
+    "type": "Event",
+    "id": "0x46",
+    "name": "QueueLookupStarted",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 51090829166,
+    "type": "Event",
+    "id": "0x46",
+    "name": "QueueResolved",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 51090866708,
+    "type": "Begin",
+    "id": "0x47",
+    "name": "TrackTransition",
+    "category": "MusicPlayback"
+  },
+  {
+    "time_ns": 51090873083,
+    "type": "Event",
+    "id": "0x46",
+    "name": "TransitionStarted",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 51090880750,
+    "type": "Event",
+    "id": "0x46",
+    "name": "TransitionIntentCommitted",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 51091084583,
+    "type": "Event",
+    "id": "0x46",
+    "name": "ReplaceCurrentItemBegin",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 51091085458,
+    "type": "Begin",
+    "id": "0x46",
+    "name": "ReplaceCurrentItem",
+    "category": "MusicPlaybackP01"
+  },
+  {
+    "time_ns": 51091372208,
+    "type": "End",
+    "id": "0x46",
+    "name": "ReplaceCurrentItem",
+    "category": "MusicPlaybackP01"
+  },
+  {
+    "time_ns": 51091375125,
+    "type": "Event",
+    "id": "0x46",
+    "name": "ReplaceCurrentItemEnd",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 51091542083,
+    "type": "Event",
+    "id": "0x46",
+    "name": "PreparedLookupStarted",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 51091563333,
+    "type": "Event",
+    "id": "0x46",
+    "name": "PreparedHit",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 51091565000,
+    "type": "Event",
+    "id": "OS_SIGNPOST_ID_EXCLUSIVE",
+    "name": "PreparedItemHit",
+    "category": "MusicPlayback"
+  },
+  {
+    "time_ns": 51091565958,
+    "type": "Event",
+    "id": "0x46",
+    "name": "PlaybackSourceReady",
+    "category": "MusicPlaybackP01",
+    "value": 1
+  },
+  {
+    "time_ns": 51091622916,
+    "type": "Event",
+    "id": "0x46",
+    "name": "PlayerItemCreationStarted",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 51091624875,
+    "type": "Event",
+    "id": "0x46",
+    "name": "PlayerItemReady",
+    "category": "MusicPlaybackP01",
+    "value": 1
+  },
+  {
+    "time_ns": 51091626333,
+    "type": "Event",
+    "id": "0x46",
+    "name": "PlayerItemUnknown",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 51091627416,
+    "type": "Event",
+    "id": "0x46",
+    "name": "ReplaceCurrentItemBegin",
+    "category": "MusicPlaybackP01",
+    "value": 1
+  },
+  {
+    "time_ns": 51091627875,
+    "type": "Begin",
+    "id": "0x46",
+    "name": "ReplaceCurrentItem",
+    "category": "MusicPlaybackP01"
+  },
+  {
+    "time_ns": 51092243333,
+    "type": "End",
+    "id": "0x46",
+    "name": "ReplaceCurrentItem",
+    "category": "MusicPlaybackP01"
+  },
+  {
+    "time_ns": 51092246750,
+    "type": "Event",
+    "id": "0x46",
+    "name": "ReplaceCurrentItemEnd",
+    "category": "MusicPlaybackP01",
+    "value": 1
+  },
+  {
+    "time_ns": 51092623666,
+    "type": "Event",
+    "id": "0x46",
+    "name": "SessionGate",
+    "category": "MusicPlaybackP01",
+    "value": 1
+  },
+  {
+    "time_ns": 51093357500,
+    "type": "Event",
+    "id": "0x46",
+    "name": "PlayerWaiting",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 51093363291,
+    "type": "Event",
+    "id": "0x46",
+    "name": "WaitingEvaluatingBuffering",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 51093375416,
+    "type": "Event",
+    "id": "0x46",
+    "name": "PlayerWaiting",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 51093377416,
+    "type": "Event",
+    "id": "0x46",
+    "name": "WaitingEvaluatingBuffering",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 51103301208,
+    "type": "Event",
+    "id": "0x46",
+    "name": "PlayerWaiting",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 51103308416,
+    "type": "Event",
+    "id": "0x46",
+    "name": "WaitingEvaluatingBuffering",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 51103321333,
+    "type": "Event",
+    "id": "0x46",
+    "name": "PlayerWaiting",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 51103322666,
+    "type": "Event",
+    "id": "0x46",
+    "name": "WaitingEvaluatingBuffering",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 51103365041,
+    "type": "Event",
+    "id": "0x46",
+    "name": "PlayerItemUnknown",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 51103373875,
+    "type": "Event",
+    "id": "0x46",
+    "name": "PlayerWaiting",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 51103375041,
+    "type": "Event",
+    "id": "0x46",
+    "name": "WaitingEvaluatingBuffering",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 51160631125,
+    "type": "Event",
+    "id": "0x46",
+    "name": "PlayerPaused",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 51207417625,
+    "type": "Event",
+    "id": "0x46",
+    "name": "PlayerWaiting",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 51207419916,
+    "type": "Event",
+    "id": "0x46",
+    "name": "WaitingToMinimizeStalls",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 51213572000,
+    "type": "Event",
+    "id": "0x46",
+    "name": "PlayerReady",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 51213576750,
+    "type": "Event",
+    "id": "0x46",
+    "name": "PlayerWaiting",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 51213578125,
+    "type": "Event",
+    "id": "0x46",
+    "name": "WaitingToMinimizeStalls",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 51213583750,
+    "type": "Event",
+    "id": "0x46",
+    "name": "PlayerWaiting",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 51213584125,
+    "type": "Event",
+    "id": "0x46",
+    "name": "WaitingToMinimizeStalls",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 51213587166,
+    "type": "Event",
+    "id": "0x46",
+    "name": "PlayerWaiting",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 51213587500,
+    "type": "Event",
+    "id": "0x46",
+    "name": "WaitingToMinimizeStalls",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 51283506583,
+    "type": "Event",
+    "id": "0x46",
+    "name": "PlayerPlayingState",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 51283531375,
+    "type": "Event",
+    "id": "OS_SIGNPOST_ID_EXCLUSIVE",
+    "name": "TrackPlaying",
+    "category": "MusicPlayback"
+  },
+  {
+    "time_ns": 51283531833,
+    "type": "Event",
+    "id": "0x46",
+    "name": "TrackPlaying",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 51283533000,
+    "type": "Event",
+    "id": "0x46",
+    "name": "DiagnosticCompleted",
+    "category": "MusicPlaybackP01",
+    "value": 0
+  },
+  {
+    "time_ns": 51283533166,
+    "type": "End",
+    "id": "0x46",
+    "name": "PlaybackSegments",
+    "category": "MusicPlaybackP01"
+  },
+  {
+    "time_ns": 51283535875,
+    "type": "End",
+    "id": "0x47",
+    "name": "TrackTransition",
+    "category": "MusicPlayback"
+  }
+]

@@ -1,0 +1,40 @@
+{
+  "rawDataLocation": "/private/tmp/setu-p16-capture",
+  "rawExports": {
+    "/private/tmp/setu-p16-capture/baseline-09-signposts.xml": "9b16c91641a0fd147067cc5a677b0d81735e097b4b59d56a8ca2f492c7d7d125",
+    "/private/tmp/setu-p16-capture/baseline-04-signposts.xml": "319d15c492703797826e578bb067eaaa4f5374c7f49cccb96d42f9d7252d7711",
+    "/private/tmp/setu-p16-capture/baseline-07-signposts.xml": "0f8e5aa23284d3ab51d94a446d7e48da11de020c727d8fb07fdbdc1a818fb87c",
+    "/private/tmp/setu-p16-capture/baseline-03-signposts.xml": "a5ec4835315d01855b8cf8397cc5c8998b8efb0d2251764c5d777a8b45617351",
+    "/private/tmp/setu-p16-capture/baseline-02-signposts.xml": "5e8c8a26a4e4ea39969f7499031567aec063a7c093c322c2612f8cc970278171",
+    "/private/tmp/setu-p16-capture/baseline-06-signposts.xml": "d591181a9292a7ea59572386fc48b602a425cc11ae98214c3171ec378862b242",
+    "/private/tmp/setu-p16-capture/baseline-01-signposts.xml": "9fc572798b141aef520747f0f103fdbbc932cf9e4a7f184396237d609720c8cc",
+    "/private/tmp/setu-p16-capture/baseline-05-signposts.xml": "f7f6c3dea364bdf033b082b914dc93b8612cbf75f95edb3415e2e4ff00b3e4d9",
+    "/private/tmp/setu-p16-capture/preflight-signposts.xml": "c5446affa54c4d8516708e3adcb66eeebe262d148910e5ad97e835f992af973e",
+    "/private/tmp/setu-p16-capture/baseline-08-signposts.xml": "3e5b1e6bd1245341d263fcd7cfde354dd16c617ddeada5bc8d5ac89510896c19"
+  },
+  "anonymousEvents": {
+    "baseline-04-events.json": "828b6f2f3496cb085391ce085ca318c76ae0b4132e10667183b8c5d75771adf5",
+    "baseline-01-events.json": "a32c7261ac309c81479cd5dba7e4d4f95c7932155324ec1b23d8c495301a1093",
+    "baseline-08-events.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "baseline-02-events.json": "9b8241801fb8d4966f0d3abd411c7ed43981310aec84d0dea22c7bba6167fff6",
+    "baseline-07-events.json": "0acc8adbcd82919deab325064c09eaa98fdf8a984a46a79d0170ad33773d1db9",
+    "baseline-09-events.json": "cf98ceae214681b957c6afb30ec03aa8672a1a9192a70b556a501f5bcd29864e",
+    "baseline-05-events.json": "8d342ea1f036b384fc0fd987348c418ef39ea815f4088584f6b807f8d91db5fa",
+    "baseline-06-events.json": "e3d10054681a97082e76865f69d589b440df3b0c9a7a37d127ea2bd864cb2297",
+    "baseline-03-events.json": "1a76aa01227ef681d8c30c0844bbd9250772428ce6783be455d82971e2013b49"
+  },
+  "normalStopAndReadableExports": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "emptyWindow08": "Mac locked; no event, no sample",
+  "preflight": "2 complete hits, excluded from formal 20",
+  "captureRetentionLimitation": "Some operated transitions were not retained, notably baseline-01. No synthetic or historical samples added."
+}
