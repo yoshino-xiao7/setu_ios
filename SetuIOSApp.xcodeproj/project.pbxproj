@@ -46,6 +46,7 @@
 		2C5259939DD90917501AC644 /* SetuEmptyState.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A94A9CF926A3383B2A4B27 /* SetuEmptyState.swift */; };
 		2E1500854A390AFBDAE14EC6 /* MusicCacheUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84DFE488F44FD80ACB839432 /* MusicCacheUITests.swift */; };
 		2E6B6785B9F85C3AC38598AF /* SetuDesignSystemPreviewGallery.swift in Sources */ = {isa = PBXBuildFile; fileRef = C57E09A02A23EB6EC07DE452 /* SetuDesignSystemPreviewGallery.swift */; };
+		2FF4EEB7DBC10683F420369D /* SetuElevation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DB541E4333DEF19B0C9D020 /* SetuElevation.swift */; };
 		30B25FD6CCFD156B41457DBD /* SetuMetrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 025C32B13BAE8DCE14258698 /* SetuMetrics.swift */; };
 		30B35571F23227DD6D41ACAC /* PasskeyAuthorizationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8551B5EE417C4D7CCAB3E6A /* PasskeyAuthorizationService.swift */; };
 		30CA5A976D588D5DC49D73C8 /* PasskeyClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C22F650ECB9CE6FDA887C8D /* PasskeyClient.swift */; };
@@ -486,6 +487,7 @@
 		9B54E7B0273F0A02B89981E1 /* AdminClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminClientTests.swift; sourceTree = "<group>"; };
 		9BE2D5C82A74CB5471E7C21C /* MusicArchitectureUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicArchitectureUITests.swift; sourceTree = "<group>"; };
 		9D765FDE0C516B6934F117B4 /* ImageFeedClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageFeedClient.swift; sourceTree = "<group>"; };
+		9DB541E4333DEF19B0C9D020 /* SetuElevation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuElevation.swift; sourceTree = "<group>"; };
 		9E6923D27BB22092B9B2749C /* MusicRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicRepository.swift; sourceTree = "<group>"; };
 		9ECF9EB7B7BC37A568A019CF /* MobileAppClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileAppClient.swift; sourceTree = "<group>"; };
 		9EE2B37F69E3C40990952658 /* RootAppView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootAppView.swift; sourceTree = "<group>"; };
@@ -633,6 +635,7 @@
 			children = (
 				72EF12F591E29337D773A5C8 /* SetuAppAppearance.swift */,
 				43837D03E176664A8872C81D /* SetuColor.swift */,
+				9DB541E4333DEF19B0C9D020 /* SetuElevation.swift */,
 				025C32B13BAE8DCE14258698 /* SetuMetrics.swift */,
 				066270CB154FDB8712B0F3B3 /* SetuTypography.swift */,
 			);
@@ -1448,6 +1451,7 @@
 				8BFA8DA95DEB49A9008EAD2D /* SetuColor.swift in Sources */,
 				F69E9D8250659B7450383BE5 /* SetuDateFormatter.swift in Sources */,
 				2E6B6785B9F85C3AC38598AF /* SetuDesignSystemPreviewGallery.swift in Sources */,
+				2FF4EEB7DBC10683F420369D /* SetuElevation.swift in Sources */,
 				2C5259939DD90917501AC644 /* SetuEmptyState.swift in Sources */,
 				ABA3986065B2A94542C94040 /* SetuErrorRecovery.swift in Sources */,
 				AD4268A32F1C5EBF09950520 /* SetuFeaturePreviewSupport.swift in Sources */,

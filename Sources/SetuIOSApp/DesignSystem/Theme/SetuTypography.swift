@@ -7,4 +7,6 @@ enum SetuTypography {
     static let body = Font.body
     static let caption = Font.footnote
     static let metric = Font.title2.weight(.semibold).monospacedDigit()
+    static let numeric = Font.body.monospacedDigit()
+    static let label = Font.caption.weight(.semibold)
 }

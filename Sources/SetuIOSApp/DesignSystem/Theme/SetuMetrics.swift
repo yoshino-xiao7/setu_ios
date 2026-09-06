@@ -10,9 +10,18 @@ enum SetuSpacing {
 }
 
 enum SetuRadius {
+    static let xs: CGFloat = 8
     static let sm: CGFloat = 12
     static let md: CGFloat = 18
     static let lg: CGFloat = 24
+    static let xl: CGFloat = 32
+}
+
+enum SetuLayoutMetrics {
+    static let bentoColumns = 4
+    static let bentoRowHeight: CGFloat = 112
+    static let recordCardMinWidth: CGFloat = 320
+    static let recordRibbonWidth: CGFloat = 4
 }
 
 enum SetuToolbarLogoMetrics {
