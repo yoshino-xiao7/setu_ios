@@ -80,24 +80,41 @@ public struct MusicFeatureFlags: Equatable, Sendable {
 
     public init() {}
 
+    /// Complete supported development experience, independent of transient launch arguments.
+    public static var development: Self {
+        var flags = Self()
+        flags.usesV2Search = true
+        flags.usesV2Playback = true
+        flags.usesV2Lyrics = true
+        flags.usesV2History = true
+        flags.usesV2Home = true
+        flags.usesV2PlaylistDetail = true
+        flags.radioFMEnabled = true
+        flags.likedTracksEnabled = true
+        flags.favoritePlaylistsEnabled = true
+        flags.wordByWordLyricsEnabled = true
+        flags.airPlayPickerEnabled = true
+        return flags
+    }
+
     #if DEBUG
     static func resolved(from defaults: UserDefaults) -> Self {
-        var flags = Self()
-        flags.usesV2Search = defaults.musicFlag("SETU_MUSIC_USES_V2_SEARCH")
-        flags.usesV2Playback = defaults.musicFlag("SETU_MUSIC_USES_V2_PLAYBACK")
-        flags.usesV2Lyrics = defaults.musicFlag("SETU_MUSIC_USES_V2_LYRICS")
-        flags.usesV2History = defaults.musicFlag("SETU_MUSIC_USES_V2_HISTORY")
-        flags.usesV2Home = defaults.musicFlag("SETU_MUSIC_USES_V2_HOME")
-        flags.usesV2PlaylistDetail = defaults.musicFlag("SETU_MUSIC_USES_V2_PLAYLIST_DETAIL")
-        flags.artistDetailEnabled = defaults.musicFlag("SETU_MUSIC_ARTIST_DETAIL_ENABLED")
-        flags.albumDetailEnabled = defaults.musicFlag("SETU_MUSIC_ALBUM_DETAIL_ENABLED")
-        flags.rankingsEnabled = defaults.musicFlag("SETU_MUSIC_RANKINGS_ENABLED")
-        flags.newReleasesEnabled = defaults.musicFlag("SETU_MUSIC_NEW_RELEASES_ENABLED")
-        flags.radioFMEnabled = defaults.musicFlag("SETU_MUSIC_RADIO_FM_ENABLED")
-        flags.likedTracksEnabled = defaults.musicFlag("SETU_MUSIC_LIKED_TRACKS_ENABLED")
-        flags.favoritePlaylistsEnabled = defaults.musicFlag("SETU_MUSIC_FAVORITE_PLAYLISTS_ENABLED")
-        flags.wordByWordLyricsEnabled = defaults.musicFlag("SETU_MUSIC_WORD_BY_WORD_LYRICS_ENABLED")
-        flags.airPlayPickerEnabled = defaults.musicFlag("SETU_MUSIC_AIRPLAY_PICKER_ENABLED")
+        var flags = Self.development
+        flags.usesV2Search = defaults.musicFlag("SETU_MUSIC_USES_V2_SEARCH", defaultValue: flags.usesV2Search)
+        flags.usesV2Playback = defaults.musicFlag("SETU_MUSIC_USES_V2_PLAYBACK", defaultValue: flags.usesV2Playback)
+        flags.usesV2Lyrics = defaults.musicFlag("SETU_MUSIC_USES_V2_LYRICS", defaultValue: flags.usesV2Lyrics)
+        flags.usesV2History = defaults.musicFlag("SETU_MUSIC_USES_V2_HISTORY", defaultValue: flags.usesV2History)
+        flags.usesV2Home = defaults.musicFlag("SETU_MUSIC_USES_V2_HOME", defaultValue: flags.usesV2Home)
+        flags.usesV2PlaylistDetail = defaults.musicFlag("SETU_MUSIC_USES_V2_PLAYLIST_DETAIL", defaultValue: flags.usesV2PlaylistDetail)
+        flags.artistDetailEnabled = defaults.musicFlag("SETU_MUSIC_ARTIST_DETAIL_ENABLED", defaultValue: flags.artistDetailEnabled)
+        flags.albumDetailEnabled = defaults.musicFlag("SETU_MUSIC_ALBUM_DETAIL_ENABLED", defaultValue: flags.albumDetailEnabled)
+        flags.rankingsEnabled = defaults.musicFlag("SETU_MUSIC_RANKINGS_ENABLED", defaultValue: flags.rankingsEnabled)
+        flags.newReleasesEnabled = defaults.musicFlag("SETU_MUSIC_NEW_RELEASES_ENABLED", defaultValue: flags.newReleasesEnabled)
+        flags.radioFMEnabled = defaults.musicFlag("SETU_MUSIC_RADIO_FM_ENABLED", defaultValue: flags.radioFMEnabled)
+        flags.likedTracksEnabled = defaults.musicFlag("SETU_MUSIC_LIKED_TRACKS_ENABLED", defaultValue: flags.likedTracksEnabled)
+        flags.favoritePlaylistsEnabled = defaults.musicFlag("SETU_MUSIC_FAVORITE_PLAYLISTS_ENABLED", defaultValue: flags.favoritePlaylistsEnabled)
+        flags.wordByWordLyricsEnabled = defaults.musicFlag("SETU_MUSIC_WORD_BY_WORD_LYRICS_ENABLED", defaultValue: flags.wordByWordLyricsEnabled)
+        flags.airPlayPickerEnabled = defaults.musicFlag("SETU_MUSIC_AIRPLAY_PICKER_ENABLED", defaultValue: flags.airPlayPickerEnabled)
         return flags
     }
     #endif
@@ -105,8 +122,8 @@ public struct MusicFeatureFlags: Equatable, Sendable {
 
 #if DEBUG
 private extension UserDefaults {
-    func musicFlag(_ key: String) -> Bool {
-        guard object(forKey: key) != nil else { return false }
+    func musicFlag(_ key: String, defaultValue: Bool) -> Bool {
+        guard object(forKey: key) != nil else { return defaultValue }
         if let value = string(forKey: key)?.lowercased() {
             return ["1", "true", "yes", "on"].contains(value)
         }

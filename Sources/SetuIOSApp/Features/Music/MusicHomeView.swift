@@ -25,11 +25,9 @@ struct MusicHomeView: View {
 
     var body: some View {
         List {
-            if environment.config.musicFeatureFlags.likedTracksEnabled && !environment.config.musicFeatureFlags.usesV2Home {
-                NavigationLink("我喜欢", value: AppRoute.likedTracks)
-            }
-            if environment.config.musicFeatureFlags.favoritePlaylistsEnabled {
-                NavigationLink("收藏歌单", value: AppRoute.favoritePlaylists)
+            if environment.config.musicFeatureFlags.usesV2Home || environment.config.musicFeatureFlags.likedTracksEnabled
+                || environment.config.musicFeatureFlags.favoritePlaylistsEnabled || environment.config.musicFeatureFlags.radioFMEnabled {
+                shortcutContent
             }
             if dynamicTypeSize.isAccessibilitySize {
                 Section {
@@ -117,6 +115,30 @@ struct MusicHomeView: View {
         }
         .task(id: store.sessionToken) { await loadLandingContent() }
         .refreshable { await loadLandingContent(force: true) }
+    }
+
+    private var shortcutContent: some View {
+        Section {
+            SetuCard {
+                LazyVGrid(columns: dynamicTypeSize.isAccessibilitySize
+                    ? [GridItem(.flexible())]
+                    : [GridItem(.adaptive(minimum: 130), spacing: SetuSpacing.sm)], spacing: SetuSpacing.sm) {
+                    ForEach(MusicHomeShortcut.entries(flags: environment.config.musicFeatureFlags)) { entry in
+                        Button { router.navigate(to: entry.route) } label: {
+                            Label(entry.title, systemImage: entry.symbol)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(SetuColor.brandInk)
+                                .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+                                .padding(.horizontal, SetuSpacing.sm)
+                                .background(SetuColor.surfaceMuted, in: RoundedRectangle(cornerRadius: 12))
+                                .contentShape(Rectangle())
+                        }
+                        .setuButtonFeedback(cornerRadius: 12)
+                        .accessibilityIdentifier("music.home.shortcut.\(entry.id)")
+                    }
+                }
+            }.setuListRow()
+        }
     }
 
     private var toolbarLogo: some View {

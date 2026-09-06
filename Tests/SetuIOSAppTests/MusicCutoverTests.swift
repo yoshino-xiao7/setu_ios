@@ -5,6 +5,39 @@ import XCTest
 
 @MainActor
 final class MusicCutoverTests: XCTestCase {
+    #if DEBUG
+    func testDevelopmentLaunchWithoutArgumentsExposesImplementedFeatures() {
+        let name = "music-delivery-\(UUID())"
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        let flags = MusicFeatureFlags.resolved(from: defaults)
+        XCTAssertTrue(flags.usesV2Home)
+        XCTAssertTrue(flags.radioFMEnabled)
+        XCTAssertTrue(flags.likedTracksEnabled)
+        XCTAssertTrue(flags.favoritePlaylistsEnabled)
+        XCTAssertTrue(flags.usesV2Playback)
+        defaults.set(false, forKey: "SETU_MUSIC_USES_V2_PLAYBACK")
+        XCTAssertFalse(MusicFeatureFlags.resolved(from: defaults).usesV2Playback)
+        XCTAssertFalse(AppConfig.production.musicFeatureFlags.usesV2Home)
+    }
+
+    #endif
+
+    func testFrozenLibraryActionReachesSavedPlaylists() {
+        var flags = MusicFeatureFlags()
+        flags.favoritePlaylistsEnabled = true
+        XCTAssertEqual(MusicDiscoverRoutes.route(.library(collection: "savedPlaylists", label: nil), flags: flags), .favoritePlaylists)
+    }
+
+    func testHomeShortcutsStayReachableWithoutServerFeed() {
+        let entries = MusicHomeShortcut.entries(flags: .development)
+        XCTAssertEqual(Set(entries.map(\.route)), Set([.musicHistory, .playlists, .likedTracks,
+            .favoritePlaylists, .radioFM, .dailyRecommend, .recommendedPlaylists]))
+        XCTAssertEqual(Set(entries.map(\.id)).count, entries.count)
+        let disabled = MusicHomeShortcut.entries(flags: .init())
+        XCTAssertFalse(disabled.contains { $0.route == .radioFM || $0.route == .likedTracks || $0.route == .favoritePlaylists })
+    }
+
     override func tearDown() { MusicV2URLProtocol.handler = nil; super.tearDown() }
     func testAlbumArtworkIsUsedWhenTrackArtworkIsMissing() throws {
         let json = MusicV2Fixtures.track.replacingOccurrences(of: "\"album\":null", with: #""album":{"id":null,"title":"Album","artwork":{"url":"https://example.test/cover.jpg"}}"#)

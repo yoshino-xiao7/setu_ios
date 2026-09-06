@@ -27,7 +27,7 @@ enum MusicDiscoverRoutes {
             switch collection {
             case "history": return .musicHistory
             case "liked": return flags.likedTracksEnabled ? .likedTracks : nil
-            case "saved": return flags.favoritePlaylistsEnabled ? .favoritePlaylists : nil
+            case "savedPlaylists": return flags.favoritePlaylistsEnabled ? .favoritePlaylists : nil
             default: return nil
             }
         case .resource(let ref, _):
@@ -84,5 +84,28 @@ struct MusicHomeSectionPresentation: Identifiable {
         } else {
             context = MusicDiscoverRoutes.context(source: section.source, selection: section.kind.rawValue, title: section.title)
         }
+    }
+}
+
+/// Local navigation stays reachable even when the Home feed is empty or unavailable.
+struct MusicHomeShortcut: Identifiable {
+    let id: String
+    let title: String
+    let symbol: String
+    let route: AppRoute
+
+    static func entries(flags: MusicFeatureFlags) -> [Self] {
+        var entries: [Self] = [
+            .init(id: "history", title: "播放历史", symbol: "clock.arrow.circlepath", route: .musicHistory),
+            .init(id: "playlists", title: "我的歌单", symbol: "music.note.list", route: .playlists),
+        ]
+        if flags.likedTracksEnabled { entries.append(.init(id: "liked", title: "我喜欢", symbol: "heart.fill", route: .likedTracks)) }
+        if flags.favoritePlaylistsEnabled { entries.append(.init(id: "saved", title: "收藏歌单", symbol: "bookmark.fill", route: .favoritePlaylists)) }
+        if flags.radioFMEnabled { entries.append(.init(id: "fm", title: "私人 FM", symbol: "dot.radiowaves.left.and.right", route: .radioFM)) }
+        if flags.usesV2Home {
+            entries.append(.init(id: "daily", title: "每日推荐", symbol: "sparkles", route: .dailyRecommend))
+            entries.append(.init(id: "recommended", title: "推荐歌单", symbol: "square.stack", route: .recommendedPlaylists))
+        }
+        return entries
     }
 }
