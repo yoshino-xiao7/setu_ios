@@ -24,7 +24,7 @@ struct MusicHomeView: View {
     @State private var searchQuery = ""
 
     var body: some View {
-        List {
+        SetuBoard {
             if dynamicTypeSize.isAccessibilitySize {
                 Section {
                     SetuCard {
@@ -35,14 +35,12 @@ struct MusicHomeView: View {
                             .frame(minHeight: 44)
                             .accessibilityLabel("搜索歌曲、歌手或专辑")
                     }
-                    .setuListRow()
                 }
             }
             if let feedback = player.feedback {
                 Section {
                     SetuFeedbackBanner(feedback: feedback)
                 }
-                .setuListRow()
             }
             recentHistoryContent
             myPlaylistContent
@@ -51,8 +49,6 @@ struct MusicHomeView: View {
             recommendedPlaylistSection
             hotSearchContent
         }
-        .listStyle(.plain)
-        .setuBackground()
         .setuRefreshAfterLogin(environment.authSession) { Task { await loadLandingContent() } }
         .setuRetry { Task { await loadLandingContent() } }
         .accessibilityIdentifier("music.home.page")
@@ -66,6 +62,11 @@ struct MusicHomeView: View {
             openSearch()
         }
         .navigationTitle("音乐")
+        .setuActionDock {
+            SetuPrimaryButton(action: openSearch) {
+                Label("搜索音乐", systemImage: "magnifyingglass")
+            }
+        }
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -111,14 +112,14 @@ struct MusicHomeView: View {
     private var hotSearchContent: some View {
         switch hotState {
         case .idle, .loading:
-            MusicStateSection(
+            MusicHomeStateSection(
                 title: "热门搜索",
                 stateTitle: "正在加载热门搜索",
                 systemImage: "magnifyingglass",
                 isLoading: true
             )
         case .failed(let message):
-            MusicStateSection(
+            MusicHomeStateSection(
                 title: "热门搜索",
                 stateTitle: "热门搜索加载失败",
                 message: message,
@@ -128,38 +129,16 @@ struct MusicHomeView: View {
             )
         case .loaded(let hots):
             if !hots.isEmpty {
-                Section {
-                    SetuCard {
-                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                            SetuSectionHeader(title: "热门搜索", subtitle: "点一下直接搜索")
-                            LazyVGrid(columns: hotSearchColumns, alignment: .leading, spacing: SetuSpacing.sm) {
-                                ForEach(Array(hots.prefix(12).enumerated()), id: \.element.id) { index, item in
-                                    Button {
-                                        router.navigate(to: .musicSearch(item.first))
-                                    } label: {
-                                        HStack(spacing: SetuSpacing.xs) {
-                                            Image(systemName: index < 3 ? "flame.fill" : "magnifyingglass")
-                                                .accessibilityHidden(true)
-                                            Text(item.first)
-                                                .fixedSize(horizontal: false, vertical: true)
-                                        }
-                                            .font(.caption.weight(.semibold))
-                                            .foregroundStyle(index < 3 ? SetuColor.brandInk : SetuColor.textPrimary)
-                                            .fixedSize(horizontal: false, vertical: true)
-                                            .frame(maxWidth: .infinity, minHeight: 44)
-                                            .padding(.vertical, SetuSpacing.xs)
-                                            .padding(.horizontal, SetuSpacing.sm)
-                                            .background(SetuColor.surfaceMuted, in: Capsule())
-                                    }
-                                    .setuButtonFeedback(cornerRadius: 22)
-                                    .accessibilityIdentifier("music.hot.\(index)")
-                                }
-                            }
-                        }
-                    }
-                    .setuListRow()
-                    .accessibilityIdentifier("music.home.section.hot")
+                VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                    SetuSectionHeader(title: "热门搜索", subtitle: "点一下直接搜索")
+                    SetuFilterBar(options: Array(hots.prefix(12).enumerated()).map { index, item in
+                        SetuFilterBar<String>.Option(value: item.first, title: item.first,
+                                                    systemImage: index < 3 ? "flame.fill" : "magnifyingglass")
+                            .accessibilityIdentifier("music.hot.\(index)")
+                    }, selection: Binding(get: { searchQuery }, set: { router.navigate(to: .musicSearch($0)) }),
+                                  accessibilityTitle: "热门搜索")
                 }
+                .accessibilityIdentifier("music.home.section.hot")
             }
         }
     }
@@ -168,9 +147,9 @@ struct MusicHomeView: View {
     private var recentHistoryContent: some View {
         switch recentHistoryState {
         case .idle, .loading:
-            MusicStateSection(title: "最近播放", stateTitle: "正在加载最近播放", systemImage: "clock.arrow.circlepath", isLoading: true)
+            MusicHomeStateSection(title: "最近播放", stateTitle: "正在加载最近播放", systemImage: "clock.arrow.circlepath", isLoading: true)
         case .failed(let message):
-            MusicStateSection(
+            MusicHomeStateSection(
                 title: "最近播放",
                 stateTitle: "最近播放加载失败",
                 message: message,
@@ -181,7 +160,7 @@ struct MusicHomeView: View {
         case .loaded(let records):
             let visibleRecords = Array(records.prefix(8))
             if visibleRecords.isEmpty {
-                MusicStateSection(
+                MusicHomeStateSection(
                     title: "继续听",
                     stateTitle: "还没有播放记录",
                     message: "找到喜欢的歌后，之后可以从这里继续听。",
@@ -190,45 +169,20 @@ struct MusicHomeView: View {
                     action: { router.navigate(to: .musicSearch(nil)) }
                 )
             } else {
-                Section {
-                    SetuCard {
-                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                            SetuSectionHeader(title: "继续听", subtitle: "最近播放")
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(alignment: .top, spacing: SetuSpacing.md) {
-                                    ForEach(visibleRecords) { record in
-                                        MusicRecentHistoryCard(record: record) {
-                                            Task {
-                                                await play(
-                                                    record.song,
-                                                    context: .unknown(reason: .missingProvenance, label: "最近播放"),
-                                                    queueTracks: visibleRecords.map { MusicPlaybackTrack(record: $0) }
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
+                VStack(alignment: .leading, spacing: SetuSpacing.sm) {
+                    SetuShelf(title: "继续听", subtitle: "最近播放", items: visibleRecords) { record in
+                        SetuShelfCard(title: record.songName, footnote: record.artistName, imageURLString: record.coverUrl) {
+                            Task {
+                                await play(record.song, context: .unknown(reason: .missingProvenance, label: "最近播放"),
+                                           queueTracks: visibleRecords.map { MusicPlaybackTrack(record: $0) })
                             }
-                            Button {
-                                router.navigate(to: .musicHistory)
-                            } label: {
-                                HStack { Text("查看全部播放历史").fixedSize(horizontal: false, vertical: true); Spacer(); Image(systemName: "chevron.right") }
-                                    .font(.footnote.weight(.semibold))
-                                    .foregroundStyle(SetuColor.brandInk)
-                                    .lineLimit(nil)
-                                    .multilineTextAlignment(.center)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                    .frame(maxWidth: .infinity, minHeight: 44)
-                                    .padding(.vertical, SetuSpacing.xs)
-                            }
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                            .contentShape(Rectangle())
-                            .setuButtonFeedback()
                         }
+                        .accessibilityLabel("播放 \(record.songName)，歌手 \(record.artistName)")
+                        .accessibilityIdentifier("music.history.\(record.id)")
                     }
-                    .setuListRow()
-                    .accessibilityIdentifier("music.home.section.history")
+                    musicNavigationButton("查看全部播放历史") { router.navigate(to: .musicHistory) }
                 }
+                .accessibilityIdentifier("music.home.section.history")
             }
         }
     }
@@ -237,9 +191,9 @@ struct MusicHomeView: View {
     private var myPlaylistContent: some View {
         switch myPlaylistState {
         case .idle, .loading:
-            MusicStateSection(title: "我的歌单", stateTitle: "正在加载我的歌单", systemImage: "music.note.list", isLoading: true)
+            MusicHomeStateSection(title: "我的歌单", stateTitle: "正在加载我的歌单", systemImage: "music.note.list", isLoading: true)
         case .failed(let message):
-            MusicStateSection(
+            MusicHomeStateSection(
                 title: "我的歌单",
                 stateTitle: "我的歌单加载失败",
                 message: message,
@@ -250,7 +204,7 @@ struct MusicHomeView: View {
         case .loaded(let playlists):
             let visiblePlaylists = Array(playlists.prefix(6))
             if visiblePlaylists.isEmpty {
-                MusicStateSection(
+                MusicHomeStateSection(
                     title: "我的歌单",
                     stateTitle: "还没有歌单",
                     message: "把喜欢的歌曲整理到自己的歌单中。",
@@ -259,39 +213,14 @@ struct MusicHomeView: View {
                     action: { router.navigate(to: .playlists) }
                 )
             } else {
-                Section {
-                    SetuCard {
-                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                            SetuSectionHeader(title: "我的歌单", subtitle: "\(playlists.count) 个")
-                            VStack(spacing: SetuSpacing.sm) {
-                                ForEach(visiblePlaylists) { playlist in
-                                    Button {
-                                        router.navigate(to: .playlistDetail(playlist.id))
-                                    } label: {
-                                        MusicPlaylistCompactRow(playlist: playlist)
-                                    }
-                                    .setuButtonFeedback()
-                                    .accessibilityIdentifier("music.playlist.\(playlist.id)")
-                                }
-                            }
-                            Button {
-                                router.navigate(to: .playlists)
-                            } label: {
-                                HStack { Text("管理全部歌单").fixedSize(horizontal: false, vertical: true); Spacer(); Image(systemName: "chevron.right") }
-                                    .font(.footnote.weight(.semibold))
-                                    .foregroundStyle(SetuColor.brandInk)
-                                    .lineLimit(nil)
-                                    .multilineTextAlignment(.center)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                    .frame(maxWidth: .infinity, minHeight: 44)
-                                    .padding(.vertical, SetuSpacing.xs)
-                            }
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                            .contentShape(Rectangle())
-                            .setuButtonFeedback()
+                VStack(alignment: .leading, spacing: SetuSpacing.sm) {
+                    SetuShelf(title: "我的歌单", subtitle: "\(playlists.count) 个", items: visiblePlaylists) { playlist in
+                        SetuShelfCard(title: playlist.name, footnote: "\(playlist.songCount ?? 0) 首" + (playlist.playCount.map { " · 播放 \($0) 次" } ?? ""), imageURLString: playlist.coverUrl) {
+                            router.navigate(to: .playlistDetail(playlist.id))
                         }
+                        .accessibilityIdentifier("music.playlist.\(playlist.id)")
                     }
-                    .setuListRow()
+                    musicNavigationButton("管理全部歌单") { router.navigate(to: .playlists) }
                 }
             }
         }
@@ -335,9 +264,9 @@ struct MusicHomeView: View {
     ) -> some View {
         switch state {
         case .idle, .loading:
-            MusicStateSection(title: title, stateTitle: loadingTitle, systemImage: systemImage, isLoading: true)
+            MusicHomeStateSection(title: title, stateTitle: loadingTitle, systemImage: systemImage, isLoading: true)
         case .failed(let message):
-            MusicStateSection(
+            MusicHomeStateSection(
                 title: title,
                 stateTitle: "\(title)加载失败",
                 message: message,
@@ -348,30 +277,21 @@ struct MusicHomeView: View {
         case .loaded(let songs):
             let visibleSongs = Array(songs.prefix(5))
             if visibleSongs.isEmpty {
-                MusicStateSection(title: title, stateTitle: emptyTitle, systemImage: systemImage)
+                MusicHomeStateSection(title: title, stateTitle: emptyTitle, systemImage: systemImage)
             } else {
-                Section {
-                    SetuCard {
-                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                            SetuSectionHeader(title: title)
-                            MusicSongList(songs: visibleSongs) { song in
-                                Task {
-                                    await play(
-                                        song,
-                                        context: context,
-                                        queueTracks: visibleSongs.map { MusicPlaybackTrack(song: $0) }
-                                    )
-                                }
-                            } onPlayMv: { song in
-                                mvSong = song
-                            } onAddToPlaylist: { song in
-                                selectedSong = song
-                            } onDownload: { song in
-                                Task { await download(song) }
+                SetuShelf(title: title, width: .feature, items: visibleSongs) { song in
+                    VStack(alignment: .leading, spacing: SetuSpacing.sm) {
+                        SetuShelfCard(title: song.name, footnote: song.artistNames, imageURLString: song.coverURLString) {
+                            Task {
+                                await play(song, context: context,
+                                           queueTracks: visibleSongs.map { MusicPlaybackTrack(song: $0) })
                             }
                         }
+                        .accessibilityLabel("播放 \(song.name)")
+                        MusicTrackActions(song: song, onPlayMv: { mvSong = song },
+                                          onAddToPlaylist: { selectedSong = song },
+                                          onDownload: { Task { await download(song) } })
                     }
-                    .setuListRow()
                 }
             }
         }
@@ -381,9 +301,9 @@ struct MusicHomeView: View {
     private var recommendedPlaylistSection: some View {
         switch recommendedPlaylistState {
         case .idle, .loading:
-            MusicStateSection(title: "推荐歌单", stateTitle: "正在加载推荐歌单", systemImage: "music.note.list", isLoading: true)
+            MusicHomeStateSection(title: "推荐歌单", stateTitle: "正在加载推荐歌单", systemImage: "music.note.list", isLoading: true)
         case .failed(let message):
-            MusicStateSection(
+            MusicHomeStateSection(
                 title: "推荐歌单",
                 stateTitle: "推荐歌单加载失败",
                 message: message,
@@ -394,39 +314,31 @@ struct MusicHomeView: View {
         case .loaded(let playlists):
             let visiblePlaylists = Array(playlists.prefix(6))
             if visiblePlaylists.isEmpty {
-                MusicStateSection(title: "推荐歌单", stateTitle: "暂无推荐歌单", systemImage: "music.note.list")
+                MusicHomeStateSection(title: "推荐歌单", stateTitle: "暂无推荐歌单", systemImage: "music.note.list")
             } else {
-                Section {
-                    SetuCard {
-                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                            SetuSectionHeader(title: "推荐歌单")
-                            VStack(spacing: 0) {
-                                ForEach(Array(visiblePlaylists.enumerated()), id: \.element.id) { index, playlist in
-                                    Button {
-                                        selectedRecommendedPlaylist = playlist
-                                    } label: {
-                                        RecommendedPlaylistRow(playlist: playlist)
-                                    }
-                                    .setuButtonFeedback()
-
-                                    if index < visiblePlaylists.count - 1 {
-                                        Divider().overlay(SetuColor.separator)
-                                    }
-                                }
-                            }
-                        }
+                SetuShelf(title: "推荐歌单", items: visiblePlaylists) { playlist in
+                    SetuShelfCard(title: playlist.name, footnote: [playlist.description, playlist.playCount.map { "\($0) 次播放" }].compactMap { $0 }.joined(separator: " · "), imageURLString: playlist.picUrl) {
+                        selectedRecommendedPlaylist = playlist
                     }
-                    .setuListRow()
                 }
             }
         }
     }
 
-    private var hotSearchColumns: [GridItem] {
-        if dynamicTypeSize.isAccessibilitySize {
-            return [GridItem(.flexible())]
+    private func musicNavigationButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                Text(title).fixedSize(horizontal: false, vertical: true)
+                Spacer()
+                Image(systemName: "arrow.right")
+            }
+            .font(SetuTypography.headline)
+            .foregroundStyle(SetuColor.brandInk)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .padding(.vertical, SetuSpacing.xs)
+            .contentShape(Rectangle())
         }
-        return [GridItem(.adaptive(minimum: 96), spacing: SetuSpacing.sm)]
+        .buttonStyle(SetuSurfaceButtonStyle())
     }
 
     private func loadLandingContent(force: Bool = false) async {
@@ -628,7 +540,7 @@ private struct RecommendedPlaylistSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            SetuBoard {
                 Section {
                     SetuCard {
                         VStack(alignment: .leading, spacing: SetuSpacing.md) {
@@ -636,50 +548,31 @@ private struct RecommendedPlaylistSheet: View {
                             RecommendedPlaylistRow(playlist: playlist)
                         }
                     }
-                    .setuListRow()
                 }
 
                 if let feedback {
                     Section {
                         SetuFeedbackBanner(feedback: feedback)
-                        .setuListRow()
                     }
                 }
 
                 switch state {
                 case .idle, .loading:
-                    MusicStateSection(title: "歌曲", stateTitle: "正在加载歌单歌曲", systemImage: "music.note.list", isLoading: true)
+                    MusicHomeStateSection(title: "歌曲", stateTitle: "正在加载歌单歌曲", systemImage: "music.note.list", isLoading: true)
                 case .failed(let message):
-                    MusicStateSection(title: "歌曲", stateTitle: "歌单加载失败", message: message, systemImage: "exclamationmark.triangle")
+                    MusicHomeStateSection(title: "歌曲", stateTitle: "歌单加载失败", message: message, systemImage: "exclamationmark.triangle")
                 case .loaded(let songs):
                     if songs.isEmpty {
-                        MusicStateSection(title: "歌曲", stateTitle: "暂无歌曲", systemImage: "music.note")
+                        MusicHomeStateSection(title: "歌曲", stateTitle: "暂无歌曲", systemImage: "music.note")
                     } else {
-                        Section {
-                            SetuCard {
-                                VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                                    SetuSectionHeader(title: "歌曲", subtitle: "\(songs.count) 首")
-                                    MusicSongList(songs: songs) { song in
-                                        Task {
-                                            await play(
-                                                song,
-                                                queueTracks: songs.map { MusicPlaybackTrack(song: $0) }
-                                            )
-                                        }
-                                    } onPlayMv: { song in
-                                        mvSong = song
-                                    } onAddToPlaylist: { song in
-                                        selectedSong = song
-                                    }
-                                }
-                            }
-                            .setuListRow()
+                        SetuRecordBoard(items: songs) { song in
+                            MusicTrackRecordCard(song: song, onPlay: {
+                                Task { await play(song, queueTracks: songs.map { MusicPlaybackTrack(song: $0) }) }
+                            }, onPlayMv: { mvSong = song }, onAddToPlaylist: { selectedSong = song })
                         }
                     }
                 }
             }
-            .listStyle(.plain)
-            .setuBackground()
         .setuFeedbackPresentation($feedback)
             .navigationTitle(playlist.name)
             .toolbar {
@@ -724,3 +617,41 @@ private struct RecommendedPlaylistSheet: View {
     .preferredColorScheme(.light)
 }
 #endif
+
+
+private struct MusicHomeStateSection: View {
+    let title: String
+    let stateTitle: String
+    var message: String?
+    let systemImage: String
+    var isLoading = false
+    var actionTitle: String?
+    var action: (() -> Void)?
+    var error: UserFacingError?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SetuSpacing.md) {
+            SetuSectionHeader(title: title)
+            if isLoading {
+                SetuSkeletonTile(aspectRatio: 2, title: stateTitle)
+            } else {
+                SetuCard {
+                    if let error {
+                        SetuEmptyState(error: error, retry: action)
+                    } else {
+                        SetuEmptyState(title: stateTitle, message: message, systemImage: systemImage,
+                                       actionTitle: actionTitle, action: action)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private extension MusicHomeStateSection {
+    init(title: String, stateTitle: String, message: UserFacingError, systemImage: String,
+         isLoading: Bool = false, actionTitle: String? = nil, action: (() -> Void)? = nil) {
+        self.init(title: title, stateTitle: stateTitle, systemImage: systemImage, isLoading: isLoading,
+                  actionTitle: actionTitle, action: action, error: message)
+    }
+}

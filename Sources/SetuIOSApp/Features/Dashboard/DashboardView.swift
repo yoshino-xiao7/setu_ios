@@ -20,17 +20,21 @@ struct DashboardView: View {
     @State private var previewItem: UserImagePreviewItem?
 
     var body: some View {
-        List {
+        SetuBoard {
             greetingSection
             continueSection
+            quickEntriesSection
             favoritesSection
             recommendationSection
             remindersSection
         }
-        .listStyle(.plain)
-        .setuBackground()
         .accessibilityIdentifier("dashboard.page")
         .navigationTitle("首页")
+        .setuActionDock {
+            SetuPrimaryButton { navigation.navigate(to: .ai, reset: true) } label: {
+                Label("开始创作", systemImage: "sparkles")
+            }
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button { navigation.navigate(to: .home, route: .notifications) } label: {
@@ -66,142 +70,115 @@ struct DashboardView: View {
     }
 
     private var greetingSection: some View {
-        Section {
+        SetuBento(items: [AppTab.home], span: { _ in .hero }) { _ in
             SetuCard(padding: SetuSpacing.xl) {
-                if dynamicTypeSize.isAccessibilitySize {
-                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                        greetingCopy
-                        HomeAccountAvatar(user: environment.authSession.currentUser)
-                            .frame(maxWidth: .infinity, alignment: .trailing)
-                    }
-                } else {
-                    HStack(alignment: .top, spacing: SetuSpacing.lg) {
+                VStack(alignment: .leading, spacing: SetuSpacing.lg) {
+                    HStack(alignment: .top) {
                         greetingCopy
                         Spacer(minLength: SetuSpacing.sm)
                         HomeAccountAvatar(user: environment.authSession.currentUser)
                     }
-                }
-            }
-        }
-        .setuListRow()
-    }
-
-    private var continueSection: some View {
-        Section {
-            SetuCard {
-                VStack(alignment: .leading, spacing: SetuSpacing.lg) {
-                    SetuSectionHeader(title: "继续使用")
-
-                    if let track = player.currentTrack {
-                        SetuNavigationRow(
-                            title: track.title,
-                            subtitle: "继续播放 · \(track.artist)",
-                            systemImage: "play.circle.fill"
-                        ) {
-                            navigation.navigate(to: .music)
-                        }
-                    }
-
-                    switch generationState {
-                    case .idle, .loading:
-                        DashboardFieldLoading(title: "正在同步生成进度")
-                    case .failed(let message):
-                        DashboardFieldFailure(
-                            title: "生成进度暂不可用",
-                            message: message,
-                            retryIdentifier: "dashboard.retry.generation"
-                        ) {
-                            Task { await loadGeneration() }
-                        }
-                    case .loaded(let job):
-                        if let job {
-                            SetuNavigationRow(
-                                title: job.promptCn.nonEmpty ?? "正在生成作品",
-                                subtitle: "\(job.statusTitle) · 查看最新进度",
-                                systemImage: "sparkles"
-                            ) {
-                                navigation.navigate(to: .ai, route: .aiGenerationDetail(job.id))
-                            }
-                        }
-                    }
-
-                    if hasMeaningfulDraft {
-                        SetuNavigationRow(
-                            title: draft.promptCn.nonEmpty ?? "未完成的 AI 绘画草稿",
-                            subtitle: "继续编辑上次保存的参数",
-                            systemImage: "square.and.pencil"
-                        ) {
-                            navigation.navigate(to: .ai, reset: true)
-                        }
-                    }
-
-                    if hasConfirmedNoActiveContent {
-                        SetuEmptyState(
-                            title: "暂无进行中的内容",
-                            message: "描述一个画面，开始今天的第一幅作品。",
-                            systemImage: "clock.arrow.circlepath",
-                            actionTitle: "开始创作",
-                            action: { navigation.navigate(to: .ai, reset: true) }
+                    if case .loaded(let points) = pointsState {
+                        SetuMetricRing(
+                            value: "\(points)", caption: "可用积分", progress: min(1, Double(points) / 20),
+                            accessibilityDescription: "可用积分 \(points)，单次基础创作预计需要 20 积分"
                         )
                     }
                 }
             }
         }
-        .setuListRow()
+    }
+
+    private var quickEntriesSection: some View {
+        SetuBento(items: [AppTab.ai, .images, .music, .square], span: { _ in .small }) { tab in
+            SetuBentoTile(title: tab.title, subtitle: quickEntrySubtitle(tab), systemImage: tab.systemImage) {
+                navigation.navigate(to: tab)
+            }
+        }
+    }
+
+    private func quickEntrySubtitle(_ tab: AppTab) -> String {
+        switch tab {
+        case .ai: "把灵感变成作品"
+        case .images: "发现喜欢的图片"
+        case .music: "继续聆听"
+        case .square: "看看大家的创作"
+        case .home: "欢迎回来"
+        }
+    }
+
+    @ViewBuilder
+    private var continueSection: some View {
+        if !hasConfirmedNoActiveContent {
+            VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                SetuSectionHeader(title: "进行中")
+                if let track = player.currentTrack {
+                    SetuBentoTile(title: track.title, subtitle: "继续播放 · \(track.artist)", systemImage: "play.circle.fill") {
+                        navigation.navigate(to: .music)
+                    }
+                }
+                switch generationState {
+                case .idle, .loading:
+                    DashboardFieldLoading(title: "正在同步生成进度")
+                case .failed(let message):
+                    DashboardFieldFailure(title: "生成进度暂不可用", message: message, retryIdentifier: "dashboard.retry.generation") {
+                        Task { await loadGeneration() }
+                    }
+                case .loaded(let job):
+                    if let job {
+                        SetuBentoTile(title: job.promptCn.nonEmpty ?? "正在生成作品", subtitle: "\(job.statusTitle) · 查看最新进度", systemImage: "sparkles") {
+                            navigation.navigate(to: .ai, route: .aiGenerationDetail(job.id))
+                        }
+                    }
+                }
+                if hasMeaningfulDraft {
+                    SetuBentoTile(title: draft.promptCn.nonEmpty ?? "未完成的创作草稿", subtitle: "继续编辑上次保存的参数", systemImage: "square.and.pencil") {
+                        navigation.navigate(to: .ai, reset: true)
+                    }
+                }
+            }
+        }
     }
 
     private var favoritesSection: some View {
-        Section {
-            SetuCard {
-                VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                    SetuSectionHeader(
-                        title: "最近收藏",
-                        actionTitle: "查看全部"
+        VStack(alignment: .leading, spacing: SetuSpacing.md) {
+            switch favoritesState {
+            case .loaded(let favorites) where !favorites.isEmpty:
+                SetuShelf(title: "最近收藏", actionTitle: "查看全部", action: {
+                    navigation.navigate(to: .images, route: .favorites)
+                }, items: favorites) { favorite in
+                    SetuShelfCard(
+                        title: favorite.image?.title.nonEmpty ?? "未命名作品",
+                        imageURLString: favorite.image?.urlSmall ?? favorite.image?.urlRegular,
+                        aspectRatio: CGFloat(favorite.image?.width ?? 1) / CGFloat(max(1, favorite.image?.height ?? 1))
                     ) {
-                        navigation.navigate(to: .images, route: .favorites)
+                        previewItem = UserImagePreviewItem(favorite: favorite)
                     }
-
-                    switch favoritesState {
-                    case .idle, .loading:
-                        DashboardFieldLoading(title: "正在加载最近收藏")
-                    case .failed(let message):
-                        DashboardFieldFailure(
-                            title: "最近收藏加载失败",
-                            message: message,
-                            retryIdentifier: "dashboard.retry.favorites"
-                        ) {
-                            Task { await loadFavorites() }
-                        }
-                    case .loaded(let favorites) where favorites.isEmpty:
-                        SetuEmptyState(
-                            title: "还没有收藏图片",
-                            message: "去图片页发现喜欢的作品吧。",
-                            systemImage: "heart",
-                            actionTitle: "发现图片",
-                            action: { navigation.navigate(to: .images) }
-                        )
-                    case .loaded(let favorites):
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: SetuSpacing.md) {
-                                ForEach(favorites) { favorite in
-                                    Button {
-                                        previewItem = UserImagePreviewItem(favorite: favorite)
-                                    } label: {
-                                        FavoritePreviewTile(item: favorite)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .accessibilityLabel("查看收藏：\(favorite.image?.title.nonEmpty ?? "未命名作品")")
-                                    .accessibilityIdentifier("dashboard.favorite.\(favorite.id)")
-                                }
-                            }
+                    .accessibilityLabel("查看收藏：\(favorite.image?.title.nonEmpty ?? "未命名作品")")
+                    .accessibilityIdentifier("dashboard.favorite.\(favorite.id)")
+                }
+            default:
+                SetuSectionHeader(title: "最近收藏", actionTitle: "查看全部") {
+                    navigation.navigate(to: .images, route: .favorites)
+                }
+                switch favoritesState {
+                case .idle, .loading:
+                    DashboardFieldLoading(title: "正在加载最近收藏")
+                case .failed(let message):
+                    DashboardFieldFailure(title: "最近收藏加载失败", message: message, retryIdentifier: "dashboard.retry.favorites") {
+                        Task { await loadFavorites() }
+                    }
+                case .loaded:
+                    SetuCard {
+                        SetuEmptyState(title: "还没有收藏图片", message: "去图库发现喜欢的作品吧。", systemImage: "heart", actionTitle: "发现图片") {
+                            navigation.navigate(to: .images)
                         }
                     }
                 }
             }
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("dashboard.section.favorites")
         }
-        .setuListRow()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("dashboard.section.favorites")
     }
 
     @ViewBuilder
@@ -245,7 +222,7 @@ struct DashboardView: View {
                                     allowsTapToRetry: false
                                 )
                                 .frame(maxWidth: .infinity)
-                                .aspectRatio(16 / 10, contentMode: .fit)
+                                .aspectRatio(CGFloat(recommendation.width) / CGFloat(max(1, recommendation.height)), contentMode: .fit)
 
                                 VStack(alignment: .leading, spacing: SetuSpacing.xs) {
                                     Text(recommendation.promptCn.nonEmpty ?? "广场精选作品")
@@ -264,81 +241,55 @@ struct DashboardView: View {
                 }
             }
         }
-        .setuListRow()
     }
 
+    @ViewBuilder
     private var remindersSection: some View {
-        Section {
-            SetuCard {
-                VStack(alignment: .leading, spacing: SetuSpacing.lg) {
-                    SetuSectionHeader(title: "提醒")
-                    notificationReminderContent
-                    pointsReminderContent
-
-                    if remindersAreConfirmedClear {
-                        Label("暂时没有需要处理的事项", systemImage: "checkmark.circle.fill")
-                            .font(SetuTypography.body)
-                            .foregroundStyle(SetuColor.success)
-                            .fixedSize(horizontal: false, vertical: true)
+        if !remindersAreConfirmedClear {
+            VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                SetuSectionHeader(title: "提醒")
+                switch notificationState {
+                case .idle, .loading:
+                    DashboardFieldLoading(title: "正在检查未读通知")
+                case .failed(let message):
+                    DashboardFieldFailure(title: "通知状态加载失败", message: message, retryIdentifier: "dashboard.retry.notifications") {
+                        Task { await loadNotifications() }
                     }
+                case .loaded:
+                    EmptyView()
+                }
+                switch pointsState {
+                case .idle, .loading:
+                    DashboardFieldLoading(title: "正在检查积分余额")
+                case .failed(let message):
+                    DashboardFieldFailure(title: "积分余额加载失败", message: message, retryIdentifier: "dashboard.retry.points") {
+                        Task { await loadPoints() }
+                    }
+                case .loaded:
+                    EmptyView()
+                }
+                SetuRecordBoard(items: reminderItems) { item in
+                    SetuRecordCard(headline: item.title, supporting: item.subtitle, status: item.status, onTap: item.action)
                 }
             }
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("dashboard.section.reminders")
         }
-        .setuListRow()
     }
 
-    @ViewBuilder
-    private var notificationReminderContent: some View {
-        switch notificationState {
-        case .idle, .loading:
-            DashboardFieldLoading(title: "正在检查未读通知")
-        case .failed(let message):
-            DashboardFieldFailure(
-                title: "通知状态加载失败",
-                message: message,
-                retryIdentifier: "dashboard.retry.notifications"
-            ) {
-                Task { await loadNotifications() }
-            }
-        case .loaded(let unread):
-            if unread > 0 {
-                SetuNavigationRow(
-                    title: "有 \(unread) 条未读通知",
-                    subtitle: "查看生成结果和处理进度",
-                    systemImage: "bell.badge"
-                ) {
-                    navigation.navigate(to: .home, route: .notifications)
-                }
-            }
+    private var reminderItems: [DashboardReminder] {
+        var items: [DashboardReminder] = []
+        if case .loaded(let unread) = notificationState, unread > 0 {
+            items.append(DashboardReminder(id: "notifications", title: "有 \(unread) 条未读通知", subtitle: "查看生成结果和处理进度", status: SetuRecordStatus("未读", tone: .brand)) {
+                navigation.navigate(to: .home, route: .notifications)
+            })
         }
-    }
-
-    @ViewBuilder
-    private var pointsReminderContent: some View {
-        switch pointsState {
-        case .idle, .loading:
-            DashboardFieldLoading(title: "正在检查积分余额")
-        case .failed(let message):
-            DashboardFieldFailure(
-                title: "积分余额加载失败",
-                message: message,
-                retryIdentifier: "dashboard.retry.points"
-            ) {
-                Task { await loadPoints() }
-            }
-        case .loaded(let points):
-            if points < 20 {
-                SetuNavigationRow(
-                    title: "积分余额较低",
-                    subtitle: "当前剩余 \(points) 积分",
-                    systemImage: "bolt.trianglebadge.exclamationmark"
-                ) {
-                    navigation.navigate(to: .images, route: .pointsLogs)
-                }
-            }
+        if case .loaded(let points) = pointsState, points < 20 {
+            items.append(DashboardReminder(id: "points", title: "积分余额较低", subtitle: "当前剩余 \(points) 积分", status: SetuRecordStatus("积分提醒", tone: .warning)) {
+                navigation.navigate(to: .images, route: .pointsLogs)
+            })
         }
+        return items
     }
 
     @State private var draft = AiDrawDraft()
@@ -500,19 +451,7 @@ private struct DashboardFieldLoading: View {
     let title: String
 
     var body: some View {
-        HStack(spacing: SetuSpacing.md) {
-            ProgressView()
-                .tint(SetuColor.brandPink)
-                .accessibilityHidden(true)
-            Text(title)
-                .font(SetuTypography.body)
-                .foregroundStyle(SetuColor.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-        }
-        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(title)
+        SetuSkeletonTile(aspectRatio: 2.5, title: title)
     }
 }
 
@@ -551,31 +490,6 @@ private struct DashboardFieldFailure: View {
             SetuColor.danger.opacity(0.08),
             in: RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous)
         )
-    }
-}
-
-private struct FavoritePreviewTile: View {
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-    let item: FavoriteItem
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: SetuSpacing.sm) {
-            SetuRemoteImage(
-                urlString: item.image?.urlSmall ?? item.image?.urlRegular,
-                accessibilityLabel: "收藏图片：\(item.image?.title.nonEmpty ?? "未命名作品")",
-                width: 136,
-                height: 136,
-                cornerRadius: SetuRadius.md,
-                allowsTapToRetry: false
-            )
-            Text(item.image?.title.nonEmpty ?? "未命名作品")
-                .font(SetuTypography.caption)
-                .foregroundStyle(SetuColor.textPrimary)
-                .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(width: dynamicTypeSize.isAccessibilitySize ? 184 : 136, alignment: .leading)
     }
 }
 
@@ -639,3 +553,12 @@ private extension String {
     .preferredColorScheme(.light)
 }
 #endif
+
+
+private struct DashboardReminder: Identifiable {
+    let id: String
+    let title: String
+    let subtitle: String
+    let status: SetuRecordStatus
+    let action: () -> Void
+}

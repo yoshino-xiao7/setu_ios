@@ -49,7 +49,7 @@ struct RandomImageSwipeView: View {
 
             VStack(spacing: SetuSpacing.md) {
                 if !hasTransientFeedback { feedbackBanner }
-                imageStage
+                SetuDeck { imageStage }
                 actionBar
             }
             .padding(.horizontal, SetuSpacing.lg)
@@ -64,6 +64,7 @@ struct RandomImageSwipeView: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("image.swipe.page")
         .navigationTitle("随机图片")
+        .setuActionDock { unlockCTA }
         .setuRefreshAfterLogin(environment.authSession) { Task { await reloadFromParameters() } }
         .setuRetry { Task { await reloadFromParameters() } }
         #if os(iOS)
@@ -72,20 +73,6 @@ struct RandomImageSwipeView: View {
         .setuFeedbackPresentation($feedback)
         .toolbar {
             ToolbarItemGroup {
-                Button { router.navigate(to: .pointsLogs) } label: {
-                    HStack(spacing: SetuSpacing.xs) {
-                        Image(systemName: "bolt.fill")
-                            .font(.system(size: 14, weight: .semibold))
-                            .accessibilityHidden(true)
-                        Text(balance.map(String.init) ?? "—")
-                            .font(.caption.weight(.semibold))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
-                    }
-                    .fixedSize(horizontal: true, vertical: false)
-                }
-                .accessibilityLabel("当前余额 \(balanceText)")
-                .accessibilityIdentifier("image.balance")
                 Button {
                     showingParameters = true
                 } label: {
@@ -239,7 +226,7 @@ struct RandomImageSwipeView: View {
                 }
             }
             .offset(dragOffset)
-            .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: dragOffset)
+            .animation(SetuMotion.resolved(SetuMotion.snappy, reduceMotion: reduceMotion), value: dragOffset)
             .gesture(
                 DragGesture(minimumDistance: 20)
                     .onChanged { value in
@@ -269,13 +256,7 @@ struct RandomImageSwipeView: View {
     }
 
     private var loadingPlaceholder: some View {
-        VStack(spacing: 12) {
-            ProgressView()
-                .tint(SetuColor.brandPink)
-            Text(isPrefetching ? "正在预加载图片" : "正在准备图片")
-                .font(.footnote)
-                .foregroundStyle(SetuColor.textSecondary)
-        }
+        SetuSkeletonTile(aspectRatio: 0.75, title: isPrefetching ? "正在预加载图片" : "正在准备图片")
     }
 
     private func floatingStatus(systemImage: String, title: String) -> some View {
@@ -289,27 +270,63 @@ struct RandomImageSwipeView: View {
         .background(.thinMaterial, in: Capsule())
     }
 
+    @ViewBuilder
+    private var unlockCTA: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(spacing: SetuSpacing.sm) {
+                balanceButton
+                unlockButton
+            }
+        } else {
+            HStack(spacing: SetuSpacing.md) {
+                balanceButton
+                unlockButton
+            }
+        }
+    }
+
+    private var balanceButton: some View {
+        Button { router.navigate(to: .pointsLogs) } label: {
+            HStack(spacing: SetuSpacing.xs) {
+                Image(systemName: "bolt.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .accessibilityHidden(true)
+                Text(balance.map(String.init) ?? "—")
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .fixedSize(horizontal: true, vertical: false)
+        }
+        .accessibilityLabel("当前余额 \(balanceText)")
+        .accessibilityIdentifier("image.balance")
+        .frame(minWidth: 44, minHeight: 50)
+        .tint(SetuColor.brandInk)
+    }
+
+    private var unlockButton: some View {
+        Button {
+            if isCurrentUnlocked {
+                Task { await openOriginal() }
+            } else {
+                showingUnlockConfirmation = true
+            }
+        } label: {
+            Label(
+                isCurrentUnlocked || dynamicTypeSize.isAccessibilitySize ? "查看高清图" : "查看高清图 · \(costPerImage) 积分",
+                systemImage: isCurrentUnlocked ? "lock.open" : "lock"
+            )
+            .frame(maxWidth: .infinity, minHeight: 48)
+        }
+        .disabled(currentCard == nil || hasActiveImageMutation)
+        .buttonStyle(.borderedProminent)
+        .tint(SetuColor.gradientTop)
+        .accessibilityHint("低清预览免费，确认后才会消费积分")
+        .accessibilityIdentifier("image.unlock")
+    }
+
     private var actionBar: some View {
         VStack(spacing: SetuSpacing.sm) {
-            Button {
-                if isCurrentUnlocked {
-                    Task { await openOriginal() }
-                } else {
-                    showingUnlockConfirmation = true
-                }
-            } label: {
-                Label(
-                    isCurrentUnlocked || dynamicTypeSize.isAccessibilitySize ? "查看高清图" : "查看高清图 · \(costPerImage) 积分",
-                    systemImage: isCurrentUnlocked ? "lock.open" : "lock"
-                )
-                .frame(maxWidth: .infinity, minHeight: 48)
-            }
-            .disabled(currentCard == nil || hasActiveImageMutation)
-            .buttonStyle(.borderedProminent)
-            .tint(SetuColor.gradientTop)
-            .accessibilityHint("低清预览免费，确认后才会消费积分")
-            .accessibilityIdentifier("image.unlock")
-
             HStack(spacing: SetuSpacing.xs) {
                 Button {
                     Task { await handleFavoriteAction() }
@@ -937,6 +954,9 @@ private struct ImageSwipeActionLabel: View {
         VStack(spacing: SetuSpacing.xs) {
             Image(systemName: systemImage)
                 .font(.system(size: 20, weight: .semibold))
+                .frame(width: 44, height: 44)
+                .background(.thinMaterial, in: Circle())
+                .overlay { Circle().stroke(SetuColor.separator, lineWidth: 1) }
                 .accessibilityHidden(true)
             Text(title)
                 .font(.caption)
@@ -945,7 +965,7 @@ private struct ImageSwipeActionLabel: View {
         .frame(maxWidth: .infinity, minHeight: 52)
         .padding(SetuSpacing.xs)
         .foregroundStyle(SetuColor.brandInk)
-        .background(SetuColor.brandSoft.opacity(0.2), in: RoundedRectangle(cornerRadius: SetuRadius.md))
+        .contentShape(Rectangle())
         .opacity(isEnabled ? 1 : 0.5)
     }
 }
@@ -1011,14 +1031,14 @@ private struct RandomImageCollectionSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            SetuBoard {
                 Section {
                     SetuCard {
                         VStack(alignment: .leading, spacing: SetuSpacing.md) {
                             SetuSectionHeader(title: "加入收藏夹", subtitle: target.title)
                             switch state {
                             case .idle, .loading:
-                                SetuEmptyState(title: "正在加载收藏夹", systemImage: "folder", isLoading: true)
+                                SetuSkeletonTile(aspectRatio: 2, title: "正在加载收藏夹")
                             case .failed(let text):
                                 SetuEmptyState(title: "收藏夹加载失败", message: text, systemImage: "folder.badge.questionmark")
                             case .loaded(let collections):
@@ -1035,17 +1055,13 @@ private struct RandomImageCollectionSheet: View {
                         }
                     }
                 }
-                .setuListRow()
 
                 if let feedback {
                     Section {
                         SetuFeedbackBanner(feedback: feedback)
                     }
-                    .setuListRow()
                 }
             }
-            .listStyle(.plain)
-            .setuBackground()
             .setuRetry { Task { await loadCollections() } }
             .navigationTitle("选择收藏夹")
             .toolbar {
@@ -1174,7 +1190,7 @@ private struct RandomImageParameterSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            SetuBoard {
                 Section {
                     SetuCard {
                         VStack(alignment: .leading, spacing: SetuSpacing.md) {
@@ -1191,23 +1207,18 @@ private struct RandomImageParameterSheet: View {
                                 .textInputAutocapitalization(.never)
                                 .autocorrectionDisabled()
                                 #endif
-                            Picker("内容级别", selection: $r18) {
-                                Text("普通内容").tag(0)
-                                Text("成人内容").tag(1)
-                                Text("混合").tag(2)
-                            }
-                            Picker("画幅偏好", selection: $aspectRatio) {
-                                Text("全部").tag("")
-                                Text("竖图").tag("0.1-0.85")
-                                Text("方图").tag("0.86-1.15")
-                                Text("横图").tag("1.16-3.0")
-                            }
+                            SetuFilterBar(options: [
+                                .init(value: 0, title: "普通内容"), .init(value: 1, title: "成人内容"), .init(value: 2, title: "混合")
+                            ], selection: $r18, accessibilityTitle: "内容级别")
+                            SetuFilterBar(options: [
+                                .init(value: "", title: "全部"), .init(value: "0.1-0.85", title: "竖图"),
+                                .init(value: "0.86-1.15", title: "方图"), .init(value: "1.16-3.0", title: "横图")
+                            ], selection: $aspectRatio, accessibilityTitle: "画幅偏好")
                             Toggle("排除 AI 图片", isOn: $excludeAI)
                                 .tint(SetuColor.brandPink)
                         }
                     }
                 }
-                .setuListRow()
 
                 Section {
                     SetuCard {
@@ -1219,10 +1230,7 @@ private struct RandomImageParameterSheet: View {
                         .foregroundStyle(SetuColor.textSecondary)
                     }
                 }
-                .setuListRow()
             }
-            .listStyle(.plain)
-            .setuBackground()
             .navigationTitle("刷图参数")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)

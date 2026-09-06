@@ -8,63 +8,57 @@ struct SquareHubView: View {
     @State private var aiPreviewState: LoadState<[AiPublicWork]> = .idle
 
     var body: some View {
-        List {
-            Section {
-                SquareLandingHeader {
-                    router.navigate(to: .collectionSquare)
-                } openAiSquare: {
-                    router.navigate(to: .aiSquare)
-                }
+        SetuBoard {
+            SquareLandingHeader {
+                router.navigate(to: .collectionSquare)
+            } openAiSquare: {
+                router.navigate(to: .aiSquare)
             }
-            .setuListRow()
 
-            SquarePreviewSection(
-                title: "收藏夹广场",
-                state: collectionPreviewState,
-                emptyTitle: "暂无公开收藏夹",
-                openAll: { router.navigate(to: .collectionSquare) },
-                content: { collections in
-                    ForEach(collections) { collection in
-                        SquareCollectionPreviewCard(collection: collection) {
-                            router.navigate(to: .publicCollectionDetail(collection.id))
-                        }
+            SquarePreviewSection(title: "收藏夹广场", state: collectionPreviewState,
+                                 emptyTitle: "暂无公开收藏夹", openAll: { router.navigate(to: .collectionSquare) }) { collections in
+                SetuShelf(title: "收藏夹广场", actionTitle: "查看全部", action: {
+                    router.navigate(to: .collectionSquare)
+                }, items: Array(collections)) { collection in
+                    SetuShelfCard(
+                        title: collection.name, footnote: "\(collection.itemCount ?? 0) 张",
+                        imageURLString: collection.coverUrl ?? collection.previewImages?.first?.bestURLString,
+                        aspectRatio: CGFloat(collection.previewImages?.first?.width ?? 1) / CGFloat(max(1, collection.previewImages?.first?.height ?? 1))
+                    ) {
+                        router.navigate(to: .publicCollectionDetail(collection.id))
                     }
                 }
-            )
+            }
 
-            SquarePreviewSection(
-                title: "AI 绘画广场",
-                state: aiPreviewState,
-                emptyTitle: "暂无公开 AI 作品",
-                openAll: { router.navigate(to: .aiSquare) },
-                content: { jobs in
-                    ForEach(jobs) { job in
-                        SquareAiPreviewCard(job: job) {
+            SquarePreviewSection(title: "AI 绘画广场", state: aiPreviewState,
+                                 emptyTitle: "暂无公开 AI 作品", openAll: { router.navigate(to: .aiSquare) }) { jobs in
+                VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                    SetuSectionHeader(title: "AI 绘画广场", actionTitle: "查看全部") {
+                        router.navigate(to: .aiSquare)
+                    }
+                    SetuMosaic(items: Array(jobs), aspectRatio: { CGFloat($0.width) / CGFloat(max(1, $0.height)) }) { job in
+                        SetuShelfCard(title: job.promptCn, footnote: "\(job.width)×\(job.height)",
+                                      imageURLString: job.imageUrl, aspectRatio: CGFloat(job.width) / CGFloat(max(1, job.height))) {
                             router.navigate(to: .publicAiWork(PublicAiWorkSnapshot(work: job)))
                         }
                     }
                 }
-            )
+            }
 
-
-
-            Section {
-                SetuCard {
-                    VStack(spacing: SetuSpacing.lg) {
-                        SetuSectionHeader(title: "我的内容")
-                        HubNavigationRow(title: "我的收藏夹", subtitle: "管理自己的图片收藏", systemImage: "heart.rectangle") {
-                            router.navigate(to: .collections)
-                        }
-                        HubNavigationRow(title: "默认收藏", subtitle: "查看默认收藏图片", systemImage: "heart.fill") {
-                            router.navigate(to: .favorites)
-                        }
+            VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                SetuSectionHeader(title: "我的内容")
+                SetuBento(items: SquarePersonalEntry.allCases, span: { _ in .small }) { entry in
+                    SetuBentoTile(title: entry.title, subtitle: entry.subtitle, systemImage: entry.systemImage) {
+                        router.navigate(to: entry.route)
                     }
                 }
             }
-            .setuListRow()
         }
-        .listStyle(.plain)
-        .setuBackground()
+        .setuActionDock {
+            SetuPrimaryButton { router.navigate(to: .collectionSquare) } label: {
+                Label("浏览全部", systemImage: "square.grid.2x2")
+            }
+        }
         .navigationTitle("广场")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -115,15 +109,13 @@ struct SquareHubView: View {
     }
 }
 
-private struct HubNavigationRow: View {
-    let title: String
-    let subtitle: String
-    let systemImage: String
-    let action: () -> Void
-
-    var body: some View {
-        SetuNavigationRow(title: title, subtitle: subtitle, systemImage: systemImage, action: action)
-    }
+private enum SquarePersonalEntry: String, CaseIterable, Identifiable {
+    case collections, favorites
+    var id: Self { self }
+    var title: String { self == .collections ? "我的收藏夹" : "默认收藏" }
+    var subtitle: String { self == .collections ? "管理自己的图片收藏" : "查看默认收藏图片" }
+    var systemImage: String { self == .collections ? "heart.rectangle" : "heart.fill" }
+    var route: AppRoute { self == .collections ? .collections : .favorites }
 }
 
 private struct SquareLandingHeader: View {
@@ -163,7 +155,7 @@ private struct SquareLandingHeader: View {
         .foregroundStyle(.white)
         .padding(SetuSpacing.xl)
         .background(SetuColor.heroGradient, in: RoundedRectangle(cornerRadius: SetuRadius.lg, style: .continuous))
-        .shadow(color: SetuColor.brandPink.opacity(0.28), radius: 18, y: 10)
+        .setuElevation(.hero)
     }
 
     private var squareIcon: some View {
@@ -214,88 +206,25 @@ private struct SquarePreviewSection<Items: RandomAccessCollection, Content: View
     @ViewBuilder let content: (Items) -> Content
 
     var body: some View {
-        Section {
+        switch state {
+        case .idle, .loading:
+            VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                SetuSectionHeader(title: title)
+                SetuSkeletonTile(aspectRatio: 2, title: "正在加载\(title)")
+            }
+        case .failed(let error):
             SetuCard {
-                SetuStateView(
-                    state: state,
-                    loadingTitle: "正在加载\(title)",
-                    loadingImage: "rectangle.stack",
-                    failureTitle: "\(title)加载失败",
-                    failureImage: "exclamationmark.triangle",
-                    failureActionTitle: "进入完整页面",
-                    failureAction: openAll,
-                    emptyTitle: emptyTitle,
-                    emptyImage: "rectangle.stack",
-                    isEmpty: { $0.isEmpty }
-                ) { items in
-                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                        SetuSectionHeader(title: title, actionTitle: "查看全部", action: openAll)
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: SetuSpacing.md) {
-                                content(items)
-                            }
-                            .padding(.vertical, 2)
-                        }
-                    }
+                VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                    SetuSectionHeader(title: title)
+                    SetuEmptyState(error: error, retry: openAll)
                 }
             }
-        }
-        .setuListRow()
-    }
-}
-
-private struct SquareCollectionPreviewCard: View {
-    let collection: CollectionInfo
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 8) {
-                SetuImageTile(
-                    urlString: collection.coverUrl ?? collection.previewImages?.first?.bestURLString,
-                    accessibilityLabel: "收藏夹「\(collection.name)」封面",
-                    aspectRatio: 132 / 92
-                )
-                    .frame(width: 132)
-
-                Text(collection.name)
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(SetuColor.textPrimary)
-                    .lineLimit(2)
-                    .frame(width: 132, alignment: .leading)
-
-                Label("\(collection.itemCount ?? 0) 张", systemImage: "photo")
-                    .font(.caption2)
-                    .foregroundStyle(SetuColor.textSecondary)
+        case .loaded(let items) where items.isEmpty:
+            SetuCard {
+                SetuEmptyState(title: emptyTitle, systemImage: "rectangle.stack", actionTitle: "查看全部", action: openAll)
             }
-            .frame(width: 132, alignment: .leading)
+        case .loaded(let items):
+            content(items)
         }
-        .buttonStyle(.plain)
-    }
-}
-
-private struct SquareAiPreviewCard: View {
-    let job: AiPublicWork
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 8) {
-                SetuImageTile(urlString: job.imageUrl, accessibilityLabel: "AI 作品：\(job.promptCn)")
-                    .frame(width: 132)
-
-                Text(job.promptCn)
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(SetuColor.textPrimary)
-                    .lineLimit(2)
-                    .frame(width: 132, alignment: .leading)
-
-                Label("\(job.width)x\(job.height)", systemImage: "aspectratio")
-                    .font(.caption2)
-                    .foregroundStyle(SetuColor.textSecondary)
-            }
-            .frame(width: 132, alignment: .leading)
-        }
-        .buttonStyle(.plain)
     }
 }

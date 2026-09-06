@@ -10,7 +10,7 @@ final class AiDrawDraftUITests: XCTestCase {
         XCTAssertTrue(openButton.waitForExistence(timeout: 8))
         openButton.tap()
 
-        let modePicker = app.segmentedControls["ai.draw.generationMode"]
+        let modePicker = app.descendants(matching: .any)["ai.draw.generationMode"].firstMatch
         XCTAssertTrue(modePicker.waitForExistence(timeout: 8))
         let dualButton = modePicker.buttons["双人物"]
         XCTAssertTrue(dualButton.exists)

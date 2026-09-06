@@ -245,7 +245,7 @@ final class UXFlowUITests: XCTestCase {
                 if tab == "创作" || tab == "图库" {
                     let action = app.buttons[actionID]
                     XCTAssertTrue(action.isHittable)
-                    XCTAssertLessThanOrEqual(action.frame.maxY, bar.frame.minY + 1)
+                    XCTAssertLessThanOrEqual(bar.frame.maxY, action.frame.minY + 1)
                 }
                 if tab == "图库" {
                     XCTAssertTrue(app.buttons["image.balance"].staticTexts["86"].exists)

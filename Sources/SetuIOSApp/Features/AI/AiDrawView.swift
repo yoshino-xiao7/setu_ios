@@ -46,16 +46,14 @@ struct AiDrawView: View {
     private let estimatedPointsCost = 20
 
     var body: some View {
-        List {
+        SetuBoard {
             serviceNoticeSection
             quickPromptSection
             quickCanvasSection
             quickAssetSection
-            advancedSettingsSection
+            generationProgressSection
             feedbackSection
         }
-        .listStyle(.plain)
-        .setuBackground()
         .setuFeedbackPresentation($feedback)
         .setuRefreshAfterLogin(environment.authSession) { Task { await loadMetadata() } }
         .setuRetry { Task { await loadMetadata() } }
@@ -122,7 +120,7 @@ struct AiDrawView: View {
         }
         .task { await loadMetadata() }
         .refreshable { await loadMetadata() }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        .setuActionDock {
             generationCTA
         }
         .alert("生成完成时通知我？", isPresented: $showingGenerationNotificationPrompt) {
@@ -151,13 +149,14 @@ struct AiDrawView: View {
     @ViewBuilder
     private var serviceNoticeSection: some View {
         switch statusState {
+        case .idle, .loading:
+            SetuSkeletonTile(aspectRatio: 3, title: "正在准备创作服务")
         case .failed(let text):
             Section {
                 SetuCard {
                     SetuEmptyState(error: text, retry: { Task { await loadMetadata() } })
                 }
             }
-            .setuListRow()
         case .loaded(let status) where !status.available:
             Section {
                 SetuCard {
@@ -170,7 +169,6 @@ struct AiDrawView: View {
                         .buttonStyle(.bordered)
                 }
             }
-            .setuListRow()
         case .loaded(let status) where (status.estimatedWaitSeconds ?? 0) > 60 || (status.queuedCount ?? 0) > 0:
             Section {
                 SetuPill(
@@ -179,7 +177,6 @@ struct AiDrawView: View {
                     tone: .warning
                 )
             }
-            .setuListRow()
         default:
             EmptyView()
         }
@@ -205,7 +202,6 @@ struct AiDrawView: View {
                 }
             }
         }
-        .setuListRow()
     }
 
     private var quickCanvasSection: some View {
@@ -214,10 +210,10 @@ struct AiDrawView: View {
                 VStack(alignment: .leading, spacing: SetuSpacing.md) {
                     SetuSectionHeader(title: "画幅", subtitle: "选择最适合作品展示的比例")
                     canvasPresetGrid
+                    advancedSettingsSection
                 }
             }
         }
-        .setuListRow()
     }
 
     private var quickAssetSection: some View {
@@ -225,13 +221,12 @@ struct AiDrawView: View {
             SetuCard {
                 VStack(alignment: .leading, spacing: SetuSpacing.md) {
                     SetuSectionHeader(title: "风格与角色", subtitle: "可选，不选择也能直接生成")
-                    Picker("人物数量", selection: $generationMode) {
-                        Text("单人物").tag("SINGLE")
-                        Text("双人物").tag("DUAL")
-                    }
-                    .pickerStyle(.segmented)
+                    SetuFilterBar(options: [
+                        .init(value: "SINGLE", title: "单人物", systemImage: "person"),
+                        .init(value: "DUAL", title: "双人物", systemImage: "person.2")
+                    ], selection: $generationMode, accessibilityTitle: "人物数量")
                     .accessibilityIdentifier("ai.draw.generationMode")
-                    SetuNavigationRow(title: "选择风格与角色", subtitle: selectedAssetSummary, systemImage: "photo.stack") {
+                    SetuBentoTile(title: "选择风格与角色", subtitle: selectedAssetSummary, systemImage: "photo.stack") {
                         saveDraft()
                         router.navigate(to: .aiAssets)
                     }
@@ -253,7 +248,6 @@ struct AiDrawView: View {
                 }
             }
         }
-        .setuListRow()
     }
 
     private var selectedAssetSummary: String {
@@ -273,8 +267,8 @@ struct AiDrawView: View {
     }
 
     private var advancedSettingsSection: some View {
-        Section {
-            SetuCard {
+        Group {
+            Group {
                 DisclosureGroup("高级设置", isExpanded: $showingAdvancedSettings) {
                     VStack(alignment: .leading, spacing: SetuSpacing.lg) {
                         Divider()
@@ -320,17 +314,16 @@ struct AiDrawView: View {
                 .font(.body.weight(.semibold))
             }
         }
-        .setuListRow()
     }
 
     @ViewBuilder
     private var advancedModelSettings: some View {
         if case .loaded(let capabilities) = capabilityState {
-            Picker("基础画风", selection: $selectedCheckpoint) {
-                Text("推荐").tag("")
-                ForEach(capabilities.checkpoints) { item in
-                    Text(item.displayName ?? item.name).tag(item.name)
-                }
+            VStack(alignment: .leading, spacing: SetuSpacing.sm) {
+                Text("基础画风").font(SetuTypography.label)
+                SetuFilterBar(options: [.init(value: "", title: "推荐")] + capabilities.checkpoints.map {
+                    .init(value: $0.name, title: $0.displayName ?? $0.name)
+                }, selection: $selectedCheckpoint, accessibilityTitle: "基础画风")
             }
             Picker("主要风格", selection: $selectedLora) {
                 Text("不使用").tag("")
@@ -385,17 +378,15 @@ struct AiDrawView: View {
             Section {
                 SetuFeedbackBanner(error: userFacingError, onAction: handleErrorAction)
             }
-            .setuListRow()
         } else if let feedback {
             Section {
                 SetuFeedbackBanner(feedback: feedback)
             }
-            .setuListRow()
         }
     }
 
     private var generationCTA: some View {
-        SetuBottomCTA {
+        Group {
             SetuPrimaryButton {
                 Task { await submit() }
             } label: {
@@ -422,29 +413,28 @@ struct AiDrawView: View {
     }
 
     private var canvasPresetGrid: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 8)], spacing: 8) {
-                ForEach(AiCanvasPreset.allCases) { preset in
-                    Button {
-                        width = preset.width
-                        height = preset.height
-                        saveDraft()
-                    } label: {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Image(systemName: preset.systemImage)
-                                .font(.title3)
-                            Text(preset.title)
-                                .font(.footnote.weight(.semibold))
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(width == preset.width && height == preset.height ? SetuColor.brandPink : SetuColor.textSecondary)
-                    .accessibilityAddTraits(width == preset.width && height == preset.height ? .isSelected : [])
-                }
+        SetuFilterBar(options: AiCanvasPreset.allCases.map {
+            .init(value: Optional($0), title: $0.title, systemImage: $0.systemImage)
+        }, selection: Binding<AiCanvasPreset?>(
+            get: { AiCanvasPreset.allCases.first { $0.width == width && $0.height == height } },
+            set: { preset in
+                guard let preset else { return }
+                width = preset.width
+                height = preset.height
+                saveDraft()
             }
+        ), accessibilityTitle: "画幅")
+    }
+
+    @ViewBuilder
+    private var generationProgressSection: some View {
+        if isSubmitting || isTranslating {
+            SetuRecordCard(
+                headline: isTranslating ? "正在理解你的画面" : "正在创建作品",
+                supporting: "请稍候，提交完成后会打开作品进度。",
+                status: SetuRecordStatus("处理中", tone: .info)
+            )
         }
-        .padding(.vertical, 4)
     }
 
     private func loadMetadata() async {

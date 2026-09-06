@@ -187,3 +187,46 @@ struct MusicSongRow: View {
         model.hasMV || onAddToPlaylist != nil || onDownload != nil
     }
 }
+
+/// Shared action semantics for track surfaces; callbacks remain owned by the page.
+struct MusicTrackActions: View {
+    let song: MusicSong
+    var onPlay: (() -> Void)?
+    var onPlayMv: (() -> Void)?
+    var onAddToPlaylist: (() -> Void)?
+    var onDownload: (() -> Void)?
+
+    var body: some View {
+        HStack(spacing: SetuSpacing.xs) {
+            if let onPlay {
+                MusicIconButton(systemImage: "play.fill", accessibilityLabel: "播放 \(song.name)", tint: SetuColor.brandInk, action: onPlay)
+            }
+            if (song.mv ?? 0) > 0, let onPlayMv {
+                MusicIconButton(systemImage: "play.rectangle.fill", accessibilityLabel: "播放《\(song.name)》的 MV", tint: SetuColor.info, action: onPlayMv)
+            }
+            if let onAddToPlaylist {
+                MusicIconButton(systemImage: "text.badge.plus", accessibilityLabel: "将《\(song.name)》加入歌单", tint: SetuColor.brandInk, action: onAddToPlaylist)
+            }
+            if let onDownload {
+                MusicIconButton(systemImage: "arrow.down", accessibilityLabel: "下载 \(song.name)", tint: SetuColor.success, action: onDownload)
+            }
+        }
+    }
+}
+
+struct MusicTrackRecordCard: View {
+    let song: MusicSong
+    var onPlay: (() -> Void)?
+    var onPlayMv: (() -> Void)?
+    var onAddToPlaylist: (() -> Void)?
+    var onDownload: (() -> Void)?
+
+    var body: some View {
+        SetuRecordCard(headline: song.name, supporting: song.artistNames,
+                       thumbnailURLString: song.coverURLString,
+                       fields: [SetuRecordField("专辑", song.albumName, isNumeric: false)]) {
+            MusicTrackActions(song: song, onPlay: onPlay, onPlayMv: onPlayMv,
+                              onAddToPlaylist: onAddToPlaylist, onDownload: onDownload)
+        }
+    }
+}

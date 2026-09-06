@@ -6,7 +6,14 @@ struct SetuFilterBar<Value: Hashable>: View {
         let title: String
         let systemImage: String?
         let badge: Int?
+        private(set) var identifier: String?
         var id: Value { value }
+
+        func accessibilityIdentifier(_ identifier: String) -> Self {
+            var option = self
+            option.identifier = identifier
+            return option
+        }
 
         init(value: Value, title: String, systemImage: String? = nil, badge: Int? = nil) {
             self.value = value
@@ -51,7 +58,8 @@ struct SetuFilterBar<Value: Hashable>: View {
                                     in: Capsule())
                         .overlay { Capsule().stroke(SetuColor.separator, lineWidth: 1) }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(SetuSurfaceButtonStyle())
+                    .accessibilityIdentifier(option.identifier ?? option.title)
                     .accessibilityAddTraits(selection == option.value ? .isSelected : [])
                 }
             }
