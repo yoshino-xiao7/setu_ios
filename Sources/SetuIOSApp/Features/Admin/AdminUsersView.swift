@@ -12,7 +12,7 @@ struct AdminUsersView: View {
     private let pageSize = 20
 
     var body: some View {
-        List {
+        SetuBoard {
             if environment.authSession.currentUser?.role != .admin {
                 AdminUserStateSection(title: "权限", stateTitle: "需要管理员权限", message: "请使用管理员账号登录后管理用户。", systemImage: "shield.slash")
             } else {
@@ -20,7 +20,6 @@ struct AdminUsersView: View {
                 content
             }
         }
-        .listStyle(.plain)
         .setuBackground()
         .navigationTitle("用户管理")
         .task { await load(resetPage: true) }
@@ -35,12 +34,8 @@ struct AdminUsersView: View {
                     .textFieldStyle(.roundedBorder)
                 TextField("昵称", text: $nickname)
                     .textFieldStyle(.roundedBorder)
-                Picker("状态", selection: $statusFilter) {
-                    ForEach(AdminUserStatusFilter.allCases) { filter in
-                        Text(filter.title).tag(filter)
-                    }
-                }
-                .pickerStyle(.segmented)
+                SetuFilterBar(options: AdminUserStatusFilter.allCases.map { .init(value: $0, title: $0.title) }, selection: $statusFilter, accessibilityTitle: "状态")
+
                 Button {
                     Task { await load(resetPage: true) }
                 } label: {
@@ -51,7 +46,7 @@ struct AdminUsersView: View {
                 .tint(SetuColor.brandPink)
             }
         }
-        .setuListRow()
+
     }
 
     @ViewBuilder
@@ -66,14 +61,10 @@ struct AdminUsersView: View {
             if users.isEmpty {
                 AdminUserStateSection(title: "用户列表", stateTitle: "暂无用户", message: "调整筛选条件后再试一次。", systemImage: "person.2.slash")
             } else {
-                SetuCard {
+                Group {
                     VStack(alignment: .leading, spacing: SetuSpacing.md) {
                         SetuSectionHeader(title: "共 \(result.total) 位用户", subtitle: "用户管理")
-                    ForEach(Array(users.enumerated()), id: \.element.id) { index, user in
-                            if index > 0 {
-                                Divider()
-                                    .overlay(SetuColor.separator)
-                            }
+                    SetuRecordBoard(items: users) { user in
                         Button {
                             router.navigate(to: .adminUserDetail(user.id))
                         } label: {
@@ -83,7 +74,7 @@ struct AdminUsersView: View {
                     }
                 }
                 }
-                .setuListRow()
+
                 pagerSection(result: result)
             }
         }
@@ -119,7 +110,7 @@ struct AdminUsersView: View {
                 .disabled((result.page ?? page) * (result.pageSize ?? pageSize) >= result.total)
             }
         }
-        .setuListRow()
+
     }
 
     private func load(resetPage: Bool) async {
@@ -158,8 +149,11 @@ struct AdminUserDetailView: View {
     @State private var isSubmitting = false
     @State private var showingDeleteConfirmation = false
 
+    @State private var pendingAction: (() -> Void)?
+    @State private var pendingActionTitle = ""
+
     var body: some View {
-        List {
+        SetuBoard {
             if environment.authSession.currentUser?.role != .admin {
                 AdminUserStateSection(title: "权限", stateTitle: "需要管理员权限", message: "请使用管理员账号登录后查看用户详情。", systemImage: "shield.slash")
             } else {
@@ -170,14 +164,25 @@ struct AdminUserDetailView: View {
                             .foregroundStyle(SetuColor.textSecondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .setuListRow()
+
                 }
                 content
             }
         }
-        .listStyle(.plain)
         .setuBackground()
         .navigationTitle("用户详情")
+        .confirmationDialog(pendingActionTitle, isPresented: Binding(
+            get: { pendingAction != nil }, set: { if !$0 { pendingAction = nil } }
+        ), titleVisibility: .visible) {
+            Button("确认执行", role: .destructive) {
+                let action = pendingAction
+                pendingAction = nil
+                action?()
+            }
+            Button("取消", role: .cancel) { pendingAction = nil }
+        } message: {
+            Text("此操作将改变当前记录或服务状态，请核对目标后确认。")
+        }
         .confirmationDialog("永久删除这个用户？", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) {
             Button("确认删除", role: .destructive) {
                 Task { await deleteUser() }
@@ -206,32 +211,20 @@ struct AdminUserDetailView: View {
     }
 
     private func summarySection(_ user: AdminUserDetail) -> some View {
-        SetuCard {
-            VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                SetuSectionHeader(title: "基础信息")
-                AdminUserMetadataRow(title: "ID", value: "\(user.id)")
-                AdminUserMetadataRow(title: "邮箱", value: user.email)
-                AdminUserMetadataRow(title: "昵称", value: user.nickname ?? "-")
-                AdminUserMetadataRow(title: "角色", value: user.roleTitle)
-                AdminUserMetadataRow(title: "状态") {
-                    AdminStatusBadge(title: user.statusTitle, isBanned: user.status == 0)
-                }
-                AdminUserMetadataRow(title: "邮箱验证", value: user.emailVerified == true ? "已验证" : "未验证")
-                AdminUserMetadataRow(title: "注册 IP", value: user.registerIp ?? "-")
-                AdminUserMetadataRow(title: "最后登录 IP", value: user.lastLoginIp ?? "-")
-                AdminUserMetadataRow(title: "创建时间", value: user.createdAt ?? "-")
-                AdminUserMetadataRow(title: "更新时间", value: user.updatedAt ?? "-")
-            }
-        }
-        .setuListRow()
+        SetuRecordCard(headline: user.nickname ?? user.email, supporting: user.email,
+            status: .init(user.statusTitle, tone: user.status == 0 ? .danger : .success),
+            fields: [.init("ID", "\(user.id)"), .init("角色", user.roleTitle),
+                     .init("邮箱验证", user.emailVerified == true ? "已验证" : "未验证"),
+                     .init("注册 IP", user.registerIp ?? "-"), .init("最后登录 IP", user.lastLoginIp ?? "-"),
+                     .init("创建时间", user.createdAt ?? "-"), .init("更新时间", user.updatedAt ?? "-")], density: .compact)
     }
 
     private func actionSection(_ user: AdminUserDetail) -> some View {
-        SetuCard {
+        SetuRecordCard(headline: "账号操作", status: .init("请核对后操作", tone: .danger), density: .compact) {
             VStack(alignment: .leading, spacing: SetuSpacing.md) {
                 SetuSectionHeader(title: "账号操作")
             Button(role: user.status == 0 ? nil : .destructive) {
-                Task { await toggleBan(user) }
+                pendingActionTitle = "确认更改用户封禁状态？"; pendingAction = { Task { await toggleBan(user) } }
             } label: {
                     Label(isSubmitting ? "处理中" : (user.status == 0 ? "解除封禁" : "封禁用户"), systemImage: isSubmitting ? "hourglass" : (user.status == 0 ? "lock.open" : "lock"))
                         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
@@ -247,7 +240,7 @@ struct AdminUserDetailView: View {
             .disabled(isSubmitting)
         }
         }
-        .setuListRow()
+
     }
 
     private var pointsSection: some View {
@@ -272,48 +265,19 @@ struct AdminUserDetailView: View {
             .disabled(isSubmitting || Int(pointsAmount) == nil)
         }
         }
-        .setuListRow()
+
     }
 
     private func apiKeysSection(_ apiKeys: [AdminUserApiKey]) -> some View {
-        SetuCard {
-            VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                SetuSectionHeader(title: "API Keys")
-            if apiKeys.isEmpty {
-                    SetuEmptyState(title: "暂无 API Key", systemImage: "key.slash")
-            } else {
-                    ForEach(Array(apiKeys.enumerated()), id: \.element.id) { index, key in
-                        if index > 0 {
-                            Divider()
-                                .overlay(SetuColor.separator)
-                        }
-                    VStack(alignment: .leading, spacing: SetuSpacing.sm) {
-                        HStack {
-                            Text(key.name)
-                                    .font(SetuTypography.headline)
-                                    .foregroundStyle(SetuColor.textPrimary)
-                            Spacer()
-                                SetuPill(text: key.statusTitle, systemImage: "key", tone: key.status == 1 ? .success : .muted)
-                        }
-                        HStack {
-                            Label("今日 \(key.callsToday ?? 0)", systemImage: "calendar")
-                            Spacer()
-                            Label("总计 \(key.totalCalls ?? 0)", systemImage: "sum")
-                        }
-                            .font(SetuTypography.caption)
-                            .foregroundStyle(SetuColor.textSecondary)
-                        if let createdAt = key.createdAt {
-                            Text("创建于 \(createdAt)")
-                                .font(.caption)
-                                    .foregroundStyle(SetuColor.textTertiary)
-                        }
-                    }
-                        .padding(.vertical, SetuSpacing.xs)
-                }
+        VStack(alignment: .leading, spacing: SetuSpacing.md) {
+            SetuSectionHeader(title: "API Keys")
+            if apiKeys.isEmpty { SetuEmptyState(title: "暂无 API Key", systemImage: "key.slash") }
+            SetuRecordBoard(items: apiKeys) { key in
+                SetuRecordCard(headline: key.name, status: .init(key.statusTitle, tone: key.status == 1 ? .success : .muted),
+                    fields: [.init("今日调用", "\(key.callsToday ?? 0)"), .init("总调用", "\(key.totalCalls ?? 0)"),
+                             .init("创建时间", key.createdAt ?? "-")], density: .compact)
             }
         }
-        }
-        .setuListRow()
     }
 
     private func load() async {
@@ -385,72 +349,13 @@ private struct AdminUserRow: View {
     let user: AdminUserItem
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SetuSpacing.sm) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(user.nickname ?? user.email)
-                        .font(SetuTypography.headline)
-                        .foregroundStyle(SetuColor.textPrimary)
-                    Text(user.email)
-                        .font(SetuTypography.caption)
-                        .foregroundStyle(SetuColor.textSecondary)
-                }
-                Spacer()
-                AdminStatusBadge(title: user.statusTitle, isBanned: user.status == 0)
-            }
-            HStack(spacing: 12) {
-                Label(user.roleTitle, systemImage: user.role == 1 ? "shield" : "person")
-                if let createdAt = user.createdAt {
-                    Label(createdAt, systemImage: "calendar")
-                }
-            }
-            .font(.caption)
-            .foregroundStyle(SetuColor.textTertiary)
-        }
-        .padding(.vertical, SetuSpacing.xs)
+        SetuRecordCard(headline: user.nickname ?? user.email, supporting: user.email,
+            status: .init(user.statusTitle, tone: user.status == 0 ? .danger : .success),
+            fields: [.init("角色", user.roleTitle), .init("创建时间", user.createdAt ?? "-")], density: .compact)
     }
 }
 
-private struct AdminStatusBadge: View {
-    let title: String
-    let isBanned: Bool
-
-    var body: some View {
-        SetuPill(text: title, systemImage: isBanned ? "lock" : "checkmark.circle", tone: isBanned ? .danger : .success)
-    }
-}
-
-private typealias AdminUserStateSection = SetuStateSection
-
-private struct AdminUserMetadataRow<Value: View>: View {
-    let title: String
-    private let value: Value
-
-    init(title: String, @ViewBuilder value: () -> Value) {
-        self.title = title
-        self.value = value()
-    }
-
-    var body: some View {
-        HStack(alignment: .top, spacing: SetuSpacing.md) {
-            Text(title)
-                .font(SetuTypography.caption)
-                .foregroundStyle(SetuColor.textSecondary)
-                .frame(width: 84, alignment: .leading)
-            value
-                .frame(maxWidth: .infinity, alignment: .trailing)
-        }
-    }
-}
-
-private extension AdminUserMetadataRow where Value == Text {
-    init(title: String, value: String) {
-        self.title = title
-        self.value = Text(value)
-            .font(SetuTypography.body)
-            .foregroundStyle(SetuColor.textPrimary)
-    }
-}
+private typealias AdminUserStateSection = AdminRecordStateSection
 
 private enum AdminUserStatusFilter: String, CaseIterable, Identifiable {
     case all

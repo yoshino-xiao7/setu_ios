@@ -16,7 +16,7 @@ struct AdminOperationLogsView: View {
     private let pageSize = 20
 
     var body: some View {
-        List {
+        SetuBoard {
             if environment.authSession.currentUser?.role != .admin {
                 AdminOperationLogStateSection(title: "权限", stateTitle: "需要管理员权限", message: "请使用管理员账号登录后查看操作日志。", systemImage: "shield.slash")
             } else {
@@ -24,7 +24,6 @@ struct AdminOperationLogsView: View {
                 content
             }
         }
-        .listStyle(.plain)
         .setuBackground()
         .navigationTitle("操作日志")
         .task { await load(resetPage: true) }
@@ -41,13 +40,13 @@ struct AdminOperationLogsView: View {
                     .textFieldStyle(.roundedBorder)
                 TextField("事件类型", text: $eventType)
                     .textFieldStyle(.roundedBorder)
-                Picker("状态", selection: $statusFilter) {
-                    Text("全部").tag("ALL")
-                    Text("成功").tag("SUCCESS")
-                    Text("失败").tag("FAILED")
-                    Text("部分成功").tag("PARTIAL")
-                }
-                .pickerStyle(.segmented)
+                SetuFilterBar(options: [
+                    .init(value: "ALL", title: "全部"),
+                    .init(value: "SUCCESS", title: "成功"),
+                    .init(value: "FAILED", title: "失败"),
+                    .init(value: "PARTIAL", title: "部分成功")
+                ], selection: $statusFilter, accessibilityTitle: "状态")
+
                 TextField("业务 code", text: $code)
                     .textFieldStyle(.roundedBorder)
                 TextField("目标类型", text: $targetType)
@@ -71,7 +70,7 @@ struct AdminOperationLogsView: View {
             }
             }
         }
-        .setuListRow()
+
     }
 
     @ViewBuilder
@@ -85,14 +84,10 @@ struct AdminOperationLogsView: View {
             if result.list.isEmpty {
                 AdminOperationLogStateSection(title: "操作日志", stateTitle: "暂无日志", message: "当前筛选条件下没有操作日志。", systemImage: "doc.text")
             } else {
-                SetuCard {
+                Group {
                     VStack(alignment: .leading, spacing: SetuSpacing.md) {
                         SetuSectionHeader(title: "共 \(result.total) 条", subtitle: "操作日志")
-                    ForEach(Array(result.list.enumerated()), id: \.element.id) { index, log in
-                            if index > 0 {
-                                Divider()
-                                    .overlay(SetuColor.separator)
-                            }
+                    SetuRecordBoard(items: result.list) { log in
                         Button {
                             router.navigate(to: .adminOperationLogDetail(log.id))
                         } label: {
@@ -102,7 +97,7 @@ struct AdminOperationLogsView: View {
                     }
                 }
                 }
-                .setuListRow()
+
                 pagerSection(result)
             }
         }
@@ -138,7 +133,7 @@ struct AdminOperationLogsView: View {
                 .disabled(result.page * result.pageSize >= result.total)
             }
         }
-        .setuListRow()
+
     }
 
     private func load(resetPage: Bool) async {
@@ -186,14 +181,13 @@ struct AdminOperationLogDetailView: View {
     @State private var state: LoadState<AdminOperationLogDetail> = .idle
 
     var body: some View {
-        List {
+        SetuBoard {
             if environment.authSession.currentUser?.role != .admin {
                 AdminOperationLogStateSection(title: "权限", stateTitle: "需要管理员权限", message: "请使用管理员账号登录后查看操作日志。", systemImage: "shield.slash")
             } else {
                 content
             }
         }
-        .listStyle(.plain)
         .setuBackground()
         .navigationTitle("日志 #\(logID)")
         .task { await load() }
@@ -208,26 +202,14 @@ struct AdminOperationLogDetailView: View {
         case .failed(let message):
             AdminOperationLogStateSection(title: "日志详情", stateTitle: "日志详情加载失败", message: message, systemImage: "doc.text.magnifyingglass")
         case .loaded(let detail):
-            SetuCard {
-                VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                    SetuSectionHeader(title: "基础信息")
-                    AdminOperationMetadataRow(title: "事件", value: detail.eventType)
-                    AdminOperationMetadataRow(title: "状态") {
-                        OperationStatusPill(status: detail.status, title: detail.statusTitle)
-                    }
-                    AdminOperationMetadataRow(title: "用户", value: detail.userEmail ?? detail.userId.map(String.init) ?? "-")
-                    AdminOperationMetadataRow(title: "目标", value: "\(detail.targetType ?? "-") / \(detail.targetId ?? "-")")
-                    AdminOperationMetadataRow(title: "路径", value: "\(detail.method ?? "-") \(detail.path ?? "-")")
-                    AdminOperationMetadataRow(title: "Trace ID", value: detail.traceId ?? "-")
-                    AdminOperationMetadataRow(title: "Request ID", value: detail.requestId ?? "-")
-                    AdminOperationMetadataRow(title: "IP", value: detail.ip ?? "-")
-                    AdminOperationMetadataRow(title: "时间", value: detail.createdAt)
-                    if let durationMs = detail.durationMs {
-                        AdminOperationMetadataRow(title: "耗时", value: "\(durationMs) ms")
-                    }
-                }
-            }
-            .setuListRow()
+            SetuRecordCard(headline: detail.eventType,
+                status: .init(detail.statusTitle, tone: detail.status == "FAILED" ? .danger : .brand),
+                fields: [.init("用户", detail.userEmail ?? detail.userId.map(String.init) ?? "-"),
+                         .init("目标", "\(detail.targetType ?? "-") / \(detail.targetId ?? "-")"),
+                         .init("路径", "\(detail.method ?? "-") \(detail.path ?? "-")"),
+                         .init("Trace ID", detail.traceId ?? "-"), .init("Request ID", detail.requestId ?? "-"),
+                         .init("IP", detail.ip ?? "-"), .init("时间", detail.createdAt),
+                         .init("耗时", detail.durationMs.map { "\($0) ms" } ?? "-")], density: .compact)
 
             if let message = detail.message, !message.isEmpty {
                 SetuCard {
@@ -238,7 +220,7 @@ struct AdminOperationLogDetailView: View {
                             .foregroundStyle(SetuColor.textPrimary)
                     }
                 }
-                .setuListRow()
+
             }
 
             payloadSection("请求", detail.displayRequestPayload)
@@ -255,7 +237,7 @@ struct AdminOperationLogDetailView: View {
                         .textSelection(.enabled)
                 }
                 }
-                .setuListRow()
+
             }
         }
     }
@@ -276,7 +258,7 @@ struct AdminOperationLogDetailView: View {
             }
         }
         }
-        .setuListRow()
+
     }
 
     private func load() async {
@@ -306,91 +288,12 @@ private struct OperationLogRow: View {
     let log: AdminOperationLogItem
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SetuSpacing.sm) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(log.eventType)
-                        .font(SetuTypography.headline)
-                        .foregroundStyle(SetuColor.textPrimary)
-                    Text(log.userEmail ?? log.userId.map { "用户 #\($0)" } ?? "未知用户")
-                        .font(SetuTypography.caption)
-                        .foregroundStyle(SetuColor.textSecondary)
-                }
-                Spacer()
-                OperationStatusPill(status: log.status, title: log.statusTitle)
-            }
-
-            if let message = log.message, !message.isEmpty {
-                Text(message)
-                    .font(SetuTypography.caption)
-                    .foregroundStyle(SetuColor.textSecondary)
-                    .lineLimit(2)
-            }
-
-            HStack(spacing: 10) {
-                Label(log.targetType ?? "-", systemImage: "scope")
-                if let targetId = log.targetId {
-                    Label(targetId, systemImage: "number")
-                }
-                Label(log.createdAt, systemImage: "calendar")
-            }
-            .font(.caption)
-            .foregroundStyle(SetuColor.textTertiary)
-        }
-        .padding(.vertical, SetuSpacing.xs)
+        SetuRecordCard(headline: log.eventType, supporting: log.message,
+            status: .init(log.statusTitle, tone: log.status == "FAILED" ? .danger : (log.status == "SUCCESS" ? .success : .warning)),
+            fields: [.init("用户", log.userEmail ?? log.userId.map(String.init) ?? "未知用户"),
+                     .init("目标类型", log.targetType ?? "-"), .init("目标 ID", log.targetId ?? "-"),
+                     .init("时间", log.createdAt)], density: .compact)
     }
 }
 
-private typealias AdminOperationLogStateSection = SetuStateSection
-
-private struct AdminOperationMetadataRow<Value: View>: View {
-    let title: String
-    private let value: Value
-
-    init(title: String, @ViewBuilder value: () -> Value) {
-        self.title = title
-        self.value = value()
-    }
-
-    var body: some View {
-        HStack(alignment: .top, spacing: SetuSpacing.md) {
-            Text(title)
-                .font(SetuTypography.caption)
-                .foregroundStyle(SetuColor.textSecondary)
-                .frame(width: 84, alignment: .leading)
-            value
-                .frame(maxWidth: .infinity, alignment: .trailing)
-        }
-    }
-}
-
-private extension AdminOperationMetadataRow where Value == Text {
-    init(title: String, value: String) {
-        self.title = title
-        self.value = Text(value)
-            .font(SetuTypography.body)
-            .foregroundStyle(SetuColor.textPrimary)
-    }
-}
-
-private struct OperationStatusPill: View {
-    let status: String
-    let title: String
-
-    var body: some View {
-        SetuPill(text: title, systemImage: "flag", tone: tone)
-    }
-
-    private var tone: SetuPillTone {
-        switch status {
-        case "SUCCESS":
-            .success
-        case "FAILED":
-            .danger
-        case "PARTIAL":
-            .warning
-        default:
-            .muted
-        }
-    }
-}
+private typealias AdminOperationLogStateSection = AdminRecordStateSection

@@ -14,7 +14,7 @@ struct AdminImageInfoView: View {
     }
 
     var body: some View {
-        List {
+        SetuBoard {
             if environment.authSession.currentUser?.role != .admin {
                 AdminImageInfoStateSection(title: "权限", stateTitle: "需要管理员权限", message: "请使用管理员账号登录后查询图片详情。", systemImage: "shield.slash")
             } else {
@@ -22,7 +22,6 @@ struct AdminImageInfoView: View {
                 contentSection
             }
         }
-        .listStyle(.plain)
         .setuBackground()
         .navigationTitle("图片详情")
         .task {
@@ -60,7 +59,7 @@ struct AdminImageInfoView: View {
                 .disabled(parsedPID == nil)
             }
         }
-        .setuListRow()
+
     }
 
     @ViewBuilder
@@ -76,22 +75,19 @@ struct AdminImageInfoView: View {
             SetuCard {
                 AdminImageInfoHeader(image: image)
             }
-            .setuListRow()
-            SetuCard {
-                VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                    SetuSectionHeader(title: "基础信息")
-                    AdminImageInfoMetadataRow(title: "PID", value: image.pidText)
-                    AdminImageInfoMetadataRow(title: "UID", value: "\(image.uid)")
-                    AdminImageInfoMetadataRow(title: "标题", value: image.title)
-                    AdminImageInfoMetadataRow(title: "作者", value: image.author)
-                    AdminImageInfoMetadataRow(title: "分级", value: image.ratingTitle)
-                    AdminImageInfoMetadataRow(title: "AI 类型", value: image.aiTitle)
-                    AdminImageInfoMetadataRow(title: "尺寸", value: "\(image.width)x\(image.height)")
-                    AdminImageInfoMetadataRow(title: "扩展名", value: image.ext)
-                    AdminImageInfoMetadataRow(title: "上传时间", value: "\(image.uploadDate)")
-                }
-            }
-            .setuListRow()
+
+            SetuRecordCard(headline: "基础信息", fields: [
+                    .init("PID", image.pidText),
+                    .init("UID", "\(image.uid)"),
+                    .init("标题", image.title),
+                    .init("作者", image.author),
+                    .init("分级", image.ratingTitle),
+                    .init("AI 类型", image.aiTitle),
+                    .init("尺寸", "\(image.width)x\(image.height)"),
+                    .init("扩展名", image.ext),
+                    .init("上传时间", "\(image.uploadDate)")
+                ], density: .compact)
+
             if let tags = image.tags, !tags.isEmpty {
                 SetuCard {
                     VStack(alignment: .leading, spacing: SetuSpacing.md) {
@@ -101,7 +97,7 @@ struct AdminImageInfoView: View {
                             .foregroundStyle(SetuColor.textSecondary)
                     }
                 }
-                .setuListRow()
+
             }
             if let urlString = image.urlOriginal, let url = URL(string: urlString) {
                 SetuCard {
@@ -110,7 +106,7 @@ struct AdminImageInfoView: View {
                             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                     }
                 }
-                .setuListRow()
+
             }
         }
     }
@@ -193,23 +189,4 @@ private struct AdminImageInfoThumbnail: View {
     }
 }
 
-private typealias AdminImageInfoStateSection = SetuStateSection
-
-private struct AdminImageInfoMetadataRow: View {
-    let title: String
-    let value: String
-
-    var body: some View {
-        HStack(alignment: .top, spacing: SetuSpacing.md) {
-            Text(title)
-                .font(SetuTypography.caption)
-                .foregroundStyle(SetuColor.textSecondary)
-                .frame(width: 72, alignment: .leading)
-            Text(value)
-                .font(SetuTypography.body)
-                .foregroundStyle(SetuColor.textPrimary)
-                .multilineTextAlignment(.trailing)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-        }
-    }
-}
+private typealias AdminImageInfoStateSection = AdminRecordStateSection

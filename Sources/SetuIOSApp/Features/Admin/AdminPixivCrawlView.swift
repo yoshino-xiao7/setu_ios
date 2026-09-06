@@ -17,8 +17,11 @@ struct AdminPixivCrawlView: View {
     @State private var isSubmitting = false
     @State private var message: String?
 
+    @State private var pendingAction: (() -> Void)?
+    @State private var pendingActionTitle = ""
+
     var body: some View {
-        List {
+        SetuBoard {
             if environment.authSession.currentUser?.role != .admin {
                 AdminPixivStateSection(title: "权限", stateTitle: "需要管理员权限", message: "请使用管理员账号登录后创建 Pixiv 抓取任务。", systemImage: "shield.slash")
             } else {
@@ -30,15 +33,26 @@ struct AdminPixivCrawlView: View {
                             .foregroundStyle(SetuColor.textSecondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .setuListRow()
+
                 }
                 createSection
                 taskSection
             }
         }
-        .listStyle(.plain)
         .setuBackground()
         .navigationTitle("新增图片")
+        .confirmationDialog(pendingActionTitle, isPresented: Binding(
+            get: { pendingAction != nil }, set: { if !$0 { pendingAction = nil } }
+        ), titleVisibility: .visible) {
+            Button("确认执行", role: .destructive) {
+                let action = pendingAction
+                pendingAction = nil
+                action?()
+            }
+            Button("取消", role: .cancel) { pendingAction = nil }
+        } message: {
+            Text("此操作将改变当前记录或服务状态，请核对目标后确认。")
+        }
         .task { await loadAll() }
         .refreshable { await loadAll() }
     }
@@ -68,19 +82,19 @@ struct AdminPixivCrawlView: View {
                 }
             }
         }
-        .setuListRow()
+
     }
 
     private var createSection: some View {
         SetuCard {
             VStack(alignment: .leading, spacing: SetuSpacing.md) {
                 SetuSectionHeader(title: "新建任务", subtitle: "Pixiv 抓取")
-                Picker("模式", selection: $mode) {
-                    Text("按 ID").tag("ids")
-                    Text("按画师").tag("user")
-                    Text("按标签").tag("tag")
-                }
-                .pickerStyle(.segmented)
+                SetuFilterBar(options: [
+                    .init(value: "ids", title: "按 ID"),
+                    .init(value: "user", title: "按画师"),
+                    .init(value: "tag", title: "按标签")
+                ], selection: $mode, accessibilityTitle: "模式")
+
                 Toggle("跳过已存在", isOn: $skipExisting)
 
                 if mode == "ids" {
@@ -103,11 +117,11 @@ struct AdminPixivCrawlView: View {
                 } else {
                     TextField("搜索标签", text: $tag)
                         .textFieldStyle(.roundedBorder)
-                    Picker("排序模式", selection: $tagMode) {
-                        Text("热门").tag("popular")
-                        Text("最新").tag("latest")
-                    }
-                    .pickerStyle(.segmented)
+                    SetuFilterBar(options: [
+                    .init(value: "popular", title: "热门"),
+                    .init(value: "latest", title: "最新")
+                ], selection: $tagMode, accessibilityTitle: "排序模式")
+
                     Stepper("起始页 \(pageFrom)", value: $pageFrom, in: 1...999)
                     Stepper("结束页 \(pageTo)", value: $pageTo, in: pageFrom...999)
                 }
@@ -123,12 +137,12 @@ struct AdminPixivCrawlView: View {
                 .disabled(isSubmitting || !canSubmit)
             }
         }
-        .setuListRow()
+
     }
 
     @ViewBuilder
     private var taskSection: some View {
-        SetuCard {
+        Group {
             VStack(alignment: .leading, spacing: SetuSpacing.md) {
                 SetuSectionHeader(title: "任务历史")
             switch tasks {
@@ -145,22 +159,18 @@ struct AdminPixivCrawlView: View {
                                 .font(SetuTypography.caption)
                                 .foregroundStyle(SetuColor.textSecondary)
                     }
-                        ForEach(Array(result.tasks.enumerated()), id: \.element.id) { index, task in
-                            if index > 0 {
-                                Divider()
-                                    .overlay(SetuColor.separator)
-                            }
+                        SetuRecordBoard(items: result.tasks) { task in
                         PixivTaskRow(task: task) {
                             router.navigate(to: .adminPixivTask(task.taskID))
                         } onCancel: {
-                            Task { await cancel(task) }
+                            pendingActionTitle = "确认取消此抓取任务？"; pendingAction = { Task { await cancel(task) } }
                         }
                     }
                 }
             }
         }
         }
-        .setuListRow()
+
     }
 
     private var parsedIDs: [Int] {
@@ -266,8 +276,11 @@ struct AdminPixivTaskDetailView: View {
     @State private var state: LoadState<PixivCrawlerTask> = .idle
     @State private var message: String?
 
+    @State private var pendingAction: (() -> Void)?
+    @State private var pendingActionTitle = ""
+
     var body: some View {
-        List {
+        SetuBoard {
             if environment.authSession.currentUser?.role != .admin {
                 AdminPixivStateSection(title: "权限", stateTitle: "需要管理员权限", message: "请使用管理员账号登录后查看任务详情。", systemImage: "shield.slash")
             } else {
@@ -278,18 +291,29 @@ struct AdminPixivTaskDetailView: View {
                             .foregroundStyle(SetuColor.textSecondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .setuListRow()
+
                 }
                 content
             }
         }
-        .listStyle(.plain)
         .setuBackground()
         .navigationTitle("任务详情")
+        .confirmationDialog(pendingActionTitle, isPresented: Binding(
+            get: { pendingAction != nil }, set: { if !$0 { pendingAction = nil } }
+        ), titleVisibility: .visible) {
+            Button("确认执行", role: .destructive) {
+                let action = pendingAction
+                pendingAction = nil
+                action?()
+            }
+            Button("取消", role: .cancel) { pendingAction = nil }
+        } message: {
+            Text("此操作将改变当前记录或服务状态，请核对目标后确认。")
+        }
         .toolbar {
             if case .loaded(let task) = state, ["pending", "running"].contains(task.status) {
                 Button("取消", role: .destructive) {
-                    Task { await cancel(task) }
+                    pendingActionTitle = "确认取消此抓取任务？"; pendingAction = { Task { await cancel(task) } }
                 }
             }
         }
@@ -305,45 +329,18 @@ struct AdminPixivTaskDetailView: View {
         case .failed(let message):
             AdminPixivStateSection(title: "任务", stateTitle: "任务详情加载失败", message: message, systemImage: "tray.full")
         case .loaded(let task):
-            SetuCard {
-                VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                    SetuSectionHeader(title: "任务", subtitle: task.taskID)
-                    AdminPixivMetadataRow(title: "ID", value: task.taskID)
-                    AdminPixivMetadataRow(title: "模式", value: task.modeTitle)
-                    AdminPixivMetadataRow(title: "状态") {
-                        PixivStatusPill(status: task.status, title: task.statusTitle)
-                    }
-                    if let serverTimestamp = task.serverTimestamp {
-                        AdminPixivMetadataRow(title: "服务时间", value: serverTimestamp)
-                    }
-                    if let startedAt = task.startedAt {
-                        AdminPixivMetadataRow(title: "开始时间", value: startedAt)
-                    }
-                    if let finishedAt = task.finishedAt {
-                        AdminPixivMetadataRow(title: "结束时间", value: finishedAt)
-                    }
-                    if let message = task.message, !message.isEmpty {
-                        Text(message)
-                            .font(SetuTypography.caption)
-                            .foregroundStyle(SetuColor.textSecondary)
-                }
-            }
-            }
-            .setuListRow()
+            SetuRecordCard(headline: task.taskID, supporting: task.message,
+                status: .init(task.statusTitle, tone: task.status == "failed" ? .danger : .brand),
+                fields: [.init("模式", task.modeTitle), .init("服务时间", task.serverTimestamp ?? "-"),
+                         .init("开始时间", task.startedAt ?? "-"), .init("结束时间", task.finishedAt ?? "-")], density: .compact)
 
             if let progress = task.progress {
-                SetuCard {
-                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                        SetuSectionHeader(title: "进度", subtitle: "\(progress.percent)%")
-                    ProgressView(value: Double(progress.percent), total: 100)
-                            .tint(SetuColor.brandPink)
-                        AdminPixivMetadataRow(title: "完成", value: "\(progress.done) / \(progress.total)")
-                        AdminPixivMetadataRow(title: "新增", value: "\(progress.new)")
-                        AdminPixivMetadataRow(title: "跳过", value: "\(progress.skipped)")
-                        AdminPixivMetadataRow(title: "失败", value: "\(progress.failed)")
-                    }
+                SetuRecordCard(headline: "进度 \(progress.percent)%",
+                    fields: [.init("完成", "\(progress.done) / \(progress.total)"), .init("新增", "\(progress.new)"),
+                             .init("跳过", "\(progress.skipped)"), .init("失败", "\(progress.failed)")], density: .compact) {
+                    ProgressView(value: Double(progress.percent), total: 100).tint(SetuColor.brandPink)
                 }
-                .setuListRow()
+
             }
 
             SetuCard {
@@ -355,7 +352,7 @@ struct AdminPixivTaskDetailView: View {
                     .textSelection(.enabled)
             }
             }
-            .setuListRow()
+
         }
     }
 
@@ -387,55 +384,27 @@ private struct PixivTaskRow: View {
     let onCancel: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SetuSpacing.sm) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(task.taskID)
-                        .font(.headline.monospaced())
-                        .foregroundStyle(SetuColor.textPrimary)
-                        .lineLimit(1)
-                    Text(task.modeTitle)
-                        .font(SetuTypography.caption)
-                        .foregroundStyle(SetuColor.textSecondary)
-                }
-                Spacer()
-                PixivStatusPill(status: task.status, title: task.statusTitle)
-            }
-
-            if let progress = task.progress {
-                ProgressView(value: Double(progress.percent), total: 100)
-                    .tint(SetuColor.brandPink)
-                HStack(spacing: 10) {
-                    Label("\(progress.done)/\(progress.total)", systemImage: "chart.bar")
-                    Label("新 \(progress.new)", systemImage: "plus.circle")
-                    Label("跳 \(progress.skipped)", systemImage: "forward")
-                    Label("错 \(progress.failed)", systemImage: "exclamationmark.triangle")
-                }
-                .font(.caption)
-                .foregroundStyle(SetuColor.textTertiary)
-            }
-
-            HStack {
-                Button(action: onOpen) {
-                    Label("详情", systemImage: "doc.text.magnifyingglass")
-                        .frame(minHeight: 44)
-                }
-                Spacer()
-                if ["pending", "running"].contains(task.status) {
-                    Button(role: .destructive, action: onCancel) {
-                        Label("取消", systemImage: "xmark.circle")
-                            .frame(minHeight: 44)
+        SetuRecordCard(headline: task.taskID,
+            status: .init(task.statusTitle, tone: task.status == "failed" || task.status == "cancelled" ? .danger : .brand),
+            fields: [.init("模式", task.modeTitle)] + (task.progress.map { progress in [
+                .init("完成", "\(progress.done) / \(progress.total)"), .init("新增", "\(progress.new)"),
+                .init("跳过", "\(progress.skipped)"), .init("失败", "\(progress.failed)")
+            ] } ?? []), density: .compact) {
+            VStack(alignment: .leading, spacing: SetuSpacing.sm) {
+                if let progress = task.progress { ProgressView(value: Double(progress.percent), total: 100) }
+                HStack {
+                    Button("详情", action: onOpen).frame(minHeight: 44)
+                    Spacer()
+                    if ["pending", "running"].contains(task.status) {
+                        Button("取消任务", role: .destructive, action: onCancel).frame(minHeight: 44)
                     }
                 }
             }
-            .buttonStyle(.borderless)
-            .font(SetuTypography.caption)
         }
-        .padding(.vertical, SetuSpacing.xs)
     }
 }
 
-private typealias AdminPixivStateSection = SetuStateSection
+private typealias AdminPixivStateSection = AdminRecordStateSection
 
 private struct AdminPixivMetadataRow<Value: View>: View {
     let title: String
@@ -464,29 +433,5 @@ private extension AdminPixivMetadataRow where Value == Text {
         self.value = Text(value)
             .font(SetuTypography.body)
             .foregroundStyle(SetuColor.textPrimary)
-    }
-}
-
-private struct PixivStatusPill: View {
-    let status: String
-    let title: String
-
-    var body: some View {
-        SetuPill(text: title, systemImage: "flag", tone: tone)
-    }
-
-    private var tone: SetuPillTone {
-        switch status {
-        case "completed":
-            .success
-        case "failed":
-            .danger
-        case "cancelled":
-            .warning
-        case "running":
-            .info
-        default:
-            .muted
-        }
     }
 }

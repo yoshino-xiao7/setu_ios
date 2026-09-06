@@ -12,8 +12,11 @@ struct AdminImageDeleteRequestsView: View {
     @State private var isBulkReviewing = false
     private let pageSize = 20
 
+    @State private var pendingAction: (() -> Void)?
+    @State private var pendingActionTitle = ""
+
     var body: some View {
-        List {
+        SetuBoard {
             if environment.authSession.currentUser?.role != .admin {
                 AdminImageDeleteStateSection(title: "权限", stateTitle: "需要管理员权限", message: "请使用管理员账号登录后审核图片删除申请。", systemImage: "shield.slash")
             } else {
@@ -24,15 +27,32 @@ struct AdminImageDeleteRequestsView: View {
                             .foregroundStyle(SetuColor.textSecondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .setuListRow()
+
                 }
                 filterSection
                 content
             }
         }
-        .listStyle(.plain)
         .setuBackground()
         .navigationTitle("删除申请审核")
+        .setuActionDock {
+            if environment.authSession.currentUser?.role == .admin, case .loaded(let result) = state {
+                let pendingItems = result.list.filter { $0.status == 0 }
+                if !pendingItems.isEmpty { bulkReviewSection(pendingItems) }
+            }
+        }
+        .confirmationDialog(pendingActionTitle, isPresented: Binding(
+            get: { pendingAction != nil }, set: { if !$0 { pendingAction = nil } }
+        ), titleVisibility: .visible) {
+            Button("确认执行", role: .destructive) {
+                let action = pendingAction
+                pendingAction = nil
+                action?()
+            }
+            Button("取消", role: .cancel) { pendingAction = nil }
+        } message: {
+            Text("此操作将改变当前记录或服务状态，请核对目标后确认。")
+        }
         .task { await load(resetPage: true) }
         .refreshable { await load(resetPage: false) }
     }
@@ -41,12 +61,8 @@ struct AdminImageDeleteRequestsView: View {
         SetuCard {
             VStack(alignment: .leading, spacing: SetuSpacing.md) {
                 SetuSectionHeader(title: "筛选")
-                Picker("状态", selection: $statusFilter) {
-                    ForEach(DeleteRequestStatusFilter.allCases) { filter in
-                        Text(filter.title).tag(filter)
-                    }
-                }
-                .pickerStyle(.segmented)
+                SetuFilterBar(options: DeleteRequestStatusFilter.allCases.map { .init(value: $0, title: $0.title) }, selection: $statusFilter, accessibilityTitle: "状态")
+
                 Button {
                     Task { await load(resetPage: true) }
                 } label: {
@@ -57,7 +73,7 @@ struct AdminImageDeleteRequestsView: View {
                 .tint(SetuColor.brandPink)
             }
         }
-        .setuListRow()
+
     }
 
     @ViewBuilder
@@ -71,42 +87,31 @@ struct AdminImageDeleteRequestsView: View {
             if result.list.isEmpty {
                 AdminImageDeleteStateSection(title: "删除申请", stateTitle: "暂无申请", message: "当前筛选条件下没有图片删除申请。", systemImage: "tray")
             } else {
-                let pendingItems = result.list.filter { $0.status == 0 }
-                if !pendingItems.isEmpty {
-                    bulkReviewSection(pendingItems)
-                }
-                SetuCard {
+
+                Group {
                     VStack(alignment: .leading, spacing: SetuSpacing.md) {
                         SetuSectionHeader(title: "共 \(result.total) 条", subtitle: "图片删除申请")
-                    ForEach(Array(result.list.enumerated()), id: \.element.id) { index, request in
-                            if index > 0 {
-                                Divider()
-                                    .overlay(SetuColor.separator)
-                            }
-                        HStack(spacing: SetuSpacing.md) {
+                    SetuRecordBoard(items: result.list) { request in
+                        SetuRecordCard(headline: request.imageTitle ?? "未命名作品",
+                            status: .init(request.statusTitle, tone: .danger), thumbnailURLString: request.thumbnailUrl,
+                            fields: [.init("作者", request.imageAuthor ?? "-"), .init("申请原因", request.reason),
+                                     .init("创建时间", SetuDateFormatter.string(from: request.createdAt))], density: .compact,
+                            onTap: { router.navigate(to: .adminImageDeleteRequestDetail(request.id)) }) {
                             if request.status == 0 {
-                                Button {
-                                    toggleSelection(request.id)
-                                } label: {
-                                    Image(systemName: selectedRequestIDs.contains(request.id) ? "checkmark.circle.fill" : "circle")
-                                            .foregroundStyle(selectedRequestIDs.contains(request.id) ? SetuColor.success : SetuColor.textTertiary)
-                                            .frame(width: 44, height: 44)
+                                Button { toggleSelection(request.id) } label: {
+                                    Label(selectedRequestIDs.contains(request.id) ? "取消选择" : "选择此申请",
+                                          systemImage: selectedRequestIDs.contains(request.id) ? "checkmark.circle.fill" : "circle")
+                                        .frame(minHeight: 44)
                                 }
+                                .accessibilityValue(selectedRequestIDs.contains(request.id) ? "已选择" : "未选择")
                                 .buttonStyle(.borderless)
                                 .disabled(isBulkReviewing)
                             }
-
-                            Button {
-                                router.navigate(to: .adminImageDeleteRequestDetail(request.id))
-                            } label: {
-                                ImageDeleteRequestRow(request: request)
-                            }
-                            .buttonStyle(.plain)
                         }
                     }
                 }
                 }
-                .setuListRow()
+
                 pagerSection(result)
             }
         }
@@ -115,54 +120,26 @@ struct AdminImageDeleteRequestsView: View {
     private func bulkReviewSection(_ pendingItems: [ImageDeleteRequestItem]) -> some View {
         let pendingIDs = Set(pendingItems.map(\.id))
         let selectedCount = selectedRequestIDs.intersection(pendingIDs).count
-        let allSelected = selectedCount == pendingItems.count
-
-        return SetuCard {
-            VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                SetuSectionHeader(title: "批量审核")
-                HStack {
-                Button(allSelected ? "取消全选当前页" : "选择当前页待审核") {
-                    if allSelected {
-                        selectedRequestIDs.subtract(pendingIDs)
-                    } else {
-                        selectedRequestIDs.formUnion(pendingIDs)
-                    }
+        return VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+            Text("已选 \(selectedCount) / \(pendingItems.count)").font(SetuTypography.caption)
+            Menu {
+                Button(selectedCount == pendingItems.count ? "取消全选当前页" : "选择当前页待审核") {
+                    if selectedCount == pendingItems.count { selectedRequestIDs.subtract(pendingIDs) }
+                    else { selectedRequestIDs.formUnion(pendingIDs) }
                 }
-                .disabled(isBulkReviewing)
-
-                Spacer()
-
-                Text("已选 \(selectedCount) / \(pendingItems.count)")
-                        .font(SetuTypography.caption)
-                        .foregroundStyle(SetuColor.textSecondary)
-            }
-
-            HStack {
-                Button("清空选择") {
-                    selectedRequestIDs.removeAll()
-                }
-                .disabled(isBulkReviewing || selectedRequestIDs.isEmpty)
-
-                Spacer()
-
-                Button(role: .destructive) {
-                    Task { await batchReview(approve: false) }
-                } label: {
-                    Label("批量拒绝", systemImage: "xmark.circle")
-                }
-                .disabled(isBulkReviewing || selectedCount == 0)
-
-                Button {
-                    Task { await batchReview(approve: true) }
-                } label: {
-                        Label(isBulkReviewing ? "处理中" : "批量同意", systemImage: isBulkReviewing ? "hourglass" : "checkmark.circle")
-                            .frame(minHeight: 44)
-                }
-                .disabled(isBulkReviewing || selectedCount == 0)
-            }
+                Button("清空选择") { selectedRequestIDs.removeAll() }.disabled(selectedRequestIDs.isEmpty)
+                Button("批量拒绝", role: .destructive) {
+                    pendingActionTitle = "确认批量拒绝已选申请？"
+                    pendingAction = { Task { await batchReview(approve: false) } }
+                }.disabled(selectedCount == 0)
+                Button("批量同意删除", role: .destructive) {
+                    pendingActionTitle = "确认批量批准删除已选图片？"
+                    pendingAction = { Task { await batchReview(approve: true) } }
+                }.disabled(selectedCount == 0)
+            } label: {
+                Label("批量审核", systemImage: "checklist").frame(maxWidth: .infinity, minHeight: 50)
+            }.disabled(isBulkReviewing)
         }
-        }
-        .setuListRow()
     }
 
     private func pagerSection(_ result: PageResult<ImageDeleteRequestItem>) -> some View {
@@ -195,7 +172,7 @@ struct AdminImageDeleteRequestsView: View {
                 .disabled(result.page * result.pageSize >= result.total)
             }
         }
-        .setuListRow()
+
     }
 
     private func load(resetPage: Bool) async {
@@ -265,8 +242,11 @@ struct AdminImageDeleteRequestDetailView: View {
     @State private var message: String?
     @State private var isSubmitting = false
 
+    @State private var pendingAction: (() -> Void)?
+    @State private var pendingActionTitle = ""
+
     var body: some View {
-        List {
+        SetuBoard {
             if environment.authSession.currentUser?.role != .admin {
                 AdminImageDeleteStateSection(title: "权限", stateTitle: "需要管理员权限", message: "请使用管理员账号登录后审核图片删除申请。", systemImage: "shield.slash")
             } else {
@@ -277,14 +257,25 @@ struct AdminImageDeleteRequestDetailView: View {
                             .foregroundStyle(SetuColor.textSecondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .setuListRow()
+
                 }
                 content
             }
         }
-        .listStyle(.plain)
         .setuBackground()
         .navigationTitle("审核详情")
+        .confirmationDialog(pendingActionTitle, isPresented: Binding(
+            get: { pendingAction != nil }, set: { if !$0 { pendingAction = nil } }
+        ), titleVisibility: .visible) {
+            Button("确认执行", role: .destructive) {
+                let action = pendingAction
+                pendingAction = nil
+                action?()
+            }
+            Button("取消", role: .cancel) { pendingAction = nil }
+        } message: {
+            Text("此操作将改变当前记录或服务状态，请核对目标后确认。")
+        }
         .task { await load() }
         .refreshable { await load() }
     }
@@ -309,54 +300,18 @@ struct AdminImageDeleteRequestDetailView: View {
     }
 
     private func statusSection(_ detail: ImageDeleteRequestDetail) -> some View {
-        SetuCard {
-            VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                SetuSectionHeader(title: "申请状态")
-                HStack {
-                RequestStatusBadge(title: detail.statusTitle, status: detail.status)
-                Spacer()
-                Text(detail.createdAt)
-                    .font(.caption)
-                        .foregroundStyle(SetuColor.textTertiary)
-            }
-                AdminImageDeleteMetadataRow(title: "申请 ID", value: "\(detail.id)")
-                AdminImageDeleteMetadataRow(title: "申请人", value: detail.userNickname.isEmpty ? detail.userEmail : detail.userNickname)
-                AdminImageDeleteMetadataRow(title: "用户 ID", value: "\(detail.userId)")
-            }
-        }
-        .setuListRow()
+        SetuRecordCard(headline: "申请 #\(detail.id)", status: .init(detail.statusTitle, tone: .danger),
+            fields: [.init("申请人", detail.userNickname.isEmpty ? detail.userEmail : detail.userNickname),
+                     .init("用户 ID", "\(detail.userId)"), .init("创建时间", detail.createdAt)], density: .compact)
     }
 
     private func imageSection(_ detail: ImageDeleteRequestDetail) -> some View {
-        SetuCard {
-            VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                SetuSectionHeader(title: "图片信息")
-            DetailImagePreview(urlString: detail.urlOriginal)
-                AdminImageDeleteMetadataRow(title: "PID", value: "\(detail.pid)_p\(detail.p)")
-            if let title = detail.title, !title.isEmpty {
-                    AdminImageDeleteMetadataRow(title: "标题", value: title)
-            }
-            if let author = detail.author, !author.isEmpty {
-                    AdminImageDeleteMetadataRow(title: "作者", value: author)
-            }
-            if let uid = detail.uid {
-                    AdminImageDeleteMetadataRow(title: "作者 UID", value: "\(uid)")
-            }
-            if let width = detail.width, let height = detail.height {
-                    AdminImageDeleteMetadataRow(title: "尺寸", value: "\(width) x \(height)")
-            }
-            if let ext = detail.ext, !ext.isEmpty {
-                    AdminImageDeleteMetadataRow(title: "格式", value: ext)
-            }
-            if let r18 = detail.r18 {
-                    AdminImageDeleteMetadataRow(title: "R18", value: r18 == 1 ? "是" : "否")
-            }
-            if let tags = detail.tags, !tags.isEmpty {
-                TagFlow(tags: tags)
-            }
-        }
-        }
-        .setuListRow()
+        SetuRecordCard(headline: "\(detail.pid)_p\(detail.p)", supporting: detail.title,
+            thumbnailURLString: detail.urlOriginal,
+            fields: [.init("作者", detail.author ?? "-"), .init("作者 UID", detail.uid.map(String.init) ?? "-"),
+                     .init("尺寸", "\(detail.width ?? 0) × \(detail.height ?? 0)"), .init("格式", detail.ext ?? "-"),
+                     .init("R18", detail.r18.map { $0 == 1 ? "是" : "否" } ?? "-"),
+                     .init("标签", detail.tags?.joined(separator: " / ") ?? "-")], density: .compact)
     }
 
     private func reasonSection(_ detail: ImageDeleteRequestDetail) -> some View {
@@ -368,18 +323,18 @@ struct AdminImageDeleteRequestDetailView: View {
                     .foregroundStyle(detail.reason.isEmpty ? SetuColor.textSecondary : SetuColor.textPrimary)
             }
         }
-        .setuListRow()
+
     }
 
     private var reviewActionSection: some View {
-        SetuCard {
+        SetuRecordCard(headline: "审核", status: .init("请核对后操作", tone: .danger), density: .compact) {
             VStack(alignment: .leading, spacing: SetuSpacing.md) {
                 SetuSectionHeader(title: "审核")
             TextField("审核备注，可选", text: $remark)
                     .textFieldStyle(.roundedBorder)
             HStack {
                 Button(role: .destructive) {
-                    Task { await review(approve: false) }
+                    pendingActionTitle = "确认拒绝此删除申请？"; pendingAction = { Task { await review(approve: false) } }
                 } label: {
                     Label("拒绝", systemImage: "xmark.circle")
                         .frame(minHeight: 44)
@@ -389,7 +344,7 @@ struct AdminImageDeleteRequestDetailView: View {
                 Spacer()
 
                 Button {
-                    Task { await review(approve: true) }
+                    pendingActionTitle = "确认批准删除此图片？"; pendingAction = { Task { await review(approve: true) } }
                 } label: {
                         Label(isSubmitting ? "提交中" : "批准删除", systemImage: isSubmitting ? "hourglass" : "checkmark.circle")
                             .frame(minHeight: 44)
@@ -398,21 +353,20 @@ struct AdminImageDeleteRequestDetailView: View {
             }
         }
         }
-        .setuListRow()
+
     }
 
     private func reviewInfoSection(_ detail: ImageDeleteRequestDetail) -> some View {
-        SetuCard {
-            VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                SetuSectionHeader(title: "审核信息")
-                AdminImageDeleteMetadataRow(title: "审核人", value: detail.adminEmail ?? "-")
-                AdminImageDeleteMetadataRow(title: "审核时间", value: detail.reviewedAt ?? "-")
+        SetuRecordCard(headline: "审核信息", fields: {
+                    var fields: [SetuRecordField] = []
+                fields.append(.init("审核人", detail.adminEmail ?? "-"))
+                fields.append(.init("审核时间", detail.reviewedAt ?? "-"))
             if let adminRemark = detail.adminRemark, !adminRemark.isEmpty {
-                    AdminImageDeleteMetadataRow(title: "备注", value: adminRemark)
+                    fields.append(.init("备注", adminRemark))
                 }
-            }
-        }
-        .setuListRow()
+                    return fields
+                }(), density: .compact)
+
     }
 
     private func load() async {
@@ -473,23 +427,4 @@ private enum DeleteRequestStatusFilter: String, CaseIterable, Identifiable {
     }
 }
 
-private typealias AdminImageDeleteStateSection = SetuStateSection
-
-private struct AdminImageDeleteMetadataRow: View {
-    let title: String
-    let value: String
-
-    var body: some View {
-        HStack(alignment: .top, spacing: SetuSpacing.md) {
-            Text(title)
-                .font(SetuTypography.caption)
-                .foregroundStyle(SetuColor.textSecondary)
-                .frame(width: 84, alignment: .leading)
-            Text(value)
-                .font(SetuTypography.body)
-                .foregroundStyle(SetuColor.textPrimary)
-                .multilineTextAlignment(.trailing)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-        }
-    }
-}
+private typealias AdminImageDeleteStateSection = AdminRecordStateSection

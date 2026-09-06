@@ -11,8 +11,11 @@ struct AdminAiDeleteRequestsView: View {
     @State private var isSubmitting = false
     private let pageSize = 20
 
+    @State private var pendingAction: (() -> Void)?
+    @State private var pendingActionTitle = ""
+
     var body: some View {
-        List {
+        SetuBoard {
             if environment.authSession.currentUser?.role != .admin {
                 AdminAiDeleteStateSection(
                     title: "权限",
@@ -23,19 +26,30 @@ struct AdminAiDeleteRequestsView: View {
             } else {
                 filterSection
                 if let message {
-                    Section {
+                    Group {
                         SetuCard {
                             SetuPill(text: message, systemImage: "checkmark.circle", tone: .info)
                         }
-                        .setuListRow()
+
                     }
                 }
                 content
             }
         }
-        .listStyle(.plain)
         .setuBackground()
         .navigationTitle("AI 删除申请")
+        .confirmationDialog(pendingActionTitle, isPresented: Binding(
+            get: { pendingAction != nil }, set: { if !$0 { pendingAction = nil } }
+        ), titleVisibility: .visible) {
+            Button("确认执行", role: .destructive) {
+                let action = pendingAction
+                pendingAction = nil
+                action?()
+            }
+            Button("取消", role: .cancel) { pendingAction = nil }
+        } message: {
+            Text("此操作将改变当前记录或服务状态，请核对目标后确认。")
+        }
         .sheet(item: $rejectDraft) { draft in
             AiDeleteRejectSheet(draft: draft, isSubmitting: isSubmitting) { reason in
                 Task { await reject(draft.request, reason: reason) }
@@ -46,17 +60,16 @@ struct AdminAiDeleteRequestsView: View {
     }
 
     private var filterSection: some View {
-        Section {
+        Group {
             SetuCard {
                 VStack(alignment: .leading, spacing: SetuSpacing.md) {
                     SetuSectionHeader(title: "筛选")
-                    Picker("状态", selection: $statusFilter) {
-                        Text("待审核").tag("WAITING")
-                        Text("全部").tag("ALL")
-                        Text("已通过").tag("APPROVED")
-                        Text("已拒绝").tag("REJECTED")
-                    }
-                    .pickerStyle(.segmented)
+                    SetuFilterBar(options: [
+                    .init(value: "WAITING", title: "待审核"),
+                    .init(value: "ALL", title: "全部"),
+                    .init(value: "APPROVED", title: "已通过"),
+                    .init(value: "REJECTED", title: "已拒绝")
+                ], selection: $statusFilter, accessibilityTitle: "状态")
 
                     SetuPrimaryButton {
                         Task { await load(resetPage: true) }
@@ -65,7 +78,7 @@ struct AdminAiDeleteRequestsView: View {
                     }
                 }
             }
-            .setuListRow()
+
         }
     }
 
@@ -80,27 +93,23 @@ struct AdminAiDeleteRequestsView: View {
             if result.list.isEmpty {
                 AdminAiDeleteStateSection(title: "删除申请", stateTitle: "暂无 AI 删除申请", systemImage: "xmark.bin")
             } else {
-                Section {
-                    SetuCard {
+                Group {
+                    Group {
                         VStack(alignment: .leading, spacing: SetuSpacing.md) {
                             SetuSectionHeader(title: "删除申请", subtitle: "共 \(result.total) 条")
                             VStack(spacing: 0) {
-                                ForEach(Array(result.list.enumerated()), id: \.element.id) { index, request in
+                                SetuRecordBoard(items: result.list) { request in
                                     AiDeleteRequestRow(request: request) {
-                                        Task { await approve(request) }
+                                        pendingActionTitle = "确认批准删除此 AI 作品？"; pendingAction = { Task { await approve(request) } }
                                     } onReject: {
                                         rejectDraft = AiDeleteRejectDraft(request: request)
                                     }
                                     .disabled(isSubmitting)
-
-                                    if index < result.list.count - 1 {
-                                        Divider().overlay(SetuColor.separator)
-                                    }
                                 }
                             }
                         }
                     }
-                    .setuListRow()
+
                 }
                 pagerSection(result)
             }
@@ -108,7 +117,7 @@ struct AdminAiDeleteRequestsView: View {
     }
 
     private func pagerSection(_ result: PageResult<AiGenerationDeleteRequest>) -> some View {
-        Section {
+        Group {
             SetuCard {
                 HStack(spacing: SetuSpacing.md) {
                     Button {
@@ -144,7 +153,7 @@ struct AdminAiDeleteRequestsView: View {
                     .disabled(result.page * result.pageSize >= result.total)
                 }
             }
-            .setuListRow()
+
         }
     }
 
@@ -198,7 +207,7 @@ struct AdminAiDeleteRequestsView: View {
     }
 }
 
-private typealias AdminAiDeleteStateSection = SetuStateSection
+private typealias AdminAiDeleteStateSection = AdminRecordStateSection
 
 private struct AiDeleteRequestRow: View {
     let request: AiGenerationDeleteRequest
@@ -206,45 +215,10 @@ private struct AiDeleteRequestRow: View {
     let onReject: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SetuSpacing.md) {
-            HStack(alignment: .top, spacing: SetuSpacing.md) {
-                AiDeleteThumbnail(urlString: request.job?.imageUrl, status: request.job?.status)
-                VStack(alignment: .leading, spacing: SetuSpacing.xs) {
-                    Text("申请 #\(request.id) · 任务 #\(request.jobId)")
-                        .font(SetuTypography.headline)
-                        .foregroundStyle(SetuColor.textPrimary)
-                    Text(request.job?.promptCn ?? "任务记录不可用")
-                        .font(SetuTypography.caption)
-                        .foregroundStyle(SetuColor.textSecondary)
-                        .lineLimit(3)
-                    HStack(spacing: 8) {
-                        RequestStatusBadge(title: request.statusTitle, status: statusBadgeCode)
-                        if let jobStatus = request.job?.status {
-                            Text(jobStatus)
-                                .font(.caption.weight(.semibold))
-                                .padding(.horizontal, SetuSpacing.sm)
-                                .padding(.vertical, SetuSpacing.xs)
-                                .background(SetuColor.surfaceMuted, in: Capsule())
-                                .foregroundStyle(SetuColor.textSecondary)
-                        }
-                    }
-                    if let createdAt = request.createdAt {
-                        Label(createdAt, systemImage: "calendar")
-                            .font(SetuTypography.caption)
-                            .foregroundStyle(SetuColor.textSecondary)
-                    }
-                }
-            }
-
-            if let reason = request.reason, !reason.isEmpty {
-                Text("申请原因：\(reason)")
-                    .font(SetuTypography.caption)
-                    .foregroundStyle(SetuColor.textSecondary)
-            }
-            if let rejectReason = request.rejectReason, !rejectReason.isEmpty {
-                SetuPill(text: "拒绝原因：\(rejectReason)", systemImage: "xmark.circle", tone: .danger)
-            }
-
+        SetuRecordCard(headline: "申请 #\(request.id) · 任务 #\(request.jobId)", supporting: request.job?.promptCn,
+            status: .init(request.statusTitle, tone: .danger), thumbnailURLString: request.job?.imageUrl,
+            fields: [.init("任务状态", request.job?.status ?? "-"), .init("创建时间", request.createdAt ?? "-"),
+                     .init("申请原因", request.reason ?? "-"), .init("拒绝原因", request.rejectReason ?? "-")], density: .compact) {
             if request.status == "WAITING" {
                 HStack(spacing: SetuSpacing.md) {
                     Button {
@@ -271,7 +245,6 @@ private struct AiDeleteRequestRow: View {
                 }
             }
         }
-        .padding(.vertical, SetuSpacing.sm)
     }
 
     private var statusBadgeCode: Int {
@@ -280,44 +253,6 @@ private struct AiDeleteRequestRow: View {
         case "REJECTED": 2
         default: 0
         }
-    }
-}
-
-private struct AiDeleteThumbnail: View {
-    let urlString: String?
-    let status: String?
-
-    var body: some View {
-        Group {
-            if let urlString, let url = URL(string: urlString) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    default:
-                        placeholder
-                    }
-                }
-            } else {
-                placeholder
-            }
-        }
-        .frame(width: 88, height: 88)
-        .background(SetuColor.brandSoft.opacity(0.18), in: RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous))
-        .clipShape(RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous))
-    }
-
-    private var placeholder: some View {
-        VStack(spacing: 4) {
-            Image(systemName: "photo")
-            if let status {
-                Text(status)
-                    .font(.caption2)
-            }
-        }
-        .foregroundStyle(SetuColor.brandPink)
     }
 }
 
@@ -330,9 +265,9 @@ private struct AiDeleteRejectSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    SetuCard {
+            SetuBoard {
+                Group {
+                    SetuRecordCard(headline: "操作确认", status: .init("请核对原因与目标", tone: .danger), density: .compact) {
                         VStack(alignment: .leading, spacing: SetuSpacing.md) {
                             SetuSectionHeader(title: "拒绝原因")
                             TextField("填写拒绝原因", text: $reason, axis: .vertical)
@@ -340,10 +275,9 @@ private struct AiDeleteRejectSheet: View {
                                 .textFieldStyle(.roundedBorder)
                         }
                     }
-                    .setuListRow()
+
                 }
             }
-            .listStyle(.plain)
             .setuBackground()
             .navigationTitle("拒绝申请 #\(draft.request.id)")
             .toolbar {

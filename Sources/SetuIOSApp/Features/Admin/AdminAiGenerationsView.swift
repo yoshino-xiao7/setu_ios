@@ -16,8 +16,11 @@ struct AdminAiGenerationsView: View {
     @State private var isSubmitting = false
     private let pageSize = 12
 
+    @State private var pendingAction: (() -> Void)?
+    @State private var pendingActionTitle = ""
+
     var body: some View {
-        List {
+        SetuBoard {
             if environment.authSession.currentUser?.role != .admin {
                 AdminAiGenerationStateSection(
                     title: "权限",
@@ -34,14 +37,25 @@ struct AdminAiGenerationsView: View {
                             .foregroundStyle(SetuColor.textSecondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .setuListRow()
+
                 }
                 content
             }
         }
-        .listStyle(.plain)
         .setuBackground()
         .navigationTitle("AI 生成记录")
+        .confirmationDialog(pendingActionTitle, isPresented: Binding(
+            get: { pendingAction != nil }, set: { if !$0 { pendingAction = nil } }
+        ), titleVisibility: .visible) {
+            Button("确认执行", role: .destructive) {
+                let action = pendingAction
+                pendingAction = nil
+                action?()
+            }
+            Button("取消", role: .cancel) { pendingAction = nil }
+        } message: {
+            Text("此操作将改变当前记录或服务状态，请核对目标后确认。")
+        }
         .sheet(item: $reasonDraft) { draft in
             AiGenerationReasonSheet(draft: draft, isSubmitting: isSubmitting) { reason in
                 Task { await submitReasonAction(draft, reason: reason) }
@@ -65,35 +79,35 @@ struct AdminAiGenerationsView: View {
                     #if os(iOS)
                     .keyboardType(.numberPad)
                     #endif
-                Picker("生成状态", selection: $statusFilter) {
-                    Text("全部").tag("ALL")
-                    Text("排队中").tag("QUEUED")
-                    Text("已接单").tag("CLAIMED")
-                    Text("生成中").tag("RUNNING")
-                    Text("上传中").tag("UPLOADING")
-                    Text("已完成").tag("COMPLETED")
-                    Text("失败").tag("FAILED")
-                }
-                Picker("广场审核", selection: $reviewStatusFilter) {
-                    Text("全部").tag("ALL")
-                    Text("未提交").tag("NOT_SUBMITTED")
-                    Text("待审核").tag("WAITING")
-                    Text("已通过").tag("APPROVED")
-                    Text("已拒绝").tag("REJECTED")
-                    Text("已下架").tag("UNPUBLISHED")
-                }
-                Picker("删除状态", selection: $deleteStatusFilter) {
-                    Text("全部").tag("ALL")
-                    Text("无").tag("NONE")
-                    Text("待审核").tag("WAITING")
-                    Text("已通过").tag("APPROVED")
-                    Text("已拒绝").tag("REJECTED")
-                }
-                Picker("记录状态", selection: $recordStateFilter) {
-                    Text("全部历史").tag("ALL")
-                    Text("正常记录").tag("ACTIVE")
-                    Text("已删除记录").tag("DELETED")
-                }
+                SetuFilterBar(options: [
+                    .init(value: "ALL", title: "全部"),
+                    .init(value: "QUEUED", title: "排队中"),
+                    .init(value: "CLAIMED", title: "已接单"),
+                    .init(value: "RUNNING", title: "生成中"),
+                    .init(value: "UPLOADING", title: "上传中"),
+                    .init(value: "COMPLETED", title: "已完成"),
+                    .init(value: "FAILED", title: "失败")
+                ], selection: $statusFilter, accessibilityTitle: "生成状态")
+                SetuFilterBar(options: [
+                    .init(value: "ALL", title: "全部"),
+                    .init(value: "NOT_SUBMITTED", title: "未提交"),
+                    .init(value: "WAITING", title: "待审核"),
+                    .init(value: "APPROVED", title: "已通过"),
+                    .init(value: "REJECTED", title: "已拒绝"),
+                    .init(value: "UNPUBLISHED", title: "已下架")
+                ], selection: $reviewStatusFilter, accessibilityTitle: "广场审核")
+                SetuFilterBar(options: [
+                    .init(value: "ALL", title: "全部"),
+                    .init(value: "NONE", title: "无"),
+                    .init(value: "WAITING", title: "待审核"),
+                    .init(value: "APPROVED", title: "已通过"),
+                    .init(value: "REJECTED", title: "已拒绝")
+                ], selection: $deleteStatusFilter, accessibilityTitle: "删除状态")
+                SetuFilterBar(options: [
+                    .init(value: "ALL", title: "全部历史"),
+                    .init(value: "ACTIVE", title: "正常记录"),
+                    .init(value: "DELETED", title: "已删除记录")
+                ], selection: $recordStateFilter, accessibilityTitle: "记录状态")
                 Button {
                     Task { await load(resetPage: true) }
                 } label: {
@@ -104,7 +118,7 @@ struct AdminAiGenerationsView: View {
                 .tint(SetuColor.brandPink)
             }
         }
-        .setuListRow()
+
     }
 
     @ViewBuilder
@@ -118,16 +132,12 @@ struct AdminAiGenerationsView: View {
             if result.list.isEmpty {
                 AdminAiGenerationStateSection(title: "生成记录", stateTitle: "暂无 AI 生成记录", message: "当前筛选条件下没有记录。", systemImage: "sparkles.rectangle.stack")
             } else {
-                SetuCard {
+                Group {
                     VStack(alignment: .leading, spacing: SetuSpacing.md) {
                         SetuSectionHeader(title: "共 \(result.total) 条", subtitle: "AI 生成记录")
-                        ForEach(Array(result.list.enumerated()), id: \.element.id) { index, job in
-                            if index > 0 {
-                                Divider()
-                                    .overlay(SetuColor.separator)
-                            }
+                        SetuRecordBoard(items: result.list) { job in
                             AdminAiGenerationRow(job: job) {
-                                Task { await unpublish(job) }
+                                pendingActionTitle = "确认下架此 AI 作品？"; pendingAction = { Task { await unpublish(job) } }
                             } onDelete: {
                                 reasonDraft = AiGenerationReasonDraft(job: job, kind: .deleteGeneration)
                             } onLocalDelete: {
@@ -137,7 +147,7 @@ struct AdminAiGenerationsView: View {
                         }
                     }
                 }
-                .setuListRow()
+
                 pagerSection(result)
             }
         }
@@ -174,7 +184,7 @@ struct AdminAiGenerationsView: View {
             }
             .font(SetuTypography.body)
         }
-        .setuListRow()
+
     }
 
     private func load(resetPage: Bool) async {
@@ -247,30 +257,12 @@ private struct AdminAiGenerationRow: View {
     let onLocalDelete: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SetuSpacing.md) {
-            HStack(alignment: .top, spacing: SetuSpacing.md) {
-                AdminAiGenerationThumbnail(urlString: job.imageUrl, title: job.statusTitle)
-                VStack(alignment: .leading, spacing: SetuSpacing.xs) {
-                    Text("#\(job.id) · 用户 \(job.userId.map(String.init) ?? "-")")
-                        .font(SetuTypography.headline)
-                        .foregroundStyle(SetuColor.textPrimary)
-                    Text(job.promptCn)
-                        .font(SetuTypography.caption)
-                        .foregroundStyle(SetuColor.textSecondary)
-                        .lineLimit(3)
-                    badgeWrap
-                    Text(metaLine)
-                        .font(.caption)
-                        .foregroundStyle(SetuColor.textTertiary)
-                        .lineLimit(2)
-                    if let createdAt = job.createdAt {
-                        Label(createdAt, systemImage: "calendar")
-                            .font(.caption)
-                            .foregroundStyle(SetuColor.textTertiary)
-                    }
-                }
-            }
-
+        SetuRecordCard(headline: "任务 #\(job.id)", supporting: job.promptCn,
+            status: .init(job.statusTitle, tone: job.deleted == true || job.status == "FAILED" ? .danger : .brand),
+            thumbnailURLString: job.imageUrl,
+            fields: [.init("用户", job.userId.map(String.init) ?? "-"), .init("参数", metaLine),
+                     .init("创建时间", job.createdAt ?? "-"), .init("广场审核", reviewStatusTitle)], density: .compact) {
+            badgeWrap
             DisclosureGroup("完整提示词") {
                 VStack(alignment: .leading, spacing: 8) {
                     promptBlock(title: "正向", value: job.promptPositive)
@@ -326,7 +318,6 @@ private struct AdminAiGenerationRow: View {
 
             actionRow
         }
-        .padding(.vertical, SetuSpacing.xs)
     }
 
     private var badgeWrap: some View {
@@ -356,36 +347,36 @@ private struct AdminAiGenerationRow: View {
     }
 
     private var actionRow: some View {
-        HStack {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), alignment: .leading)], alignment: .leading) {
             if let imageUrl = job.imageUrl, let url = URL(string: imageUrl) {
                 Link(destination: url) {
-                    Label("查看", systemImage: "eye")
+                    Label("查看", systemImage: "eye").frame(minHeight: 44)
                 }
             }
-            Spacer()
             if job.publicVisible == true {
                 Button(role: .destructive) {
                     onUnpublish()
                 } label: {
-                    Label("下架", systemImage: "rectangle.portrait.and.arrow.right")
+                    Label("下架", systemImage: "rectangle.portrait.and.arrow.right").frame(minHeight: 44)
                 }
             }
             if job.deleted != true {
                 Button(role: .destructive) {
                     onDelete()
                 } label: {
-                    Label("删除", systemImage: "trash")
+                    Label("删除", systemImage: "trash").frame(minHeight: 44)
                 }
             }
             if canDeleteLocalImage {
                 Button(role: .destructive) {
                     onLocalDelete()
                 } label: {
-                    Label("本机图片", systemImage: "externaldrive.badge.xmark")
+                    Label("本机图片", systemImage: "externaldrive.badge.xmark").frame(minHeight: 44)
                 }
             }
         }
         .buttonStyle(.borderless)
+        .controlSize(.large)
         .font(SetuTypography.caption)
     }
 
@@ -478,46 +469,6 @@ private struct AdminAiGenerationRow: View {
     }
 }
 
-private struct AdminAiGenerationThumbnail: View {
-    let urlString: String?
-    let title: String
-
-    var body: some View {
-        Group {
-            if let urlString, let url = URL(string: urlString) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    default:
-                        placeholder
-                    }
-                }
-            } else {
-                placeholder
-            }
-        }
-        .frame(width: 92, height: 112)
-        .background(SetuColor.brandSoft.opacity(0.12), in: RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous))
-        .clipShape(RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous)
-                .stroke(SetuColor.separator, lineWidth: 1)
-        }
-    }
-
-    private var placeholder: some View {
-        VStack(spacing: 6) {
-            Image(systemName: "sparkles.rectangle.stack")
-            Text(title)
-                .font(.caption2)
-        }
-        .foregroundStyle(SetuColor.brandPink)
-    }
-}
-
 private struct AiGenerationReasonSheet: View {
     @Environment(\.dismiss) private var dismiss
     let draft: AiGenerationReasonDraft
@@ -527,8 +478,8 @@ private struct AiGenerationReasonSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                SetuCard {
+            SetuBoard {
+                SetuRecordCard(headline: "操作确认", status: .init("请核对原因与目标", tone: .danger), density: .compact) {
                     VStack(alignment: .leading, spacing: SetuSpacing.md) {
                         SetuSectionHeader(title: draft.kind.reasonTitle, subtitle: draft.kind.title)
                     TextField(draft.kind.reasonPlaceholder, text: $reason, axis: .vertical)
@@ -536,7 +487,7 @@ private struct AiGenerationReasonSheet: View {
                             .textFieldStyle(.roundedBorder)
                 }
                 }
-                .setuListRow()
+
                 if draft.kind == .deleteLocalImage, let path = draft.job.localAbsolutePath {
                     SetuCard {
                         VStack(alignment: .leading, spacing: SetuSpacing.sm) {
@@ -547,10 +498,9 @@ private struct AiGenerationReasonSheet: View {
                                 .textSelection(.enabled)
                         }
                     }
-                    .setuListRow()
+
                 }
             }
-            .listStyle(.plain)
             .setuBackground()
             .navigationTitle(draft.kind.title)
             .toolbar {
@@ -570,7 +520,7 @@ private struct AiGenerationReasonSheet: View {
     }
 }
 
-private typealias AdminAiGenerationStateSection = SetuStateSection
+private typealias AdminAiGenerationStateSection = AdminRecordStateSection
 
 private struct AiGenerationReasonDraft: Identifiable {
     let job: AiGenerationJob

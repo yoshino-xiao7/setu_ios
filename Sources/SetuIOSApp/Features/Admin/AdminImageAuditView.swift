@@ -19,13 +19,12 @@ struct AdminImageAuditView: View {
     private let pageSize = 12
 
     var body: some View {
-        List {
+        SetuBoard {
             if environment.authSession.currentUser?.role != .admin {
                 AdminImageAuditStateSection(title: "权限", stateTitle: "需要管理员权限", message: "请使用管理员账号登录后管理图片库。", systemImage: "shield.slash")
             } else {
                 filterSection
                 statsSection
-                bulkSection
                 if let message {
                     SetuCard {
                         Label(message, systemImage: "checkmark.circle")
@@ -33,14 +32,14 @@ struct AdminImageAuditView: View {
                             .foregroundStyle(SetuColor.textSecondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .setuListRow()
+
                 }
                 content
             }
         }
-        .listStyle(.plain)
         .setuBackground()
         .navigationTitle("图片库管理")
+        .setuActionDock { if environment.authSession.currentUser?.role == .admin { bulkSection } }
         .sheet(item: $reasonDraft) { draft in
             ImageAuditReasonSheet(draft: draft, isSubmitting: isSubmitting) { reason in
                 Task { await submitReasonAction(draft, reason: reason) }
@@ -54,12 +53,12 @@ struct AdminImageAuditView: View {
         SetuCard {
             VStack(alignment: .leading, spacing: SetuSpacing.md) {
                 SetuSectionHeader(title: "筛选")
-                Picker("范围", selection: $scope) {
-                    Text("未审核").tag("UNREVIEWED")
-                    Text("到期复审").tag("DUE_REVIEW")
-                    Text("全部").tag("ALL")
-                }
-                .pickerStyle(.segmented)
+                SetuFilterBar(options: [
+                    .init(value: "UNREVIEWED", title: "未审核"),
+                    .init(value: "DUE_REVIEW", title: "到期复审"),
+                    .init(value: "ALL", title: "全部")
+                ], selection: $scope, accessibilityTitle: "范围")
+
                 TextField("PID", text: $pidText)
                     .textFieldStyle(.roundedBorder)
                     #if os(iOS)
@@ -77,13 +76,13 @@ struct AdminImageAuditView: View {
                         .keyboardType(.numberPad)
                         #endif
                 }
-                Picker("可用性", selection: $availabilityStatus) {
-                    Text("全部").tag("ALL")
-                    Text("未知").tag("UNKNOWN")
-                    Text("可用").tag("OK")
-                    Text("疑似失效").tag("SUSPECTED_BROKEN")
-                    Text("已失效").tag("BROKEN")
-                }
+                SetuFilterBar(options: [
+                    .init(value: "ALL", title: "全部"),
+                    .init(value: "UNKNOWN", title: "未知"),
+                    .init(value: "OK", title: "可用"),
+                    .init(value: "SUSPECTED_BROKEN", title: "疑似失效"),
+                    .init(value: "BROKEN", title: "已失效")
+                ], selection: $availabilityStatus, accessibilityTitle: "可用性")
                 Toggle("只看失效", isOn: $onlyBroken)
                 HStack {
                     Button {
@@ -101,73 +100,46 @@ struct AdminImageAuditView: View {
                 }
             }
         }
-        .setuListRow()
+
     }
 
     @ViewBuilder
     private var statsSection: some View {
         if case .loaded(let result) = state {
-            SetuCard {
-                VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                    SetuSectionHeader(title: "统计")
+            SetuRecordCard(headline: "统计", fields: {
+                    var fields: [SetuRecordField] = []
                 if let stats = result.stats {
-                        AdminImageAuditMetadataRow(title: "未审核", value: "\(stats.unreviewed)")
-                        AdminImageAuditMetadataRow(title: "到期复审", value: "\(stats.dueReview)")
-                        AdminImageAuditMetadataRow(title: "全部图片", value: "\(stats.all)")
+                        fields.append(.init("未审核", "\(stats.unreviewed)"))
+                        fields.append(.init("到期复审", "\(stats.dueReview)"))
+                        fields.append(.init("全部图片", "\(stats.all)"))
                 }
                 if let dueBefore = result.dueBefore, scope == "DUE_REVIEW" {
-                        AdminImageAuditMetadataRow(title: "复审截止", value: dueBefore)
+                        fields.append(.init("复审截止", dueBefore))
                     }
-                }
-            }
-            .setuListRow()
+
+                    return fields
+                }(), density: .compact)
+
         }
     }
 
     @ViewBuilder
     private var bulkSection: some View {
         if isAuditScope, case .loaded(let result) = state, !result.list.isEmpty {
-            SetuCard {
-                VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                    SetuSectionHeader(title: "批量审核")
-                    AdminImageAuditMetadataRow(title: "已选", value: "\(selectedImageIDs.count) / \(result.list.count)")
-                HStack {
-                    Button(selectedImageIDs.count == result.list.count ? "取消全选" : "选择当前页") {
-                        toggleCurrentPage(result.list)
-                    }
-                    Spacer()
-                    Button("清空") {
-                        selectedImageIDs.removeAll()
-                    }
-                    .disabled(selectedImageIDs.isEmpty)
-                }
-                Button {
-                    Task { await checkAvailability(Array(selectedImageIDs)) }
-                } label: {
-                    Label("检测已选", systemImage: "checkmark.shield")
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                }
-                .disabled(selectedImageIDs.isEmpty || isSubmitting)
-                HStack {
-                    Button {
-                        Task { await submitBatch(status: 1, remark: nil) }
-                    } label: {
-                        Label("批量正常", systemImage: "checkmark.circle")
-                                .frame(minHeight: 44)
-                    }
-                    .disabled(selectedImageIDs.isEmpty || isSubmitting)
-                    Spacer()
-                    Button(role: .destructive) {
+            VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+                Text("已选 \(selectedImageIDs.count) / \(result.list.count)").font(SetuTypography.caption)
+                Menu {
+                    Button(selectedImageIDs.count == result.list.count ? "取消全选" : "选择当前页") { toggleCurrentPage(result.list) }
+                    Button("清空选择") { selectedImageIDs.removeAll() }.disabled(selectedImageIDs.isEmpty)
+                    Button("检测已选") { Task { await checkAvailability(Array(selectedImageIDs)) } }.disabled(selectedImageIDs.isEmpty)
+                    Button("批量正常") { Task { await submitBatch(status: 1, remark: nil) } }.disabled(selectedImageIDs.isEmpty)
+                    Button("批量问题", role: .destructive) {
                         reasonDraft = ImageAuditReasonDraft(kind: .batchProblem, image: nil, imageIDs: Array(selectedImageIDs))
-                    } label: {
-                        Label("批量问题", systemImage: "xmark.circle")
-                                .frame(minHeight: 44)
-                    }
-                    .disabled(selectedImageIDs.isEmpty || isSubmitting)
-                }
+                    }.disabled(selectedImageIDs.isEmpty)
+                } label: {
+                    Label("批量审核", systemImage: "checklist").frame(maxWidth: .infinity, minHeight: 50)
+                }.disabled(isSubmitting)
             }
-            }
-            .setuListRow()
         }
     }
 
@@ -182,14 +154,10 @@ struct AdminImageAuditView: View {
             if result.list.isEmpty {
                 AdminImageAuditStateSection(title: "图片库", stateTitle: "暂无图片", message: "当前筛选条件下没有图片。", systemImage: "photo.stack")
             } else {
-                SetuCard {
+                Group {
                     VStack(alignment: .leading, spacing: SetuSpacing.md) {
                         SetuSectionHeader(title: "共 \(result.total) 张", subtitle: "图片库")
-                    ForEach(Array(result.list.enumerated()), id: \.element.id) { index, image in
-                            if index > 0 {
-                                Divider()
-                                    .overlay(SetuColor.separator)
-                            }
+                    SetuRecordBoard(items: result.list) { image in
                         ImageAuditRow(
                             image: image,
                             isAuditScope: isAuditScope,
@@ -211,7 +179,7 @@ struct AdminImageAuditView: View {
                     }
                 }
                 }
-                .setuListRow()
+
                 pagerSection(result)
             }
         }
@@ -247,7 +215,7 @@ struct AdminImageAuditView: View {
                 .disabled(result.page * result.pageSize >= result.total)
             }
         }
-        .setuListRow()
+
     }
 
     private var isAuditScope: Bool {
@@ -400,57 +368,23 @@ private struct ImageAuditRow: View {
     let onDetail: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SetuSpacing.md) {
-            HStack(alignment: .top, spacing: SetuSpacing.md) {
-                if isAuditScope {
-                    Button {
-                        onToggleSelection()
-                    } label: {
-                        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                            .foregroundStyle(isSelected ? SetuColor.brandPink : SetuColor.textTertiary)
-                            .font(.title3)
-                            .frame(width: 44, height: 44)
-                    }
-                    .buttonStyle(.borderless)
-                }
-                ImageAuditThumbnail(urlString: image.urlOriginal)
-                VStack(alignment: .leading, spacing: SetuSpacing.xs) {
-                    Text(image.pidText)
-                        .font(SetuTypography.headline)
-                        .foregroundStyle(SetuColor.textPrimary)
-                    Text(image.title)
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(SetuColor.textPrimary)
-                        .lineLimit(2)
-                    Text("作者：\(image.author)")
-                        .font(.caption)
-                        .foregroundStyle(SetuColor.textSecondary)
-                    badgeRow
-                    Text("\(image.width)x\(image.height) · \(image.ext) · UID \(image.uid)")
-                        .font(.caption)
-                        .foregroundStyle(SetuColor.textTertiary)
-                }
+        SetuRecordCard(headline: image.pidText, supporting: image.title,
+            status: .init(image.auditStatusTitle, tone: image.lastAuditStatus == 2 ? .danger : .brand),
+            thumbnailURLString: image.urlOriginal,
+            fields: [.init("作者", image.author), .init("尺寸", "\(image.width) × \(image.height)"),
+                     .init("格式", image.ext), .init("UID", "\(image.uid)"),
+                     .init("可用性", availabilityDetail ?? image.availabilityTitle),
+                     .init("审核备注", image.lastAuditRemark ?? "-"),
+                     .init("审核人", image.lastAuditAdminEmail ?? "-"), .init("审核时间", image.lastAuditTime ?? "-")], density: .compact) {
+            badgeRow
+            if isAuditScope {
+                Button(action: onToggleSelection) {
+                    Label(isSelected ? "取消选择" : "选择", systemImage: isSelected ? "checkmark.circle.fill" : "circle")
+                        .frame(minHeight: 44)
+                }.buttonStyle(.borderless)
             }
-
-            if let detail = availabilityDetail {
-                Text(detail)
-                    .font(.caption)
-                    .foregroundStyle(SetuColor.warning)
-            }
-            if let remark = image.lastAuditRemark, !remark.isEmpty {
-                Text("审核备注：\(remark)")
-                    .font(.caption)
-                    .foregroundStyle(SetuColor.textSecondary)
-            }
-            if let admin = image.lastAuditAdminEmail, let time = image.lastAuditTime {
-                Text("最近审核：\(admin) · \(time)")
-                    .font(.caption)
-                    .foregroundStyle(SetuColor.textSecondary)
-            }
-
             actionRow
         }
-        .padding(.vertical, SetuSpacing.xs)
     }
 
     private var badgeRow: some View {
@@ -471,43 +405,43 @@ private struct ImageAuditRow: View {
     }
 
     private var actionRow: some View {
-        HStack {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), alignment: .leading)], alignment: .leading) {
             if let url = URL(string: image.urlOriginal) {
                 Link(destination: url) {
-                    Label("查看", systemImage: "eye")
+                    Label("查看", systemImage: "eye").frame(minHeight: 44)
                 }
             }
             Button {
                 onDetail()
             } label: {
-                Label("详情", systemImage: "info.circle")
+                Label("详情", systemImage: "info.circle").frame(minHeight: 44)
             }
             Button {
                 onCheckAvailability()
             } label: {
-                Label("检测", systemImage: "checkmark.shield")
+                Label("检测", systemImage: "checkmark.shield").frame(minHeight: 44)
             }
-            Spacer()
             if isAuditScope {
                 Button {
                     onPass()
                 } label: {
-                    Label("正常", systemImage: "checkmark.circle")
+                    Label("正常", systemImage: "checkmark.circle").frame(minHeight: 44)
                 }
                 Button(role: .destructive) {
                     onProblem()
                 } label: {
-                    Label("问题", systemImage: "xmark.circle")
+                    Label("问题", systemImage: "xmark.circle").frame(minHeight: 44)
                 }
             } else {
                 Button(role: .destructive) {
                     onDeleteRequest()
                 } label: {
-                    Label("申请删除", systemImage: "trash")
+                    Label("申请删除", systemImage: "trash").frame(minHeight: 44)
                 }
             }
         }
         .buttonStyle(.borderless)
+        .controlSize(.large)
         .font(SetuTypography.caption)
     }
 
@@ -541,41 +475,6 @@ private struct ImageAuditRow: View {
     }
 }
 
-private struct ImageAuditThumbnail: View {
-    let urlString: String
-
-    var body: some View {
-        Group {
-            if let url = URL(string: urlString) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    default:
-                        placeholder
-                    }
-                }
-            } else {
-                placeholder
-            }
-        }
-        .frame(width: 92, height: 112)
-        .background(SetuColor.brandSoft.opacity(0.12), in: RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous))
-        .clipShape(RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous)
-                .stroke(SetuColor.separator, lineWidth: 1)
-        }
-    }
-
-    private var placeholder: some View {
-        Image(systemName: "photo")
-            .foregroundStyle(SetuColor.brandPink)
-    }
-}
-
 private struct ImageAuditReasonSheet: View {
     @Environment(\.dismiss) private var dismiss
     let draft: ImageAuditReasonDraft
@@ -585,8 +484,8 @@ private struct ImageAuditReasonSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                SetuCard {
+            SetuBoard {
+                SetuRecordCard(headline: "操作确认", status: .init("请核对原因与目标", tone: .danger), density: .compact) {
                     VStack(alignment: .leading, spacing: SetuSpacing.md) {
                         SetuSectionHeader(title: draft.kind.sectionTitle, subtitle: draft.kind.title)
                     TextField(draft.kind.placeholder, text: $reason, axis: .vertical)
@@ -594,27 +493,20 @@ private struct ImageAuditReasonSheet: View {
                             .textFieldStyle(.roundedBorder)
                 }
                 }
-                .setuListRow()
+
                 if let image = draft.image {
-                    SetuCard {
-                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                            SetuSectionHeader(title: "图片")
-                            AdminImageAuditMetadataRow(title: "PID", value: image.pidText)
-                            AdminImageAuditMetadataRow(title: "标题", value: image.title)
-                        }
-                    }
-                    .setuListRow()
+                    SetuRecordCard(headline: "图片", fields: [
+                    .init("PID", image.pidText),
+                    .init("标题", image.title)
+                ], density: .compact)
+
                 } else {
-                    SetuCard {
-                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                            SetuSectionHeader(title: "批量")
-                            AdminImageAuditMetadataRow(title: "图片数", value: "\(draft.imageIDs.count)")
-                        }
-                    }
-                    .setuListRow()
+                    SetuRecordCard(headline: "批量", fields: [
+                    .init("图片数", "\(draft.imageIDs.count)")
+                ], density: .compact)
+
                 }
             }
-            .listStyle(.plain)
             .setuBackground()
             .navigationTitle(draft.kind.title)
             .toolbar {
@@ -634,26 +526,7 @@ private struct ImageAuditReasonSheet: View {
     }
 }
 
-private typealias AdminImageAuditStateSection = SetuStateSection
-
-private struct AdminImageAuditMetadataRow: View {
-    let title: String
-    let value: String
-
-    var body: some View {
-        HStack(alignment: .top, spacing: SetuSpacing.md) {
-            Text(title)
-                .font(SetuTypography.caption)
-                .foregroundStyle(SetuColor.textSecondary)
-                .frame(width: 84, alignment: .leading)
-            Text(value)
-                .font(SetuTypography.body)
-                .foregroundStyle(SetuColor.textPrimary)
-                .multilineTextAlignment(.trailing)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-        }
-    }
-}
+private typealias AdminImageAuditStateSection = AdminRecordStateSection
 
 private struct ImageAuditReasonDraft: Identifiable {
     let kind: ImageAuditReasonKind

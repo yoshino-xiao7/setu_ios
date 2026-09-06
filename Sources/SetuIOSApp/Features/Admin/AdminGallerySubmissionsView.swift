@@ -10,7 +10,7 @@ struct AdminGallerySubmissionsView: View {
     private let pageSize = 20
 
     var body: some View {
-        List {
+        SetuBoard {
             if environment.authSession.currentUser?.role != .admin {
                 AdminGallerySubmissionStateSection(title: "权限", stateTitle: "需要管理员权限", message: "请使用管理员账号登录后审核投稿。", systemImage: "shield.slash")
             } else {
@@ -18,7 +18,6 @@ struct AdminGallerySubmissionsView: View {
                 content
             }
         }
-        .listStyle(.plain)
         .setuBackground()
         .navigationTitle("投稿审核")
         .task { await load(resetPage: true) }
@@ -29,15 +28,15 @@ struct AdminGallerySubmissionsView: View {
         SetuCard {
             VStack(alignment: .leading, spacing: SetuSpacing.md) {
                 SetuSectionHeader(title: "筛选")
-                Picker("状态", selection: $statusFilter) {
-                    Text("待审核").tag("WAITING_MANUAL_REVIEW")
-                    Text("全部").tag("ALL")
-                    Text("已通过").tag("APPROVED")
-                    Text("已发布").tag("PUBLISHED")
-                    Text("已拒绝").tag("REJECTED")
-                    Text("发布失败").tag("PUBLISH_FAILED")
-                }
-                .pickerStyle(.segmented)
+                SetuFilterBar(options: [
+                    .init(value: "WAITING_MANUAL_REVIEW", title: "待审核"),
+                    .init(value: "ALL", title: "全部"),
+                    .init(value: "APPROVED", title: "已通过"),
+                    .init(value: "PUBLISHED", title: "已发布"),
+                    .init(value: "REJECTED", title: "已拒绝"),
+                    .init(value: "PUBLISH_FAILED", title: "发布失败")
+                ], selection: $statusFilter, accessibilityTitle: "状态")
+
                 Button {
                     Task { await load(resetPage: true) }
                 } label: {
@@ -48,7 +47,7 @@ struct AdminGallerySubmissionsView: View {
                 .tint(SetuColor.brandPink)
             }
         }
-        .setuListRow()
+
     }
 
     @ViewBuilder
@@ -62,24 +61,24 @@ struct AdminGallerySubmissionsView: View {
             if result.list.isEmpty {
                 AdminGallerySubmissionStateSection(title: "投稿批次", stateTitle: "暂无投稿批次", message: "当前筛选条件下没有需要展示的投稿批次。", systemImage: "tray")
             } else {
-                SetuCard {
+                Group {
                     VStack(alignment: .leading, spacing: SetuSpacing.md) {
                         SetuSectionHeader(title: "共 \(result.total) 个批次", subtitle: "投稿审核")
-                    ForEach(Array(result.list.enumerated()), id: \.element.id) { index, batch in
-                            if index > 0 {
-                                Divider()
-                                    .overlay(SetuColor.separator)
-                            }
+                    SetuRecordBoard(items: result.list) { batch in
                         Button {
                             router.navigate(to: .adminGallerySubmissionDetail(batch.batchId))
                         } label: {
-                            GalleryUploadBatchRow(batch: batch)
+                            SetuRecordCard(headline: batch.title?.isEmpty == false ? batch.title! : "未命名投稿",
+                                status: .init(batch.statusTitle, tone: batch.status == "REJECTED" ? .danger : .brand),
+                                fields: [.init("作者", batch.author ?? "未知作者"), .init("图片", "\(batch.itemCount)"),
+                                         .init("已上传", "\(batch.uploadedCount)"), .init("已发布", "\(batch.publishedCount)"),
+                                         .init("创建时间", SetuDateFormatter.string(from: batch.createdAt))], density: .compact)
                         }
                         .buttonStyle(.plain)
                     }
                 }
                 }
-                .setuListRow()
+
                 pagerSection(result)
             }
         }
@@ -115,7 +114,7 @@ struct AdminGallerySubmissionsView: View {
                 .disabled(result.page * result.pageSize >= result.total)
             }
         }
-        .setuListRow()
+
     }
 
     private func load(resetPage: Bool) async {
@@ -150,8 +149,11 @@ struct AdminGallerySubmissionDetailView: View {
     @State private var rejectReason = ""
     @State private var rejectSeverity = "MEDIUM"
 
+    @State private var pendingAction: (() -> Void)?
+    @State private var pendingActionTitle = ""
+
     var body: some View {
-        List {
+        SetuBoard {
             if environment.authSession.currentUser?.role != .admin {
                 AdminGallerySubmissionStateSection(title: "权限", stateTitle: "需要管理员权限", message: "请使用管理员账号登录后审核投稿。", systemImage: "shield.slash")
             } else {
@@ -162,14 +164,25 @@ struct AdminGallerySubmissionDetailView: View {
                             .foregroundStyle(SetuColor.textSecondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .setuListRow()
+
                 }
                 content
             }
         }
-        .listStyle(.plain)
         .setuBackground()
         .navigationTitle("投稿 #\(batchID)")
+        .confirmationDialog(pendingActionTitle, isPresented: Binding(
+            get: { pendingAction != nil }, set: { if !$0 { pendingAction = nil } }
+        ), titleVisibility: .visible) {
+            Button("确认执行", role: .destructive) {
+                let action = pendingAction
+                pendingAction = nil
+                action?()
+            }
+            Button("取消", role: .cancel) { pendingAction = nil }
+        } message: {
+            Text("此操作将改变当前记录或服务状态，请核对目标后确认。")
+        }
         .task { await load() }
         .refreshable { await load() }
     }
@@ -187,53 +200,51 @@ struct AdminGallerySubmissionDetailView: View {
                 approveSection(batch)
                 rejectSection
             }
-            SetuCard {
+            Group {
                 VStack(alignment: .leading, spacing: SetuSpacing.md) {
                     SetuSectionHeader(title: "图片 \(batch.items.count)", subtitle: "投稿明细")
-                ForEach(Array(batch.items.enumerated()), id: \.element.id) { index, item in
-                        if index > 0 {
-                            Divider()
-                                .overlay(SetuColor.separator)
-                        }
-                    GalleryUploadItemRow(item: item)
+                SetuRecordBoard(items: batch.items) { item in
+                    SetuRecordCard(headline: item.title?.isEmpty == false ? item.title! : "投稿图片",
+                        status: .init(item.statusTitle, tone: item.rejectReason == nil ? .brand : .danger),
+                        thumbnailURLString: item.previewUrl,
+                        fields: [.init("作者", item.author ?? "未知作者"), .init("拒绝原因", item.rejectReason ?? "-")], density: .compact)
                 }
             }
             }
-            .setuListRow()
+
         }
     }
 
     private func batchSection(_ batch: GalleryUploadBatchDetail) -> some View {
-        SetuCard {
-            VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                SetuSectionHeader(title: "批次", subtitle: "#\(batch.batchId)")
-                AdminGalleryMetadataRow(title: "状态", value: batch.statusTitle)
-                AdminGalleryMetadataRow(title: "PID 模式", value: batch.pidMode)
+        SetuRecordCard(headline: "批次 #\(batch.batchId)", status: .init(batch.statusTitle, tone: batch.status == "REJECTED" ? .danger : .brand), fields: {
+                    var fields: [SetuRecordField] = []
+                fields.append(.init("状态", batch.statusTitle))
+                fields.append(.init("PID 模式", batch.pidMode))
                 if let title = batch.title, !title.isEmpty {
-                    AdminGalleryMetadataRow(title: "标题", value: title)
+                    fields.append(.init("标题", title))
                 }
                 if let author = batch.author, !author.isEmpty {
-                    AdminGalleryMetadataRow(title: "作者", value: author)
+                    fields.append(.init("作者", author))
                 }
                 if let r18 = batch.r18 {
-                    AdminGalleryMetadataRow(title: "R18", value: r18 ? "是" : "否")
+                    fields.append(.init("R18", r18 ? "是" : "否"))
                 }
                 if let aiType = batch.aiType {
-                    AdminGalleryMetadataRow(title: "AI 类型", value: "\(aiType)")
+                    fields.append(.init("AI 类型", "\(aiType)"))
                 }
                 if let tags = batch.tags, !tags.isEmpty {
-                    AdminGalleryMetadataRow(title: "标签", value: tags.joined(separator: " / "))
+                    fields.append(.init("标签", tags.joined(separator: " / ")))
                 }
-                AdminGalleryMetadataRow(title: "创建时间", value: batch.createdAt)
+                fields.append(.init("创建时间", batch.createdAt))
                 if let reviewedAt = batch.reviewedAt {
-                    AdminGalleryMetadataRow(title: "审核时间", value: reviewedAt)
+                    fields.append(.init("审核时间", reviewedAt))
                 }
                 if let publishedAt = batch.publishedAt {
-                    AdminGalleryMetadataRow(title: "发布时间", value: publishedAt)
+                    fields.append(.init("发布时间", publishedAt))
                 }
-            }
-        }
-        .setuListRow()
+                    return fields
+                }(), density: .compact)
+
     }
 
     private func approveSection(_ batch: GalleryUploadBatchDetail) -> some View {
@@ -259,23 +270,23 @@ struct AdminGallerySubmissionDetailView: View {
             .disabled(isSubmitting)
         }
         }
-        .setuListRow()
+
     }
 
     private var rejectSection: some View {
-        SetuCard {
+        SetuRecordCard(headline: "拒绝", status: .init("请核对后操作", tone: .danger), density: .compact) {
             VStack(alignment: .leading, spacing: SetuSpacing.md) {
                 SetuSectionHeader(title: "拒绝")
             TextField("拒绝原因", text: $rejectReason)
                     .textFieldStyle(.roundedBorder)
-            Picker("严重程度", selection: $rejectSeverity) {
-                Text("低").tag("LOW")
-                Text("中").tag("MEDIUM")
-                Text("高").tag("HIGH")
-            }
-                .pickerStyle(.segmented)
+            SetuFilterBar(options: [
+                    .init(value: "LOW", title: "低"),
+                    .init(value: "MEDIUM", title: "中"),
+                    .init(value: "HIGH", title: "高")
+                ], selection: $rejectSeverity, accessibilityTitle: "严重程度")
+
             Button(role: .destructive) {
-                Task { await reject() }
+                pendingActionTitle = "确认拒绝此投稿？"; pendingAction = { Task { await reject() } }
             } label: {
                 Label("拒绝投稿", systemImage: "xmark.circle")
                     .frame(maxWidth: .infinity, minHeight: 44)
@@ -283,7 +294,7 @@ struct AdminGallerySubmissionDetailView: View {
             .disabled(isSubmitting || rejectReason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
         }
-        .setuListRow()
+
     }
 
     private func load() async {
@@ -350,23 +361,4 @@ struct AdminGallerySubmissionDetailView: View {
     }
 }
 
-private typealias AdminGallerySubmissionStateSection = SetuStateSection
-
-private struct AdminGalleryMetadataRow: View {
-    let title: String
-    let value: String
-
-    var body: some View {
-        HStack(alignment: .top, spacing: SetuSpacing.md) {
-            Text(title)
-                .font(SetuTypography.caption)
-                .foregroundStyle(SetuColor.textSecondary)
-                .frame(width: 84, alignment: .leading)
-            Text(value)
-                .font(SetuTypography.body)
-                .foregroundStyle(SetuColor.textPrimary)
-                .multilineTextAlignment(.trailing)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-        }
-    }
-}
+private typealias AdminGallerySubmissionStateSection = AdminRecordStateSection

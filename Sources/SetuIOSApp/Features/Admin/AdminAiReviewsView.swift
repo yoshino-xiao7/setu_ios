@@ -13,7 +13,7 @@ struct AdminAiReviewsView: View {
     private let pageSize = 20
 
     var body: some View {
-        List {
+        SetuBoard {
             if environment.authSession.currentUser?.role != .admin {
                 AdminAiReviewStateSection(title: "权限", stateTitle: "需要管理员权限", message: "请使用管理员账号登录后审核 AI 作品。", systemImage: "shield.slash")
             } else {
@@ -25,12 +25,11 @@ struct AdminAiReviewsView: View {
                             .foregroundStyle(SetuColor.textSecondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .setuListRow()
+
                 }
                 content
             }
         }
-        .listStyle(.plain)
         .setuBackground()
         .navigationTitle("AI 审核队列")
         .sheet(item: $rejectDraft) { draft in
@@ -46,19 +45,19 @@ struct AdminAiReviewsView: View {
         SetuCard {
             VStack(alignment: .leading, spacing: SetuSpacing.md) {
                 SetuSectionHeader(title: "筛选")
-                Picker("状态", selection: $statusFilter) {
-                    Text("待审核").tag("WAITING")
-                    Text("全部").tag("ALL")
-                    Text("已通过").tag("APPROVED")
-                    Text("已拒绝").tag("REJECTED")
-                }
-                .pickerStyle(.segmented)
-                Picker("分类", selection: $categoryFilter) {
-                    Text("全部").tag("ALL")
-                    Text("全年龄").tag("GENERAL")
-                    Text("R18").tag("R18")
-                }
-                .pickerStyle(.segmented)
+                SetuFilterBar(options: [
+                    .init(value: "WAITING", title: "待审核"),
+                    .init(value: "ALL", title: "全部"),
+                    .init(value: "APPROVED", title: "已通过"),
+                    .init(value: "REJECTED", title: "已拒绝")
+                ], selection: $statusFilter, accessibilityTitle: "状态")
+
+                SetuFilterBar(options: [
+                    .init(value: "ALL", title: "全部"),
+                    .init(value: "GENERAL", title: "全年龄"),
+                    .init(value: "R18", title: "R18")
+                ], selection: $categoryFilter, accessibilityTitle: "分类")
+
                 Button {
                     Task { await load(resetPage: true) }
                 } label: {
@@ -69,7 +68,7 @@ struct AdminAiReviewsView: View {
                 .tint(SetuColor.brandPink)
             }
         }
-        .setuListRow()
+
     }
 
     @ViewBuilder
@@ -83,14 +82,10 @@ struct AdminAiReviewsView: View {
             if result.list.isEmpty {
                 AdminAiReviewStateSection(title: "审核队列", stateTitle: "暂无审核任务", systemImage: "checklist")
             } else {
-                SetuCard {
+                Group {
                     VStack(alignment: .leading, spacing: SetuSpacing.md) {
                         SetuSectionHeader(title: "共 \(result.total) 条", subtitle: "AI 审核")
-                    ForEach(Array(result.list.enumerated()), id: \.element.id) { index, review in
-                            if index > 0 {
-                                Divider()
-                                    .overlay(SetuColor.separator)
-                            }
+                    SetuRecordBoard(items: result.list) { review in
                         AiReviewRow(review: review) {
                             Task { await approve(review) }
                         } onReject: {
@@ -100,7 +95,7 @@ struct AdminAiReviewsView: View {
                     }
                 }
                 }
-                .setuListRow()
+
                 pagerSection(result)
             }
         }
@@ -136,7 +131,7 @@ struct AdminAiReviewsView: View {
                 .disabled(result.page * result.pageSize >= result.total)
             }
         }
-        .setuListRow()
+
     }
 
     private func load(resetPage: Bool) async {
@@ -196,44 +191,11 @@ private struct AiReviewRow: View {
     let onReject: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SetuSpacing.md) {
-            HStack(alignment: .top, spacing: SetuSpacing.md) {
-                AiReviewThumbnail(urlString: review.job?.imageUrl)
-                VStack(alignment: .leading, spacing: SetuSpacing.xs) {
-                    Text("审核 #\(review.id) · 任务 #\(review.jobId)")
-                        .font(SetuTypography.headline)
-                        .foregroundStyle(SetuColor.textPrimary)
-                    Text(review.job?.promptCn ?? "无提示词")
-                        .font(SetuTypography.caption)
-                        .foregroundStyle(SetuColor.textSecondary)
-                        .lineLimit(3)
-                    HStack(spacing: 8) {
-                        RequestStatusBadge(title: review.statusTitle, status: statusBadgeCode)
-                        SetuPill(
-                            text: review.categoryTitle,
-                            systemImage: review.category == "R18" ? "exclamationmark.triangle" : "checkmark.seal",
-                            tone: review.category == "R18" ? .danger : .success
-                        )
-                    }
-                    if let createdAt = review.createdAt {
-                        Label(createdAt, systemImage: "calendar")
-                            .font(.caption)
-                            .foregroundStyle(SetuColor.textTertiary)
-                    }
-                }
-            }
-
-            if let note = review.submitNote, !note.isEmpty {
-                Text(note)
-                    .font(SetuTypography.caption)
-                    .foregroundStyle(SetuColor.textSecondary)
-            }
-            if let reason = review.rejectReason, !reason.isEmpty {
-                Text(reason)
-                    .font(SetuTypography.caption)
-                    .foregroundStyle(SetuColor.danger)
-            }
-
+        SetuRecordCard(headline: "审核 #\(review.id) · 任务 #\(review.jobId)", supporting: review.job?.promptCn,
+            status: .init(review.statusTitle, tone: review.status == "REJECTED" ? .danger : .brand),
+            thumbnailURLString: review.job?.imageUrl,
+            fields: [.init("分类", review.categoryTitle), .init("创建时间", review.createdAt ?? "-"),
+                     .init("投稿说明", review.submitNote ?? "-"), .init("拒绝原因", review.rejectReason ?? "-")], density: .compact) {
             if review.status == "WAITING" {
                 HStack {
                     Button {
@@ -254,7 +216,6 @@ private struct AiReviewRow: View {
                 .font(SetuTypography.caption)
             }
         }
-        .padding(.vertical, SetuSpacing.xs)
     }
 
     private var statusBadgeCode: Int {
@@ -263,41 +224,6 @@ private struct AiReviewRow: View {
         case "REJECTED": 2
         default: 0
         }
-    }
-}
-
-private struct AiReviewThumbnail: View {
-    let urlString: String?
-
-    var body: some View {
-        Group {
-            if let urlString, let url = URL(string: urlString) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    default:
-                        placeholder
-                    }
-                }
-            } else {
-                placeholder
-            }
-        }
-        .frame(width: 88, height: 88)
-        .background(SetuColor.brandSoft.opacity(0.12), in: RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous))
-        .clipShape(RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous)
-                .stroke(SetuColor.separator, lineWidth: 1)
-        }
-    }
-
-    private var placeholder: some View {
-        Image(systemName: "photo")
-            .foregroundStyle(SetuColor.brandPink)
     }
 }
 
@@ -310,8 +236,8 @@ private struct AiReviewRejectSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                SetuCard {
+            SetuBoard {
+                SetuRecordCard(headline: "操作确认", status: .init("请核对原因与目标", tone: .danger), density: .compact) {
                     VStack(alignment: .leading, spacing: SetuSpacing.md) {
                         SetuSectionHeader(title: "拒绝原因", subtitle: "审核 #\(draft.review.id)")
                     TextField("填写拒绝原因", text: $reason, axis: .vertical)
@@ -319,9 +245,8 @@ private struct AiReviewRejectSheet: View {
                             .textFieldStyle(.roundedBorder)
                 }
                 }
-                .setuListRow()
+
             }
-            .listStyle(.plain)
             .setuBackground()
             .navigationTitle("拒绝审核 #\(draft.review.id)")
             .toolbar {
@@ -341,7 +266,7 @@ private struct AiReviewRejectSheet: View {
     }
 }
 
-private typealias AdminAiReviewStateSection = SetuStateSection
+private typealias AdminAiReviewStateSection = AdminRecordStateSection
 
 private struct AiReviewRejectDraft: Identifiable {
     let review: AiGenerationReview
