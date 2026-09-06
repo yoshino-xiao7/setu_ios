@@ -50,6 +50,8 @@ struct AiHistoryView: View {
                             SetuEmptyState(title: "历史加载失败", message: loadError, systemImage: "wifi.exclamationmark")
                             Button("重试") { Task { await loadFirstPage() } }
                                 .buttonStyle(.borderedProminent)
+                                .tint(SetuColor.brandOnLight)
+                                .foregroundStyle(.white)
                         }
                     }
                 } else {
@@ -58,6 +60,8 @@ struct AiHistoryView: View {
                             SetuEmptyState(title: "暂无 AI 绘画记录", message: "描述一个画面，开始你的第一幅作品。", systemImage: "sparkles")
                             Button("开始创作") { router.navigate(to: .aiDraw) }
                                 .buttonStyle(.borderedProminent)
+                                .tint(SetuColor.brandOnLight)
+                                .foregroundStyle(.white)
                         }
                     }
                 }
@@ -431,7 +435,8 @@ struct AiGenerationImagePreviewSheet: View {
                         .frame(maxWidth: .infinity, minHeight: 44)
             }
             .buttonStyle(.borderedProminent)
-                .tint(SetuColor.brandPink)
+            .tint(SetuColor.brandOnLight)
+            .foregroundStyle(.white)
             }
         }
     }

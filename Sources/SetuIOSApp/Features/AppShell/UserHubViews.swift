@@ -27,6 +27,7 @@ struct SquareHubView: View {
                     ) {
                         router.navigate(to: .publicCollectionDetail(collection.id))
                     }
+                    .accessibilityIdentifier("square.collection.\(collection.id)")
                 }
             }
 
@@ -51,9 +52,11 @@ struct SquareHubView: View {
                     SetuBentoTile(title: entry.title, subtitle: entry.subtitle, systemImage: entry.systemImage) {
                         router.navigate(to: entry.route)
                     }
+                    .accessibilityIdentifier("square.personal.\(entry.id)")
                 }
             }
         }
+        .accessibilityIdentifier("square.hub.page")
         .setuActionDock {
             SetuPrimaryButton { router.navigate(to: .collectionSquare) } label: {
                 Label("浏览全部", systemImage: "square.grid.2x2")

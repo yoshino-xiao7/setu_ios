@@ -36,6 +36,7 @@ struct MusicQualityMenu: View {
                     .font(.caption.weight(.semibold))
                     .lineLimit(1)
             }
+            .foregroundStyle(SetuColor.brandInk)
             .fixedSize(horizontal: true, vertical: false)
             .frame(minHeight: 44)
         }

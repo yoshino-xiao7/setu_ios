@@ -16,7 +16,7 @@ struct SetuPrimaryButton<Label: View>: View {
             label
                 .font(.body.weight(.semibold))
                 .foregroundStyle(.white)
-                .frame(maxWidth: .infinity, minHeight: 48)
+                .frame(maxWidth: .infinity, minHeight: 50)
                 .padding(.horizontal, SetuSpacing.lg)
                 .background(SetuColor.heroGradient, in: Capsule())
                 .shadow(color: SetuColor.brandPink.opacity(isEnabled ? 0.24 : 0), radius: 14, y: 8)

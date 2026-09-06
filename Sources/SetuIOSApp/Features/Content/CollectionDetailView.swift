@@ -137,6 +137,8 @@ struct CollectionDetailView: View {
                         Task { await loadFirstPage() }
                     }
                     .buttonStyle(.borderedProminent)
+                    .tint(SetuColor.brandOnLight)
+                    .foregroundStyle(.white)
                 }
             }
         } else {

@@ -244,6 +244,7 @@ struct PublicAiWorkDetailView: View {
     private var detailsSection: some View {
         let parameters = [AiDetailParameter(title: "画幅", value: "\(work.width) × \(work.height)")]
         return VStack(alignment: .leading, spacing: SetuSpacing.lg) {
+            SetuSectionHeader(title: "作品信息")
             SetuBento(items: parameters, span: { _ in .wide }) { parameter in
                 SetuRecordCard(headline: parameter.title, fields: [.init("尺寸", parameter.value)])
                     .accessibilityElement(children: .ignore)

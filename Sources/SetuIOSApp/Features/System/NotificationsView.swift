@@ -107,6 +107,8 @@ struct NotificationsView: View {
                                     Task { await loadFirstPage(for: unreadOnly, clearExisting: false) }
                                 }
                                 .buttonStyle(.borderedProminent)
+                                .tint(SetuColor.brandOnLight)
+                                .foregroundStyle(.white)
                                 .accessibilityIdentifier("notifications.retry.initial")
                             }
                         } else {

@@ -31,7 +31,7 @@ final class ColorContrastTests: XCTestCase {
     }
 
     func testSupportingTextMeetsBodyTextContrastOnAppSurfaces() throws {
-        for textAsset in ["text/secondary", "text/tertiary"] {
+        for textAsset in ["text/secondary", "text/tertiary", "brand/ink"] {
             for surfaceAsset in ["bg/surface", "bg/surfaceMuted"] {
                 let lightText = try color(asset: textAsset, dark: false)
                 let darkText = try color(asset: textAsset, dark: true)

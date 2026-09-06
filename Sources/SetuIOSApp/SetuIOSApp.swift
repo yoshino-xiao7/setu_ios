@@ -32,7 +32,13 @@ struct SetuIOSApp: App {
     @ViewBuilder
     private var appContent: some View {
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("-ui-testing-root") })
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-sakura-content") {
+            SakuraContentUITestScenario()
+        } else if ProcessInfo.processInfo.arguments.contains("-ui-testing-sakura-contrast") {
+            SakuraContrastCalibrationScenario()
+        } else if ProcessInfo.processInfo.arguments.contains("-ui-testing-sakura-admin") {
+            SakuraAdminUITestScenario()
+        } else if ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("-ui-testing-root") })
             || ProcessInfo.processInfo.arguments.contains("-ui-testing-welcome-fixture") {
             SetuRootUITestScenario()
         } else if ProcessInfo.processInfo.arguments.contains("-ui-testing-public-ai-work")
@@ -94,8 +100,10 @@ private struct SetuUITestAppearance: ViewModifier {
         if arguments.contains(where: { $0.hasPrefix("-ui-testing-") }) {
             let usesAX5 = arguments.contains("UICTContentSizeCategoryAccessibilityExtraExtraExtraLarge")
                 || arguments.contains("UICTContentSizeCategoryAccessibilityXXXL")
+            let usesAX1 = arguments.contains("UICTContentSizeCategoryAccessibilityMedium")
+                || arguments.contains("UICTContentSizeCategoryAccessibilityM")
             content
-                .dynamicTypeSize(usesAX5 ? .accessibility5 : .large)
+                .dynamicTypeSize(usesAX5 ? .accessibility5 : usesAX1 ? .accessibility1 : .large)
                 .preferredColorScheme(arguments.contains("Dark") ? .dark : .light)
         } else {
             content

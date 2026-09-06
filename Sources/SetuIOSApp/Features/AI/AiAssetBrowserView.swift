@@ -168,6 +168,8 @@ struct AiAssetBrowserView: View {
 
             Button("应用并返回（已选 \(selectedAssetCount) 项）") { dismiss() }
                 .buttonStyle(.borderedProminent)
+                .tint(SetuColor.brandOnLight)
+                .foregroundStyle(.white)
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .accessibilityIdentifier("ai.assets.apply")
 

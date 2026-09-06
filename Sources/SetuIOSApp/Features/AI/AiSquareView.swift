@@ -41,6 +41,8 @@ struct AiSquareView: View {
                             SetuEmptyState(title: "AI 绘画广场加载失败", message: loadError, systemImage: "wifi.exclamationmark")
                             Button("重试") { Task { await loadFirstPage() } }
                                 .buttonStyle(.borderedProminent)
+                                .tint(SetuColor.brandOnLight)
+                                .foregroundStyle(.white)
                         }
                     }
                 } else {

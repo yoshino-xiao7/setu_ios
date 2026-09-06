@@ -33,6 +33,7 @@ struct SetuBoard<Content: View>: View {
             .padding(.vertical, SetuSpacing.lg)
         }
         .background(SetuColor.pageGradient.ignoresSafeArea())
+        .tint(SetuColor.brandInk)
         .environment(\.setuBoardInset, inset)
     }
 }
@@ -46,6 +47,7 @@ struct SetuActionDock<Content: View>: View {
 
     var body: some View {
         content
+            .tint(SetuColor.brandInk)
             .frame(maxWidth: .infinity, minHeight: 50)
             .padding(SetuSpacing.md)
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: SetuRadius.xl))

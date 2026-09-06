@@ -43,7 +43,8 @@ struct AdminUsersView: View {
                         .frame(maxWidth: .infinity, minHeight: 44)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(SetuColor.brandPink)
+                .tint(SetuColor.brandOnLight)
+                .foregroundStyle(.white)
             }
         }
 
@@ -261,7 +262,8 @@ struct AdminUserDetailView: View {
                         .frame(maxWidth: .infinity, minHeight: 44)
             }
                 .buttonStyle(.borderedProminent)
-                .tint(SetuColor.brandPink)
+                .tint(SetuColor.brandOnLight)
+                .foregroundStyle(.white)
             .disabled(isSubmitting || Int(pointsAmount) == nil)
         }
         }

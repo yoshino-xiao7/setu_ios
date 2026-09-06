@@ -297,10 +297,11 @@ struct RandomImageSwipeView: View {
                     .minimumScaleFactor(0.7)
             }
             .fixedSize(horizontal: true, vertical: false)
+            .frame(minWidth: 44, minHeight: 50)
+            .contentShape(Rectangle())
         }
         .accessibilityLabel("当前余额 \(balanceText)")
         .accessibilityIdentifier("image.balance")
-        .frame(minWidth: 44, minHeight: 50)
         .tint(SetuColor.brandInk)
     }
 

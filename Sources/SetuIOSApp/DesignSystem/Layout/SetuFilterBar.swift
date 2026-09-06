@@ -54,8 +54,12 @@ struct SetuFilterBar<Value: Hashable>: View {
                         .padding(.horizontal, SetuSpacing.md)
                         .frame(minWidth: 44, minHeight: 44)
                         .foregroundStyle(selection == option.value ? SetuColor.brandInk : SetuColor.textSecondary)
-                        .background(selection == option.value ? SetuColor.brandSoft : SetuColor.surface,
-                                    in: Capsule())
+                        .background {
+                            Capsule().fill(SetuColor.surface)
+                                .overlay {
+                                    Capsule().fill(selection == option.value ? SetuColor.brandSoft.opacity(0.25) : .clear)
+                                }
+                        }
                         .overlay { Capsule().stroke(SetuColor.separator, lineWidth: 1) }
                     }
                     .buttonStyle(SetuSurfaceButtonStyle())

@@ -62,7 +62,7 @@ final class ProductAccessibilityUITests: XCTestCase {
                 Landmark(identifier: "music.playlist.7402"),
                 Landmark(identifier: "music.hot.0"),
             ],
-            forwardScrollMode: .incremental
+            forwardScrollMode: .semantic
         ),
         LoggedInRoute(
             title: "收藏夹广场",
@@ -115,6 +115,77 @@ final class ProductAccessibilityUITests: XCTestCase {
             "-UIPreferredContentSizeCategoryName",
             "UICTContentSizeCategoryAccessibilityExtraExtraExtraLarge",
         ])
+    }
+
+    func testMusicSurfacesRemainReachableAtDarkAX5() throws {
+        try assertLoggedInRouteMatrix(extraLaunchArguments: [
+            "-AppleInterfaceStyle", "Dark",
+            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityExtraExtraExtraLarge",
+        ], onlyRouteTitle: "音乐首页")
+    }
+
+    func testLoggedInRoutesPassDarkDefaultAccessibilityAudit() throws {
+        try assertLoggedInRouteMatrix(extraLaunchArguments: [
+            "-AppleInterfaceStyle", "Dark",
+            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryLarge",
+        ])
+    }
+
+    func testLoggedInRoutesPassLightAX1AccessibilityAudit() throws {
+        try assertLoggedInRouteMatrix(extraLaunchArguments: [
+            "-AppleInterfaceStyle", "Light",
+            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityMedium",
+        ])
+    }
+
+    func testLoggedInRoutesPassDarkAX1AccessibilityAudit() throws {
+        try assertLoggedInRouteMatrix(extraLaunchArguments: [
+            "-AppleInterfaceStyle", "Dark",
+            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityMedium",
+        ])
+    }
+
+    func testLoggedInRoutesPassLightAX5AccessibilityAudit() throws {
+        try assertLoggedInRouteMatrix(extraLaunchArguments: [
+            "-AppleInterfaceStyle", "Light",
+            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityExtraExtraExtraLarge",
+        ])
+    }
+
+    func testSurfaceContrastInLightAX1() throws {
+        continueAfterFailure = false
+        try assertLoggedInRouteMatrix(extraLaunchArguments: [
+            "-AppleInterfaceStyle", "Light",
+            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityMedium",
+        ], checksContrast: true)
+    }
+
+    func testSurfaceContrastInDarkAX1() throws {
+        continueAfterFailure = false
+        try assertLoggedInRouteMatrix(extraLaunchArguments: [
+            "-AppleInterfaceStyle", "Dark",
+            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityMedium",
+        ], checksContrast: true)
+    }
+
+    func testSquareHubAcrossDisplayModes() throws {
+        continueAfterFailure = false
+        let route = LoggedInRoute(
+            title: "广场 Tab", launchArgument: "-ui-testing-square-hub",
+            rootIdentifier: "square.hub.page", readyIdentifier: "square.collection.801",
+            landmarks: [Landmark(identifier: "square.personal.collections"), Landmark(identifier: "square.personal.favorites")],
+            forwardScrollMode: .semantic
+        )
+        for color in ["Light", "Dark"] {
+            for size in ["UICTContentSizeCategoryLarge", "UICTContentSizeCategoryAccessibilityMedium",
+                         "UICTContentSizeCategoryAccessibilityExtraExtraExtraLarge"] {
+                try XCTContext.runActivity(named: "广场 Tab-\(color)-\(size)") { _ in
+                    try assertLoggedInRouteMatrix(extraLaunchArguments: [
+                        "-AppleInterfaceStyle", color, "-UIPreferredContentSizeCategoryName", size,
+                    ], routes: [route], checksContrast: true)
+                }
+            }
+        }
     }
 
     func testDashboardFailuresRemainExplicitAndRetryable() throws {
@@ -472,8 +543,11 @@ final class ProductAccessibilityUITests: XCTestCase {
         ])
     }
 
-    private func assertLoggedInRouteMatrix(extraLaunchArguments: [String]) throws {
-        for route in loggedInRoutes {
+    private func assertLoggedInRouteMatrix(
+        extraLaunchArguments: [String], onlyRouteTitle: String? = nil,
+        routes: [LoggedInRoute]? = nil, checksContrast: Bool = false
+    ) throws {
+        for route in routes ?? loggedInRoutes where onlyRouteTitle == nil || route.title == onlyRouteTitle {
             try XCTContext.runActivity(named: route.title) { _ in
                 let app = XCUIApplication()
                 app.launchArguments = [route.launchArgument] + extraLaunchArguments
@@ -482,9 +556,10 @@ final class ProductAccessibilityUITests: XCTestCase {
 
                 let root = anyElement(withIdentifier: route.rootIdentifier, in: app)
                 XCTAssertTrue(root.waitForExistence(timeout: 8), "未显示\(route.title)根页面")
-                try performVisibleViewportAccessibilityAudit(in: app)
+                try performVisibleViewportAccessibilityAudit(in: app, checksContrast: checksContrast)
+                attachViewport(in: app, name: "\(route.title)-initial")
 
-                // List may not create an offscreen row until scrolling, especially at AX5.
+                // Lazy surfaces may not create an offscreen item until scrolling, especially at AX5.
                 // Verify loaded content by reaching the ready landmark, not by requiring it in the initial tree.
                 let orderedLandmarks = [Landmark(identifier: route.readyIdentifier)] + route.landmarks
                 for landmark in orderedLandmarks {
@@ -495,10 +570,18 @@ final class ProductAccessibilityUITests: XCTestCase {
                         forwardScrollMode: route.forwardScrollMode,
                         maximumSwipes: 32
                     )
-                    try performVisibleViewportAccessibilityAudit(in: app)
+                    try performVisibleViewportAccessibilityAudit(in: app, checksContrast: checksContrast)
+                    attachViewport(in: app, name: "\(route.title)-\(landmark.description)")
                 }
             }
         }
+    }
+
+    private func attachViewport(in app: XCUIApplication, name: String) {
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = name
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
     }
 
     private func anyElement(withIdentifier identifier: String, in app: XCUIApplication) -> XCUIElement {
@@ -541,6 +624,20 @@ final class ProductAccessibilityUITests: XCTestCase {
                 scrollForward(in: app, pageRoot: pageRoot, mode: forwardScrollMode)
             } else if frame.minY < viewport.minY {
                 scrollDownFinely(in: app)
+            } else if frame.maxY > viewport.maxY {
+                scrollUpFinely(in: app)
+            } else if frame.minX < viewport.minX || frame.maxX > viewport.maxX {
+                // Shelf and FilterBar items can be vertically visible but horizontally clipped.
+                // Traverse that surface before resuming vertical navigation; keep the 90% gate.
+                let y = frame.intersection(viewport).midY
+                let origin = app.coordinate(withNormalizedOffset: .zero)
+                let left = origin.withOffset(CGVector(dx: viewport.minX + 44, dy: y))
+                let right = origin.withOffset(CGVector(dx: viewport.maxX - 44, dy: y))
+                if frame.maxX > viewport.maxX {
+                    right.press(forDuration: 0.01, thenDragTo: left)
+                } else {
+                    left.press(forDuration: 0.01, thenDragTo: right)
+                }
             } else {
                 scrollUpFinely(in: app)
             }
@@ -549,6 +646,10 @@ final class ProductAccessibilityUITests: XCTestCase {
         let viewport = pageViewport(for: pageRoot, app: app)
         let element = element(for: landmark, in: app)
         guard isMeaningfullyVisible(element, in: viewport) else {
+            let screenshot = XCTAttachment(screenshot: app.screenshot())
+            screenshot.name = "unreachable-\(landmark.description)"
+            screenshot.lifetime = .keepAlways
+            add(screenshot)
             XCTFail(
                 "滚动后 landmark 仍未达到 90% 可见：\(landmark.description)，\(lastObservation)",
                 file: file,
@@ -651,15 +752,17 @@ final class ProductAccessibilityUITests: XCTestCase {
         return visibleArea / totalArea
     }
 
-    private func performVisibleViewportAccessibilityAudit(in app: XCUIApplication) throws {
+    private func performVisibleViewportAccessibilityAudit(in app: XCUIApplication, checksContrast: Bool = false) throws {
         let window = app.windows.firstMatch
         let viewport = window.exists ? window.frame : app.frame
-        try app.performAccessibilityAudit(for: [
+        var auditTypes: XCUIAccessibilityAuditType = [
             .hitRegion,
             .sufficientElementDescription,
             .textClipped,
             .trait,
-        ]) { issue in
+        ]
+        if checksContrast { auditTypes.insert(.contrast) }
+        try app.performAccessibilityAudit(for: auditTypes) { issue in
             // Xcode 27 can report orphaned text-clipping issues for content
             // recycled by a List after scrolling. Keep other orphaned audit
             // types as failures because they are not part of that known bug.
@@ -674,6 +777,19 @@ final class ProductAccessibilityUITests: XCTestCase {
                   frame.width > 0,
                   frame.height > 0 else {
                 return false
+            }
+
+            if issue.auditType.contains(.contrast) {
+                let context = XCTAttachment(string: """
+                \(issue.detailedDescription)
+                Element: \(element.label)
+                Frame: \(frame)
+                Window: \(viewport)
+                Hittable: \(element.isHittable)
+                """)
+                context.name = "contrast-context"
+                context.lifetime = .keepAlways
+                self.add(context)
             }
 
             let visibleFrame = frame.intersection(viewport)

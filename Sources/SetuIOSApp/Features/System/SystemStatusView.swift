@@ -33,7 +33,8 @@ struct SystemStatusView: View {
                                     .frame(maxWidth: .infinity, minHeight: 44)
                             }
                             .buttonStyle(.borderedProminent)
-                            .tint(SetuColor.brandInk)
+                            .tint(SetuColor.brandOnLight)
+                            .foregroundStyle(.white)
                         }
                     }
                 }

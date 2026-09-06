@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		00FCC5D6B31C00A3BDBCB47E /* DashboardClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 337AA40A226566D6E5944762 /* DashboardClient.swift */; };
+		010B0B5F3115473F241BED63 /* SakuraContentFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AD3212245C9B18B453E19F3 /* SakuraContentFixtures.swift */; };
 		0189120D42786A0483B0AE81 /* SetuPreviewFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BE70E083CA8689714D87837 /* SetuPreviewFixtures.swift */; };
 		021B23C555C057EDD22F955F /* AiAssetBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5F36A7DD3C5B90EC6E00689 /* AiAssetBrowserView.swift */; };
 		043D764B89F275E523B9325B /* AiDrawDraftUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC8CB12C3A8824F2DBFBF08E /* AiDrawDraftUITests.swift */; };
@@ -40,6 +41,7 @@
 		1E5F984AB8CF3205034F6F1C /* AuthSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 218F856A1DADE217F3926312 /* AuthSessionTests.swift */; };
 		203F7C08A9CFF66CEDDAE690 /* NotificationPermissionUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31E7D3DDBB381C1A5709922C /* NotificationPermissionUITests.swift */; };
 		2251DF92CA35A53F71415E59 /* AiDrawDraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08EB6447A38E43F5548AE68A /* AiDrawDraftStore.swift */; };
+		2653000275B2D9EF958748B3 /* SakuraAdminUITestScenario.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86E4D926F43E184E0170B296 /* SakuraAdminUITestScenario.swift */; };
 		26E2BAFB489A752EEA5C8E21 /* MusicSearchRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29682C327EBC3063E5483890 /* MusicSearchRepositoryTests.swift */; };
 		270B4EBD869AFDF6BFB2558D /* NextItemPreparer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BA1FD0B93DCABC919AF1166 /* NextItemPreparer.swift */; };
 		27B722D3EDA5E13F4959D539 /* SystemPushCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9D45C019C4DFBCC6CD653D4 /* SystemPushCoordinator.swift */; };
@@ -76,6 +78,7 @@
 		44CEB24F612AF9D7953A7B57 /* AdminImageInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C599E30B49EEEABA0F352C3A /* AdminImageInfoView.swift */; };
 		46017994CF8F0412079F46E6 /* MusicHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9D3419CDE37B276AEA2AEA2 /* MusicHomeView.swift */; };
 		4639554CE8E9633EDA40CF99 /* SetuImageTile.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4FAD2C108F0B5598D70D72A /* SetuImageTile.swift */; };
+		481B82F33F83C5E475D3D507 /* SakuraContentUITestScenario.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6770CCE7496452BEDC1FDC5 /* SakuraContentUITestScenario.swift */; };
 		484399AD4C02D35571D80D2C /* SetuBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C177E784570257166F9399F /* SetuBackground.swift */; };
 		4886AAA6701358FE34B9882A /* AiGenerationLiveActivityCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86B2E4429D53A970E6075BB1 /* AiGenerationLiveActivityCenter.swift */; };
 		48A9D03A04613EF62355EE52 /* FavoriteListUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72E5308109C7DA93931FD731 /* FavoriteListUITests.swift */; };
@@ -106,6 +109,7 @@
 		5D0012BD76102AF6D6DADA46 /* FavoriteListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 679D974505BC26B097599979 /* FavoriteListView.swift */; };
 		5F857B6005E59C93B155F116 /* AppDestination+AI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22E57B1838E43CE17DE3843 /* AppDestination+AI.swift */; };
 		602B329971138B0F32EBFD6B /* AuthSigner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 040C887BFBD3799A61BF2F2C /* AuthSigner.swift */; };
+		61D07308F2BC1C17EE4B32A6 /* SakuraSurfaceAudit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BC965FDA2C6364243BCD3A2 /* SakuraSurfaceAudit.swift */; };
 		623981B9D2174BC2BDD17374 /* SetuIOSCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E83FF3E83093A6F76A280DD8 /* SetuIOSCore.framework */; };
 		65062E3F68096B3FB5C268FA /* DownloadClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD312917C35027AFF27C39FC /* DownloadClient.swift */; };
 		66420715149C490CA6506627 /* PlaybackPhaseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2413A225F8EDC740B6BFAFA1 /* PlaybackPhaseTests.swift */; };
@@ -128,6 +132,7 @@
 		733FFF134E18C164772E9F10 /* SetuSkeleton.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB1A10CDB5283D71DADB5C1D /* SetuSkeleton.swift */; };
 		750A54160CF4293580B5214C /* ApiKeyListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF20EAE938A450CBFCD46498 /* ApiKeyListView.swift */; };
 		75F7B3BB5D6B377705BFE8A0 /* MusicRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE4709E5B5D978FFE2698E88 /* MusicRepositoryTests.swift */; };
+		76073361D94B4B352A67D436 /* SakuraContentSurfaceUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 105E09746F3C0360F6A33E50 /* SakuraContentSurfaceUITests.swift */; };
 		767BDF23E9FD1218169F1016 /* MusicV2Client.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7DD39032D2D2A70EAFF6C83 /* MusicV2Client.swift */; };
 		779E1C676A01686AE36F5985 /* MusicPlaylistsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 310C7E5EBEFDF066EB928A02 /* MusicPlaylistsView.swift */; };
 		77A76640B6B95B0A4BA82488 /* AdminModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AAD4E4D945833C26205F923 /* AdminModels.swift */; };
@@ -139,8 +144,10 @@
 		7AB572495BFD26025C0DFF70 /* MusicSongRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD297F9E64A627591FE2E81F /* MusicSongRow.swift */; };
 		7BEAABB0A5F0C747C1095B93 /* SetuIOSCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = E83FF3E83093A6F76A280DD8 /* SetuIOSCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		7D89C4487941FDA6FB4A1AC0 /* PasskeyClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A73916342BFBD050720B6015 /* PasskeyClientTests.swift */; };
+		7E31254FA0F6D8D3F25DB507 /* SakuraAdminSurfaceUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F225EF212AB6909058B92CE1 /* SakuraAdminSurfaceUITests.swift */; };
 		802F3E3139B2AD9D6F218D25 /* UserFacingError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C42D743EBFDE49CEEA24FF9 /* UserFacingError.swift */; };
 		80B250E8EA743C5763D18B86 /* MvPlaybackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8678FC2225B1CF65D70554AB /* MvPlaybackView.swift */; };
+		80E20E7EFB6E0CDD7735782B /* SakuraAdminFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D32DCAB21C56B14B9683C5E /* SakuraAdminFixtures.swift */; };
 		8299C2CD07C67C61B7A2812B /* AppDestination+Admin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10DB368795C37640444A789 /* AppDestination+Admin.swift */; };
 		83E84641E9B9790393A06B10 /* SetuFeedbackPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22291DD33B0DFDC45BE03389 /* SetuFeedbackPresenter.swift */; };
 		85BAC8B4F8017D91A37AB15E /* SetuMosaic.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0F65725E26EEFC3B11A867B /* SetuMosaic.swift */; };
@@ -213,6 +220,7 @@
 		C5F46E7346A1F140C83E855A /* SetuRemoteImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3195415917D9B8AB0FDF521 /* SetuRemoteImage.swift */; };
 		C5F9F23011BBCE84065938BA /* PlaybackPhase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 969CE41D6D3D68611D315C26 /* PlaybackPhase.swift */; };
 		C7569A1839EE1D5EE2F2C128 /* UserHubViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61CE8941C16597E05C269F27 /* UserHubViews.swift */; };
+		C8904093B4E372E72A44527F /* SakuraContrastCalibrationScenario.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3147583523B600DB1C3C00A /* SakuraContrastCalibrationScenario.swift */; };
 		CDADFD0A96380165350F67C5 /* ImageFeedExpiryPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C76EC45E487F2DBA4ABC299 /* ImageFeedExpiryPolicy.swift */; };
 		D0350EAB2AF41D36B727CA6E /* MusicSearchUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEBEF036D7535BAB9C1C0A08 /* MusicSearchUITests.swift */; };
 		D0C6A35A484C88DDF595CAB0 /* PlatformClipboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FBFACA80CC1273BC475A055 /* PlatformClipboard.swift */; };
@@ -258,6 +266,7 @@
 		F7453ABEBC9E56BCD6C2FA9C /* MusicModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90B5C9BD778EFE9385092A12 /* MusicModels.swift */; };
 		F87D0680D60CB7A1CEE1A14D /* AccountProfileComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E0DF1F201FC48964AF60D5B /* AccountProfileComponents.swift */; };
 		F8A6904F10CCBF91D4045C5D /* AddSongToPlaylistSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 012B4CA4F43A5C77E3C9A3CD /* AddSongToPlaylistSheet.swift */; };
+		F97946E8005909ADB9F34FBB /* SakuraContrastCalibrationUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FDA8899586F87CEECCDF5D9 /* SakuraContrastCalibrationUITests.swift */; };
 		FA1597436BF30928A65C3D94 /* ImageDeleteRequestDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EC7E0DF25FB6902D5BD525E /* ImageDeleteRequestDetailView.swift */; };
 		FA305A7FED3CD3AEC2419BD0 /* AdminPixivCrawlView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D65CD600EB96DA067D349D7E /* AdminPixivCrawlView.swift */; };
 		FAD73840F6FAC39D66876740 /* SystemStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA263C6C60D6DAEBF1EDADA9 /* SystemStatusView.swift */; };
@@ -363,11 +372,14 @@
 		0A921FB5DE2E975700EEC418 /* SleepTimerController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SleepTimerController.swift; sourceTree = "<group>"; };
 		0AAC0F2646CCCB2AE0854E7B /* MusicPerformanceProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicPerformanceProbe.swift; sourceTree = "<group>"; };
 		0B087092A2D20284F92C1073 /* SetuDateFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuDateFormatter.swift; sourceTree = "<group>"; };
+		0BC965FDA2C6364243BCD3A2 /* SakuraSurfaceAudit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SakuraSurfaceAudit.swift; sourceTree = "<group>"; };
 		0C7F242D5B50143A4E42A21F /* LyricStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LyricStore.swift; sourceTree = "<group>"; };
 		0C81906E773027AE55EE8628 /* AiDrawView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AiDrawView.swift; sourceTree = "<group>"; };
 		0CDA6CD818D0A2EFF3BD1A5E /* MusicClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicClient.swift; sourceTree = "<group>"; };
 		0D48AA3FACCEEE7967EB4EE2 /* MusicPlaybackQueueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicPlaybackQueueTests.swift; sourceTree = "<group>"; };
 		0E2151C22DA939A86BED86DC /* StaticInfoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StaticInfoView.swift; sourceTree = "<group>"; };
+		0FDA8899586F87CEECCDF5D9 /* SakuraContrastCalibrationUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SakuraContrastCalibrationUITests.swift; sourceTree = "<group>"; };
+		105E09746F3C0360F6A33E50 /* SakuraContentSurfaceUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SakuraContentSurfaceUITests.swift; sourceTree = "<group>"; };
 		1079D1D0CE5C3076AA377AFF /* PointsModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PointsModels.swift; sourceTree = "<group>"; };
 		10AAF4197AE920A8A902788F /* SetuMetricRing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuMetricRing.swift; sourceTree = "<group>"; };
 		1456165BE7AF7F3C92C54AD2 /* AuthSessionModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthSessionModels.swift; sourceTree = "<group>"; };
@@ -422,6 +434,7 @@
 		458F606A0F9777C1977BC071 /* CollectionSquareView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollectionSquareView.swift; sourceTree = "<group>"; };
 		4628048B88428D4D7D7D7EF3 /* RandomImageSwipeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RandomImageSwipeView.swift; sourceTree = "<group>"; };
 		46645BD9029ED9291437406B /* SetuPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuPill.swift; sourceTree = "<group>"; };
+		4AD3212245C9B18B453E19F3 /* SakuraContentFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SakuraContentFixtures.swift; sourceTree = "<group>"; };
 		4B5C19F8E4F0CFE3285A4D49 /* SetuMosaicLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuMosaicLayoutTests.swift; sourceTree = "<group>"; };
 		4C7B94D5CBD6D2072B2E0A08 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		4C88078ADE0564F19C98FA3E /* UserImagePreviewSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserImagePreviewSheet.swift; sourceTree = "<group>"; };
@@ -462,6 +475,7 @@
 		6BA6E0AACD49A324C42B462C /* AiDeleteRequestsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AiDeleteRequestsView.swift; sourceTree = "<group>"; };
 		6C768139EC00EE104ED7A123 /* AiSquareView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AiSquareView.swift; sourceTree = "<group>"; };
 		6D231D43F5C49CF6DDCF3066 /* ProductAccessibilityUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductAccessibilityUITests.swift; sourceTree = "<group>"; };
+		6D32DCAB21C56B14B9683C5E /* SakuraAdminFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SakuraAdminFixtures.swift; sourceTree = "<group>"; };
 		6EC7E0DF25FB6902D5BD525E /* ImageDeleteRequestDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageDeleteRequestDetailView.swift; sourceTree = "<group>"; };
 		6F7E7E48ABF53B91D7B3ECAA /* SetuLoadMoreFooter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuLoadMoreFooter.swift; sourceTree = "<group>"; };
 		6FBFACA80CC1273BC475A055 /* PlatformClipboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformClipboard.swift; sourceTree = "<group>"; };
@@ -489,6 +503,7 @@
 		8539F55D8D3E0AE56F1663B5 /* GalleryUploadDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalleryUploadDetailView.swift; sourceTree = "<group>"; };
 		8678FC2225B1CF65D70554AB /* MvPlaybackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MvPlaybackView.swift; sourceTree = "<group>"; };
 		86B2E4429D53A970E6075BB1 /* AiGenerationLiveActivityCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AiGenerationLiveActivityCenter.swift; sourceTree = "<group>"; };
+		86E4D926F43E184E0170B296 /* SakuraAdminUITestScenario.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SakuraAdminUITestScenario.swift; sourceTree = "<group>"; };
 		879D7C16B2B972A0397B64EE /* SetuRemoteImageCacheTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuRemoteImageCacheTests.swift; sourceTree = "<group>"; };
 		8C54396A7771FE4E7767162B /* MusicMiniPlayerBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicMiniPlayerBar.swift; sourceTree = "<group>"; };
 		8DCB470385749A8792B64C44 /* AdminOverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminOverviewView.swift; sourceTree = "<group>"; };
@@ -526,6 +541,7 @@
 		B1D22CE331F0ADD65C4E3113 /* GalleryUploadClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalleryUploadClientTests.swift; sourceTree = "<group>"; };
 		B2537193089086AD66B4708E /* AdminImageAuditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminImageAuditView.swift; sourceTree = "<group>"; };
 		B5E929FD5136E6E36876D7CE /* SecuritySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecuritySettingsView.swift; sourceTree = "<group>"; };
+		B6770CCE7496452BEDC1FDC5 /* SakuraContentUITestScenario.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SakuraContentUITestScenario.swift; sourceTree = "<group>"; };
 		B7DD39032D2D2A70EAFF6C83 /* MusicV2Client.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicV2Client.swift; sourceTree = "<group>"; };
 		B93D002CC9AC8D91AE810413 /* MobileModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileModels.swift; sourceTree = "<group>"; };
 		B9EA6361A9D71F6D1E165250 /* UserProfileClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfileClient.swift; sourceTree = "<group>"; };
@@ -585,6 +601,8 @@
 		EEBEF036D7535BAB9C1C0A08 /* MusicSearchUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicSearchUITests.swift; sourceTree = "<group>"; };
 		EF1C1518FF7D3BD0FE0172B9 /* MusicClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicClientTests.swift; sourceTree = "<group>"; };
 		F0C21D7B17096458B738B2C6 /* AiGenerationActivityModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AiGenerationActivityModels.swift; sourceTree = "<group>"; };
+		F225EF212AB6909058B92CE1 /* SakuraAdminSurfaceUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SakuraAdminSurfaceUITests.swift; sourceTree = "<group>"; };
+		F3147583523B600DB1C3C00A /* SakuraContrastCalibrationScenario.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SakuraContrastCalibrationScenario.swift; sourceTree = "<group>"; };
 		F3195415917D9B8AB0FDF521 /* SetuRemoteImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuRemoteImage.swift; sourceTree = "<group>"; };
 		F4FAD2C108F0B5598D70D72A /* SetuImageTile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuImageTile.swift; sourceTree = "<group>"; };
 		F5571DEF047E80A570FB6399 /* ApiKeyClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApiKeyClient.swift; sourceTree = "<group>"; };
@@ -760,6 +778,10 @@
 				6D231D43F5C49CF6DDCF3066 /* ProductAccessibilityUITests.swift */,
 				E77F0F45C76E431F3955422D /* PublicAiWorkUITests.swift */,
 				26AC9E85E4064CA6D60DE455 /* RandomImageConsumptionUITests.swift */,
+				F225EF212AB6909058B92CE1 /* SakuraAdminSurfaceUITests.swift */,
+				105E09746F3C0360F6A33E50 /* SakuraContentSurfaceUITests.swift */,
+				0FDA8899586F87CEECCDF5D9 /* SakuraContrastCalibrationUITests.swift */,
+				0BC965FDA2C6364243BCD3A2 /* SakuraSurfaceAudit.swift */,
 				CE919DDE322356A41535AE53 /* UXFlowUITests.swift */,
 				FFE72410FB51CA775E53F09E /* WelcomeFlowUITests.swift */,
 			);
@@ -1119,6 +1141,11 @@
 		EA3684F3C267EB82C4CAB65F /* Preview */ = {
 			isa = PBXGroup;
 			children = (
+				6D32DCAB21C56B14B9683C5E /* SakuraAdminFixtures.swift */,
+				86E4D926F43E184E0170B296 /* SakuraAdminUITestScenario.swift */,
+				4AD3212245C9B18B453E19F3 /* SakuraContentFixtures.swift */,
+				B6770CCE7496452BEDC1FDC5 /* SakuraContentUITestScenario.swift */,
+				F3147583523B600DB1C3C00A /* SakuraContrastCalibrationScenario.swift */,
 				C57E09A02A23EB6EC07DE452 /* SetuDesignSystemPreviewGallery.swift */,
 				69020B96D9AE75A4862132A6 /* SetuFeaturePreviewSupport.swift */,
 				5BE70E083CA8689714D87837 /* SetuPreviewFixtures.swift */,
@@ -1394,6 +1421,10 @@
 				E1B8C5B44E7B4DFEE1EF310B /* ProductAccessibilityUITests.swift in Sources */,
 				70BF017A63D12D7F0FAB1C7C /* PublicAiWorkUITests.swift in Sources */,
 				4C75FDA9AE05D2EF7B9B8F04 /* RandomImageConsumptionUITests.swift in Sources */,
+				7E31254FA0F6D8D3F25DB507 /* SakuraAdminSurfaceUITests.swift in Sources */,
+				76073361D94B4B352A67D436 /* SakuraContentSurfaceUITests.swift in Sources */,
+				F97946E8005909ADB9F34FBB /* SakuraContrastCalibrationUITests.swift in Sources */,
+				61D07308F2BC1C17EE4B32A6 /* SakuraSurfaceAudit.swift in Sources */,
 				1A2A3199919A9ECBBAC858FE /* UXFlowUITests.swift in Sources */,
 				A1A0F37C4ABD509F6E5309F3 /* WelcomeFlowUITests.swift in Sources */,
 			);
@@ -1490,6 +1521,11 @@
 				121C83EEB89DD719E602B880 /* RandomImageSwipeView.swift in Sources */,
 				B4B27B6FD570CC5AEBEB75C3 /* RemoteCommandCoordinator.swift in Sources */,
 				D3866126D48082B5F8F46996 /* RootAppView.swift in Sources */,
+				80E20E7EFB6E0CDD7735782B /* SakuraAdminFixtures.swift in Sources */,
+				2653000275B2D9EF958748B3 /* SakuraAdminUITestScenario.swift in Sources */,
+				010B0B5F3115473F241BED63 /* SakuraContentFixtures.swift in Sources */,
+				481B82F33F83C5E475D3D507 /* SakuraContentUITestScenario.swift in Sources */,
+				C8904093B4E372E72A44527F /* SakuraContrastCalibrationScenario.swift in Sources */,
 				78F5050863AA5F6A270D99A4 /* SecuritySettingsView.swift in Sources */,
 				F132BB812CEFE97AA86B5E4D /* SetuAppAppearance.swift in Sources */,
 				484399AD4C02D35571D80D2C /* SetuBackground.swift in Sources */,

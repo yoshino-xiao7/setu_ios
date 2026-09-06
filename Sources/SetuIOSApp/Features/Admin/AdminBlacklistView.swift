@@ -106,7 +106,8 @@ struct AdminBlacklistView: View {
                         .frame(maxWidth: .infinity, minHeight: 44)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(SetuColor.brandPink)
+                .tint(SetuColor.brandOnLight)
+                .foregroundStyle(.white)
                 .disabled(isSubmitting || parsedIps.isEmpty)
             }
         }

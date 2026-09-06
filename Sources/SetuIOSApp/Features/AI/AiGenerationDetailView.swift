@@ -88,6 +88,8 @@ struct AiGenerationDetailView: View {
                         .frame(maxWidth: .infinity, minHeight: 44)
                 }
                 .buttonStyle(.borderedProminent)
+                .tint(SetuColor.brandOnLight)
+                .foregroundStyle(.white)
                 .accessibilityIdentifier("ai.detail.create-again")
 
             }

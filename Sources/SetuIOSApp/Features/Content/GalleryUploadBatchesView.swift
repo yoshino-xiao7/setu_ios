@@ -305,7 +305,8 @@ struct GalleryUploadBatchesView: View {
                 .frame(maxWidth: .infinity, minHeight: 44)
         }
         .buttonStyle(.borderedProminent)
-        .tint(SetuColor.brandPink)
+        .tint(SetuColor.brandOnLight)
+        .foregroundStyle(.white)
     }
 
     private var informationStep: some View {
@@ -356,7 +357,8 @@ struct GalleryUploadBatchesView: View {
                         .frame(maxWidth: .infinity, minHeight: 44)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(SetuColor.brandPink)
+                .tint(SetuColor.brandOnLight)
+                .foregroundStyle(.white)
             }
         }
     }
@@ -419,7 +421,8 @@ struct GalleryUploadBatchesView: View {
                     .frame(maxWidth: .infinity, minHeight: 44)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(SetuColor.brandPink)
+                .tint(SetuColor.brandOnLight)
+                .foregroundStyle(.white)
                 .disabled(isUploading || uploadItems.isEmpty)
             }
         }
@@ -1012,7 +1015,23 @@ private struct GalleryUploadDraftItemPayload: Codable {
 private enum GalleryUploadDraftStore {
     private static let key = "icu.yukiryou.setu.galleryUploadDraft"
 
+    #if DEBUG
+    private static var usesSakuraFixtureStorage: Bool {
+        ProcessInfo.processInfo.arguments.contains("-ui-testing-sakura-content")
+    }
+    private static let fixtureID = UUID().uuidString
+    private static let fixtureDefaults = UserDefaults(suiteName: "icu.yukiryou.setu.sakura-content-draft.\(fixtureID)")!
+    private static let fixtureDirectory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("SakuraContentDraft-\(fixtureID)", isDirectory: true)
+    #endif
+
     static func load() -> GalleryUploadDraftPayload? {
+        #if DEBUG
+        if usesSakuraFixtureStorage {
+            guard let data = fixtureDefaults.data(forKey: key) else { return nil }
+            return try? JSONDecoder().decode(GalleryUploadDraftPayload.self, from: data)
+        }
+        #endif
         guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
         return try? JSONDecoder().decode(GalleryUploadDraftPayload.self, from: data)
     }
@@ -1023,6 +1042,12 @@ private enum GalleryUploadDraftStore {
             return
         }
         guard let data = try? JSONEncoder().encode(draft) else { return }
+        #if DEBUG
+        if usesSakuraFixtureStorage {
+            fixtureDefaults.set(data, forKey: key)
+            return
+        }
+        #endif
         UserDefaults.standard.set(data, forKey: key)
     }
 
@@ -1042,12 +1067,25 @@ private enum GalleryUploadDraftStore {
     }
 
     static func clear() {
+        #if DEBUG
+        if usesSakuraFixtureStorage {
+            fixtureDefaults.removeObject(forKey: key)
+            try? FileManager.default.removeItem(at: fixtureDirectory)
+            return
+        }
+        #endif
         UserDefaults.standard.removeObject(forKey: key)
         guard let directoryURL = try? directory(create: false) else { return }
         try? FileManager.default.removeItem(at: directoryURL)
     }
 
     private static func directory(create: Bool = true) throws -> URL {
+        #if DEBUG
+        if usesSakuraFixtureStorage {
+            if create { try FileManager.default.createDirectory(at: fixtureDirectory, withIntermediateDirectories: true) }
+            return fixtureDirectory
+        }
+        #endif
         let cachesURL = try FileManager.default.url(
             for: .cachesDirectory,
             in: .userDomainMask,

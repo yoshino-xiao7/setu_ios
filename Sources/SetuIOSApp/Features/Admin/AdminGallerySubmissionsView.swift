@@ -44,7 +44,8 @@ struct AdminGallerySubmissionsView: View {
                         .frame(maxWidth: .infinity, minHeight: 44)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(SetuColor.brandPink)
+                .tint(SetuColor.brandOnLight)
+                .foregroundStyle(.white)
             }
         }
 
@@ -266,7 +267,8 @@ struct AdminGallerySubmissionDetailView: View {
                         .frame(maxWidth: .infinity, minHeight: 44)
             }
                 .buttonStyle(.borderedProminent)
-                .tint(SetuColor.brandPink)
+                .tint(SetuColor.brandOnLight)
+                .foregroundStyle(.white)
             .disabled(isSubmitting)
         }
         }
