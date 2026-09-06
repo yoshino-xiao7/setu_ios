@@ -41,10 +41,10 @@ struct AccountProfileCard: View {
 
     private var profileText: some View {
         VStack(alignment: .leading, spacing: 5) {
-            HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: SetuSpacing.sm) {
                 Text(displayName)
                     .font(.title3.weight(.semibold))
-                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+                    .fixedSize(horizontal: false, vertical: true)
                 if user.role == .admin {
                     Text("管理员")
                         .font(.caption.weight(.semibold))
@@ -57,7 +57,7 @@ struct AccountProfileCard: View {
             Text(user.email)
                 .font(.footnote)
                 .foregroundStyle(SetuColor.textSecondary)
-                .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+                .fixedSize(horizontal: false, vertical: true)
             if user.lastLoginIp?.isEmpty == false {
                 Text("最近登录已记录")
                     .font(.caption)

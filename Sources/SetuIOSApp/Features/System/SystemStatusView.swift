@@ -13,12 +13,12 @@ struct SystemStatusView: View {
     }
 
     var body: some View {
-        List {
+        SetuBoard {
             switch state {
             case .idle, .loading:
                 Section {
                     SetuCard {
-                        SetuEmptyState(title: "正在加载", systemImage: "waveform.path.ecg", isLoading: true)
+                        AccountSurfaceSkeleton(title: "正在加载系统状态")
                     }
                 }
             case .failed(let message):
@@ -42,41 +42,21 @@ struct SystemStatusView: View {
                 Section {
                     SetuCard {
                         VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                            HStack(alignment: .top) {
+                            VStack(alignment: .leading, spacing: SetuSpacing.sm) {
                                 SetuSectionHeader(title: "服务状态", subtitle: "近 5 分钟运行概览")
-                                Spacer()
                                 SetuPill(
                                     text: statusTitle(overview.status.status),
                                     systemImage: "waveform.path.ecg",
                                     tone: statusTone(overview.status.status)
                                 )
                             }
-                            LazyVGrid(columns: statColumns, spacing: SetuSpacing.sm) {
-                                SetuStatTile(
-                                    title: "今日使用",
-                                    value: String(overview.status.callsToday),
-                                    systemImage: "arrow.left.arrow.right",
-                                    color: SetuColor.brandPink
-                                )
-                                SetuStatTile(
-                                    title: "服务可用性",
-                                    value: availabilityText(overview.status.availability),
-                                    systemImage: "checkmark.seal",
-                                    color: SetuColor.success
-                                )
-                                SetuStatTile(
-                                    title: "平均响应时间",
-                                    value: latencyText(overview.status.avgLatencyMs),
-                                    systemImage: "timer",
-                                    color: SetuColor.info
-                                )
-                                SetuStatTile(
-                                    title: "图库数量",
-                                    value: snapshot.imageCount.map(String.init) ?? "-",
-                                    systemImage: "photo.on.rectangle",
-                                    color: SetuColor.warning
-                                )
-                            }
+                            SetuMetricRing(
+                                value: availabilityText(overview.status.availability),
+                                caption: "服务可用性",
+                                progress: overview.status.availability ?? 0,
+                                tone: statusTone(overview.status.status).foreground,
+                                accessibilityDescription: "服务可用性，" + availabilityText(overview.status.availability)
+                            )
                             if let lastUpdatedAt {
                                 Label("更新于 \(lastUpdatedAt.formatted(date: .omitted, time: .standard))", systemImage: "clock")
                                     .font(SetuTypography.caption)
@@ -86,41 +66,31 @@ struct SystemStatusView: View {
                     }
                 }
 
+                SetuBento(items: metricItems(snapshot), span: { _ in .small }) { item in
+                    SetuBentoTile(title: item.title, subtitle: item.value, systemImage: item.systemImage)
+                }
+
                 if let health = overview.health {
-                    Section {
-                        SetuCard {
-                            VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                                HStack {
-                                    SetuSectionHeader(title: "运行检查", subtitle: "服务最近一次检查结果")
-                                    Spacer()
-                                    SetuPill(
-                                        text: statusTitle(health.status, healthy: health.healthy),
-                                        systemImage: "heart.text.square",
-                                        tone: statusTone(health.status, healthy: health.healthy)
-                                    )
-                                }
-                                StatusInfoRow(
-                                    title: "检查时间",
-                                    value: SetuDateFormatter.string(from: health.checkedAt, style: .full)
-                                )
-                            }
-                        }
-                    }
+                    SetuRecordCard(
+                        headline: "运行检查",
+                        supporting: "服务最近一次检查结果",
+                        status: .init(statusTitle(health.status, healthy: health.healthy), tone: statusTone(health.status, healthy: health.healthy)),
+                        fields: [.init("检查时间", SetuDateFormatter.string(from: health.checkedAt, style: .full))]
+                    )
                 }
             }
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .setuBackground()
         .navigationTitle(title)
         .task { await load() }
         .refreshable { await load() }
     }
 
-    private var statColumns: [GridItem] {
+    private func metricItems(_ snapshot: SystemStatusSnapshot) -> [AccountSurfaceItem] {
         [
-            GridItem(.flexible(), spacing: SetuSpacing.sm),
-            GridItem(.flexible(), spacing: SetuSpacing.sm)
+            .init(title: "今日使用", value: String(snapshot.overview.status.callsToday), systemImage: "arrow.left.arrow.right"),
+            .init(title: "平均响应时间", value: latencyText(snapshot.overview.status.avgLatencyMs), systemImage: "timer"),
+            .init(title: "图库数量", value: snapshot.imageCount.map(String.init) ?? "暂未同步", systemImage: "photo.on.rectangle"),
+            .init(title: "服务状态", value: statusTitle(snapshot.overview.status.status), systemImage: "waveform.path.ecg")
         ]
     }
 
@@ -225,22 +195,4 @@ struct SystemStatusView: View {
 private struct SystemStatusSnapshot: Sendable {
     let overview: StatusOverview
     let imageCount: Int?
-}
-
-private struct StatusInfoRow: View {
-    let title: String
-    let value: String
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(title)
-                .font(SetuTypography.caption)
-                .foregroundStyle(SetuColor.textSecondary)
-            Spacer(minLength: SetuSpacing.md)
-            Text(value)
-                .font(.callout.weight(.medium))
-                .foregroundStyle(SetuColor.textPrimary)
-                .multilineTextAlignment(.trailing)
-        }
-    }
 }

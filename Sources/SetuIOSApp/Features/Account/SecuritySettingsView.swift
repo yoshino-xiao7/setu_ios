@@ -15,7 +15,10 @@ struct SecuritySettingsView: View {
     @State private var showAppleUnbindConfirmation = false
 
     var body: some View {
-        List {
+        SetuBoard {
+            SetuBento(items: securityItems, span: { _ in .small }) { item in
+                SetuBentoTile(title: item.title, subtitle: item.value, systemImage: item.systemImage)
+            }
             Section {
                 SetuCard {
                     VStack(alignment: .leading, spacing: SetuSpacing.md) {
@@ -62,16 +65,7 @@ struct SecuritySettingsView: View {
                         )
                         switch appleBindingState {
                         case .idle, .loading:
-                            HStack(spacing: SetuSpacing.md) {
-                                ProgressView()
-                                    .accessibilityHidden(true)
-                                Text("正在检查 Apple 绑定状态")
-                                    .font(SetuTypography.body)
-                                    .foregroundStyle(SetuColor.textSecondary)
-                            }
-                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                            .accessibilityElement(children: .combine)
-                            .accessibilityLabel("正在检查 Apple 绑定状态")
+                            AccountSurfaceSkeleton(title: "正在检查 Apple 绑定状态")
                         case .failed(let message):
                             SetuEmptyState(
                                 title: "Apple 绑定状态加载失败",
@@ -113,9 +107,6 @@ struct SecuritySettingsView: View {
                 }
             }
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .setuBackground()
         .setuFeedbackPresentation($feedback)
         .accessibilityIdentifier("security.page")
         .navigationTitle("账号安全")
@@ -128,6 +119,13 @@ struct SecuritySettingsView: View {
         } message: {
             Text("解除后将不能再用该 Apple 账号登录；密码和通行密钥登录不受影响。")
         }
+    }
+
+    private var securityItems: [AccountSurfaceItem] {
+        [
+            .init(title: "登录账号", value: environment.authSession.currentUser?.email ?? "请重新登录", systemImage: "person.badge.shield.checkmark"),
+            .init(title: "Apple 登录", value: appleBindingSubtitle, systemImage: "apple.logo")
+        ]
     }
 
     private var canSave: Bool {

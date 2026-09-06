@@ -37,17 +37,23 @@ struct NotificationsView: View {
     private let pageSize = 20
 
     var body: some View {
-        List {
-            Section {
+        SetuBoard {
+            SetuFilterBar(
+                options: [
+                    .init(value: false, title: "全部通知", systemImage: "bell"),
+                    .init(value: true, title: "仅看未读", systemImage: "bell.badge")
+                        .accessibilityIdentifier("notifications.filter.unread-only")
+                ],
+                selection: $unreadOnly,
+                accessibilityTitle: "通知筛选"
+            )
+            .disabled(isMarkingAllRead)
+            .onChange(of: unreadOnly) { _, newValue in
+                Task { await loadFirstPage(for: newValue, clearExisting: true) }
+            }
+            if unreadStatusText != nil || unreadCountError != nil {
                 SetuCard {
                     VStack(alignment: .leading, spacing: SetuSpacing.sm) {
-                        Toggle("仅看未读", isOn: $unreadOnly)
-                            .tint(SetuColor.brandPink)
-                            .disabled(isMarkingAllRead)
-                            .accessibilityIdentifier("notifications.filter.unread-only")
-                            .onChange(of: unreadOnly) { _, newValue in
-                                Task { await loadFirstPage(for: newValue, clearExisting: true) }
-                            }
                         if let unreadStatusText {
                             SetuPill(
                                 text: unreadStatusText,
@@ -73,23 +79,20 @@ struct NotificationsView: View {
                     }
                 }
             }
-            .setuListRow()
 
             if let feedback {
                 Section {
                     SetuFeedbackBanner(feedback: feedback)
                         .accessibilityIdentifier("notifications.feedback")
                 }
-                .setuListRow()
             }
 
             if isInitialLoading {
                 Section {
                     SetuCard {
-                        SetuEmptyState(title: "正在加载通知", systemImage: "bell", isLoading: true)
+                        AccountSurfaceSkeleton(title: "正在加载通知")
                     }
                 }
-                .setuListRow()
             } else if notifications.isEmpty {
                 Section {
                     SetuCard {
@@ -111,7 +114,6 @@ struct NotificationsView: View {
                         }
                     }
                 }
-                .setuListRow()
             } else {
                 if let firstPageError {
                     Section {
@@ -126,41 +128,37 @@ struct NotificationsView: View {
                             }
                         }
                     }
-                    .setuListRow()
                 }
-                Section {
-                    ForEach(notifications) { notification in
-                        NotificationRow(
-                            notification: notification,
-                            isRead: isEffectivelyRead(notification),
-                            isUpdating: markingReadIDs.contains(notification.id)
-                        ) {
-                            Task { await handleNotificationTap(notification) }
-                        }
-                        .onAppear {
-                            if notification.id == notifications.last?.id {
-                                Task { await loadMore() }
-                            }
+                SetuSectionHeader(title: "通知记录", subtitle: "共 \(total) 条")
+                SetuRecordBoard(items: notifications) { notification in
+                    NotificationRow(
+                        notification: notification,
+                        isRead: isEffectivelyRead(notification),
+                        isUpdating: markingReadIDs.contains(notification.id)
+                    ) {
+                        Task { await handleNotificationTap(notification) }
+                    }
+                    .onAppear {
+                        if notification.id == notifications.last?.id {
+                            Task { await loadMore() }
                         }
                     }
-
-                    SetuLoadMoreFooter(state: loadMoreFooterState) {
-                        Task { await loadMore() }
-                    }
-                } header: {
-                    Text("共 \(total) 条")
+                }
+                SetuLoadMoreFooter(state: loadMoreFooterState) {
+                    Task { await loadMore() }
                 }
             }
+
             notificationPermissionSection
         }
-        .listStyle(.plain)
-        .setuBackground()
         .setuFeedbackPresentation($feedback)
         .accessibilityIdentifier("notifications.page")
         .navigationTitle(navigationTitle)
-        .toolbar {
-            Button("全部已读") {
+        .setuActionDock {
+            SetuPrimaryButton {
                 Task { await markAllRead() }
+            } label: {
+                Label(isMarkingAllRead ? "正在标记" : "全部已读", systemImage: "checkmark.message")
             }
             .disabled(!canMarkAllRead || isMarkingAllRead || !markingReadIDs.isEmpty)
             .accessibilityIdentifier("notifications.mark-all-read")
@@ -187,7 +185,6 @@ struct NotificationsView: View {
                 .accessibilityIdentifier("notifications.permission.prompt")
             }
         }
-        .setuListRow()
     }
 
     private var notificationPermissionState: SetuPermissionState {
@@ -230,7 +227,7 @@ struct NotificationsView: View {
     private var hasMore: Bool { pager.hasMore }
 
     private var isInitialLoading: Bool {
-        !hasLoadedFirstPage && isLoadingFirstPage
+        !hasLoadedFirstPage && (isLoadingFirstPage || firstPageError == nil)
     }
 
     private var visibleUnreadCount: Int {
@@ -671,34 +668,16 @@ private struct NotificationRow: View {
 
     var body: some View {
         Button(action: onRead) {
-            VStack(alignment: .leading, spacing: SetuSpacing.sm) {
-                HStack {
-                    Text(notification.title)
-                        .font(.headline)
-                        .foregroundStyle(SetuColor.textPrimary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer()
-                    if !isRead {
-                        Circle()
-                            .fill(SetuColor.brandPink)
-                            .frame(width: 8, height: 8)
-                            .accessibilityHidden(true)
-                    }
-                }
-                HStack(spacing: 8) {
-                    NotificationTypeBadge(type: notification.type)
-                }
-                Text(notification.content)
-                    .font(.footnote)
-                    .foregroundStyle(SetuColor.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(SetuDateFormatter.string(from: notification.createdAt))
-                    .font(.caption)
-                    .foregroundStyle(SetuColor.textTertiary)
-            }
-            .padding(.vertical, SetuSpacing.sm)
+            SetuRecordCard(
+                headline: notification.title,
+                supporting: notification.content,
+                status: .init((isRead ? "已读 · " : "未读 · ") + NotificationTypeBadge(type: notification.type).title,
+                              tone: isRead ? .muted : .brand),
+                fields: [.init("时间", SetuDateFormatter.string(from: notification.createdAt))]
+            )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SetuSurfaceButtonStyle())
+        .saturation(isRead ? 0 : 1)
         .disabled(isUpdating)
         .accessibilityIdentifier("notifications.item.\(notification.id)")
         .accessibilityValue(isUpdating ? "正在标记为已读" : (isRead ? "已读" : "未读"))
@@ -717,7 +696,7 @@ private struct NotificationTypeBadge: View {
         SetuPill(text: title, tone: tone)
     }
 
-    private var title: String {
+    var title: String {
         switch type {
         case "GALLERY_SUBMISSION_APPROVED": "投稿通过"
         case "GALLERY_SUBMISSION_REJECTED": "投稿拒绝"

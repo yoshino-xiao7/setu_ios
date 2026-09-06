@@ -111,6 +111,7 @@
 		66420715149C490CA6506627 /* PlaybackPhaseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2413A225F8EDC740B6BFAFA1 /* PlaybackPhaseTests.swift */; };
 		66A42635D9C44F19113DA8DE /* AppDestination+Account.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65CDD615B649B55BE8C0621B /* AppDestination+Account.swift */; };
 		66AD6B5483FFD29E03C81331 /* AdminAiGenerationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A218B63E6B35A6E75F92766 /* AdminAiGenerationsView.swift */; };
+		66F4DEEBCB70AA97569A9958 /* AccountSurfaces.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3759DCF2CC89563CCA79C56E /* AccountSurfaces.swift */; };
 		67806650C775ECE370D258B5 /* AppDestination+Content.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05A5E926D0BB4D2A556CCEE9 /* AppDestination+Content.swift */; };
 		67F8CDCC2AC98F4DF1006F8C /* MusicStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A579C54F4EBF21885D1EB39 /* MusicStore.swift */; };
 		6840A65927388A66AD7B9119 /* AppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1ECB7927713D69FCD42EA670 /* AppEnvironment.swift */; };
@@ -404,6 +405,7 @@
 		33C3FD265E1FD43010883478 /* AppleAuthClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleAuthClientTests.swift; sourceTree = "<group>"; };
 		340090FC5AA3B5B729597541 /* MusicV2ClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicV2ClientTests.swift; sourceTree = "<group>"; };
 		35D59902F274716CA127393F /* NotificationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsView.swift; sourceTree = "<group>"; };
+		3759DCF2CC89563CCA79C56E /* AccountSurfaces.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSurfaces.swift; sourceTree = "<group>"; };
 		3C177E784570257166F9399F /* SetuBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuBackground.swift; sourceTree = "<group>"; };
 		3C22F650ECB9CE6FDA887C8D /* PasskeyClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasskeyClient.swift; sourceTree = "<group>"; };
 		3D3851FC55716DE6BC9FDADF /* MusicPlaybackControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicPlaybackControllerTests.swift; sourceTree = "<group>"; };
@@ -816,6 +818,7 @@
 		5B55C062D8FD8B99A20AF383 /* Account */ = {
 			isa = PBXGroup;
 			children = (
+				3759DCF2CC89563CCA79C56E /* AccountSurfaces.swift */,
 				C8551B5EE417C4D7CCAB3E6A /* PasskeyAuthorizationService.swift */,
 				C0203AD5DA86F328BCA1DBCE /* PasskeyListView.swift */,
 				C91CFF67E98BBC01DC6893D1 /* ProfileView.swift */,
@@ -1401,6 +1404,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F87D0680D60CB7A1CEE1A14D /* AccountProfileComponents.swift in Sources */,
+				66F4DEEBCB70AA97569A9958 /* AccountSurfaces.swift in Sources */,
 				98EB9AD58E19695140F133BD /* AccountView.swift in Sources */,
 				F8A6904F10CCBF91D4045C5D /* AddSongToPlaylistSheet.swift in Sources */,
 				FE273EC908BFB74560257D20 /* AdminAiDeleteRequestsView.swift in Sources */,

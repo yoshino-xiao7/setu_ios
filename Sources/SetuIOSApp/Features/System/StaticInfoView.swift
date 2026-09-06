@@ -50,14 +50,14 @@ enum StaticInfoKind {
 struct StaticInfoView: View {
     @Bindable var environment: AppEnvironment
     let kind: StaticInfoKind
-    @State private var dailyState: LoadState<SetuImageItem> = .idle
+    @State private var dailyState: LoadState<SetuImageItem?> = .idle
     @State private var dailyFeedback: SetuFeedback?
     @State private var dailyFavoriteState: LoadState<Bool> = .idle
     @State private var dailyActionLoading = false
     @State private var dailyPreview: UserImagePreviewItem?
 
     var body: some View {
-        List {
+        SetuBoard {
             SetuCard(padding: SetuSpacing.xl) {
                 VStack(alignment: .leading, spacing: 12) {
                     Image(systemName: kind.systemImage)
@@ -71,7 +71,6 @@ struct StaticInfoView: View {
                         .foregroundStyle(SetuColor.textSecondary)
                 }
             }
-            .setuListRow()
 
             switch kind {
             case .docs:
@@ -85,8 +84,6 @@ struct StaticInfoView: View {
                 termsContent
             }
         }
-        .listStyle(.plain)
-        .setuBackground()
         .accessibilityIdentifier("static.info.page")
         .navigationTitle(kind.title)
         .sheet(item: $dailyPreview) { item in
@@ -132,10 +129,12 @@ struct StaticInfoView: View {
         StaticInfoSectionCard(title: "每日示例图") {
             switch dailyState {
             case .idle, .loading:
-                SetuEmptyState(title: "正在加载示例图", systemImage: "photo", isLoading: true)
+                AccountSurfaceSkeleton(title: "正在加载示例图")
             case .failed(let message):
-                SetuEmptyState(title: "示例图加载失败", message: message, systemImage: "photo.badge.exclamationmark")
-            case .loaded(let item):
+                SetuEmptyState(title: "示例图加载失败", message: message, systemImage: "photo.badge.exclamationmark", actionTitle: "重试", action: { Task { await loadDailyExample() } })
+            case .loaded(nil):
+                SetuEmptyState(title: "暂无示例图", message: "稍后下拉刷新，或前往图库发现图片。", systemImage: "photo")
+            case .loaded(.some(let item)):
                 DailySetuExampleCard(
                     item: item,
                     favoriteState: dailyFavoriteState,
@@ -159,7 +158,7 @@ struct StaticInfoView: View {
                 SetuFeedbackBanner(feedback: dailyFeedback)
             }
         }
-        if case .loaded(let item) = dailyState, case .failed(let message) = dailyFavoriteState {
+        if case .loaded(.some(let item)) = dailyState, case .failed(let message) = dailyFavoriteState {
             SetuCard {
                 Button("重试收藏状态") {
                     Task { await loadDailyFavoriteStatus(for: item) }
@@ -169,7 +168,6 @@ struct StaticInfoView: View {
                 .accessibilityIdentifier("daily.favorite.retry")
                 SetuFeedbackBanner(feedback: .error(message))
             }
-            .setuListRow()
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("daily.favorite.failed")
         }
@@ -239,7 +237,7 @@ struct StaticInfoView: View {
         dailyFeedback = nil
         do {
             guard let item = try await environment.publicBlogClient.dailySetu() else {
-                dailyState = .failed("公共示例服务暂未返回图片")
+                dailyState = .loaded(nil)
                 return
             }
             dailyState = .loaded(item)
@@ -401,7 +399,6 @@ private struct StaticInfoSectionCard<Content: View>: View {
                 content
             }
         }
-        .setuListRow()
     }
 }
 
@@ -415,6 +412,8 @@ private struct InfoParagraph: View {
     var body: some View {
         Text(.init(text))
             .font(.body)
+            .lineSpacing(SetuSpacing.sm)
+            .fixedSize(horizontal: false, vertical: true)
             .foregroundStyle(SetuColor.textSecondary)
     }
 }
@@ -429,7 +428,9 @@ private struct InfoPair: View {
                 .font(SetuTypography.headline)
                 .foregroundStyle(SetuColor.textPrimary)
             Text(value)
-                .font(SetuTypography.caption)
+                .font(SetuTypography.body)
+                .lineSpacing(SetuSpacing.xs)
+                .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(SetuColor.textSecondary)
         }
         .padding(.vertical, 2)

@@ -13,15 +13,14 @@ struct ProfileView: View {
     @State private var isUploadingAvatar = false
 
     var body: some View {
-        List {
+        SetuBoard {
             switch state {
             case .idle, .loading:
                 Section {
                     SetuCard {
-                        SetuEmptyState(title: "正在加载资料", systemImage: "person.crop.circle", isLoading: true)
+                        AccountSurfaceSkeleton(title: "正在加载资料")
                     }
                 }
-                .setuListRow()
             case .failed(let message):
                 Section {
                     SetuCard {
@@ -34,54 +33,48 @@ struct ProfileView: View {
                         )
                     }
                 }
-                .setuListRow()
             case .loaded(let profile):
                 Section {
                     SetuCard(padding: SetuSpacing.xl) {
-                        Group {
-                            if dynamicTypeSize.isAccessibilitySize {
-                                VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                                    AvatarView(urlString: profile.avatarUrl, name: profile.displayName)
-                                    profileIdentity(profile)
-                                }
-                            } else {
-                                HStack(spacing: SetuSpacing.lg) {
-                                    AvatarView(urlString: profile.avatarUrl, name: profile.displayName)
-                                    profileIdentity(profile)
-                                }
-                            }
-                        }
-
-                        PhotosPicker(selection: $selectedAvatarItem, matching: .images) {
-                            if isUploadingAvatar {
-                                HStack(spacing: SetuSpacing.sm) {
-                                    ProgressView()
-                                        .tint(SetuColor.brandPink)
-                                    Text("正在更换头像")
-                                }
-                                .frame(minHeight: 44)
-                            } else {
-                                Label("更换头像", systemImage: "photo.badge.plus")
-                                    .frame(minHeight: 44)
-                            }
-                        }
-                        .buttonStyle(.bordered)
-                        .tint(SetuColor.brandPink)
-                        .disabled(isUploadingAvatar)
-                        .padding(.top, SetuSpacing.md)
-                    }
-                }
-                .setuListRow()
-
-                Section {
-                    SetuCard {
                         VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                            SetuSectionHeader(title: "账号")
-                            LabeledContent("注册时间", value: SetuDateFormatter.string(from: profile.createdAt, style: .full))
+                            Group {
+                                if dynamicTypeSize.isAccessibilitySize {
+                                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                                        AvatarView(urlString: profile.avatarUrl, name: profile.displayName)
+                                        profileIdentity(profile)
+                                    }
+                                } else {
+                                    HStack(spacing: SetuSpacing.lg) {
+                                        AvatarView(urlString: profile.avatarUrl, name: profile.displayName)
+                                        profileIdentity(profile)
+                                    }
+                                }
+                            }
+
+                            PhotosPicker(selection: $selectedAvatarItem, matching: .images) {
+                                if isUploadingAvatar {
+                                    HStack(spacing: SetuSpacing.sm) {
+                                        ProgressView()
+                                            .tint(SetuColor.brandPink)
+                                        Text("正在更换头像")
+                                    }
+                                    .frame(minHeight: 44)
+                                } else {
+                                    Label("更换头像", systemImage: "photo.badge.plus")
+                                        .frame(minHeight: 44)
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                            .tint(SetuColor.brandPink)
+                            .disabled(isUploadingAvatar)
+                            .padding(.top, SetuSpacing.md)
                         }
                     }
                 }
-                .setuListRow()
+
+                SetuBento(items: profileItems(profile), span: { _ in .small }) { item in
+                    SetuBentoTile(title: item.title, subtitle: item.value, systemImage: item.systemImage)
+                }
 
                 Section {
                     SetuCard {
@@ -98,18 +91,14 @@ struct ProfileView: View {
                         }
                     }
                 }
-                .setuListRow()
             }
 
             if let feedback {
                 Section {
                     SetuFeedbackBanner(feedback: feedback)
                 }
-                .setuListRow()
             }
         }
-        .listStyle(.plain)
-        .setuBackground()
         .setuFeedbackPresentation($feedback)
         .navigationTitle("个人中心")
         .onChange(of: selectedAvatarItem) {
@@ -119,16 +108,25 @@ struct ProfileView: View {
         .refreshable { await load() }
     }
 
+    private func profileItems(_ profile: UserProfile) -> [AccountSurfaceItem] {
+        [
+            .init(title: "昵称", value: profile.displayName, systemImage: "person.text.rectangle"),
+            .init(title: "邮箱", value: profile.email, systemImage: "envelope"),
+            .init(title: "账号角色", value: profile.role == .admin ? "管理员" : "普通用户", systemImage: "person.badge.shield.checkmark"),
+            .init(title: "注册时间", value: SetuDateFormatter.string(from: profile.createdAt, style: .full), systemImage: "calendar")
+        ]
+    }
+
     private func profileIdentity(_ profile: UserProfile) -> some View {
         VStack(alignment: .leading, spacing: SetuSpacing.xs) {
             Text(profile.displayName)
                 .font(SetuTypography.title)
                 .foregroundStyle(SetuColor.textPrimary)
-                .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+                .fixedSize(horizontal: false, vertical: true)
             Text(profile.email)
                 .font(SetuTypography.caption)
                 .foregroundStyle(SetuColor.textSecondary)
-                .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+                .fixedSize(horizontal: false, vertical: true)
             if profile.role == .admin {
                 SetuPill(text: "管理员", systemImage: "person.crop.circle.fill", tone: .brand)
             }

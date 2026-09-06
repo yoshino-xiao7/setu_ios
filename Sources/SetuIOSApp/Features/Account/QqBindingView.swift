@@ -9,12 +9,12 @@ struct QqBindingView: View {
     @State private var feedback: SetuFeedback?
 
     var body: some View {
-        List {
+        SetuBoard {
             switch state {
             case .idle, .loading:
                 Section {
                     SetuCard {
-                        SetuEmptyState(title: "正在加载", systemImage: "link.badge.plus", isLoading: true)
+                        AccountSurfaceSkeleton(title: "正在加载 QQ 绑定")
                     }
                 }
             case .failed(let message):
@@ -30,32 +30,15 @@ struct QqBindingView: View {
                     }
                 }
             case .loaded(let binding):
-                Section {
-                    SetuCard {
-                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                            HStack {
-                                SetuSectionHeader(title: "当前绑定", subtitle: "QQ 通知和登录提醒状态")
-                                Spacer()
-                                SetuPill(
-                                    text: binding.isEnabled ? "已启用" : "未启用",
-                                    systemImage: binding.isEnabled ? "checkmark.circle" : "pause.circle",
-                                    tone: binding.isEnabled ? .success : .muted
-                                )
-                            }
-                            QqBindingInfoRow(title: "QQ", value: binding.qqNumber?.isEmpty == false ? binding.qqNumber! : "-")
-                            if let updatedAt = binding.updatedAt, !updatedAt.isEmpty {
-                                QqBindingInfoRow(title: "更新时间", value: SetuDateFormatter.string(from: updatedAt, style: .full))
-                            }
-                            if binding.isEnabled {
-                                Button(role: .destructive) {
-                                    Task { await disable() }
-                                } label: {
-                                    Label("停用 QQ 通知", systemImage: "bell.slash")
-                                        .frame(maxWidth: .infinity, minHeight: 44)
-                                }
-                                .buttonStyle(.bordered)
-                            }
+                SetuBento(items: bindingItems(binding), span: { _ in .small }) { item in
+                    SetuBentoTile(title: item.title, subtitle: item.value, systemImage: item.systemImage)
+                }
+                if binding.isEnabled {
+                    SetuRecordCard(headline: "QQ 通知", supporting: "停用后不再通过 QQ 接收通知", status: .init("已启用", tone: .success)) {
+                        Button(role: .destructive) { Task { await disable() } } label: {
+                            Label("停用 QQ 通知", systemImage: "bell.slash").frame(minHeight: 44)
                         }
+                        .buttonStyle(.bordered)
                     }
                 }
             }
@@ -97,13 +80,21 @@ struct QqBindingView: View {
                 }
             }
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .setuBackground()
         .setuFeedbackPresentation($feedback)
         .navigationTitle("QQ 绑定")
         .task { await load() }
         .refreshable { await load() }
+    }
+
+    private func bindingItems(_ binding: QqBinding) -> [AccountSurfaceItem] {
+        var items = [
+            AccountSurfaceItem(title: "当前 QQ", value: binding.qqNumber?.isEmpty == false ? binding.qqNumber! : "尚未绑定", systemImage: "link"),
+            AccountSurfaceItem(title: "通知状态", value: binding.isEnabled ? "已启用" : "未启用", systemImage: "bell.badge")
+        ]
+        if let updatedAt = binding.updatedAt, !updatedAt.isEmpty {
+            items.append(.init(title: "更新时间", value: SetuDateFormatter.string(from: updatedAt, style: .full), systemImage: "clock"))
+        }
+        return items
     }
 
     private var trimmedQqNumber: String {
@@ -166,24 +157,6 @@ struct QqBindingView: View {
             state = .loaded(binding)
         } catch {
             feedback = .error(UserFacingErrorMapper.map(error))
-        }
-    }
-}
-
-private struct QqBindingInfoRow: View {
-    let title: String
-    let value: String
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(title)
-                .font(SetuTypography.caption)
-                .foregroundStyle(SetuColor.textSecondary)
-            Spacer(minLength: SetuSpacing.md)
-            Text(value)
-                .font(.callout.weight(.medium))
-                .foregroundStyle(SetuColor.textPrimary)
-                .multilineTextAlignment(.trailing)
         }
     }
 }

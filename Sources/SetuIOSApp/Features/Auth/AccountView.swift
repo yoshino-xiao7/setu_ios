@@ -20,6 +20,8 @@ struct AccountView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Bindable var environment: AppEnvironment
     @AppStorage("setu_admin_mode_enabled") private var adminModeEnabled = false
+    @State private var qqSummary: LoadState<String> = .idle
+    @State private var passkeySummary: LoadState<String> = .idle
     @State private var email = ""
     @State private var password = ""
     @State private var loginCaptcha = AuthCaptchaState()
@@ -97,7 +99,7 @@ struct AccountView: View {
     }
 
     private func authenticatedContent(user: CurrentUser) -> some View {
-        List {
+        SetuBoard {
             Section {
                 SetuCard(padding: SetuSpacing.xl) {
                     AccountProfileCard(user: user) {
@@ -105,49 +107,20 @@ struct AccountView: View {
                     }
                 }
             }
-            .setuListRow()
 
-            Section {
-                SetuCard {
-                    VStack(spacing: SetuSpacing.lg) {
-                        SetuSectionHeader(title: "账号与安全")
-                        SetuNavigationRow(title: "个人资料", subtitle: "头像、昵称和账号信息", systemImage: "person.crop.circle") {
-                            router.navigate(to: .profile)
-                        }
-                        SetuNavigationRow(title: "QQ 绑定", subtitle: "连接 QQ 账号与通知", systemImage: "link") {
-                            router.navigate(to: .qqBinding)
-                        }
-                        SetuNavigationRow(title: "修改密码", subtitle: "更新账号登录密码", systemImage: "lock") {
-                            router.navigate(to: .security)
-                        }
-                        SetuNavigationRow(title: "通行密钥", subtitle: "Face ID、Touch ID 或设备密码登录", systemImage: "touchid") {
-                            router.navigate(to: .passkeys)
-                        }
-                    }
+            SetuSectionHeader(title: "账号与安全")
+            SetuBento(items: accountItems(user), span: { _ in .small }) { item in
+                SetuBentoTile(title: item.title, subtitle: item.value, systemImage: item.systemImage) {
+                    if let route = item.route { router.navigate(to: route) }
                 }
             }
-            .setuListRow()
 
-            Section {
-                SetuCard {
-                    VStack(spacing: SetuSpacing.lg) {
-                        SetuSectionHeader(title: "帮助与信息")
-                        SetuNavigationRow(title: "使用帮助", subtitle: "查看图片、音乐与创作说明", systemImage: "questionmark.circle") {
-                            router.navigate(to: .docs)
-                        }
-                        SetuNavigationRow(title: "隐私政策", subtitle: "了解数据与账号安全", systemImage: "hand.raised") {
-                            router.navigate(to: .privacy)
-                        }
-                        SetuNavigationRow(title: "服务条款", subtitle: "了解使用规则与内容说明", systemImage: "doc.text.magnifyingglass") {
-                            router.navigate(to: .terms)
-                        }
-                        SetuNavigationRow(title: "关于雪涼云", subtitle: "产品介绍与版本信息", systemImage: "info.circle") {
-                            router.navigate(to: .about)
-                        }
-                    }
+            SetuSectionHeader(title: "帮助与信息")
+            SetuBento(items: helpItems, span: { _ in .small }) { item in
+                SetuBentoTile(title: item.title, subtitle: item.value, systemImage: item.systemImage) {
+                    if let route = item.route { router.navigate(to: route) }
                 }
             }
-            .setuListRow()
 
             if user.role == .admin {
                 Section {
@@ -166,7 +139,6 @@ struct AccountView: View {
                         }
                     }
                 }
-                .setuListRow()
             }
 
             Section {
@@ -183,17 +155,15 @@ struct AccountView: View {
                 }
                 .buttonStyle(.bordered)
             }
-            .setuListRow()
 
             if let error = environment.authSession.lastError {
                 Section {
                     SetuFeedbackBanner(feedback: .error(error))
                 }
-                .setuListRow()
             }
 
             if environment.authSession.currentUser?.role == .admin {
-                Section("故障排查") {
+                SetuCard {
                     DisclosureGroup("会话与登录状态") {
                         Button("刷新签名密钥") {
                             Task {
@@ -258,9 +228,62 @@ struct AccountView: View {
                 }
             }
         }
-        .listStyle(.plain)
-        .setuBackground()
         .navigationTitle("我的")
+        .task(id: user.id) { await loadAccountSummaries() }
+        .refreshable { await loadAccountSummaries() }
+    }
+
+    private func accountItems(_ user: CurrentUser) -> [AccountSurfaceItem] {
+        [
+            .init(title: "个人资料", value: user.nickname?.isEmpty == false ? user.nickname! : user.email, systemImage: "person.crop.circle", route: .profile),
+            .init(title: "QQ 绑定", value: summaryText(qqSummary), systemImage: "link", route: .qqBinding),
+            .init(title: "修改密码", value: "当前账号已登录", systemImage: "lock", route: .security),
+            .init(title: "通行密钥", value: summaryText(passkeySummary), systemImage: "touchid", route: .passkeys)
+        ]
+    }
+
+    private func summaryText(_ state: LoadState<String>) -> String {
+        switch state {
+        case .idle, .loading: "正在同步当前状态"
+        case .failed: "状态暂未同步，进入详情查看"
+        case .loaded(let value): value
+        }
+    }
+
+    private func loadAccountSummaries() async {
+        qqSummary = .loading
+        passkeySummary = .loading
+        async let qq = fetchQqSummary()
+        async let passkeys = fetchPasskeySummary()
+        (qqSummary, passkeySummary) = await (qq, passkeys)
+    }
+
+    private func fetchQqSummary() async -> LoadState<String> {
+        do {
+            let binding = try await environment.userProfileClient.getQqBinding()
+            guard let number = binding.qqNumber, !number.isEmpty else { return .loaded("尚未绑定 QQ") }
+            return .loaded("已绑定 QQ · \(number) · 通知\(binding.isEnabled ? "已启用" : "未启用")")
+        } catch {
+            return .failed(UserFacingErrorMapper.map(error))
+        }
+    }
+
+    private func fetchPasskeySummary() async -> LoadState<String> {
+        do {
+            let items = try await environment.passkeyClient.list()
+            return .loaded(items.isEmpty ? "尚未开通" : "已开通 \(items.count) 个")
+        } catch {
+            return .failed(UserFacingErrorMapper.map(error))
+        }
+    }
+
+    private var helpItems: [AccountSurfaceItem] {
+        [
+            .init(title: "使用帮助", value: "图库、音乐与创作说明", systemImage: "questionmark.circle", route: .docs),
+            .init(title: "隐私政策", value: "数据与账号安全", systemImage: "hand.raised", route: .privacy),
+            .init(title: "服务条款", value: "使用规则与内容说明", systemImage: "doc.text.magnifyingglass", route: .terms),
+            .init(title: "关于雪涼云", value: "产品介绍与版本信息", systemImage: "info.circle", route: .about)
+        ]
     }
 
     private var unauthenticatedAuthScreen: some View {
@@ -268,7 +291,7 @@ struct AccountView: View {
             AuthWelcomeBackdrop()
                 .ignoresSafeArea()
 
-            ScrollView {
+            SetuBoard(inset: SetuSpacing.xl) {
                 Group {
                     if authPage == .landing {
                         AuthWelcomeView(
@@ -285,8 +308,11 @@ struct AccountView: View {
                         )
                         .transition(.opacity.combined(with: .move(edge: .bottom)))
                     } else {
-                        AuthGlassPanel {
-                            unauthenticatedContent
+                        SetuCard(padding: SetuSpacing.xl) {
+                            VStack(spacing: SetuSpacing.xl) {
+                                AuthHeaderImage()
+                                unauthenticatedContent
+                            }
                         }
                         .frame(maxWidth: 520)
                         .transition(.opacity.combined(with: .move(edge: .bottom)))
@@ -296,7 +322,6 @@ struct AccountView: View {
                 .padding(.vertical, SetuSpacing.lg)
             }
             .scrollDismissesKeyboard(.interactively)
-            .padding(.horizontal, SetuSpacing.xl)
             .padding(.vertical, SetuSpacing.sm)
         }
         .navigationTitle("")
@@ -391,13 +416,13 @@ struct AccountView: View {
             .font(.footnote.weight(.semibold))
             .foregroundStyle(SetuColor.brandInk)
 
-            Button {
+            SetuPrimaryButton {
                 Task { await loginWithPassword() }
             } label: {
                 if authActionLoading {
-                    AuthGradientProgressLabel(title: "正在登录")
+                    Label("正在登录", systemImage: "hourglass")
                 } else {
-                    AuthGradientButtonLabel(title: "登录")
+                    Text("登录")
                 }
             }
             .buttonStyle(.plain)
@@ -435,13 +460,13 @@ struct AccountView: View {
                 Task { await refreshCaptcha(.register) }
             }
 
-            Button {
+            SetuPrimaryButton {
                 Task { await registerAccount() }
             } label: {
                 if authActionLoading {
-                    AuthGradientProgressLabel(title: "正在注册")
+                    Label("正在注册", systemImage: "hourglass")
                 } else {
-                    AuthGradientButtonLabel(title: "注册")
+                    Text("注册")
                 }
             }
             .buttonStyle(.plain)
@@ -482,13 +507,13 @@ struct AccountView: View {
                 Task { await refreshCaptcha(.recovery) }
             }
 
-            Button {
+            SetuPrimaryButton {
                 Task { await sendPasswordRecoveryEmail() }
             } label: {
                 if authActionLoading {
-                    AuthGradientProgressLabel(title: "正在发送重置邮件")
+                    Label("正在发送重置邮件", systemImage: "hourglass")
                 } else {
-                    AuthGradientButtonLabel(title: "发送重置邮件")
+                    Text("发送重置邮件")
                 }
             }
             .buttonStyle(.plain)
@@ -519,13 +544,13 @@ struct AccountView: View {
             AuthSecureInputRow(systemImage: "key", placeholder: "新密码", text: $resetPassword, focus: $focusedField, field: .resetPassword, accessibilityIdentifier: "auth.reset.password")
                 .textContentType(.newPassword)
 
-            Button {
+            SetuPrimaryButton {
                 Task { await submitPasswordReset() }
             } label: {
                 if authActionLoading {
-                    AuthGradientProgressLabel(title: "正在重置密码")
+                    Label("正在重置密码", systemImage: "hourglass")
                 } else {
-                    AuthGradientButtonLabel(title: "重置密码")
+                    Text("重置密码")
                 }
             }
             .buttonStyle(.plain)
