@@ -55,7 +55,11 @@ struct MusicHomeView: View {
                                      userID: store.userID, retry: { await loadLandingContent(force: true) })
                     .environment(\.musicPlaybackIntent, MusicPlaybackIntent(player: player, store: store, libraryClient: environment.musicV2Client, libraryEnabled: environment.config.musicFeatureFlags.likedTracksEnabled))
             } else {
-                recentHistoryContent
+                if store.usesCanonicalHistory(config: environment.config) {
+                    canonicalRecentHistoryContent
+                } else {
+                    recentHistoryContent
+                }
                 myPlaylistContent
                 dailySongsContent
                 newSongsContent
@@ -162,6 +166,36 @@ struct MusicHomeView: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private var canonicalRecentHistoryContent: some View {
+        Section("继续听") {
+            MusicDetailState(resource: store.canonicalHistory, retry: { await loadLandingContent(force: true) }) { page in
+                if page.items.isEmpty {
+                    Text("还没有播放记录").foregroundStyle(.secondary)
+                }
+                ForEach(Array(page.items.prefix(8))) { item in
+                    Button {
+                        Task {
+                            let owner = store.sessionToken
+                            do {
+                                let track = try await environment.musicV2Client.track(item.id)
+                                guard owner == store.sessionToken, track.id == item.id else { return }
+                                let intent = MusicPlaybackIntent(player: player, store: store, libraryClient: environment.musicV2Client,
+                                    libraryEnabled: environment.config.musicFeatureFlags.likedTracksEnabled)
+                                await intent.play(track, in: [track], context: .unknown(reason: .missingProvenance, label: "最近播放"))
+                            } catch {
+                                if owner == store.sessionToken { player.showFeedback(.error(UserFacingErrorMapper.map(error).message)) }
+                            }
+                        }
+                    } label: {
+                        Text(item.entry.track?.title ?? "歌曲信息暂不可用").frame(minHeight: 44)
+                    }
+                }
+                NavigationLink("查看全部播放历史", value: AppRoute.musicHistory)
+            }
+        }.setuListRow()
     }
 
     @ViewBuilder
@@ -444,7 +478,7 @@ struct MusicHomeView: View {
         if environment.config.musicFeatureFlags.usesV2Home {
             await store.loadHomeV2(client: environment.musicV2Client, force: force)
         } else {
-            await store.loadHome(force: force)
+            await store.loadHome(force: force, historyClient: store.usesCanonicalHistory(config: environment.config) ? environment.musicV2Client : nil)
         }
     }
 
