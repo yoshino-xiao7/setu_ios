@@ -170,32 +170,49 @@ struct MusicHomeView: View {
 
     @ViewBuilder
     private var canonicalRecentHistoryContent: some View {
-        Section("继续听") {
-            MusicDetailState(resource: store.canonicalHistory, retry: { await loadLandingContent(force: true) }) { page in
-                if page.items.isEmpty {
-                    Text("还没有播放记录").foregroundStyle(.secondary)
-                }
-                ForEach(Array(page.items.prefix(8))) { item in
-                    Button {
-                        Task {
-                            let owner = store.sessionToken
-                            do {
-                                let track = try await environment.musicV2Client.track(item.id)
-                                guard owner == store.sessionToken, track.id == item.id else { return }
-                                let intent = MusicPlaybackIntent(player: player, store: store, libraryClient: environment.musicV2Client,
-                                    libraryEnabled: environment.config.musicFeatureFlags.likedTracksEnabled)
-                                await intent.play(track, in: [track], context: .unknown(reason: .missingProvenance, label: "最近播放"))
-                            } catch {
-                                if owner == store.sessionToken { player.showFeedback(.error(UserFacingErrorMapper.map(error).message)) }
+        Section {
+            SetuCard {
+                VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                    SetuSectionHeader(title: "继续听", subtitle: "最近播放")
+                    MusicDetailState(resource: store.canonicalHistory, retry: { await loadLandingContent(force: true) }) { page in
+                        if page.items.isEmpty {
+                            SetuEmptyState(title: "还没有播放记录", message: "找到喜欢的歌后，之后可以从这里继续听。", systemImage: "clock.arrow.circlepath")
+                        }
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(alignment: .top, spacing: SetuSpacing.md) {
+                                ForEach(Array(page.items.prefix(8))) { item in
+                                    if let track = item.entry.track {
+                                        MusicRecentHistoryCard(track: track) {
+                                            Task {
+                                                let intent = MusicPlaybackIntent(player: player, store: store, libraryClient: environment.musicV2Client,
+                                                    libraryEnabled: environment.config.musicFeatureFlags.likedTracksEnabled)
+                                                await intent.play(track, in: page.items.compactMap { $0.entry.track },
+                                                    context: .unknown(reason: .missingProvenance, label: "最近播放"))
+                                            }
+                                        }
+                                    } else {
+                                        VStack {
+                                            MusicArtworkView(urlString: nil, width: 116, height: 116)
+                                            Text("歌曲信息暂不可用").font(.caption).foregroundStyle(.secondary)
+                                        }.frame(width: 132)
+                                    }
+                                }
                             }
                         }
-                    } label: {
-                        Text(item.entry.track?.title ?? "歌曲信息暂不可用").frame(minHeight: 44)
+                        Button { router.navigate(to: .musicHistory) } label: {
+                            HStack { Text("查看全部播放历史"); Spacer(); Image(systemName: "chevron.right") }
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(SetuColor.brandInk)
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                                .padding(.vertical, SetuSpacing.xs)
+                        }
+                        .setuButtonFeedback()
                     }
                 }
-                NavigationLink("查看全部播放历史", value: AppRoute.musicHistory)
             }
-        }.setuListRow()
+            .setuListRow()
+            .accessibilityIdentifier("music.home.section.history")
+        }
     }
 
     @ViewBuilder

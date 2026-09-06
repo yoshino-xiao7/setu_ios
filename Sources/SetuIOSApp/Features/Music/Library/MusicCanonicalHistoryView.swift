@@ -19,21 +19,26 @@ struct MusicCanonicalHistoryView: View {
             MusicDetailState(resource: store.canonicalHistory, retry: { await load(force: true) }) { page in
                 if page.items.isEmpty { ContentUnavailableView("暂无播放历史", systemImage: "clock") }
                 ForEach(page.items) { item in
-                    Button {
-                        Task {
-                            let owner = store.sessionToken
-                            do {
-                                let track = try await environment.musicV2Client.track(item.id)
-                                guard owner == store.sessionToken, track.id == item.id else { return }
-                                await intent?.play(track, in: [track], context: .unknown(reason: .missingProvenance, label: "播放历史"))
-                            } catch { if owner == store.sessionToken { feedback = UserFacingErrorMapper.map(error).message } }
+                    SetuCard {
+                        VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+                            if let track = item.entry.track {
+                                MusicSongRow(track: track, onPlay: {
+                                    Task {
+                                        await intent?.play(track, in: page.items.compactMap { $0.entry.track },
+                                            context: .unknown(reason: .missingProvenance, label: "播放历史"))
+                                    }
+                                })
+                            } else {
+                                HStack(spacing: SetuSpacing.md) {
+                                    MusicArtworkView(urlString: nil)
+                                    Text("歌曲信息暂不可用").foregroundStyle(.secondary)
+                                }
+                            }
+                            Label(item.entry.lastPlayedAt, systemImage: "clock")
+                                .font(SetuTypography.caption)
+                                .foregroundStyle(SetuColor.textTertiary)
                         }
-                    } label: {
-                        VStack(alignment: .leading) {
-                            Text(item.entry.track?.title ?? "歌曲信息暂不可用")
-                            Text(item.entry.lastPlayedAt).font(.caption).foregroundStyle(.secondary)
-                        }.frame(minHeight: 44)
-                    }
+                    }.setuListRow()
                 }
                 if let error = store.libraryMoreErrors["history"] { Text(error.message) }
                 if page.nextOffset != nil { Button("加载更多") { Task { await load(more: true) } }.disabled(store.libraryMoreLoading.contains("history")) }
