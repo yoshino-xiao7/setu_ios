@@ -39,12 +39,16 @@ final class MusicCutoverTests: XCTestCase {
         let capture = MusicV2RequestCapture()
         MusicV2URLProtocol.handler = { request in
             capture.append(request)
-            return .init(body: Data(#"{"items":[{"ownerId":"setu:user:1","trackId":"netease:track:opaque","lastPlayedAt":"2026-09-06T00:00:00Z","track":null}],"offset":0,"limit":20,"hasMore":false,"total":1,"nextOffset":null}"#.utf8))
+            if request.url!.path == "/user/music/v2/tracks" {
+                return .init(body: Data("{\"items\":[\(MusicV2Fixtures.track)]}".utf8))
+            }
+            return .init(body: Data(#"{"items":[{"ownerId":"setu:user:1","trackId":"netease:track:1","lastPlayedAt":"2026-09-06T00:00:00Z","track":null}],"offset":0,"limit":20,"hasMore":false,"total":1,"nextOffset":null}"#.utf8))
         }
         let store = MusicStore(client: musicTestClient(server: legacy), userID: 1)
         await store.loadHome(historyClient: makeMusicV2Client())
-        XCTAssertEqual(capture.requests.map { $0.url!.path }, ["/user/music/v2/library/history"])
-        XCTAssertEqual(store.canonicalHistory.value?.items.first?.id.rawValue, "netease:track:opaque")
+        XCTAssertEqual(capture.requests.map { $0.url!.path }, ["/user/music/v2/library/history", "/user/music/v2/tracks"])
+        XCTAssertEqual(store.canonicalHistory.value?.items.first?.id.rawValue, "netease:track:1")
+        XCTAssertNotNil(store.canonicalHistory.value?.items.first?.entry.track?.title)
         XCTAssertNil(store.recentHistory.value)
         let requests = await legacy.requests
         XCTAssertFalse(requests.contains { $0.contains("/history") })

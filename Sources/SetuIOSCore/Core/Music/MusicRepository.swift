@@ -282,4 +282,26 @@ public extension MusicQuery where Value == MusicV2NewAlbums { static func newRel
 public extension MusicQuery where Value == MusicV2UserLibrary { static func library(client: MusicV2Client) -> Self { .init(key: .library, client: client) { try await $0.library() } } }
 public extension MusicQuery where Value == MusicV2LikedPage { static func likedTracks(client: MusicV2Client, limit: Int = 20, offset: Int = 0) -> Self { .init(key: .likedTracks(offset: offset, limit: limit), client: client) { try await $0.likedTracks(limit: limit, offset: offset) } } }
 public extension MusicQuery where Value == MusicV2SavedPage { static func favoritePlaylists(client: MusicV2Client, limit: Int = 20, offset: Int = 0) -> Self { .init(key: .favoritePlaylists(offset: offset, limit: limit), client: client) { try await $0.favoritePlaylists(limit: limit, offset: offset) } } }
-public extension MusicQuery where Value == MusicV2HistoryPage { static func historyV2(client: MusicV2Client, limit: Int = 20, offset: Int = 0) -> Self { .init(key: .historyV2(offset: offset, limit: limit), client: client) { try await $0.history(limit: limit, offset: offset) } } }
+public extension MusicQuery where Value == MusicV2HistoryPage {
+    static func historyV2(client: MusicV2Client, limit: Int = 20, offset: Int = 0) -> Self {
+        .init(key: .historyV2(offset: offset, limit: limit), client: client) { client in
+            let page = try await client.history(limit: limit, offset: offset)
+            let missing = page.items.filter { $0.track == nil }.map(\.trackId)
+            guard !missing.isEmpty else { return page }
+            // History membership is durable even when catalog details are unavailable.
+            let tracks: [MusicV2Track]
+            do { tracks = try await client.tracks(missing).items }
+            catch {
+                try Task.checkCancellation()
+                return page
+            }
+            let items = page.items.map { entry in
+                var entry = entry
+                if entry.track == nil { entry.track = tracks.first { $0.id == entry.trackId } }
+                return entry
+            }
+            return MusicV2HistoryPage(items: items, offset: page.offset, limit: page.limit,
+                hasMore: page.hasMore, total: page.total, nextOffset: page.nextOffset)
+        }
+    }
+}
