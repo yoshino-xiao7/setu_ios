@@ -16,6 +16,7 @@ enum MusicDiscoverRoutes {
         case .discovery(let selection, _):
             switch selection {
             case "dailyTracks": return flags.usesV2Home ? .dailyRecommend : nil
+            case "recommendedPlaylists": return flags.usesV2Home ? .recommendedPlaylists : nil
             case "rankings": return flags.rankingsEnabled ? .rankings : nil
             case "newTracks": return flags.newReleasesEnabled ? .newReleases(albums: false) : nil
             case "newAlbums": return flags.newReleasesEnabled ? .newReleases(albums: true) : nil

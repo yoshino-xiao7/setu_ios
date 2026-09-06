@@ -100,6 +100,7 @@ final class MusicStore {
     @ObservationIgnored private var savedPreparation: Task<Void, Never>?
     let homeFeed = MusicResource<MusicV2HomeFeed>()
     let rankings = MusicResource<MusicV2Rankings>()
+    let v2RecommendedPlaylists = MusicResource<MusicV2RecommendedPlaylists>()
     let dailyRecommendations = MusicResource<MusicV2RecommendedTracks>()
     private(set) var newReleaseTracks: [MusicV2Area: MusicResource<MusicDiscoverPage<MusicV2Track>>] = [:]
     private(set) var newReleaseAlbums: [MusicV2Area: MusicResource<MusicDiscoverPage<MusicV2Album>>] = [:]
@@ -150,6 +151,7 @@ final class MusicStore {
         hotSearch.reset(); recommendedPlaylists.reset(); newSongs.reset(); dailySongs.reset()
         recentHistory.reset(); playlists.reset(); history.reset()
         homeFeed.reset(); rankings.reset(); dailyRecommendations.reset()
+        v2RecommendedPlaylists.reset()
         for resource in newReleaseTracks.values { resource.reset() }
         for resource in newReleaseAlbums.values { resource.reset() }
         newReleaseTracks.removeAll(); newReleaseAlbums.removeAll()
@@ -195,14 +197,22 @@ final class MusicStore {
         }
     }
 
-    func loadHome(force: Bool = false) async {
+    func loadHome(force: Bool = false, historyClient: MusicV2Client? = nil) async {
         async let hot: Void = load(hotSearch, .hotSearch, force: force)
         async let recommended: Void = load(recommendedPlaylists, .recommendedPlaylists, force: force)
         async let new: Void = load(newSongs, .newSongs, force: force)
         async let daily: Void = load(dailySongs, .dailySongs, force: force)
-        async let recent: Void = load(recentHistory, .history(limit: 8), force: force)
+        async let recent: Void = loadHomeHistory(client: historyClient, force: force)
         async let lists: Void = loadPlaylists(force: force)
         _ = await (hot, recommended, new, daily, recent, lists)
+    }
+
+    private func loadHomeHistory(client: MusicV2Client?, force: Bool) async {
+        if let client {
+            await loadCanonicalHistory(client: client, force: force)
+        } else {
+            await load(recentHistory, .history(limit: 8), force: force)
+        }
     }
 
     func loadHomeV2(client: MusicV2Client, force: Bool = false) async {
@@ -211,6 +221,10 @@ final class MusicStore {
 
     func loadRankings(client: MusicV2Client, force: Bool = false) async {
         await load(rankings, .rankings(client: client), force: force)
+    }
+
+    func loadRecommendedPlaylists(client: MusicV2Client, force: Bool = false) async {
+        await load(v2RecommendedPlaylists, .recommendedPlaylistsV2(client: client), force: force)
     }
 
     func loadLegacyDaily(force: Bool = false) async { await load(dailySongs, .dailySongs, force: force) }

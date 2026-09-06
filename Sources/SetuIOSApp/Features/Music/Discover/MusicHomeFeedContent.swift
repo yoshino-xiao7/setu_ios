@@ -30,7 +30,9 @@ struct MusicHomeSectionView: View {
         Section {
             SetuCard {
                 LazyVStack(alignment: .leading, spacing: SetuSpacing.md) {
-                    SetuSectionHeader(title: model.section.title, subtitle: model.section.subtitle)
+                    SetuSectionHeader(title: model.section.title, subtitle: model.section.subtitle,
+                        actionTitle: showsRecommendationsEntry ? "查看全部" : nil,
+                        action: showsRecommendationsEntry ? { router.navigate(to: .recommendedPlaylists) } : nil)
                     if let source = model.section.source { MusicDiscoverSourceLabel(source: source) }
                     if model.section.degraded {
                         Text(model.section.items.isEmpty ? "内容暂时不可用" : "刷新暂不可用，正在显示已有内容")
@@ -56,7 +58,7 @@ struct MusicHomeSectionView: View {
                         }
                     default: items
                     }
-                    if let route = MusicDiscoverRoutes.route(model.section.action, flags: flags) {
+                    if !showsRecommendationsEntry, let route = MusicDiscoverRoutes.route(model.section.action, flags: flags) {
                         Button { router.navigate(to: route) } label: {
                             HStack { Text(model.actionTitle); Spacer(); Image(systemName: "chevron.right") }
                                 .font(.footnote.weight(.semibold)).foregroundStyle(SetuColor.brandInk)
@@ -67,6 +69,8 @@ struct MusicHomeSectionView: View {
             }.setuListRow()
         }.accessibilityIdentifier("music.home.v2.section.\(model.id)")
     }
+
+    private var showsRecommendationsEntry: Bool { model.section.kind == .recommendedPlaylists && flags.usesV2Home }
 
     private func isHiddenRadio(_ action: MusicV2HomeAction) -> Bool {
         if case .discovery("radio", _) = action { return !flags.radioFMEnabled }

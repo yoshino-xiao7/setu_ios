@@ -19,6 +19,10 @@ extension RootAppView {
             if environment.config.musicFeatureFlags.rankingsEnabled {
                 RankingsView(environment: environment).environment(musicStore)
             }
+        case .recommendedPlaylists:
+            if environment.config.musicFeatureFlags.usesV2Home {
+                RecommendedPlaylistsView(environment: environment).environment(musicStore)
+            }
         case .newReleases(let albums):
             if environment.config.musicFeatureFlags.newReleasesEnabled {
                 NewReleasesView(environment: environment, albums: albums).environment(musicStore)
@@ -46,11 +50,9 @@ extension RootAppView {
             MusicPlaylistsView(environment: environment, player: musicPlayer)
                 .environment(musicStore)
         case .playlistDetail(let id):
-            if environment.config.musicFeatureFlags.usesV2PlaylistDetail {
-                playlistDetailDestination(.local(.init(rawValue: "setu:playlist:\(id)")))
-            } else {
-                MusicPlaylistDetailView(environment: environment, player: musicPlayer, playlistID: id).environment(musicStore)
-            }
+            // The owned-playlist management surface remains /user/playlists/**
+            // under the cutover manifest; external detail uses playlistDetailV2.
+            MusicPlaylistDetailView(environment: environment, player: musicPlayer, playlistID: id).environment(musicStore)
         case .artistDetail(let id):
             if MusicDetailRoutes.artist(.init(rawValue: id), flags: environment.config.musicFeatureFlags) != nil {
                 ArtistDetailView(environment: environment, artistID: id).environment(musicStore)

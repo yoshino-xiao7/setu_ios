@@ -40,6 +40,7 @@ enum AppRoute: Hashable {
     case rankings
     case newReleases(albums: Bool)
     case dailyRecommend
+    case recommendedPlaylists
     case notifications
     case favorites
     case imageDeleteRequests

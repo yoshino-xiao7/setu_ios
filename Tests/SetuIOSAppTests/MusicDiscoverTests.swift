@@ -7,6 +7,30 @@ import XCTest
 final class MusicDiscoverTests: XCTestCase {
     override func tearDown() { MusicV2URLProtocol.handler = nil; super.tearDown() }
 
+    func testRecommendedPlaylistsLoadsOnlyOnNavigationAndResetsForOwner() async {
+        let capture = MusicV2RequestCapture()
+        MusicV2URLProtocol.handler = { request in
+            capture.append(request)
+            if request.url?.path.hasSuffix("/recommend/playlists") == true {
+                return .init(body: Data("{\"items\":[],\"source\":\(MusicV2Fixtures.source)}".utf8))
+            }
+            return MusicV2Fixtures.response(for: request)
+        }
+        let store = MusicStore(client: musicTestClient(), userID: 1), client = makeMusicV2Client()
+        await store.loadHomeV2(client: client)
+        XCTAssertEqual(capture.requests.map { $0.url!.path }, ["/user/music/v2/home"])
+        var flags = MusicFeatureFlags()
+        XCTAssertNil(MusicDiscoverRoutes.route(.discovery(selection: "recommendedPlaylists", label: nil), flags: flags))
+        flags.usesV2Home = true
+        XCTAssertEqual(MusicDiscoverRoutes.route(.discovery(selection: "recommendedPlaylists", label: nil), flags: flags), .recommendedPlaylists)
+        await store.loadRecommendedPlaylists(client: client)
+        XCTAssertEqual(capture.requests.last?.url?.path, "/user/music/v2/recommend/playlists")
+        XCTAssertEqual(store.v2RecommendedPlaylists.value?.items.count, 0)
+        XCTAssertNil(store.v2RecommendedPlaylists.error)
+        store.reset(for: 2)
+        XCTAssertNil(store.v2RecommendedPlaylists.value)
+    }
+
     func testHomeColdOneWarmAndNavigationReturnZeroForceOne() async throws {
         let capture = MusicV2RequestCapture(), keychain = MusicV2CountingKeychain()
         MusicV2URLProtocol.handler = { capture.append($0); return MusicV2Fixtures.response(for: $0) }
