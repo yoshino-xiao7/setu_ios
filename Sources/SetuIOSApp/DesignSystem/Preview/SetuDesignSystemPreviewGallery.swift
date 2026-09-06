@@ -16,11 +16,45 @@ struct SetuDesignSystemPreviewGallery: View {
                 contentStateSection
                 loadMoreSection
                 cardAndButtonSection
+                sakuraTideSection
             }
             .padding(.horizontal, SetuSpacing.lg)
             .padding(.vertical, SetuSpacing.xl)
         }
         .background(SetuColor.pageGradient.ignoresSafeArea())
+    }
+
+    private var sakuraTideSection: some View {
+        previewSection(title: "樱潮版式", subtitle: "便当 · 展架 · 瀑布 · 记录 · 卡摞") {
+            SetuBento(items: SetuPreviewFixtures.contentItems, span: { _ in .small }) { item in
+                SetuBentoTile(title: item.title, subtitle: item.detail, systemImage: item.systemImage)
+            }
+            SetuShelf(title: "最近作品", actionTitle: "查看全部", action: {}, items: SetuPreviewFixtures.contentItems) { item in
+                SetuShelfCard(title: item.title, footnote: item.metadata, aspectRatio: 0.75, action: {})
+            }
+            SetuMosaic(items: SetuPreviewFixtures.contentItems, aspectRatio: { _ in 0.75 }) { item in
+                SetuSkeletonTile(aspectRatio: 0.75, title: item.title)
+            }
+            SetuRecordBoard(items: SetuPreviewFixtures.contentItems) { item in
+                SetuRecordCard(headline: item.title, supporting: item.detail,
+                               status: SetuRecordStatus("已完成", tone: .success),
+                               fields: [SetuRecordField("编号", "20260906"), SetuRecordField("说明", item.metadata, isNumeric: false)])
+            }
+            SetuRecordCard(headline: "审核记录", status: SetuRecordStatus("待处理", tone: .warning), density: .compact) {
+                Button("查看详情") {}.frame(minHeight: 44)
+            }
+            SetuFilterBar(options: [
+                .init(value: "all", title: "全部", badge: 12),
+                .init(value: "saved", title: "已收藏", systemImage: "heart")
+            ], selection: .constant("all"))
+            SetuMetricRing(value: "128", caption: "可用积分", progress: 0.64)
+            SetuTimeline(events: [
+                .init(id: "queue", title: "排队", timestamp: "12:00", tone: .muted),
+                .init(id: "generate", title: "正在生成", detail: SetuPreviewFixtures.longChinese, tone: .brand, isCurrent: true)
+            ])
+            SetuDeck { SetuSkeletonTile(aspectRatio: 0.75) }
+            SetuActionDock { SetuPrimaryButton(action: {}) { Text("开始创作") } }
+        }
     }
 
     private var galleryHeader: some View {
