@@ -19,6 +19,10 @@ extension RootAppView {
             if environment.config.musicFeatureFlags.rankingsEnabled {
                 RankingsView(environment: environment).environment(musicStore)
             }
+        case .recommendedPlaylists:
+            if environment.config.musicFeatureFlags.usesV2Home {
+                RecommendedPlaylistsView(environment: environment).environment(musicStore)
+            }
         case .newReleases(let albums):
             if environment.config.musicFeatureFlags.newReleasesEnabled {
                 NewReleasesView(environment: environment, albums: albums).environment(musicStore)

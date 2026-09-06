@@ -100,6 +100,7 @@ final class MusicStore {
     @ObservationIgnored private var savedPreparation: Task<Void, Never>?
     let homeFeed = MusicResource<MusicV2HomeFeed>()
     let rankings = MusicResource<MusicV2Rankings>()
+    let v2RecommendedPlaylists = MusicResource<MusicV2RecommendedPlaylists>()
     let dailyRecommendations = MusicResource<MusicV2RecommendedTracks>()
     private(set) var newReleaseTracks: [MusicV2Area: MusicResource<MusicDiscoverPage<MusicV2Track>>] = [:]
     private(set) var newReleaseAlbums: [MusicV2Area: MusicResource<MusicDiscoverPage<MusicV2Album>>] = [:]
@@ -150,6 +151,7 @@ final class MusicStore {
         hotSearch.reset(); recommendedPlaylists.reset(); newSongs.reset(); dailySongs.reset()
         recentHistory.reset(); playlists.reset(); history.reset()
         homeFeed.reset(); rankings.reset(); dailyRecommendations.reset()
+        v2RecommendedPlaylists.reset()
         for resource in newReleaseTracks.values { resource.reset() }
         for resource in newReleaseAlbums.values { resource.reset() }
         newReleaseTracks.removeAll(); newReleaseAlbums.removeAll()
@@ -219,6 +221,10 @@ final class MusicStore {
 
     func loadRankings(client: MusicV2Client, force: Bool = false) async {
         await load(rankings, .rankings(client: client), force: force)
+    }
+
+    func loadRecommendedPlaylists(client: MusicV2Client, force: Bool = false) async {
+        await load(v2RecommendedPlaylists, .recommendedPlaylistsV2(client: client), force: force)
     }
 
     func loadLegacyDaily(force: Bool = false) async { await load(dailySongs, .dailySongs, force: force) }

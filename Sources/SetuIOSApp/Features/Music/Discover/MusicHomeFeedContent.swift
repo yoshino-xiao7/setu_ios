@@ -62,6 +62,9 @@ struct MusicHomeSectionView: View {
                                 .font(.footnote.weight(.semibold)).foregroundStyle(SetuColor.brandInk)
                                 .frame(minHeight: 44).contentShape(Rectangle())
                         }.setuButtonFeedback()
+                    } else if model.section.kind == .recommendedPlaylists, flags.usesV2Home {
+                        Button("查看全部推荐歌单") { router.navigate(to: .recommendedPlaylists) }
+                            .frame(minHeight: 44).setuButtonFeedback()
                     }
                 }
             }.setuListRow()
