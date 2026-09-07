@@ -189,7 +189,7 @@ final class MusicPlaybackController {
         preciseSeekCache: PreciseSeekAudioCache? = nil,
         seekPreparationTimeout: Duration = .seconds(30)
     ) {
-        self.preciseSeekCache = preciseSeekCache ?? PreciseSeekAudioCache()
+        self.preciseSeekCache = preciseSeekCache ?? PreciseSeekAudioCache(storageDirectory: persistsPlayback ? PreciseSeekAudioCache.persistentDirectory : nil)
         self.seekPreparationTimeout = seekPreparationTimeout
         self.persistsPlayback = persistsPlayback
         self.preferences = preferences
@@ -584,10 +584,11 @@ final class MusicPlaybackController {
             self.failSeek(message: "准备跳转超时，已保留原播放位置")
         }
         let cache = preciseSeekCache
+        let cacheKey = currentTrack.map { preciseAudioKey(for: $0) }
         seekPreparationTask = Task { [weak self] in
             do {
                 try Task.checkCancellation()
-                let asset = try await cache.prepare(source: source)
+                let asset = try await cache.prepare(source: source, identity: cacheKey)
                 try Task.checkCancellation()
                 guard let self, self.seekID == ticket, self.streamingSourceURL == source,
                       let player = self.player else { return }
@@ -686,9 +687,10 @@ final class MusicPlaybackController {
     private func prefetchPreciseAudio() {
         guard precisePrefetchTask == nil, let source = streamingSourceURL else { return }
         let cache = preciseSeekCache
+        let cacheKey = currentTrack.map { preciseAudioKey(for: $0) }
         precisePrefetchTask = Task(priority: .utility) {
             guard !Task.isCancelled else { return }
-            _ = try? await cache.prepare(source: source)
+            _ = try? await cache.prepare(source: source, identity: cacheKey)
         }
     }
 
@@ -987,8 +989,20 @@ final class MusicPlaybackController {
 
     // MARK: - Queue advancement
 
+    private func preciseAudioKey(for track: MusicPlaybackTrack) -> String {
+        "\(snapshotStore.userID.map(String.init) ?? "anonymous")|\(track.id)|\(audioQuality.rawValue)"
+    }
+
     private func resumeRestoredCurrentTrack() {
-        guard resumeTask == nil, let track = currentTrack, let resolver = urlResolver else { return }
+        guard resumeTask == nil, let track = currentTrack else { return }
+        if let local = preciseSeekCache.cachedSource(identity: preciseAudioKey(for: track)) {
+            let position = currentTimeSeconds
+            beginTransition()
+            currentSource = nil
+            load(url: local, track: track, index: currentQueueIndex, resumeAt: position)
+            return
+        }
+        guard let resolver = urlResolver else { return }
         beginTransition()
         let ticket = transitionID, position = currentTimeSeconds, quality = audioQuality
         let force = player?.currentItem?.status == .failed

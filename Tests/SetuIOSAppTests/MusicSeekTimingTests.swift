@@ -133,7 +133,10 @@ final class MusicSeekTimingTests: XCTestCase {
         let preferences = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { preferences.removePersistentDomain(forName: suite) }
         let url = try fixtureURL(), track = try playbackTracks()[0]
-        let before = MusicPlaybackController(preferences: preferences)
+        let storage = FileManager.default.temporaryDirectory.appendingPathComponent(suite)
+        defer { try? FileManager.default.removeItem(at: storage) }
+        let before = MusicPlaybackController(preferences: preferences,
+            preciseSeekCache: PreciseSeekAudioCache(storageDirectory: storage))
         before.setSnapshotUserID(42)
         before.play(url: url, track: track)
         before.pause()
@@ -143,7 +146,11 @@ final class MusicSeekTimingTests: XCTestCase {
         await before.waitForSnapshotWrites()
         before.resetForUserChange()
 
-        let restored = MusicPlaybackController(preferences: preferences)
+        let restored = MusicPlaybackController(preferences: preferences,
+            preciseSeekCache: PreciseSeekAudioCache(storageDirectory: storage) { _, _ in
+                XCTFail("Completed audio must survive controller recreation without another download")
+                throw URLError(.notConnectedToInternet)
+            })
         defer { restored.stop() }
         restored.setSnapshotUserID(42)
         restored.restorePlaybackSnapshotIfNeeded(for: 42)
@@ -156,6 +163,46 @@ final class MusicSeekTimingTests: XCTestCase {
             MainActor.assumeIsolated { restored.player?.timeControlStatus == .playing && !restored.isSeeking }
         }, object: nil)
         await fulfillment(of: [playing], timeout: 8)
+        restored.pause()
+        try await assertRequestedSound(in: XCTUnwrap(restored.player?.currentItem).asset)
+        XCTAssertEqual(try XCTUnwrap(restored.player).currentTime().seconds, 19, accuracy: 1)
+    }
+
+    func testRelaunchUsesCompletedAudioWithoutResolvingOrDownloadingAgain() async throws {
+        let suite = "restore-seek-\(UUID().uuidString)"
+        let preferences = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { preferences.removePersistentDomain(forName: suite) }
+        let url = try fixtureURL(), track = try playbackTracks()[0]
+        let storage = FileManager.default.temporaryDirectory.appendingPathComponent(suite)
+        defer { try? FileManager.default.removeItem(at: storage) }
+        let before = MusicPlaybackController(preferences: preferences,
+            preciseSeekCache: PreciseSeekAudioCache(storageDirectory: storage))
+        before.setSnapshotUserID(42)
+        before.play(url: url, track: track)
+        before.pause()
+        before.seek(to: 19)
+        await waitForSeek(before)
+        before.savePlaybackSnapshot(userID: 42)
+        await before.waitForSnapshotWrites()
+        before.resetForUserChange()
+
+        let restored = MusicPlaybackController(preferences: preferences,
+            preciseSeekCache: PreciseSeekAudioCache(storageDirectory: storage) { _, _ in
+                XCTFail("Completed audio must survive controller recreation without another download")
+                throw URLError(.notConnectedToInternet)
+            })
+        defer { restored.stop() }
+        restored.setSnapshotUserID(42)
+        restored.restorePlaybackSnapshotIfNeeded(for: 42)
+        XCTAssertEqual(restored.currentTimeSeconds, 19, accuracy: 0.1)
+        restored.urlResolver = PlaybackURLResolver { ids, quality in
+            throw URLError(.notConnectedToInternet)
+        }
+        restored.resume()
+        let playing = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            MainActor.assumeIsolated { restored.player?.timeControlStatus == .playing && !restored.isSeeking }
+        }, object: nil)
+        await fulfillment(of: [playing], timeout: 3)
         restored.pause()
         try await assertRequestedSound(in: XCTUnwrap(restored.player?.currentItem).asset)
         XCTAssertEqual(try XCTUnwrap(restored.player).currentTime().seconds, 19, accuracy: 1)
@@ -206,6 +253,39 @@ final class MusicSeekTimingTests: XCTestCase {
         controller.pause()
         XCTAssertEqual(try XCTUnwrap(controller.player).currentTime().seconds, 19, accuracy: 1)
         try await assertRequestedSound(in: XCTUnwrap(controller.player?.currentItem).asset)
+    }
+
+    func testPersistentCacheSeparatesSourcesAndEvictsOldAudio() async throws {
+        let storage = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: storage) }
+        let cache = PreciseSeekAudioCache(storageDirectory: storage)
+        let url = try fixtureURL()
+        _ = try await cache.prepare(source: url, identity: "user1|song1|standard")
+        XCTAssertNotNil(cache.cachedSource(identity: "user1|song1|standard"))
+        XCTAssertNil(cache.cachedSource(identity: "user2|song1|standard"))
+        XCTAssertNil(cache.cachedSource(identity: "user1|song1|lossless"))
+        _ = try await cache.prepare(source: url, identity: "user1|song2|standard")
+        _ = try await cache.prepare(source: url, identity: "user1|song3|standard")
+        XCTAssertNil(cache.cachedSource(identity: "user1|song1|standard"))
+        let stored = try XCTUnwrap(cache.cachedSource(identity: "user1|song3|standard"))
+        cache.invalidate()
+        try Data("broken audio".utf8).write(to: stored)
+        do {
+            _ = try await cache.prepare(source: url, identity: "user1|song3|standard")
+            XCTFail("Corrupt files must not remain available for restoration")
+        } catch {}
+        XCTAssertNil(cache.cachedSource(identity: "user1|song3|standard"))
+        _ = try await cache.prepare(source: url, identity: "user1|song3|standard")
+        XCTAssertNotNil(cache.cachedSource(identity: "user1|song3|standard"))
+    }
+
+    func testUnavailablePersistentStorageDoesNotPreventPrecisePlayback() async throws {
+        let storage = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try Data("not a directory".utf8).write(to: storage)
+        defer { try? FileManager.default.removeItem(at: storage) }
+        let cache = PreciseSeekAudioCache(storageDirectory: storage)
+        let asset = try await cache.prepare(source: fixtureURL(), identity: "user|song|quality")
+        try await assertRequestedSound(in: asset)
     }
 
     private func waitForSeek(_ controller: MusicPlaybackController) async {
