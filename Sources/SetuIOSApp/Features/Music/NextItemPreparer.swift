@@ -17,7 +17,7 @@ final class NextItemPreparer {
     private let makeItem: @MainActor (URL) async throws -> AVPlayerItem
 
     init(makeItem: @escaping @MainActor (URL) async throws -> AVPlayerItem = { url in
-        let asset = AVURLAsset(url: url)
+        let asset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
         guard try await asset.load(.isPlayable) else { throw UserFacingError(message: "音源暂时无法播放") }
         try Task.checkCancellation()
         let item = AVPlayerItem(asset: asset)
