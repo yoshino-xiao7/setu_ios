@@ -134,7 +134,7 @@ final class PreciseSeekAudioCache {
     private func pruneStorage(keeping file: URL) {
         guard let storageDirectory else { return }
         let folder = file.deletingLastPathComponent()
-        guard folder.deletingLastPathComponent() == storageDirectory else { return }
+        guard folder.deletingLastPathComponent().standardizedFileURL.path == storageDirectory.standardizedFileURL.path else { return }
         try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: folder.path)
         let folders = (try? FileManager.default.contentsOfDirectory(at: storageDirectory,
             includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
