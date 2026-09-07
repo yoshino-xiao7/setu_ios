@@ -8,6 +8,7 @@ import UIKit
 struct RandomImageSwipeView: View {
     @Environment(RouterPath.self) private var router
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.displayScale) private var displayScale
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Bindable var environment: AppEnvironment
 
@@ -38,6 +39,13 @@ struct RandomImageSwipeView: View {
     @State private var originalPreviewItem: UserImagePreviewItem?
     @State private var deleteTarget: RandomImageDeleteTarget?
 
+    @State private var pageOffset: CGFloat = 0
+    @State private var pageWidth: CGFloat = 0
+    @State private var incomingCard: ImageFeedCard?
+    @State private var pagingForward = true
+    @State private var isPageAnimating = false
+    @State private var pageTransitionID = UUID()
+
     private let preloadLimit = 10
     private let refillThreshold = 3
     private let noMatchingImagesMessage = "当前筛选条件没有匹配图片"
@@ -62,6 +70,10 @@ struct RandomImageSwipeView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("image.swipe.page")
+        .onDisappear {
+            pageTransitionID = UUID()
+            pageOffset = 0; incomingCard = nil; isPageAnimating = false
+        }
         .setuRefreshAfterLogin(environment.authSession) { Task { await reloadFromParameters() } }
         .setuRetry { Task { await reloadFromParameters() } }
         #if os(iOS)
@@ -238,6 +250,19 @@ struct RandomImageSwipeView: View {
                     floatingStatus(systemImage: "lock.open", title: "正在解锁")
                 }
             }
+            .onAppear { pageWidth = proxy.size.width }
+            .onChange(of: proxy.size.width) { _, width in pageWidth = width }
+            .task(id: previewWarmKeys(width: proxy.size.width)) {
+                let keys = previewWarmKeys(width: proxy.size.width)
+                await withTaskGroup(of: Void.self) { group in
+                    for key in keys {
+                        group.addTask {
+                            guard !Task.isCancelled else { return }
+                            _ = try? await SetuRemoteImageLoader.shared.image(for: key)
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -270,30 +295,79 @@ struct RandomImageSwipeView: View {
     }
 
     private func imagePager(pageSize: CGSize) -> some View {
-        Group {
+        ZStack(alignment: .topLeading) {
             if let card = currentCard {
-                RandomImagePagerPage(card: card, unlockedItem: unlockedItems[card.token], pageSize: pageSize)
-                    .id(card.id)
+                pageArtwork(card, width: pageSize.width)
+                    .offset(x: pageOffset)
+            }
+            if let incomingCard {
+                pageArtwork(incomingCard, width: pageSize.width)
+                    .offset(x: pageOffset + (pagingForward ? pageSize.width : -pageSize.width))
+                    .accessibilityHidden(true)
             }
         }
-        .frame(width: pageSize.width, height: pageSize.height)
+        .frame(width: pageSize.width, height: pageSize.height, alignment: .top)
+        .clipped()
         .contentShape(Rectangle())
         .simultaneousGesture(
-            DragGesture(minimumDistance: 30).onEnded { value in
-                guard !showingUnlockConfirmation, !hasActiveImageMutation,
-                      let direction = ImageBrowseLayout.swipeDirection(translation: value.translation),
-                      let card = currentCard else { return }
-                if direction < 0 {
-                    let generation = feedGeneration
-                    playSwipeFeedback()
-                    Task { await loadNextImage(reason: "已换到下一张图片，预览免费", expectedGeneration: generation) }
-                } else if let index = displayedCards.firstIndex(where: { $0.id == card.id }),
-                          let previous = displayedCards[..<index].last(where: { !ImageFeedExpiryPolicy.isExpired($0.expiresAt) }) {
-                    playSwipeFeedback()
-                    selectCard(previous, reason: "已切换图片")
+            DragGesture(minimumDistance: 30)
+                .onChanged { value in
+                    guard !reduceMotion, !showingUnlockConfirmation, !hasActiveImageMutation,
+                          abs(value.translation.width) > abs(value.translation.height) * 1.5,
+                          let card = currentCard else { return }
+                    pagingForward = value.translation.width < 0
+                    incomingCard = pagingForward ? nextCard(after: card) : previousCard(before: card)
+                    let resistance: CGFloat = incomingCard == nil ? 0.2 : 1
+                    pageOffset = max(-pageSize.width, min(pageSize.width, value.translation.width * resistance))
                 }
-            }
+                .onEnded { value in
+                    guard !isPageAnimating else { return }
+                    guard !showingUnlockConfirmation, !hasActiveImageMutation,
+                          let direction = ImageBrowseLayout.swipeDirection(translation: value.translation),
+                          let card = currentCard else { resetPageDrag(); return }
+                    if direction < 0 {
+                        let generation = feedGeneration
+                        playSwipeFeedback()
+                        if let next = nextCard(after: card) { selectCard(next, reason: "已切换图片") }
+                        else {
+                            resetPageDrag()
+                            Task { await loadNextImage(reason: "已切换图片", expectedGeneration: generation) }
+                        }
+                    } else if let previous = previousCard(before: card) {
+                        playSwipeFeedback()
+                        selectCard(previous, reason: "已切换图片")
+                    } else { resetPageDrag() }
+                }
         )
+    }
+
+    private func pageArtwork(_ card: ImageFeedCard, width: CGFloat) -> some View {
+        RandomImagePagerPage(card: card, unlockedItem: unlockedItems[card.token],
+                             pageSize: CGSize(width: width, height: ImageBrowseLayout.imageHeight(
+                                containerWidth: width, pixelWidth: self.width(for: card), pixelHeight: height(for: card))))
+    }
+
+    private func previousCard(before card: ImageFeedCard) -> ImageFeedCard? {
+        guard let index = displayedCards.firstIndex(where: { $0.id == card.id }) else { return nil }
+        return displayedCards[..<index].last { !ImageFeedExpiryPolicy.isExpired($0.expiresAt) }
+    }
+
+    private func resetPageDrag() {
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { pageOffset = 0 }
+        // Keep the adjacent artwork offscreen until the next drag replaces it.
+    }
+
+    private func previewWarmKeys(width: CGFloat) -> [SetuImageKey] {
+        guard width > 0, let card = currentCard,
+              let index = displayedCards.firstIndex(where: { $0.id == card.id }) else { return [] }
+        let neighbors = Array(displayedCards.dropFirst(index + 1)
+            .filter { !ImageFeedExpiryPolicy.isExpired($0.expiresAt) }.prefix(2))
+        return neighbors.compactMap { card in
+            guard let raw = card.displayURLString(unlockedItem: unlockedItems[card.token]),
+                  let url = URL(string: raw) else { return nil }
+            let height = ImageBrowseLayout.imageHeight(containerWidth: width, pixelWidth: self.width(for: card), pixelHeight: self.height(for: card))
+            return SetuImageKey(url: url, size: .fitting(width: width, height: height, scale: displayScale))
+        }
     }
 
     private func imageDetail(_ card: ImageFeedCard) -> some View {
@@ -520,6 +594,33 @@ struct RandomImageSwipeView: View {
     }
 
     private func selectCard(_ card: ImageFeedCard, reason: String?) {
+        guard currentCard?.id != card.id else { resetPageDrag(); return }
+        guard !isPageAnimating else { return }
+        guard let current = currentCard, pageWidth > 0, !reduceMotion else {
+            incomingCard = nil; pageOffset = 0
+            commitCard(card, reason: reason)
+            return
+        }
+        let currentIndex = displayedCards.firstIndex(where: { $0.id == current.id }) ?? 0
+        let targetIndex = displayedCards.firstIndex(where: { $0.id == card.id }) ?? currentIndex + 1
+        pagingForward = targetIndex > currentIndex
+        incomingCard = card
+        isPageAnimating = true
+        let ticket = UUID(), generation = feedGeneration
+        pageTransitionID = ticket
+        withAnimation(.easeOut(duration: 0.26), completionCriteria: .logicallyComplete) {
+            pageOffset = pagingForward ? -pageWidth : pageWidth
+        } completion: {
+            guard pageTransitionID == ticket, feedGeneration == generation else { return }
+            var transaction = Transaction(); transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                commitCard(card, reason: reason)
+                pageOffset = 0; incomingCard = nil; isPageAnimating = false
+            }
+        }
+    }
+
+    private func commitCard(_ card: ImageFeedCard, reason: String?) {
         if let unlocked = unlockedImagesByKey[imageKey(for: card)] {
             unlockedItems[card.token] = unlocked
         }
@@ -584,7 +685,8 @@ struct RandomImageSwipeView: View {
     }
 
     private var hasActiveImageMutation: Bool {
-        !unlockingTokens.isEmpty || !favoriteLoadingKeys.isEmpty
+        if isPageAnimating { return true }
+        return !unlockingTokens.isEmpty || !favoriteLoadingKeys.isEmpty
     }
 
     private var parsedTags: [String] {
