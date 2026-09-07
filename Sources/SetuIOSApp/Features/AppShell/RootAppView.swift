@@ -36,8 +36,17 @@ struct RootAppView: View {
         Group {
             if isSessionReady {
                 if environment.authSession.isSignedIn || environment.authSession.requiresReauthentication {
-                    appTabs
-                        .id(sessionOwnerID)
+                    #if DEBUG && canImport(MobileVLCKit)
+                    if ProcessInfo.processInfo.arguments.contains("-development-vlc-probe") {
+                        VLCProbeView(environment: environment) { identity in
+                            guard let resolver = musicPlayer.urlResolver else { throw UserFacingError(message: "地址解析尚未就绪") }
+                            return try await resolver.resolve(trackID: identity, quality: musicPlayer.audioQuality)
+                        }
+                        .onAppear { musicPlayer.pause() }
+                    } else { appTabs.id(sessionOwnerID) }
+                    #else
+                    appTabs.id(sessionOwnerID)
+                    #endif
                 } else {
                     NavigationStack(path: Binding(
                         get: { loggedOutRouter.path },

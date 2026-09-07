@@ -11,3 +11,4 @@ xcuserdata/
 *.dSYM.zip
 *.dSYM
 Files.xcfilescontainer/
+Pods/

@@ -75,6 +75,17 @@
                ReferencedContainer = "container:SetuIOSApp.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "E4F6380377E6DFE25A0F0BA7"
+               BuildableName = "SetuVLCIntegrationTests.xctest"
+               BlueprintName = "SetuVLCIntegrationTests"
+               ReferencedContainer = "container:SetuIOSApp.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
       <CommandLineArguments>
       </CommandLineArguments>

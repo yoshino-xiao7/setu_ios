@@ -105,6 +105,21 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: icu.yukiryou.setuios.tests
 
+  SetuVLCIntegrationTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/VLCIntegrationTests
+      - path: Tests/SetuIOSAppTests/Fixtures
+        buildPhase: resources
+    dependencies:
+      - target: SetuIOSApp
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: icu.yukiryou.setuios.vlctests
+        SWIFT_OBJC_BRIDGING_HEADER: Tests/VLCIntegrationTests/VLCAudioProbe.h
+
   SetuIOSAppUITests:
     type: bundle.ui-testing
     platform: iOS
@@ -131,6 +146,7 @@ schemes:
       targets:
         - SetuIOSAppTests
         - SetuIOSAppUITests
+        - SetuVLCIntegrationTests
     archive:
       config: Release
     profile:
