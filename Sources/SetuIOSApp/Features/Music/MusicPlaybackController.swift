@@ -98,6 +98,7 @@ final class MusicPlaybackController {
     private(set) var currentTimeSeconds: Double = 0
     private var mediaDurationSeconds: Double?
     private(set) var isSeeking = false
+    @ObservationIgnored private var isRestoringSeek = false
     @ObservationIgnored private var seekID: UUID?
     @ObservationIgnored private var seekTarget: Double?
     @ObservationIgnored private var seekTimeout: Task<Void, Never>?
@@ -556,11 +557,16 @@ final class MusicPlaybackController {
     }
 
     func seek(to seconds: Double) {
+        beginSeek(to: seconds, restoring: false)
+    }
+
+    private func beginSeek(to seconds: Double, restoring: Bool) {
         guard let player, let item = player.currentItem, let source = streamingSourceURL, seconds.isFinite else { return }
         let original = seekOriginItem ?? item
         let originalPosition = seekOriginPosition ?? currentTimeSeconds
         cancelSeek()
         let ticket = UUID()
+        isRestoringSeek = restoring
         seekID = ticket
         seekTarget = max(0, seconds)
         seekOriginItem = original
@@ -619,6 +625,7 @@ final class MusicPlaybackController {
                     self.failSeek(message: "跳转未完成，已保留原播放位置")
                     return
                 }
+                self.isRestoringSeek = false
                 self.seekID = nil
                 self.seekTimeout?.cancel(); self.seekTimeout = nil
                 self.seekPreparationTask = nil
@@ -634,6 +641,21 @@ final class MusicPlaybackController {
     }
 
     private func failSeek(message: String) {
+        if isRestoringSeek {
+            let position = seekOriginPosition ?? currentTimeSeconds
+            cancelSeek()
+            player?.pause()
+            removeItemObservers()
+            player?.replaceCurrentItem(with: nil)
+            currentTimeSeconds = position
+            isPlaying = false
+            isBuffering = false
+            itemLoadDeadline = nil
+            feedback = .warning("暂时无法恢复准确进度，已保留上次位置，请点击播放重试")
+            updateNowPlaying()
+            persistPlaybackSnapshot()
+            return
+        }
         let original = seekOriginItem
         let position = seekOriginPosition ?? currentTimeSeconds
         cancelSeek()
@@ -651,6 +673,7 @@ final class MusicPlaybackController {
     }
 
     private func cancelSeek() {
+        isRestoringSeek = false
         seekID = nil
         seekTarget = nil
         seekTimeout?.cancel(); seekTimeout = nil
@@ -1097,12 +1120,11 @@ final class MusicPlaybackController {
         updateNowPlaying(elapsed: resumeAt)
         loadNowPlayingArtwork(for: track)
         if resumeAt > 0 {
-            player.seek(to: CMTime(seconds: resumeAt, preferredTimescale: 600)) { [weak self, weak item] finished in
-                Task { @MainActor in
-                    guard finished, let self, let item, self.player?.currentItem === item else { return }
-                    if self.isPlaying { self.playWhenSessionReady(item) }
-                }
-            }
+            // Every nonzero resume uses the same complete-file timing as lyric seeks.
+            // Remote VBR timestamps can look correct while decoding the wrong sound.
+            beginSeek(to: resumeAt, restoring: true)
+            persistPlaybackSnapshot()
+            return
         } else if autoplay {
             playWhenSessionReady(item)
         }

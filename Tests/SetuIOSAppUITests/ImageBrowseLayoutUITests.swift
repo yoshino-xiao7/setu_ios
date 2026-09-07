@@ -18,6 +18,19 @@ final class ImageBrowseLayoutUITests: XCTestCase {
         add(attachment)
     }
 
+    func testSwipeFromDetailsTurnsTheWholePage() {
+        let app = launch()
+        defer { app.terminate() }
+        let title = app.staticTexts["星光落在湖面"]
+        XCTAssertTrue(title.waitForExistence(timeout: 8))
+        let start = title.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5))
+        let end = title.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: 0.5))
+        start.press(forDuration: 0.05, thenDragTo: end)
+        XCTAssertTrue(app.staticTexts["夏日列车与向日葵"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["星光落在湖面"].exists)
+        capture("whole-page-from-details")
+    }
+
     func testPortraitLandscapeLongImageAndExistingActions() {
         let app = launch()
         let scroll = app.scrollViews["image.detail.scroll"]

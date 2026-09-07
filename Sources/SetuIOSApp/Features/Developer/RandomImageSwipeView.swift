@@ -267,46 +267,21 @@ struct RandomImageSwipeView: View {
     }
 
     private func browseLayout(containerSize: CGSize) -> some View {
-        let card = currentCard
-        let imageHeight = ImageBrowseLayout.imageHeight(
-            containerWidth: containerSize.width,
-            pixelWidth: card.map { width(for: $0) } ?? 0,
-            pixelHeight: card.map { height(for: $0) } ?? 0
-        )
-        return ScrollViewReader { scroll in
-            ScrollView {
-                VStack(spacing: 0) {
-                    Color.clear.frame(height: 0).id("image.top")
-                    imagePager(pageSize: CGSize(width: containerSize.width, height: imageHeight))
-                    if let currentCard {
-                        imageDetail(currentCard)
-                            .padding(.horizontal, 20)
-                            .padding(.top, 20)
-                            .padding(.bottom, 96)
-                    }
-                }
-            }
-            .scrollIndicators(.hidden)
-            .accessibilityIdentifier("image.detail.scroll")
-            .onChange(of: currentCard?.id) { _, _ in
-                scroll.scrollTo("image.top", anchor: .top)
-            }
-        }
-    }
-
-    private func imagePager(pageSize: CGSize) -> some View {
         ZStack(alignment: .topLeading) {
             if let card = currentCard {
-                pageArtwork(card, width: pageSize.width)
+                scrollablePage(card, width: containerSize.width)
+                    .id(card.id)
                     .offset(x: pageOffset)
             }
             if let incomingCard {
-                pageArtwork(incomingCard, width: pageSize.width)
-                    .offset(x: pageOffset + (pagingForward ? pageSize.width : -pageSize.width))
+                scrollablePage(incomingCard, width: containerSize.width)
+                    .scrollDisabled(true)
+                    .offset(x: pageOffset + (pagingForward ? containerSize.width : -containerSize.width))
+                    .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
         }
-        .frame(width: pageSize.width, height: pageSize.height, alignment: .top)
+        .frame(width: containerSize.width, height: containerSize.height, alignment: .top)
         .clipped()
         .contentShape(Rectangle())
         .simultaneousGesture(
@@ -318,7 +293,7 @@ struct RandomImageSwipeView: View {
                     pagingForward = value.translation.width < 0
                     incomingCard = pagingForward ? nextCard(after: card) : previousCard(before: card)
                     let resistance: CGFloat = incomingCard == nil ? 0.2 : 1
-                    pageOffset = max(-pageSize.width, min(pageSize.width, value.translation.width * resistance))
+                    pageOffset = max(-containerSize.width, min(containerSize.width, value.translation.width * resistance))
                 }
                 .onEnded { value in
                     guard !isPageAnimating else { return }
@@ -339,6 +314,22 @@ struct RandomImageSwipeView: View {
                     } else { resetPageDrag() }
                 }
         )
+    }
+
+    private func scrollablePage(_ card: ImageFeedCard, width: CGFloat) -> some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                pageArtwork(card, width: width)
+                imageDetail(card)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 20)
+                    .padding(.bottom, 96)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .background(SetuColor.surface)
+        .scrollIndicators(.hidden)
+        .accessibilityIdentifier("image.detail.scroll")
     }
 
     private func pageArtwork(_ card: ImageFeedCard, width: CGFloat) -> some View {

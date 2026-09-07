@@ -102,7 +102,10 @@ final class MusicSeekTimingTests: XCTestCase {
         await waitForSeek(controller)
         XCTAssertTrue(controller.player?.currentItem === original)
         XCTAssertTrue(controller.isPlaying)
-        XCTAssertFalse(controller.isBuffering)
+        let resumed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            MainActor.assumeIsolated { controller.player?.timeControlStatus == .playing && !controller.isBuffering }
+        }, object: nil)
+        await fulfillment(of: [resumed], timeout: 5)
         XCTAssertLessThan(controller.currentTimeSeconds, 5)
         await gate.open()
     }
@@ -123,6 +126,86 @@ final class MusicSeekTimingTests: XCTestCase {
         await fulfillment(of: [cancelled], timeout: 3)
         XCTAssertFalse(controller.isSeeking)
         XCTAssertNil(controller.player?.currentItem)
+    }
+
+    func testRelaunchRestoresActualAudioPositionFromSnapshot() async throws {
+        let suite = "restore-seek-\(UUID().uuidString)"
+        let preferences = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { preferences.removePersistentDomain(forName: suite) }
+        let url = try fixtureURL(), track = try playbackTracks()[0]
+        let before = MusicPlaybackController(preferences: preferences)
+        before.setSnapshotUserID(42)
+        before.play(url: url, track: track)
+        before.pause()
+        before.seek(to: 19)
+        await waitForSeek(before)
+        before.savePlaybackSnapshot(userID: 42)
+        await before.waitForSnapshotWrites()
+        before.resetForUserChange()
+
+        let restored = MusicPlaybackController(preferences: preferences)
+        defer { restored.stop() }
+        restored.setSnapshotUserID(42)
+        restored.restorePlaybackSnapshotIfNeeded(for: 42)
+        XCTAssertEqual(restored.currentTimeSeconds, 19, accuracy: 0.1)
+        restored.urlResolver = PlaybackURLResolver { ids, quality in
+            try playbackResponse(ids: ids, quality: quality, url: url)
+        }
+        restored.resume()
+        let playing = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            MainActor.assumeIsolated { restored.player?.timeControlStatus == .playing && !restored.isSeeking }
+        }, object: nil)
+        await fulfillment(of: [playing], timeout: 8)
+        restored.pause()
+        try await assertRequestedSound(in: XCTUnwrap(restored.player?.currentItem).asset)
+        XCTAssertEqual(try XCTUnwrap(restored.player).currentTime().seconds, 19, accuracy: 1)
+    }
+
+    func testFailedRestoreKeepsSavedPositionAndCanRetry() async throws {
+        let suite = "restore-retry-\(UUID().uuidString)"
+        let preferences = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { preferences.removePersistentDomain(forName: suite) }
+        let url = try fixtureURL(), track = try playbackTracks()[0]
+        let snapshot = PlaybackSnapshotStore.Snapshot(
+            userID: 42, track: track, context: .unknown(reason: .legacySnapshot, label: nil),
+            queueTracks: [track], currentQueueIndex: 0, currentTimeSeconds: 19,
+            playMode: .sequence, updatedAt: Date())
+        preferences.set(try JSONEncoder().encode(snapshot), forKey: PlaybackSnapshotStore.snapshotKey(userID: 42))
+        let attempts = MusicTestCounter()
+        let cache = PreciseSeekAudioCache { source, destination in
+            if await attempts.next() == 1 { throw URLError(.notConnectedToInternet) }
+            try FileManager.default.copyItem(at: source, to: destination)
+            return destination
+        }
+        let controller = MusicPlaybackController(preferences: preferences, preciseSeekCache: cache)
+        defer { controller.stop() }
+        controller.setSnapshotUserID(42)
+        controller.restorePlaybackSnapshotIfNeeded(for: 42)
+        controller.urlResolver = PlaybackURLResolver { ids, quality in
+            try playbackResponse(ids: ids, quality: quality, url: url)
+        }
+        controller.resume()
+        let failed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            MainActor.assumeIsolated {
+                if case .warning = controller.feedback { return !controller.isSeeking }
+                return false
+            }
+        }, object: nil)
+        await fulfillment(of: [failed], timeout: 5)
+        XCTAssertNil(controller.player?.currentItem)
+        XCTAssertFalse(controller.isPlaying)
+        XCTAssertFalse(controller.isBuffering)
+        XCTAssertEqual(controller.currentTimeSeconds, 19, accuracy: 0.1)
+        await controller.waitForSnapshotWrites()
+        XCTAssertEqual(PlaybackSnapshotStore(enabled: true, preferences: preferences).restore(for: 42)?.currentTimeSeconds, 19)
+        controller.resume()
+        let playing = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            MainActor.assumeIsolated { controller.player?.timeControlStatus == .playing && !controller.isSeeking }
+        }, object: nil)
+        await fulfillment(of: [playing], timeout: 8)
+        controller.pause()
+        XCTAssertEqual(try XCTUnwrap(controller.player).currentTime().seconds, 19, accuracy: 1)
+        try await assertRequestedSound(in: XCTUnwrap(controller.player?.currentItem).asset)
     }
 
     private func waitForSeek(_ controller: MusicPlaybackController) async {
