@@ -96,6 +96,7 @@ final class MusicPlaybackController {
         didSet { scheduleFeedbackDismissal() }
     }
     private(set) var currentTimeSeconds: Double = 0
+    private var mediaDurationSeconds: Double?
     private(set) var playMode: MusicPlayMode {
         get { queue.mode }
         set { queue.mode = newValue }
@@ -133,6 +134,7 @@ final class MusicPlaybackController {
     @ObservationIgnored private var itemLoadDeadline: Date?
     @ObservationIgnored private var loadingTimeout: Task<Void, Never>?
     @ObservationIgnored private var itemStatusObservation: NSKeyValueObservation?
+    @ObservationIgnored private var itemDurationObservation: NSKeyValueObservation?
     @ObservationIgnored private var keepUpObservation: NSKeyValueObservation?
     @ObservationIgnored private var timeControlObservation: NSKeyValueObservation?
     @ObservationIgnored private var audioSessionReady = false
@@ -193,7 +195,7 @@ final class MusicPlaybackController {
     }
 
     var durationSeconds: Double {
-        currentTrack?.durationSeconds ?? 0
+        mediaDurationSeconds ?? max(currentTrack?.durationSeconds ?? 0, 0)
     }
 
     var playbackProgress: Double {
@@ -533,7 +535,7 @@ final class MusicPlaybackController {
     }
 
     func seek(to seconds: Double) {
-        guard let player else { return }
+        guard let player, seconds.isFinite else { return }
         let boundedSeconds = min(max(seconds, 0), max(durationSeconds, 0))
         currentTimeSeconds = boundedSeconds
         player.seek(to: CMTime(seconds: boundedSeconds, preferredTimescale: 600))
@@ -1162,17 +1164,33 @@ final class MusicPlaybackController {
 
     private func addTimeObserver() {
         guard let player else { return }
-        timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 1, preferredTimescale: 1), queue: .main) { [weak self, weak player] time in
+        timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 1, preferredTimescale: 1), queue: .main) { [weak self, weak player] _ in
             let observedItem = player?.currentItem
             Task { @MainActor [weak observedItem] in
                 guard let self, let observedItem, self.player?.currentItem === observedItem else { return }
-                let seconds = max(0, time.seconds)
-                guard self.player?.currentItem != nil, seconds.isFinite else { return }
-                self.currentTimeSeconds = seconds
-                self.updateNowPlaying(elapsed: seconds)
+                self.refreshDuration(for: observedItem)
+                // Read the current position after the actor hop. A queued tick can
+                // otherwise publish a pre-seek (or previous item's) timestamp.
+                guard let seconds = self.player?.currentTime().seconds, seconds.isFinite else { return }
+                self.currentTimeSeconds = self.boundedPlaybackTime(seconds)
+                self.updateNowPlaying()
                 self.persistPlaybackSnapshot(throttled: true)
             }
         }
+    }
+
+    private func boundedPlaybackTime(_ seconds: Double) -> Double {
+        guard seconds.isFinite else { return 0 }
+        return durationSeconds > 0 ? min(max(seconds, 0), durationSeconds) : max(seconds, 0)
+    }
+
+    private func refreshDuration(for item: AVPlayerItem) {
+        guard player?.currentItem === item else { return }
+        let seconds = item.duration.seconds
+        // Indefinite/unknown duration must not replace catalog metadata.
+        guard seconds.isFinite, seconds > 0 else { return }
+        mediaDurationSeconds = seconds
+        currentTimeSeconds = boundedPlaybackTime(currentTimeSeconds)
     }
 
     private func removeTimeObserver() {
@@ -1183,6 +1201,13 @@ final class MusicPlaybackController {
     }
 
     private func addItemObservers(for item: AVPlayerItem) {
+        itemDurationObservation = item.observe(\.duration, options: [.initial, .new]) { [weak self] item, _ in
+            Task { @MainActor [weak item] in
+                guard let self, let item, self.player?.currentItem === item else { return }
+                self.refreshDuration(for: item)
+                self.updateNowPlaying()
+            }
+        }
         itemStatusObservation = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
             Task { @MainActor [weak item] in
                 guard let self, let item, self.player?.currentItem === item else { return }
@@ -1191,7 +1216,10 @@ final class MusicPlaybackController {
                 #endif // P0.1 instrumentation
                 switch item.status {
                 case .failed: self.handleItemFailure(item, error: item.error)
-                case .readyToPlay: self.observeTimeControlStatus()
+                case .readyToPlay:
+                    self.refreshDuration(for: item)
+                    self.updateNowPlaying()
+                    self.observeTimeControlStatus()
                 case .unknown: self.isBuffering = self.isPlaying
                 @unknown default: break
                 }
@@ -1230,6 +1258,8 @@ final class MusicPlaybackController {
 
     private func removeItemObservers() {
         itemStatusObservation?.invalidate(); itemStatusObservation = nil
+        itemDurationObservation?.invalidate(); itemDurationObservation = nil
+        mediaDurationSeconds = nil
         keepUpObservation?.invalidate(); keepUpObservation = nil
         for token in itemObservers { NotificationCenter.default.removeObserver(token) }
         itemObservers = []
@@ -1328,8 +1358,8 @@ final class MusicPlaybackController {
     // MARK: - Now Playing & remote commands
 
     private func updateNowPlaying(elapsed: Double? = nil) {
-        let position = elapsed ?? player?.currentTime().seconds
-        nowPlayingCoordinator.update(track: currentTrack, isPlaying: isPlaying, elapsed: position)
+        let position = boundedPlaybackTime(elapsed ?? currentTimeSeconds)
+        nowPlayingCoordinator.update(track: currentTrack, isPlaying: isPlaying, elapsed: position, duration: durationSeconds)
     }
 
     private func clearNowPlaying() {

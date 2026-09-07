@@ -30,17 +30,23 @@ final class NowPlayingCoordinator {
         #endif
     }
 
-    func update(track: MusicPlaybackTrack?, isPlaying: Bool, elapsed: Double?) {
+    func update(track: MusicPlaybackTrack?, isPlaying: Bool, elapsed: Double?, duration: Double? = nil) {
         guard let track else {
             clear()
             return
+        }
+        let effectiveDuration = duration ?? track.durationSeconds
+        let validDuration = effectiveDuration.isFinite && effectiveDuration > 0 ? effectiveDuration : nil
+        let validElapsed = elapsed.flatMap { value -> Double? in
+            guard value.isFinite else { return nil }
+            return validDuration.map { min(max(0, value), $0) } ?? max(0, value)
         }
         metadata = Metadata(
             title: track.title,
             artist: track.artist,
             album: track.album,
-            duration: track.durationSeconds > 0 ? track.durationSeconds : nil,
-            elapsed: elapsed.map { max(0, $0) },
+            duration: validDuration,
+            elapsed: validElapsed,
             playbackRate: isPlaying ? 1 : 0
         )
         publish(track: track)

@@ -18,6 +18,82 @@ final class MusicPlaybackControllerTests: XCTestCase {
         return (controller, try playbackTracks(), url, count)
     }
 
+    func testActualAudioDurationReplacesShorterCatalogDuration() async throws {
+        let url = try playbackWave() // Actual audio is 180 seconds.
+        defer { try? FileManager.default.removeItem(at: url) }
+        let coordinator = NowPlayingCoordinator()
+        let controller = MusicPlaybackController(persistsPlayback: false, nowPlayingCoordinator: coordinator)
+        defer { controller.stop() }
+        let track = MusicPlaybackTrack(id: 99, title: "Duration", artist: "", album: "", coverURLString: nil,
+                                       durationMilliseconds: 150_000, mvID: nil)
+        controller.play(url: url, track: track)
+        let engine = try XCTUnwrap(controller.player)
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            MainActor.assumeIsolated { engine.currentItem?.status == .readyToPlay }
+        }, object: nil)
+        await fulfillment(of: [ready], timeout: 5)
+        controller.pause()
+        await engine.seek(to: CMTime(seconds: 170, preferredTimescale: 600))
+        let advanced = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            MainActor.assumeIsolated { controller.currentTimeSeconds >= 169 }
+        }, object: nil)
+        await fulfillment(of: [advanced], timeout: 5)
+        XCTAssertEqual(controller.durationSeconds, 180, accuracy: 0.01)
+        XCTAssertLessThanOrEqual(controller.currentTimeSeconds, controller.durationSeconds)
+        XCTAssertEqual(coordinator.metadata?.duration, 180)
+        controller.seek(to: 175)
+        XCTAssertEqual(controller.currentTimeSeconds, 175)
+        controller.stop()
+        XCTAssertEqual(controller.durationSeconds, 0)
+    }
+
+    func testDurationResetsOnReplacementAndStallKeepsPlaybackStopped() async throws {
+        let longURL = try playbackWave()
+        let shortURL = try playbackWave(seconds: 60)
+        defer {
+            try? FileManager.default.removeItem(at: longURL)
+            try? FileManager.default.removeItem(at: shortURL)
+        }
+        let coordinator = NowPlayingCoordinator()
+        let controller = MusicPlaybackController(persistsPlayback: false, nowPlayingCoordinator: coordinator)
+        defer { controller.stop() }
+        let first = MusicPlaybackTrack(id: 98, title: "Long", artist: "", album: "", coverURLString: nil,
+                                       durationMilliseconds: 300_000, mvID: nil)
+        controller.play(url: longURL, track: first)
+        let loaded = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            MainActor.assumeIsolated { controller.durationSeconds == 180 }
+        }, object: nil)
+        await fulfillment(of: [loaded], timeout: 5)
+        let next = MusicPlaybackTrack(id: 99, title: "Short", artist: "", album: "", coverURLString: nil,
+                                      durationMilliseconds: 90_000, mvID: nil)
+        controller.play(url: shortURL, track: next)
+        XCTAssertEqual(controller.durationSeconds, 90, "New item uses its own catalog fallback")
+        let replaced = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            MainActor.assumeIsolated { controller.durationSeconds == 60 }
+        }, object: nil)
+        await fulfillment(of: [replaced], timeout: 5)
+        controller.pause()
+        controller.seek(to: 70)
+        XCTAssertEqual(controller.currentTimeSeconds, 60)
+        controller.seek(to: .infinity)
+        XCTAssertEqual(controller.currentTimeSeconds, 60)
+        controller.seek(to: 10)
+        let item = try XCTUnwrap(controller.player?.currentItem)
+        for _ in 0..<3 {
+            NotificationCenter.default.post(name: .AVPlayerItemPlaybackStalled, object: item)
+        }
+        let failed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            MainActor.assumeIsolated { controller.playbackError != nil }
+        }, object: nil)
+        await fulfillment(of: [failed], timeout: 5)
+        XCTAssertFalse(controller.isPlaying)
+        XCTAssertFalse(controller.isBuffering)
+        XCTAssertEqual(controller.player?.rate, 0)
+        XCTAssertEqual(coordinator.metadata?.playbackRate, 0)
+        XCTAssertEqual(coordinator.metadata?.duration, 60)
+        XCTAssertLessThanOrEqual(controller.currentTimeSeconds, controller.durationSeconds)
+    }
+
     func testPlaybackActivatesAudioSessionAndAdvancesTime() async throws {
         let (controller, tracks, _, _) = try fixture()
         _ = await controller.play(track: tracks[0], in: [tracks[0]])
@@ -340,10 +416,10 @@ final class MusicPlaybackControllerTests: XCTestCase {
     }
 }
 
-func playbackWave() throws -> URL {
+func playbackWave(seconds: Int = 180) throws -> URL {
     var data = Data()
     func append<T: FixedWidthInteger>(_ value: T) { var little = value.littleEndian; withUnsafeBytes(of: &little) { data.append(contentsOf: $0) } }
-    let bytes = 8_000 * 2 * 180
+    let bytes = 8_000 * 2 * seconds
     data.append(Data("RIFF".utf8)); append(UInt32(36 + bytes)); data.append(Data("WAVEfmt ".utf8))
     append(UInt32(16)); append(UInt16(1)); append(UInt16(1)); append(UInt32(8_000)); append(UInt32(16_000)); append(UInt16(2)); append(UInt16(16))
     data.append(Data("data".utf8)); append(UInt32(bytes)); data.append(Data(repeating: 0, count: bytes))
