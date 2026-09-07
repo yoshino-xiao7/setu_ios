@@ -643,7 +643,7 @@ final class MusicPlaybackController {
         case .success(let url, let notice):
             // Keep the existing player alive while checking the replacement source.
             // This also catches an unsupported audio format before replacing playback.
-            let asset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
+            let asset = AVURLAsset(url: url)
             do {
                 guard try await asset.load(.isPlayable) else {
                     throw MusicQualityError.unplayable
@@ -989,11 +989,7 @@ final class MusicPlaybackController {
         #if DEBUG // P0.1 instrumentation
         playbackDiagnostics.mark("PlayerItemCreationStarted")
         #endif // P0.1 instrumentation
-        // MP3/VBR sources may otherwise seek by an estimated byte offset, so
-        // a successful seek can report the requested time but play another verse.
-        let item = preparedItem ?? AVPlayerItem(asset: AVURLAsset(
-            url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true]
-        ))
+        let item = preparedItem ?? AVPlayerItem(url: url)
         #if DEBUG // P0.1 instrumentation
         playbackDiagnostics.itemReady(reused: preparedItem != nil, status: item.status)
         playbackDiagnostics.replaceBegin(installing: true)
