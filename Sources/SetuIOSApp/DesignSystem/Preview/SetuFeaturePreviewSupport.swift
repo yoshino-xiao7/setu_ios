@@ -131,6 +131,11 @@ private struct SetuRootUITestContext {
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-player") {
             player.configurePreview(songs: SetuPreviewAPI.musicSongs)
         }
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-music-cache") {
+            UserDefaults.standard.removeObject(forKey: "music.cache.capacityMB")
+            UserDefaults.standard.removeObject(forKey: "music.cache.prefetch")
+            navigation.navigate(to: .home, route: .account)
+        }
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-images") { navigation.selectedTab = .images }
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-ai") { navigation.selectedTab = .ai }
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-music") { navigation.selectedTab = .music }

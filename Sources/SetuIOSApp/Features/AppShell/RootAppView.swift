@@ -69,6 +69,15 @@ struct RootAppView: View {
         .task {
             switchMusicPlaybackUser(from: environment.authSession.currentUser?.id, to: environment.authSession.currentUser?.id)
             configureMusicPlayerResolver()
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("-development-cache-benchmark") {
+                for _ in 0..<100 {
+                    if musicPlayer.currentTrack != nil && isSessionReady { break }
+                    try? await Task.sleep(for: .milliseconds(100))
+                }
+                await musicPlayer.runCacheBenchmark()
+            }
+            #endif
         }
         .onChange(of: environment.authSession.currentUser?.id) { oldUserID, newUserID in
             musicStore.reset(for: newUserID)
