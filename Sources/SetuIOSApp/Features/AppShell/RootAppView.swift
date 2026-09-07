@@ -38,7 +38,7 @@ struct RootAppView: View {
                 if environment.authSession.isSignedIn || environment.authSession.requiresReauthentication {
                     #if DEBUG && canImport(MobileVLCKit)
                     if ProcessInfo.processInfo.arguments.contains("-development-vlc-probe") {
-                        VLCProbeView(environment: environment) { identity in
+                        VLCProbeView(environment: environment, resolver: musicPlayer.urlResolver) { identity in
                             guard let resolver = musicPlayer.urlResolver else { throw UserFacingError(message: "地址解析尚未就绪") }
                             return try await resolver.resolve(trackID: identity, quality: musicPlayer.audioQuality)
                         }

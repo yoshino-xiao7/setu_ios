@@ -66,11 +66,11 @@ final class VLCProbeModel {
         }
     }
     func play(_ track: MusicV2Track, client: MusicV2Client,
-              resolve: (MusicPlaybackIdentity) async throws -> ResolvedPlaybackURL) async {
+              resolve: (MusicPlaybackIdentity) async throws -> ResolvedPlaybackURL, resolver: PlaybackURLResolver? = nil) async {
         let request = UUID(); generation = request; downloadSession?.invalidateAndCancel(); engine.onChange = nil; engine.stop(); lines = []; snapshot = nil
         busy = true; title = track.title; began = ProcessInfo.processInfo.systemUptime; events = []; runID = UUID()
         switch route {
-        case .current: engine = CurrentPlaybackProbeEngine(track: MusicPlaybackTrack(track: track))
+        case .current: engine = CurrentPlaybackProbeEngine(track: MusicPlaybackTrack(track: track), resolver: resolver)
         case .avRemote, .avLocal: engine = AVDirectProbeEngine()
         case .vlcRemote, .vlcLocal: engine = VLCPlaybackEngine()
         }
@@ -142,7 +142,7 @@ final class VLCProbeModel {
         latestSeek = UUID(); generation = UUID(); downloadSession?.invalidateAndCancel(); downloadSession = nil
         engine.stop(); snapshot = nil; busy = false; record(["event": "stopped"])
     }
-    func smoke(client: MusicV2Client, resolve: (MusicPlaybackIdentity) async throws -> ResolvedPlaybackURL) async {
+    func smoke(client: MusicV2Client, resolve: (MusicPlaybackIdentity) async throws -> ResolvedPlaybackURL, resolver: PlaybackURLResolver? = nil) async {
         let batch = UUID(); batchID = batch; isBatchRunning = true
         defer { isBatchRunning = false }
         for name in ["不擅生长的树", "昔涟"] {
@@ -161,7 +161,7 @@ final class VLCProbeModel {
             for candidate in selectedRoute.map({ [$0] }) ?? Route.allCases {
                 guard batchID == batch, !Task.isCancelled else { return }
                 route = candidate
-                await play(track, client: client, resolve: resolve)
+                await play(track, client: client, resolve: resolve, resolver: resolver)
                 guard batchID == batch, !Task.isCancelled else { return }
                 try? await Task.sleep(for: .seconds(15))
                 guard batchID == batch, !Task.isCancelled else { return }
@@ -188,6 +188,7 @@ final class VLCProbeModel {
 
 struct VLCProbeView: View {
     let environment: AppEnvironment
+    var resolver: PlaybackURLResolver? = nil
     let resolve: (MusicPlaybackIdentity) async throws -> ResolvedPlaybackURL
     @State private var model = VLCProbeModel()
     @State private var query = "不擅生长的树 房东的猫"
@@ -220,7 +221,7 @@ struct VLCProbeView: View {
                 Section("歌曲版本") {
                     ForEach(model.tracks, id: \.id) { track in
                         Button("\(track.title) — \(track.artists.map(\.name).joined(separator: " / "))") {
-                            Task { await model.play(track, client: environment.musicV2Client, resolve: resolve) }
+                            Task { await model.play(track, client: environment.musicV2Client, resolve: resolve, resolver: resolver) }
                         }.disabled(model.busy || model.isBatchRunning)
                     }
                 }
@@ -235,7 +236,7 @@ struct VLCProbeView: View {
             .navigationTitle("音乐同源对照")
             .task {
                 if ProcessInfo.processInfo.arguments.contains("-music-probe-smoke") {
-                    await model.smoke(client: environment.musicV2Client, resolve: resolve)
+                    await model.smoke(client: environment.musicV2Client, resolve: resolve, resolver: resolver)
                 } else { await model.search(query, client: environment.musicV2Client) }
             }
             .onDisappear { model.stop() }
@@ -337,10 +338,11 @@ final class CurrentPlaybackProbeEngine: MusicPlaybackEngine {
     private(set) var snapshot: MusicEngineSnapshot?
     var onChange: ((MusicEngineSnapshot) -> Void)?
     var volume: Float = 1
-    init(track: MusicPlaybackTrack) {
+    init(track: MusicPlaybackTrack, resolver: PlaybackURLResolver? = nil) {
         self.track = track
         let cache = MusicAudioCache(directory: FileManager.default.temporaryDirectory.appendingPathComponent("music-controller-probe-cache"), capacity: 256 * 1024 * 1024)
         controller = MusicPlaybackController(persistsPlayback: false, audioAssets: CachedAudioAssetFactory(cache: cache))
+        controller.urlResolver = resolver
     }
     func load(url: URL, mediaID: UUID) {
         stop(); self.mediaID = mediaID

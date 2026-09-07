@@ -15,13 +15,15 @@ actor MusicAudioCache {
     private struct Segment: Codable { let offset: Int64; let count: Int; let name: String; var end: Int64 { offset + Int64(count) } }
     private struct Entry: Codable {
         let id: String; let key: String; let quality: String
-        var sourceHash: String; var validator: String?; var length: Int64?; var mime = "audio/mpeg"
+        var sourceHash: String; var validator: String?; var length: Int64?; var mime = "application/octet-stream"
         var ranges = true; var segments: [Segment] = []; var complete: String?
         var used = Date(); var deleteWhenReleased = false
     }
     private struct Assembly { let token: UUID; let task: Task<URL, Error>; var consumers: Set<UUID>; var speculative: Bool }
     private var assemblies: [String: Assembly] = [:]
     private struct Flight { let token: UUID; let task: Task<Void, Never>; var speculative: Bool }
+    typealias DiskWrite = @Sendable (Data, URL) async throws -> Void
+    private let diskWrite: DiskWrite
     private let directory: URL
     private let transport: Transport
     private let legacyDirectory: URL?
@@ -29,6 +31,13 @@ actor MusicAudioCache {
     private var sources: [String: URL] = [:]
     private var leases: [String: Int] = [:]
     private var flights: [String: Flight] = [:]
+    private struct Incoming { let token: UUID; var offset: Int64; var data: Data }
+    private var incoming: [String: Incoming] = [:]
+    private var verifiedFormats: Set<String> = []
+    private var progressByID: [String: Int64] = [:]
+    func networkBytes(key: String, quality: String) -> Int64 {
+        progressByID[Self.hash(key + "|" + quality), default: 0]
+    }
     private var failures: [String: Error] = [:]
     private var waiters: [UUID: CheckedContinuation<Void, Never>] = [:]
     private var volatile: [String: Data] = [:]
@@ -43,7 +52,10 @@ actor MusicAudioCache {
     private let log = Logger(subsystem: "icu.yukiryou.setuios", category: "MusicAudioCache")
 
     init(directory: URL, capacity: Int64 = 1024 * 1024 * 1024, legacyDirectory: URL? = nil,
-         transport: @escaping Transport = { MusicAudioTransport.events(for: $0) }) {
+         diskWrite: @escaping DiskWrite = { data, url in
+             try await Task.detached(priority: .utility) { try data.write(to: url, options: .atomic) }.value
+         }, transport: @escaping Transport = { MusicAudioTransport.events(for: $0) }) {
+        self.diskWrite = diskWrite
         self.directory = directory; self.legacyDirectory = legacyDirectory; self.capacity = min(max(0, capacity), Self.maximumCapacity); self.transport = transport
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         if let data = try? Data(contentsOf: directory.appendingPathComponent("catalog.json")),
@@ -81,17 +93,21 @@ actor MusicAudioCache {
                 if let validator = entry.validator {
                     var request = URLRequest(url: source.url); request.setValue("bytes=0-0", forHTTPHeaderField: "Range")
                     var matches = false
+                    var stopValidation: (@Sendable () -> Void)?
+                    defer { stopValidation?() }
                     for try await event in transport(request) {
+                        if case .cancellation(let cancel) = event { stopValidation = cancel }
                         if case .response(let response) = event {
                             matches = response.value(forHTTPHeaderField: "ETag") == validator && Self.totalLength(response) == entry.length
                             break
                         }
                     }
-                    if !matches { removeFiles(entry); entry.segments = []; entry.length = nil; entry.validator = nil }
-                } else { removeFiles(entry); entry.segments = []; entry.length = nil }
+                    if !matches { removeFiles(entry); entry.segments = []; verifiedFormats.remove(id); entry.length = nil; entry.validator = nil }
+                } else { removeFiles(entry); entry.segments = []; verifiedFormats.remove(id); entry.length = nil }
             }
             entry.sourceHash = hash; entry.used = Date(); entries[id] = entry
         } else { entries[id] = Entry(id: id, key: source.key, quality: source.quality, sourceHash: hash) }
+        verifiedFormats.remove(id)
         sources[id] = source.url; leases[id, default: 0] += 1
         save(); return id
     }
@@ -113,7 +129,20 @@ actor MusicAudioCache {
               let name = entry.complete else { return nil }
         let url = directory.appendingPathComponent(name)
         guard let length = entry.length, (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) == length else { return nil }
-        entries[entry.id]?.used = Date(); return (url, entry.quality)
+        let handle = try? FileHandle(forReadingFrom: url)
+        let header = (try? handle?.read(upToCount: 16)) ?? Data()
+        try? handle?.close()
+        let mime = AudioContentFormat.mime(header: header, advertised: entry.mime)
+        entries[entry.id]?.mime = mime
+        let ext = UTType(mimeType: mime)?.preferredFilenameExtension ?? "audio"
+        var result = url
+        if url.pathExtension != ext, (leases[entry.id] ?? 0) == 0 {
+            let corrected = directory.appendingPathComponent(entry.id + "." + ext)
+            if (try? FileManager.default.moveItem(at: url, to: corrected)) != nil {
+                entries[entry.id]?.complete = corrected.lastPathComponent; result = corrected
+            }
+        }
+        entries[entry.id]?.used = Date(); save(); return (result, entry.quality)
     }
     private func importLegacy(_ key: String) {
         guard let legacyDirectory else { return }
@@ -140,7 +169,16 @@ actor MusicAudioCache {
     }
 
     func info(_ id: String) async throws -> Info {
-        _ = try await read(id, offset: 0, count: 1)
+        if !verifiedFormats.contains(id) {
+            var header = Data()
+            while header.count < 16 {
+                let bytes = try await read(id, offset: Int64(header.count), count: 16 - header.count)
+                if bytes.isEmpty { break }; header.append(bytes)
+            }
+            let advertised = entries[id]?.mime
+            entries[id]?.mime = AudioContentFormat.mime(header: header, advertised: advertised)
+            verifiedFormats.insert(id)
+        }
         guard let entry = entries[id], let length = entry.length else { throw URLError(.badServerResponse) }
         return Info(length: length, mime: entry.mime, supportsRanges: entry.ranges)
     }
@@ -173,6 +211,12 @@ actor MusicAudioCache {
             defer { try? handle.close() }; try? handle.seek(toOffset: UInt64(offset))
             return try? handle.read(upToCount: count)
         }
+        for (key, chunk) in incoming where key.hasPrefix(entry.id + ":") && flights[key]?.token == chunk.token {
+            let start = offset - chunk.offset
+            if start >= 0, start < chunk.data.count {
+                return chunk.data.subdata(in: (chunk.data.startIndex + Int(start))..<min(chunk.data.endIndex, chunk.data.startIndex + Int(start) + count))
+            }
+        }
         guard let segment = entry.segments.first(where: { $0.offset <= offset && $0.end > offset }) else { return nil }
         guard let data = volatile[segment.name] ?? (try? Data(contentsOf: directory.appendingPathComponent(segment.name))) else {
             entries[entry.id]?.segments.removeAll { $0.name == segment.name }
@@ -184,6 +228,9 @@ actor MusicAudioCache {
         guard let url = sources[id] else { return }
         let key = id + ":" + String(offset), token = UUID(), transport = transport
         failures[key] = nil; metrics.requests += 1
+        #if DEBUG
+        log.debug("audio.range request=\(token.uuidString, privacy: .public) offset=\(offset, privacy: .public) count=\(Self.blockSize, privacy: .public)")
+        #endif
         let task = Task { [weak self] in
             do {
                 var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
@@ -191,9 +238,11 @@ actor MusicAudioCache {
                 request.setValue("identity", forHTTPHeaderField: "Accept-Encoding")
                 let began = ContinuousClock.now
                 var position = offset, expectedEnd: Int64?, buffer = Data(), receivedHeader = false
+                var cancelTransport: (@Sendable () -> Void)?
+                defer { cancelTransport?() }
                 for try await event in transport(request) {
                     try Task.checkCancellation()
-                    guard let self else { throw CancellationError() }
+                    guard let self, await self.isCurrent(key, token: token) else { throw CancellationError() }
                     switch event {
                     case .response(let response):
                         position = try await self.accept(response, id: id, requested: offset)
@@ -201,22 +250,35 @@ actor MusicAudioCache {
                         receivedHeader = true
                     case .bytes(let data):
                         guard receivedHeader else { throw URLError(.badServerResponse) }
-                        await self.received(data.count, since: began)
+                        if let expectedEnd, position + Int64(buffer.count) + Int64(data.count) > expectedEnd { throw URLError(.badServerResponse) }
+                        await self.received(data.count, since: began, id: id)
                         buffer.append(data)
+                        await self.publishIncoming(key, token: token, offset: position, data: buffer)
+                        await Task.yield()
                         while buffer.count >= Self.blockSize {
-                            try await self.store(Data(buffer.prefix(Self.blockSize)), id: id, offset: position)
+                            try await self.store(Data(buffer.prefix(Self.blockSize)), id: id, offset: position, flightKey: key, token: token)
                             buffer.removeFirst(Self.blockSize); position += Int64(Self.blockSize)
+                            await self.publishIncoming(key, token: token, offset: position, data: buffer)
                         }
+                    case .checkpoint(let consumed): consumed()
+                    case .cancellation(let cancel): cancelTransport = cancel
                     }
                 }
-                if !buffer.isEmpty, let self { try await self.store(buffer, id: id, offset: position); position += Int64(buffer.count) }
+                if !buffer.isEmpty, let self { try await self.store(buffer, id: id, offset: position, flightKey: key, token: token); position += Int64(buffer.count) }
                 if let expectedEnd, expectedEnd != position { throw URLError(.networkConnectionLost) }
                 await self?.finish(key, token: token, error: nil)
             } catch { await self?.finish(key, token: token, error: error) }
         }
         flights[key] = Flight(token: token, task: task, speculative: speculative)
     }
-    private func received(_ count: Int, since start: ContinuousClock.Instant) {
+    private func isCurrent(_ key: String, token: UUID) -> Bool { flights[key]?.token == token }
+    private func publishIncoming(_ key: String, token: UUID, offset: Int64, data: Data) {
+        guard isCurrent(key, token: token) else { return }
+        incoming[key] = Incoming(token: token, offset: offset, data: data)
+        signal()
+    }
+    private func received(_ count: Int, since start: ContinuousClock.Instant, id: String) {
+        progressByID[id, default: 0] += Int64(count)
         metrics.networkBytes += Int64(count)
         if metrics.firstByteMilliseconds == nil {
             let duration = start.duration(to: .now).components
@@ -235,6 +297,9 @@ actor MusicAudioCache {
             if let length = Self.totalLength(response) { entry.length = length; entries[id] = entry; signal() }
             throw URLError(.badServerResponse)
         }
+        if response.statusCode == 401 || response.statusCode == 403 {
+            throw NSError(domain: NSURLErrorDomain, code: NSURLErrorBadServerResponse, userInfo: ["HTTPStatusCode": response.statusCode])
+        }
         guard response.statusCode == 200 || response.statusCode == 206,
               let length = Self.totalLength(response), length > 0 else { throw URLError(.badServerResponse) }
         if response.statusCode == 206 {
@@ -248,10 +313,10 @@ actor MusicAudioCache {
         let tag = response.value(forHTTPHeaderField: "ETag").flatMap { $0.hasPrefix("W/") ? nil : $0 }
         if let old = entry.validator, let tag, old != tag, !entry.segments.isEmpty { throw URLError(.resourceUnavailable) }
         if let old = entry.length, old != length, !entry.segments.isEmpty { throw URLError(.resourceUnavailable) }
-        entry.length = length; entry.mime = response.mimeType ?? "audio/mpeg"; entry.ranges = response.statusCode == 206; entry.validator = tag
+        entry.length = length; entry.mime = verifiedFormats.contains(id) ? entry.mime : (response.mimeType ?? "application/octet-stream"); entry.ranges = response.statusCode == 206; entry.validator = tag
         entries[id] = entry; signal(); return entry.ranges ? requested : 0
     }
-    private func store(_ data: Data, id: String, offset: Int64) throws {
+    private func store(_ data: Data, id: String, offset: Int64, flightKey: String, token: UUID) async throws {
         try Task.checkCancellation()
         guard var entry = entries[id] else { throw CancellationError() }
         if entry.segments.contains(where: { $0.offset == offset && $0.count >= data.count &&
@@ -260,20 +325,29 @@ actor MusicAudioCache {
         evict(reserving: Int64(data.count))
         do {
             guard !writesDisabled, diskBytes() + Int64(data.count) * 2 + 4 * 1024 * 1024 <= capacity else { throw CocoaError(.fileWriteOutOfSpace) }
-            try data.write(to: directory.appendingPathComponent(name), options: .atomic)
+            try await diskWrite(data, directory.appendingPathComponent(name))
+            guard isCurrent(flightKey, token: token), !Task.isCancelled else {
+                try? FileManager.default.removeItem(at: directory.appendingPathComponent(name))
+                throw CancellationError()
+            }
             storedBytes += Int64(data.count)
-        } catch {
+        } catch is CancellationError { throw CancellationError() }
+        catch {
+            guard isCurrent(flightKey, token: token), !Task.isCancelled else { throw CancellationError() }
             writesDisabled = true
             if volatile.values.reduce(0, { $0 + $1.count }) > 4 * 1024 * 1024 {
                 if let first = volatile.keys.first { volatile[first] = nil }
             }
             volatile[name] = data
         }
+        guard let latest = entries[id], isCurrent(flightKey, token: token) else { throw CancellationError() }
+        entry = latest
         entry.segments.append(Segment(offset: offset, count: data.count, name: name)); entry.used = Date()
         entries[id] = entry; save(); signal()
     }
     private func finish(_ key: String, token: UUID, error: Error?) {
         guard flights[key]?.token == token else { return }
+        incoming[key] = nil
         flights[key] = nil; if let error { failures[key] = error }; signal()
     }
     private func waitForChange() async {
@@ -285,7 +359,9 @@ actor MusicAudioCache {
         } onCancel: { Task { await self.cancelWait(ticket) } }
     }
     private func cancelWait(_ id: UUID) { waiters.removeValue(forKey: id)?.resume() }
-    private func signal() { let pending = waiters.values; waiters.removeAll(); for waiter in pending { waiter.resume() } }
+    private func signal() {
+        incoming = incoming.filter { flights[$0.key]?.token == $0.value.token }
+        let pending = waiters.values; waiters.removeAll(); for waiter in pending { waiter.resume() } }
 
     func prefetch(_ id: String, limit: Int = 3 * 1024 * 1024) async throws {
         var offset: Int64 = 0
@@ -328,9 +404,14 @@ actor MusicAudioCache {
             let data = try await read(id, offset: offset, count: Self.blockSize, speculative: assemblies[id]?.speculative ?? false)
             guard !data.isEmpty else { throw URLError(.networkConnectionLost) }; offset += Int64(data.count)
         }
+        // An incremental read may reach EOF while its last chunk is still being persisted.
+        while flights.keys.contains(where: { $0.hasPrefix(id + ":") }) {
+            try Task.checkCancellation(); await waitForChange()
+        }
+        if let failure = failures.first(where: { $0.key.hasPrefix(id + ":") }) { throw failure.value }
         evict(reserving: info.length)
         guard diskBytes() + info.length <= capacity, !writesDisabled else { throw CocoaError(.fileWriteOutOfSpace) }
-        let fileExtension = UTType(mimeType: info.mime)?.preferredFilenameExtension ?? "mp3"
+        let fileExtension = UTType(mimeType: info.mime)?.preferredFilenameExtension ?? "audio"
         let name = id + "." + fileExtension, temporary = directory.appendingPathComponent(id + "-" + UUID().uuidString + ".assembling")
         FileManager.default.createFile(atPath: temporary.path, contents: nil)
         let handle = try FileHandle(forWritingTo: temporary)
@@ -410,5 +491,18 @@ actor MusicAudioCache {
                 storedBytes += Int64(data.count) - catalogBytes; catalogBytes = Int64(data.count)
             } catch {}
         }
+    }
+}
+
+/// Only byte signatures override a server's advertised media type.
+enum AudioContentFormat {
+    static func mime(header: Data, advertised: String?) -> String {
+        let b = [UInt8](header)
+        if b.starts(with: Array("fLaC".utf8)) { return "audio/flac" }
+        if b.count >= 12, Array(b[0..<4]) == Array("RIFF".utf8), Array(b[8..<12]) == Array("WAVE".utf8) { return "audio/wav" }
+        if b.count >= 8, Array(b[4..<8]) == Array("ftyp".utf8) { return "audio/mp4" }
+        if b.starts(with: Array("OggS".utf8)) { return "audio/ogg" }
+        if b.starts(with: Array("ID3".utf8)) || (b.count >= 3 && b[0] == 0xff && b[1] & 0xe0 == 0xe0 && b[1] & 0x06 != 0 && b[2] & 0xf0 != 0xf0) { return "audio/mpeg" }
+        return advertised.flatMap { $0.hasPrefix("audio/") ? $0 : nil } ?? "application/octet-stream"
     }
 }

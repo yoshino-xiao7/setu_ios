@@ -2,14 +2,16 @@ import Foundation
 
 /// Delegate delivery keeps first-byte latency independent of the response's total size.
 final class MusicAudioTransport: NSObject, URLSessionDataDelegate, @unchecked Sendable {
-    enum Event: @unchecked Sendable { case response(HTTPURLResponse), bytes(Data) }
+    enum Event: @unchecked Sendable { case response(HTTPURLResponse), bytes(Data); case checkpoint(@Sendable () -> Void); case cancellation(@Sendable () -> Void) }
     private var continuation: AsyncThrowingStream<Event, Error>.Continuation?
     private var session: URLSession?
     private var task: URLSessionDataTask?
     private let lock = NSLock()
+    private var pendingBytes = 0
+    private var suspended = false
 
     static func events(for request: URLRequest) -> AsyncThrowingStream<Event, Error> {
-        AsyncThrowingStream(bufferingPolicy: .bufferingOldest(64)) { continuation in
+        AsyncThrowingStream { continuation in
             let transport = MusicAudioTransport()
             transport.continuation = continuation
             let configuration = URLSessionConfiguration.ephemeral
@@ -22,6 +24,7 @@ final class MusicAudioTransport: NSObject, URLSessionDataDelegate, @unchecked Se
             transport.session = session
             transport.task = session.dataTask(with: request)
             continuation.onTermination = { @Sendable _ in transport.cancel() }
+            continuation.yield(.cancellation { transport.cancel() })
             transport.task?.resume()
         }
     }
@@ -38,9 +41,21 @@ final class MusicAudioTransport: NSObject, URLSessionDataDelegate, @unchecked Se
         continuation?.yield(.response(response)); completionHandler(.allow)
     }
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
-        // A stalled disk/consumer must not accumulate an entire song in RAM.
-        if case .dropped = continuation?.yield(.bytes(data)) {
-            continuation?.finish(throwing: URLError(.dataLengthExceedsMaximum)); cancel()
+        lock.lock()
+        pendingBytes += data.count
+        if pendingBytes >= 512 * 1024, !suspended {
+            suspended = true; dataTask.suspend()
+        }
+        lock.unlock()
+        continuation?.yield(.bytes(data))
+        let count = data.count
+        continuation?.yield(.checkpoint { [weak self] in self?.consumed(count) })
+    }
+    private func consumed(_ count: Int) {
+        lock.lock(); defer { lock.unlock() }
+        pendingBytes = max(0, pendingBytes - count)
+        if suspended, pendingBytes <= 256 * 1024, session != nil {
+            suspended = false; task?.resume()
         }
     }
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {

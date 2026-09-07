@@ -35,7 +35,7 @@ struct MusicQualityMenu: View {
                     Image(systemName: "waveform")
                         .accessibilityHidden(true)
                 }
-                Text(player.audioQuality.title)
+                Text(player.actualQualityTitle)
                     .font(.caption.weight(.semibold))
                     .lineLimit(1)
             }
@@ -43,7 +43,7 @@ struct MusicQualityMenu: View {
             .frame(minHeight: 44)
         }
         .disabled(player.isChangingQuality)
-        .accessibilityLabel("优先音质：\(player.audioQuality.title)")
+        .accessibilityLabel("优先音质：\(player.audioQuality.title)，当前音质：\(player.actualQualityTitle)")
         .accessibilityHint("选择音质，实际可用音质取决于音源")
         .accessibilityIdentifier("music.quality")
         .alert("音质提示", isPresented: Binding(

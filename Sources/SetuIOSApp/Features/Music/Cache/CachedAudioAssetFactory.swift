@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import OSLog
 import ObjectiveC
 import UniformTypeIdentifiers
 
@@ -88,7 +89,7 @@ private final class CachedAudioResourceLoader: NSObject, AVAssetResourceLoaderDe
                 await withCheckedContinuation { continuation in
                     queue.async {
                         if !request.isCancelled {
-                            request.contentInformationRequest?.contentType = UTType(mimeType: info.mime)?.identifier ?? UTType.mp3.identifier
+                            request.contentInformationRequest?.contentType = UTType(mimeType: info.mime)?.identifier ?? UTType.data.identifier
                             request.contentInformationRequest?.contentLength = info.length
                             request.contentInformationRequest?.isByteRangeAccessSupported = true
                         }
@@ -96,16 +97,26 @@ private final class CachedAudioResourceLoader: NSObject, AVAssetResourceLoaderDe
                     }
                 }
                 if let dataRequest = request.dataRequest {
-                    var offset = max(dataRequest.requestedOffset, dataRequest.currentOffset)
-                    let end = dataRequest.requestsAllDataToEndOfResource ? info.length : min(info.length, dataRequest.requestedOffset + Int64(dataRequest.requestedLength))
+                    let bounds: (Int64, Int64) = await withCheckedContinuation { continuation in
+                        queue.async {
+                            continuation.resume(returning: (max(dataRequest.requestedOffset, dataRequest.currentOffset),
+                                dataRequest.requestsAllDataToEndOfResource ? info.length : min(info.length, dataRequest.requestedOffset + Int64(dataRequest.requestedLength))))
+                        }
+                    }
+                    var offset = bounds.0
+                    let end = bounds.1
                     while offset < end {
                         try Task.checkCancellation()
                         let data = try await cache.read(id, offset: offset, count: Int(min(Int64(MusicAudioCache.blockSize), end - offset)))
-                        guard !data.isEmpty else { break }
+                        guard !data.isEmpty else { throw URLError(.networkConnectionLost) }
                         try Task.checkCancellation()
                         await withCheckedContinuation { continuation in
                             queue.async { if !request.isCancelled { dataRequest.respond(with: data) }; continuation.resume() }
                         }
+                        #if DEBUG
+                        Logger(subsystem: "icu.yukiryou.setuios", category: "MusicAudioDelivery")
+                            .debug("audio.delivered offset=\(offset, privacy: .public) count=\(data.count, privacy: .public)")
+                        #endif
                         offset += Int64(data.count)
                     }
                 }

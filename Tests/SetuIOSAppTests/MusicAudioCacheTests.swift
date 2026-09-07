@@ -33,6 +33,98 @@ final class MusicAudioCacheTests: XCTestCase {
         }
     }
 
+    func testShortResponseCannotBecomeACompleteCacheFile() async throws {
+        let folder = temporaryDirectory(); defer { try? FileManager.default.removeItem(at: folder) }
+        let cache = MusicAudioCache(directory: folder, transport: { request in
+            AsyncThrowingStream { stream in
+                stream.yield(.response(HTTPURLResponse(url: request.url!, statusCode: 206, httpVersion: nil,
+                    headerFields: ["Content-Range": "bytes 0-262143/300000", "Content-Length": "262144"])!))
+                stream.yield(.bytes(Data(repeating: 1, count: 1024))); stream.finish()
+            }
+        })
+        let id = try await cache.open(source)
+        do { _ = try await cache.completeFile(id); XCTFail("Truncated response must not assemble") }
+        catch { XCTAssertEqual((error as NSError).code, NSURLErrorNetworkConnectionLost) }
+        let complete = await cache.cachedSource(key: source.key); XCTAssertNil(complete)
+        await cache.release(id)
+    }
+
+    func testMalformedContentRangeFailsBeforeDeliveringBytes() async throws {
+        let folder = temporaryDirectory(); defer { try? FileManager.default.removeItem(at: folder) }
+        let cache = MusicAudioCache(directory: folder, transport: { request in
+            AsyncThrowingStream { stream in
+                stream.yield(.response(HTTPURLResponse(url: request.url!, statusCode: 206, httpVersion: nil,
+                    headerFields: ["Content-Range": "bytes 42-100/300000", "Content-Length": "59"])!))
+                stream.yield(.bytes(Data(repeating: 9, count: 59))); stream.finish()
+            }
+        })
+        let id = try await cache.open(source)
+        do { _ = try await cache.read(id, offset: 0, count: 1); XCTFail("Wrong byte origin must fail") }
+        catch { XCTAssertEqual((error as NSError).code, NSURLErrorBadServerResponse) }
+        await cache.release(id)
+    }
+
+    func testFirstSmallChunkIsReadableBeforeRangeCompletes() async throws {
+        let folder = temporaryDirectory(); defer { try? FileManager.default.removeItem(at: folder) }
+        let gate = MusicTestGate()
+        let cache = MusicAudioCache(directory: folder, transport: { request in
+            AsyncThrowingStream { continuation in
+                let task = Task {
+                    continuation.yield(.response(HTTPURLResponse(url: request.url!, statusCode: 206, httpVersion: nil,
+                        headerFields: ["Content-Range": "bytes 0-262143/300000", "Content-Length": "262144"])!))
+                    continuation.yield(.bytes(Data(repeating: 7, count: 1024)))
+                    await gate.wait()
+                    continuation.yield(.bytes(Data(repeating: 7, count: 261120)))
+                    continuation.finish()
+                }
+                continuation.onTermination = { _ in task.cancel() }
+            }
+        })
+        let id = try await cache.open(source)
+        let delivered = expectation(description: "First 1024 bytes available without a full cache block")
+        let reader = Task {
+            let data = try await cache.read(id, offset: 0, count: 1024)
+            XCTAssertEqual(data, Data(repeating: 7, count: 1024)); delivered.fulfill()
+        }
+        await fulfillment(of: [delivered], timeout: 0.5)
+        await gate.open()
+        _ = try await reader.value
+        await cache.release(id)
+    }
+
+    func testSlowDiskDoesNotBlockDeliveryOfReceivedAudio() async throws {
+        let folder = temporaryDirectory(); defer { try? FileManager.default.removeItem(at: folder) }
+        let gate = MusicTestGate(), writing = expectation(description: "disk write started")
+        let bytes = Data(repeating: 5, count: 262144)
+        let cache = MusicAudioCache(directory: folder, diskWrite: { data, url in
+            writing.fulfill(); await gate.wait(); try data.write(to: url)
+        }, transport: transport(bytes))
+        let id = try await cache.open(source)
+        let read = Task { try await cache.read(id, offset: 0, count: 100) }
+        await fulfillment(of: [writing], timeout: 2)
+        let delivered = expectation(description: "read while disk blocked")
+        let reader = Task {
+            let data = try await cache.read(id, offset: 200000, count: 100)
+            XCTAssertEqual(data, Data(repeating: 5, count: 100)); delivered.fulfill()
+        }
+        await fulfillment(of: [delivered], timeout: 0.5)
+        await gate.open(); _ = try await reader.value; _ = try await read.value
+        await cache.release(id)
+    }
+
+    func testFLACHeaderOverridesMPEGResponseAndCompleteExtension() async throws {
+        let folder = temporaryDirectory(); defer { try? FileManager.default.removeItem(at: folder) }
+        let bytes = Data("fLaC".utf8) + Data(repeating: 0, count: 400000)
+        let cache = MusicAudioCache(directory: folder, transport: transport(bytes))
+        let id = try await cache.open(source)
+        let info = try await cache.info(id)
+        XCTAssertEqual(info.mime, "audio/flac")
+        let file = try await cache.completeFile(id)
+        XCTAssertEqual(file.pathExtension, "flac")
+        XCTAssertEqual(try Data(contentsOf: file), bytes)
+        await cache.release(id)
+    }
+
     func testConcurrentOverlappingReadsUseOneRangeRequestAndSurviveRestart() async throws {
         let folder = temporaryDirectory(); defer { try? FileManager.default.removeItem(at: folder) }
         let bytes = Data((0..<700_000).map { UInt8($0 % 251) }), counter = MusicTestCounter()
@@ -142,6 +234,8 @@ final class MusicAudioCacheTests: XCTestCase {
         let id = try await cache.open(source)
         let bytes = try await cache.read(id, offset: 100, count: 100)
         XCTAssertEqual(bytes, Data(repeating: 9, count: 100))
+        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        while !(await cache.usage().writeDisabled), ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
         let usage = await cache.usage(); XCTAssertTrue(usage.writeDisabled)
         await cache.release(id)
     }
