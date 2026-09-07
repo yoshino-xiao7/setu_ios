@@ -48,7 +48,7 @@ struct NowPlayingLyricsPane: View {
 
     private func playbackTime() -> TimeInterval {
         #if canImport(AVFoundation)
-        if let time = player.player?.currentTime().seconds, time.isFinite { return time }
+        if !player.isSeeking, let time = player.player?.currentTime().seconds, time.isFinite { return time }
         #endif
         return player.currentTimeSeconds
     }

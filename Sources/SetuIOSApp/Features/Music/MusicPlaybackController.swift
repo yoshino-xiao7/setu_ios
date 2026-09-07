@@ -97,6 +97,10 @@ final class MusicPlaybackController {
     }
     private(set) var currentTimeSeconds: Double = 0
     private var mediaDurationSeconds: Double?
+    private(set) var isSeeking = false
+    @ObservationIgnored private var seekID: UUID?
+    @ObservationIgnored private var seekTarget: Double?
+    @ObservationIgnored private var seekTimeout: Task<Void, Never>?
     private(set) var playMode: MusicPlayMode {
         get { queue.mode }
         set { queue.mode = newValue }
@@ -338,6 +342,7 @@ final class MusicPlaybackController {
     }
 
     private func beginTransition() {
+        cancelSeek()
         observationStart = ProcessInfo.processInfo.systemUptime
         transitionID = UUID()
         resumeTask?.cancel(); resumeTask = nil
@@ -535,12 +540,56 @@ final class MusicPlaybackController {
     }
 
     func seek(to seconds: Double) {
-        guard let player, seconds.isFinite else { return }
-        let boundedSeconds = min(max(seconds, 0), max(durationSeconds, 0))
-        currentTimeSeconds = boundedSeconds
-        player.seek(to: CMTime(seconds: boundedSeconds, preferredTimescale: 600))
-        updateNowPlaying(elapsed: boundedSeconds)
-        persistPlaybackSnapshot()
+        guard let player, let item = player.currentItem, seconds.isFinite else { return }
+        cancelSeek()
+        let ticket = UUID()
+        seekID = ticket
+        seekTarget = max(0, seconds)
+        isSeeking = true
+        isBuffering = true
+        playbackError = nil
+        player.pause()
+        updateNowPlaying()
+        seekTimeout = Task { [weak self, weak item] in
+            do { try await Task.sleep(for: .seconds(10)) } catch { return }
+            guard let self, let item, self.seekID == ticket, self.player?.currentItem === item else { return }
+            self.failPlayback(UserFacingError(message: "跳转超时，请重新获取播放地址"))
+        }
+        if item.status == .readyToPlay { performPendingSeek(on: item) }
+    }
+
+    private func performPendingSeek(on item: AVPlayerItem) {
+        guard let player, player.currentItem === item, let ticket = seekID, let target = seekTarget else { return }
+        seekTarget = nil // A ready-status callback must not issue the same seek twice.
+        refreshDuration(for: item)
+        let destination = boundedPlaybackTime(target)
+        player.seek(to: CMTime(seconds: destination, preferredTimescale: 600),
+                    toleranceBefore: .zero, toleranceAfter: .zero) { [weak self, weak item] finished in
+            Task { @MainActor in
+                guard let self, let item, self.seekID == ticket, self.player?.currentItem === item else { return }
+                guard finished, let actual = self.player?.currentTime().seconds, actual.isFinite,
+                      abs(actual - destination) <= 1 else {
+                    self.failPlayback(UserFacingError(message: "未能跳转到所选位置，请重新获取播放地址"))
+                    return
+                }
+                self.seekID = nil
+                self.seekTimeout?.cancel(); self.seekTimeout = nil
+                self.isSeeking = false
+                self.isBuffering = false
+                self.currentTimeSeconds = self.boundedPlaybackTime(actual)
+                if self.isPlaying { self.playWhenSessionReady(item) }
+                self.updateNowPlaying()
+                self.persistPlaybackSnapshot()
+            }
+        }
+    }
+
+    private func cancelSeek() {
+        seekID = nil
+        seekTarget = nil
+        seekTimeout?.cancel(); seekTimeout = nil
+        isSeeking = false
+        player?.currentItem?.cancelPendingSeeks()
     }
 
     func setPlayMode(_ mode: MusicPlayMode) {
@@ -909,6 +958,7 @@ final class MusicPlaybackController {
     }
 
     func playbackEndReached() async {
+        guard !isSeeking else { return }
         if sleepTimerController.consumeEndOfTrack() {
             pauseForSleepTimer()
             return
@@ -991,6 +1041,7 @@ final class MusicPlaybackController {
     }
 
     func observeTimeControlStatus() {
+        guard !isSeeking else { return }
         guard let player, player.currentItem != nil, playbackError == nil else { return }
         #if DEBUG // P0.1 instrumentation
         playbackDiagnostics.playerStatus(player.timeControlStatus, waitingReason: player.reasonForWaitingToPlay)
@@ -1100,6 +1151,7 @@ final class MusicPlaybackController {
     }
 
     private func failPlayback(_ error: UserFacingError) {
+        cancelSeek()
         MusicClientObservation.emit("playback.failed", start: observationStart, v2: MusicClientObservation.playbackV2 || currentTrack?.id.legacyID == nil)
         observationStart = nil
         #if DEBUG // P0.1 instrumentation
@@ -1168,6 +1220,7 @@ final class MusicPlaybackController {
             let observedItem = player?.currentItem
             Task { @MainActor [weak observedItem] in
                 guard let self, let observedItem, self.player?.currentItem === observedItem else { return }
+                guard !self.isSeeking else { return }
                 self.refreshDuration(for: observedItem)
                 // Read the current position after the actor hop. A queued tick can
                 // otherwise publish a pre-seek (or previous item's) timestamp.
@@ -1218,9 +1271,10 @@ final class MusicPlaybackController {
                 case .failed: self.handleItemFailure(item, error: item.error)
                 case .readyToPlay:
                     self.refreshDuration(for: item)
+                    self.performPendingSeek(on: item)
                     self.updateNowPlaying()
                     self.observeTimeControlStatus()
-                case .unknown: self.isBuffering = self.isPlaying
+                case .unknown: self.isBuffering = self.isPlaying || self.isSeeking
                 @unknown default: break
                 }
             }
@@ -1257,6 +1311,7 @@ final class MusicPlaybackController {
     }
 
     private func removeItemObservers() {
+        cancelSeek()
         itemStatusObservation?.invalidate(); itemStatusObservation = nil
         itemDurationObservation?.invalidate(); itemDurationObservation = nil
         mediaDurationSeconds = nil
@@ -1268,6 +1323,7 @@ final class MusicPlaybackController {
     // MARK: - Audio session, interruptions & route changes
 
     private func playWhenSessionReady(_ item: AVPlayerItem) {
+        guard !isSeeking, isPlaying, playbackError == nil, player?.currentItem === item else { return }
         #if os(iOS)
         #if DEBUG // P0.1 instrumentation
         playbackDiagnostics.mark("SessionGate", value: audioSessionReady ? 1 : 0)
@@ -1291,7 +1347,7 @@ final class MusicPlaybackController {
                 self.audioSessionReady = true
                 self.audioSessionNeedsReactivation = false
                 self.audioSessionTask = nil
-                if self.isPlaying { self.player?.play() }
+                if self.isPlaying && !self.isSeeking { self.player?.play() }
             } catch {
                 guard let self, self.transitionID == ticket, self.audioSessionRevision == revision,
                       !Task.isCancelled else { return }
@@ -1359,7 +1415,7 @@ final class MusicPlaybackController {
 
     private func updateNowPlaying(elapsed: Double? = nil) {
         let position = boundedPlaybackTime(elapsed ?? currentTimeSeconds)
-        nowPlayingCoordinator.update(track: currentTrack, isPlaying: isPlaying, elapsed: position, duration: durationSeconds)
+        nowPlayingCoordinator.update(track: currentTrack, isPlaying: isPlaying && !isSeeking, elapsed: position, duration: durationSeconds)
     }
 
     private func clearNowPlaying() {

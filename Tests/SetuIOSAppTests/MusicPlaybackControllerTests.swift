@@ -18,6 +18,55 @@ final class MusicPlaybackControllerTests: XCTestCase {
         return (controller, try playbackTracks(), url, count)
     }
 
+    private func waitForSeek(_ controller: MusicPlaybackController) async {
+        let completed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            MainActor.assumeIsolated { !controller.isSeeking }
+        }, object: nil)
+        await fulfillment(of: [completed], timeout: 5)
+        XCTAssertNil(controller.playbackError)
+    }
+
+    func testLyricSeekDoesNotPublishTargetBeforeAudioConfirms() async throws {
+        let (controller, tracks, url, _) = try fixture()
+        controller.play(url: url, track: tracks[0])
+        let engine = try XCTUnwrap(controller.player)
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            MainActor.assumeIsolated { engine.currentItem?.status == .readyToPlay }
+        }, object: nil)
+        await fulfillment(of: [ready], timeout: 5)
+        controller.pause()
+        let confirmed = controller.currentTimeSeconds
+        controller.seek(to: 120) // Same entry point as the lyric selection guide.
+        XCTAssertEqual(controller.currentTimeSeconds, confirmed, "Do not move lyrics before audio seek completes")
+        let completed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            MainActor.assumeIsolated {
+                abs(controller.currentTimeSeconds - 120) < 0.1 && abs(engine.currentTime().seconds - 120) < 0.1
+            }
+        }, object: nil)
+        await fulfillment(of: [completed], timeout: 5)
+        XCTAssertFalse(controller.isPlaying)
+    }
+
+    func testLatestLyricSeekWinsAndTrackReplacementCancelsOldSeek() async throws {
+        let (controller, tracks, url, _) = try fixture()
+        controller.play(url: url, track: tracks[0])
+        controller.seek(to: 120)
+        controller.seek(to: 45)
+        controller.pause()
+        await waitForSeek(controller)
+        XCTAssertEqual(controller.currentTimeSeconds, 45, accuracy: 0.1)
+        XCTAssertEqual(try XCTUnwrap(controller.player).currentTime().seconds, 45, accuracy: 0.1)
+        XCTAssertFalse(controller.isPlaying)
+        controller.seek(to: 100)
+        controller.play(url: url, track: tracks[1])
+        controller.pause()
+        await Task.yield()
+        XCTAssertEqual(controller.currentTrack?.id, tracks[1].id)
+        XCTAssertFalse(controller.isSeeking)
+        XCTAssertNil(controller.playbackError)
+        XCTAssertLessThan(controller.currentTimeSeconds, 1)
+    }
+
     func testActualAudioDurationReplacesShorterCatalogDuration() async throws {
         let url = try playbackWave() // Actual audio is 180 seconds.
         defer { try? FileManager.default.removeItem(at: url) }
@@ -42,6 +91,7 @@ final class MusicPlaybackControllerTests: XCTestCase {
         XCTAssertLessThanOrEqual(controller.currentTimeSeconds, controller.durationSeconds)
         XCTAssertEqual(coordinator.metadata?.duration, 180)
         controller.seek(to: 175)
+        await waitForSeek(controller)
         XCTAssertEqual(controller.currentTimeSeconds, 175)
         controller.stop()
         XCTAssertEqual(controller.durationSeconds, 0)
@@ -74,10 +124,12 @@ final class MusicPlaybackControllerTests: XCTestCase {
         await fulfillment(of: [replaced], timeout: 5)
         controller.pause()
         controller.seek(to: 70)
+        await waitForSeek(controller)
         XCTAssertEqual(controller.currentTimeSeconds, 60)
         controller.seek(to: .infinity)
         XCTAssertEqual(controller.currentTimeSeconds, 60)
         controller.seek(to: 10)
+        await waitForSeek(controller)
         let item = try XCTUnwrap(controller.player?.currentItem)
         for _ in 0..<3 {
             NotificationCenter.default.post(name: .AVPlayerItemPlaybackStalled, object: item)
@@ -283,7 +335,9 @@ final class MusicPlaybackControllerTests: XCTestCase {
 
     func testFailedItemReResolvesOnceAndSecondFailureExitsBuffering() async throws {
         let (controller, tracks, url, counter) = try fixture()
-        controller.play(url: url, track: tracks[0], queueTracks: tracks)
+        // Count recovery requests without racing next-track prefetch.
+        controller.setPlayMode(.sequence)
+        controller.play(url: url, track: tracks[0], queueTracks: [tracks[0]])
         let original = try XCTUnwrap(controller.player?.currentItem)
         let replaced = expectation(description: "recovery replaced item")
         let observer = try XCTUnwrap(controller.player).observe(\.currentItem, options: [.new]) { engine, _ in
@@ -339,11 +393,13 @@ final class MusicPlaybackControllerTests: XCTestCase {
         controller.setSnapshotUserID(1)
         controller.play(url: url, track: tracks[0], queueTracks: tracks)
         controller.seek(to: 3)
+        await waitForSeek(controller)
         controller.savePlaybackSnapshot(userID: 1)
         controller.resetForUserChange()
         controller.setSnapshotUserID(2)
         controller.play(url: url, track: tracks[1], queueTracks: tracks)
         controller.seek(to: 4)
+        await waitForSeek(controller)
         controller.savePlaybackSnapshot(userID: 2)
         await controller.waitForSnapshotWrites()
         let restoredA = MusicPlaybackController(preferences: preferences)
