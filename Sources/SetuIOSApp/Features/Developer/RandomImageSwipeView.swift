@@ -13,7 +13,8 @@ struct RandomImageSwipeView: View {
 
     @State private var imageState: LoadState<ImageFeedCard> = .idle
     @State private var currentCard: ImageFeedCard?
-    @State private var feedQueue: [ImageFeedCard] = []
+    @State private var displayedCards: [ImageFeedCard] = []
+    @State private var scrollTargetID: String?
     @State private var unlockedImagesByKey: [String: SetuImageItem] = [:]
     @State private var unlockedItems: [String: SetuImageItem] = [:]
     @State private var unlockingTokens: Set<String> = []
@@ -26,7 +27,6 @@ struct RandomImageSwipeView: View {
     @State private var excludeAI = true
     @State private var feedback: SetuFeedback?
     @State private var showingParameters = false
-    @State private var dragOffset = CGSize.zero
     @State private var balance: Int?
     @State private var costPerImage = 20
     @State private var showingUnlockConfirmation = false
@@ -49,7 +49,7 @@ struct RandomImageSwipeView: View {
 
             VStack(spacing: SetuSpacing.md) {
                 if !hasTransientFeedback { feedbackBanner }
-                imageStage
+                feedStage
                 actionBar
             }
             .padding(.horizontal, SetuSpacing.lg)
@@ -159,7 +159,9 @@ struct RandomImageSwipeView: View {
             let generation = feedGeneration
             do { try await Task.sleep(for: .seconds(delay)) } catch { return }
             guard !Task.isCancelled, generation == feedGeneration else { return }
-            feedQueue.removeAll { (ImageFeedExpiryPolicy.prefetchDelay(for: $0.expiresAt) ?? 1) == 0 }
+            displayedCards.removeAll {
+                $0.id != currentCard?.id && (ImageFeedExpiryPolicy.prefetchDelay(for: $0.expiresAt) ?? 1) == 0
+            }
             await prefetchIfNeeded(force: true, expectedGeneration: generation)
         }
         .alert(
@@ -183,18 +185,15 @@ struct RandomImageSwipeView: View {
     }
 
     @ViewBuilder
-    private var imageStage: some View {
+    private var feedStage: some View {
         GeometryReader { proxy in
             ZStack {
-                RoundedRectangle(cornerRadius: SetuRadius.lg)
-                    .fill(SetuColor.surfaceMuted)
-
                 switch imageState {
-                case .idle where currentCard == nil:
+                case .idle where displayedCards.isEmpty && currentCard == nil:
                     loadingPlaceholder
-                case .loading where currentCard == nil:
+                case .loading where displayedCards.isEmpty && currentCard == nil:
                     loadingPlaceholder
-                case .failed(let text) where currentCard == nil:
+                case .failed(let text) where displayedCards.isEmpty && currentCard == nil:
                     if text.message == noMatchingImagesMessage {
                         SetuEmptyState(
                             title: "没有匹配图片",
@@ -209,62 +208,68 @@ struct RandomImageSwipeView: View {
                         SetuEmptyState(title: "图片加载失败", message: text, systemImage: "photo.on.rectangle")
                     }
                 default:
-                    if let currentCard {
-                        RandomImageCard(
-                            card: currentCard,
-                            unlockedItem: unlockedItems[currentCard.token],
-                            stageSize: proxy.size
-                        )
-                    } else {
+                    if displayedCards.isEmpty {
                         SetuEmptyState(title: "暂无图片", systemImage: "photo.on.rectangle")
+                    } else {
+                        feedScroll(containerSize: proxy.size)
                     }
                 }
 
-                if isLoadingImage && currentCard != nil {
-                    floatingStatus(systemImage: "arrow.triangle.2.circlepath", title: "正在切换")
-                } else if isCurrentUnlocking {
+                if isCurrentUnlocking {
                     floatingStatus(systemImage: "lock.open", title: "正在解锁")
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: SetuRadius.lg, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: SetuRadius.lg, style: .continuous)
-                    .stroke(SetuColor.separator, lineWidth: 1)
+        }
+    }
+
+    private func feedScroll(containerSize: CGSize) -> some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: SetuSpacing.xxl) {
+                    ForEach(displayedCards) { card in
+                        RandomImageFeedPost(
+                            card: card,
+                            unlockedItem: unlockedItems[card.token],
+                            containerWidth: containerSize.width,
+                            maxImageHeight: max(containerSize.height * 0.72, 180),
+                            onCopyPID: { copyPID(of: card) }
+                        )
+                        .id(card.id)
+                        .background {
+                            GeometryReader { geo in
+                                Color.clear.preference(
+                                    key: FeedCardMinYKey.self,
+                                    value: [card.id: geo.frame(in: .named("imageFeed")).minY]
+                                )
+                            }
+                        }
+                        .onAppear {
+                            if card.id == displayedCards.last?.id {
+                                let generation = feedGeneration
+                                Task { await prefetchIfNeeded(expectedGeneration: generation) }
+                            }
+                        }
+                    }
+
+                    if isPrefetching && currentCard != nil {
+                        SetuLoadMoreFooter(state: .loading)
+                    }
+                }
+                .padding(.bottom, SetuSpacing.sm)
             }
-            .overlay(alignment: .bottom) {
-                if let currentCard,
-                   currentCard.hasDisplayableURL(unlockedItem: unlockedItems[currentCard.token]) {
-                    imageMetadataOverlay(currentCard)
-                        .accessibilityIdentifier("image.metadata.overlay")
+            .coordinateSpace(name: "imageFeed")
+            .scrollIndicators(.hidden)
+            .onPreferenceChange(FeedCardMinYKey.self) { updateFocusedCard(from: $0) }
+            .onChange(of: scrollTargetID) { _, id in
+                guard let id else { return }
+                if reduceMotion {
+                    proxy.scrollTo(id, anchor: .top)
+                } else {
+                    withAnimation(.snappy(duration: 0.28)) {
+                        proxy.scrollTo(id, anchor: .top)
+                    }
                 }
             }
-            .offset(dragOffset)
-            .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: dragOffset)
-            .gesture(
-                DragGesture(minimumDistance: 20)
-                    .onChanged { value in
-                        if !hasActiveImageMutation {
-                            dragOffset = CGSize(
-                                width: value.translation.width * 0.18,
-                                height: value.translation.height * 0.18
-                            )
-                        }
-                    }
-                    .onEnded { value in
-                        guard !hasActiveImageMutation else {
-                            dragOffset = .zero
-                            return
-                        }
-                        let distance = max(abs(value.translation.width), abs(value.translation.height))
-                        let reason = swipeReason(for: value.translation)
-                        dragOffset = .zero
-                        if distance > 70 {
-                            playSwipeFeedback()
-                            let generation = feedGeneration
-                            Task { await loadNextImage(reason: reason, expectedGeneration: generation) }
-                        }
-                    }
-            )
         }
     }
 
@@ -336,6 +341,8 @@ struct RandomImageSwipeView: View {
                     if let currentCard {
                         originalPreviewItem = UserImagePreviewItem(
                             id: currentCard.id,
+                            pid: currentCard.preview.pid,
+                            page: currentCard.preview.page,
                             title: title(for: currentCard),
                             author: author(for: currentCard),
                             width: width(for: currentCard),
@@ -353,6 +360,7 @@ struct RandomImageSwipeView: View {
                 .accessibilityIdentifier("image.share")
 
                 Button {
+                    playSwipeFeedback()
                     let generation = feedGeneration
                     Task {
                         await loadNextImage(
@@ -378,37 +386,54 @@ struct RandomImageSwipeView: View {
         }
     }
 
-    private func imageMetadataOverlay(_ card: ImageFeedCard) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title(for: card))
-                        .font(.headline)
-                        .lineLimit(2)
-                    Text(author(for: card))
-                        .font(.footnote)
-                        .foregroundStyle(.white.opacity(0.86))
-                }
-                Spacer()
-                if r18Value(for: card) {
-                    SetuPill(text: "成人内容", tone: .danger)
-                }
-                SetuPill(text: unlockedItems[card.token] == nil ? "预览" : "已解锁", tone: unlockedItems[card.token] == nil ? .muted : .success)
-            }
+    private func pidDisplay(for card: ImageFeedCard) -> ImagePidDisplay {
+        ImagePidDisplay(pid: card.preview.pid, page: page(for: card))
+    }
 
-            HStack(spacing: 10) {
-                Label("\(width(for: card))x\(height(for: card))", systemImage: "aspectratio")
-                if let firstTag = tags(for: card).first {
-                    Label(firstTag, systemImage: "tag")
-                }
+    private func copyPID(of card: ImageFeedCard) {
+        let display = pidDisplay(for: card)
+        PlatformClipboard.copy(display.copyText)
+        present(.success("\(display.title) 已复制"))
+        #if os(iOS)
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        #endif
+    }
+
+    private func updateFocusedCard(from minYs: [String: CGFloat]) {
+        guard !showingUnlockConfirmation, !hasActiveImageMutation else { return }
+        if let scrollTargetID {
+            if let y = minYs[scrollTargetID], abs(y) < 120 {
+                self.scrollTargetID = nil
             }
-            .font(.caption)
-            .foregroundStyle(.white.opacity(0.86))
-            .lineLimit(1)
+            return
         }
-        .foregroundStyle(.white)
-        .padding(SetuSpacing.md)
-        .background(.ultraThinMaterial)
+        guard let focusedID = minYs.min(by: { abs($0.value) < abs($1.value) })?.key,
+              let card = displayedCards.first(where: { $0.id == focusedID }),
+              currentCard?.id != card.id else { return }
+        Task { selectCard(card, reason: nil, scroll: false) }
+    }
+
+    private func selectCard(_ card: ImageFeedCard, reason: String?, scroll: Bool) {
+        if let unlocked = unlockedImagesByKey[imageKey(for: card)] {
+            unlockedItems[card.token] = unlocked
+        }
+        let favoriteKey = imageKey(for: card)
+        if favoriteStates[favoriteKey] == nil {
+            favoriteStates[favoriteKey] = .loading
+        }
+        currentCard = card
+        imageState = .loaded(card)
+        if reason == "已应用参数" {
+            present(.info(reason ?? ""))
+        } else if reason != nil {
+            feedback = nil
+            favoriteToastTarget = nil
+        }
+        if scroll {
+            scrollTargetID = card.id
+        }
+        let generation = feedGeneration
+        Task { await refreshFavoriteStatus(for: card, expectedGeneration: generation) }
     }
 
     private var hasTransientFeedback: Bool {
@@ -535,7 +560,8 @@ struct RandomImageSwipeView: View {
         feedGeneration += 1
         activePrefetchID = nil
         currentCard = nil
-        feedQueue = []
+        displayedCards = []
+        scrollTargetID = nil
         unlockedItems = [:]
         favoriteStates = [:]
         favoriteStatusLoadIDs = [:]
@@ -550,7 +576,7 @@ struct RandomImageSwipeView: View {
         await loadBalance(expectedGeneration: generation)
         guard generation == feedGeneration else { return }
         await prefetchIfNeeded(force: true, expectedGeneration: generation)
-        guard generation == feedGeneration, !feedQueue.isEmpty else { return }
+        guard generation == feedGeneration, !displayedCards.isEmpty else { return }
         imageState = .idle
         await loadNextImage(reason: "已应用参数", expectedGeneration: generation)
     }
@@ -558,54 +584,84 @@ struct RandomImageSwipeView: View {
     private func loadNextImage(reason: String, expectedGeneration: Int? = nil) async {
         let generation = expectedGeneration ?? feedGeneration
         guard generation == feedGeneration else { return }
-        guard !isLoadingImage else { return }
-        feedQueue.removeAll { ImageFeedExpiryPolicy.isExpired($0.expiresAt) }
-        if feedQueue.isEmpty, isPrefetching {
-            present(.info("正在预加载下一批图片"))
+        pruneExpiredCards()
+
+        if let currentCard, let next = nextCard(after: currentCard) {
+            selectCard(next, reason: reason, scroll: true)
+            prefetchIfLow(expectedGeneration: generation)
             return
         }
 
-        if feedQueue.isEmpty {
-            imageState = currentCard.map { .loaded($0) } ?? .loading
-            await prefetchIfNeeded(force: true, expectedGeneration: generation)
-            guard generation == feedGeneration else { return }
+        if currentCard == nil, let first = displayedCards.first(where: { !ImageFeedExpiryPolicy.isExpired($0.expiresAt) }) {
+            selectCard(first, reason: reason, scroll: false)
+            prefetchIfLow(expectedGeneration: generation)
+            return
         }
 
-        guard !feedQueue.isEmpty else {
-            if let currentCard {
-                imageState = .loaded(currentCard)
-            } else if case .failed = imageState {
-                // Keep the precise network or empty-result state published by prefetch.
-            } else {
-                imageState = .failed(noMatchingImagesMessage)
+        if isPrefetching {
+            for _ in 0..<40 {
+                guard generation == feedGeneration else { return }
+                if !isPrefetching { break }
+                try? await Task.sleep(for: .milliseconds(50))
             }
-            return
+            guard generation == feedGeneration else { return }
+            if let currentCard, let next = nextCard(after: currentCard) {
+                selectCard(next, reason: reason, scroll: true)
+                return
+            }
         }
 
-        feedQueue.removeAll { ImageFeedExpiryPolicy.isExpired($0.expiresAt) }
-        guard !feedQueue.isEmpty else {
-            imageState = .failed("预览已过期，请重新加载")
-            present(.warning("预览已过期，请重新加载"))
+        await prefetchIfNeeded(force: true, expectedGeneration: generation)
+        guard generation == feedGeneration else { return }
+        pruneExpiredCards()
+
+        if let currentCard, let next = nextCard(after: currentCard) {
+            selectCard(next, reason: reason, scroll: true)
             return
         }
-        let next = feedQueue.removeFirst()
-        if let unlocked = unlockedImagesByKey[imageKey(for: next)] {
-            unlockedItems[next.token] = unlocked
+        if currentCard == nil, let first = displayedCards.first(where: { !ImageFeedExpiryPolicy.isExpired($0.expiresAt) }) {
+            selectCard(first, reason: reason, scroll: false)
+            return
         }
-        let favoriteKey = imageKey(for: next)
-        favoriteStates[favoriteKey] = .loading
-        currentCard = next
-        imageState = .loaded(next)
-        if reason == "已应用参数" {
-            present(.info(reason))
-        } else {
-            feedback = nil
-            favoriteToastTarget = nil
+        if currentCard == nil {
+            if case .failed = imageState {
+                return
+            }
+            imageState = .failed(noMatchingImagesMessage)
         }
-        Task { await refreshFavoriteStatus(for: next, expectedGeneration: generation) }
-        if feedQueue.count <= refillThreshold {
-            Task { await prefetchIfNeeded(expectedGeneration: generation) }
+    }
+
+    private func nextCard(after card: ImageFeedCard) -> ImageFeedCard? {
+        let expired = displayedCards.map { ImageFeedExpiryPolicy.isExpired($0.expiresAt) }
+        guard let index = displayedCards.firstIndex(where: { $0.id == card.id }),
+              let nextIndex = ImageFeedBrowsePolicy.nextIndex(after: index, expired: expired) else {
+            return nil
         }
+        return displayedCards[nextIndex]
+    }
+
+    private func pruneExpiredCards() {
+        displayedCards.removeAll { card in
+            card.id != currentCard?.id && ImageFeedExpiryPolicy.isExpired(card.expiresAt)
+        }
+    }
+
+    private func remainingCardsAfterFocus() -> Int {
+        guard let currentCard,
+              let index = displayedCards.firstIndex(where: { $0.id == currentCard.id }) else {
+            return displayedCards.count
+        }
+        return max(displayedCards.count - index - 1, 0)
+    }
+
+    private func prefetchIfLow(expectedGeneration: Int? = nil) {
+        let generation = expectedGeneration ?? feedGeneration
+        Task { await prefetchIfNeeded(expectedGeneration: generation) }
+    }
+
+    private func appendUniqueCards(_ cards: [ImageFeedCard]) {
+        let existing = Set(displayedCards.map(\.token))
+        displayedCards.append(contentsOf: cards.filter { !existing.contains($0.token) })
     }
 
     private func prefetchIfNeeded(
@@ -615,7 +671,7 @@ struct RandomImageSwipeView: View {
         let generation = expectedGeneration ?? feedGeneration
         guard generation == feedGeneration else { return }
         guard activePrefetchID == nil else { return }
-        guard force || feedQueue.count <= refillThreshold else { return }
+        guard force || remainingCardsAfterFocus() <= refillThreshold else { return }
 
         let requestID = UUID()
         let request = ImageFeedRequest(
@@ -640,7 +696,7 @@ struct RandomImageSwipeView: View {
             costPerImage = response.costPerImage
             balance = response.balance
             let cards = response.items.map { ImageFeedCard(feedID: response.feedId, preview: $0, expiresAt: ImageFeedExpiryPolicy.expirationDate(response.expiresAt)) }
-            feedQueue.append(contentsOf: cards)
+            appendUniqueCards(cards)
             if cards.isEmpty {
                 if currentCard == nil {
                     imageState = .failed(noMatchingImagesMessage)
@@ -886,13 +942,6 @@ struct RandomImageSwipeView: View {
         present(.error(mapped))
     }
 
-    private func swipeReason(for translation: CGSize) -> String {
-        if abs(translation.width) > abs(translation.height) {
-            return translation.width > 0 ? "已向右换图，快滑不会扣分" : "已向左换图，快滑不会扣分"
-        }
-        return translation.height > 0 ? "已向下换图，快滑不会扣分" : "已向上换图，快滑不会扣分"
-    }
-
     private func title(for card: ImageFeedCard) -> String {
         unlockedItems[card.token]?.title ?? card.preview.title
     }
@@ -1101,20 +1150,44 @@ private struct RandomImageCollectionSheet: View {
     }
 }
 
-private struct RandomImageCard: View {
+private struct FeedCardMinYKey: PreferenceKey {
+    static var defaultValue: [String: CGFloat] = [:]
+
+    static func reduce(value: inout [String: CGFloat], nextValue: () -> [String: CGFloat]) {
+        value.merge(nextValue(), uniquingKeysWith: { $1 })
+    }
+}
+
+private struct RandomImageFeedPost: View {
     let card: ImageFeedCard
     let unlockedItem: SetuImageItem?
-    let stageSize: CGSize
+    let containerWidth: CGFloat
+    let maxImageHeight: CGFloat
+    let onCopyPID: () -> Void
 
     var body: some View {
+        VStack(alignment: .leading, spacing: SetuSpacing.md) {
+            imageStage
+            if hasDisplayableURL {
+                metadata
+                    .accessibilityIdentifier("image.metadata.overlay")
+            } else {
+                pidRow
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var imageStage: some View {
         ZStack {
-            SetuColor.surfaceMuted
-            if card.hasDisplayableURL(unlockedItem: unlockedItem) {
+            RoundedRectangle(cornerRadius: SetuRadius.lg, style: .continuous)
+                .fill(SetuColor.surfaceMuted)
+            if hasDisplayableURL {
                 SetuRemoteImage(
                     urlString: card.displayURLString(unlockedItem: unlockedItem),
-                    accessibilityLabel: "随机图片：\(card.preview.title)，作者 \(card.preview.author)",
-                    width: stageSize.width,
-                    height: stageSize.height,
+                    accessibilityLabel: "随机图片：\(displayTitle)，作者 \(displayAuthor)",
+                    width: containerWidth,
+                    height: imageHeight,
                     cornerRadius: SetuRadius.lg,
                     contentMode: .fit
                 )
@@ -1136,10 +1209,103 @@ private struct RandomImageCard: View {
                         .foregroundStyle(SetuColor.textSecondary)
                         .padding(SetuSpacing.sm)
                 }
-                    .accessibilityLabel("图片预览暂不可用，\(displayTitle)，作者 \(displayAuthor)")
-                    .accessibilityIdentifier("image.card.placeholder")
+                .accessibilityLabel("图片预览暂不可用，\(displayTitle)，作者 \(displayAuthor)")
+                .accessibilityIdentifier("image.card.placeholder")
             }
         }
+        .frame(width: containerWidth, height: imageHeight)
+        .clipShape(RoundedRectangle(cornerRadius: SetuRadius.lg, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: SetuRadius.lg, style: .continuous)
+                .stroke(SetuColor.separator, lineWidth: 1)
+        }
+    }
+
+    private var metadata: some View {
+        VStack(alignment: .leading, spacing: SetuSpacing.sm) {
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: SetuSpacing.sm) {
+                    titleBlock
+                    Spacer(minLength: SetuSpacing.sm)
+                    statusPills
+                }
+                VStack(alignment: .leading, spacing: SetuSpacing.sm) {
+                    titleBlock
+                    statusPills
+                }
+            }
+
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center, spacing: SetuSpacing.sm) {
+                    pidRow
+                    Spacer(minLength: SetuSpacing.sm)
+                    resolutionLabel
+                }
+                VStack(alignment: .leading, spacing: SetuSpacing.sm) {
+                    pidRow
+                    resolutionLabel
+                }
+            }
+
+            if !displayTags.isEmpty {
+                TagFlow(tags: displayTags)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var titleBlock: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(displayTitle)
+                .font(SetuTypography.headline)
+                .foregroundStyle(SetuColor.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(displayAuthor)
+                .font(.footnote)
+                .foregroundStyle(SetuColor.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var statusPills: some View {
+        HStack(spacing: SetuSpacing.xs) {
+            if isR18 {
+                SetuPill(text: "成人内容", tone: .danger)
+            }
+            SetuPill(
+                text: unlockedItem == nil ? "预览" : "已解锁",
+                tone: unlockedItem == nil ? .muted : .success
+            )
+        }
+    }
+
+    private var pidRow: some View {
+        ImagePidCopyButton(display: pidDisplay, onCopied: onCopyPID)
+    }
+
+    private var resolutionLabel: some View {
+        Label("\(displayWidth)×\(displayHeight)", systemImage: "aspectratio")
+            .font(.footnote.weight(.semibold).monospacedDigit())
+            .foregroundStyle(SetuColor.textSecondary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+    }
+
+    private var hasDisplayableURL: Bool {
+        card.hasDisplayableURL(unlockedItem: unlockedItem)
+    }
+
+    private var imageHeight: CGFloat {
+        ImageFeedBrowsePolicy.imageHeight(
+            containerWidth: containerWidth,
+            pixelWidth: displayWidth,
+            pixelHeight: displayHeight,
+            maxHeight: maxImageHeight
+        )
+    }
+
+    private var pidDisplay: ImagePidDisplay {
+        ImagePidDisplay(pid: card.preview.pid, page: unlockedItem?.page ?? card.preview.page)
     }
 
     private var displayTitle: String {
@@ -1148,6 +1314,22 @@ private struct RandomImageCard: View {
 
     private var displayAuthor: String {
         unlockedItem?.author ?? card.preview.author
+    }
+
+    private var displayWidth: Int {
+        unlockedItem?.width ?? card.preview.width
+    }
+
+    private var displayHeight: Int {
+        unlockedItem?.height ?? card.preview.height
+    }
+
+    private var displayTags: [String] {
+        unlockedItem?.tags ?? card.preview.tags ?? []
+    }
+
+    private var isR18: Bool {
+        (unlockedItem?.r18 == 1) || card.preview.r18
     }
 }
 
