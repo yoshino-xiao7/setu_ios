@@ -5,6 +5,24 @@ import XCTest
 
 @MainActor
 final class VLCIndependentPlaybackTests: XCTestCase {
+    func testAVDirectProbeReplacesMediaAndPublishesOnlyCurrentIdentity() async throws {
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "seek-markers-indexed", withExtension: "mp3"))
+        let engine = AVDirectProbeEngine()
+        defer { engine.stop() }
+        let first = UUID(), second = UUID()
+        engine.load(url: url, mediaID: first); engine.play()
+        engine.load(url: url, mediaID: second); engine.play()
+        var received: [UUID] = []
+        engine.onChange = { received.append($0.mediaID) }
+        try await wait { engine.snapshot?.state == .playing }
+        try await engine.seek(toMilliseconds: 19000)
+        XCTAssertEqual(engine.snapshot?.mediaID, second)
+        XCTAssertTrue(received.allSatisfy { $0 == second })
+        XCTAssertGreaterThanOrEqual(engine.snapshot?.positionMilliseconds ?? 0, 18800)
+        engine.stop()
+        XCTAssertNil(engine.snapshot)
+    }
+
     func testVLCDecodesTheRequestedSoundWithMisleadingXingIndex() async throws {
         let bundle = Bundle(for: Self.self)
         var bytes = try Data(contentsOf: XCTUnwrap(bundle.url(forResource: "seek-markers-indexed", withExtension: "mp3")))
@@ -110,6 +128,55 @@ final class VLCIndependentPlaybackTests: XCTestCase {
         XCTAssertEqual(engine.snapshot?.mediaID, current)
         XCTAssertGreaterThanOrEqual(engine.snapshot?.positionMilliseconds ?? 0, 18800)
         XCTAssertLessThanOrEqual(engine.snapshot?.positionMilliseconds ?? 0, 20000)
+    }
+
+    /// Input is an explicitly supplied real audio file, never a signed URL or account export.
+    func testCaptureRealSourcePCMForIndependentAlignment() async throws {
+        let folder = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let input = folder.appendingPathComponent("music-probe-input.audio")
+        guard FileManager.default.fileExists(atPath: input.path) else { throw XCTSkip("Supply the selected real audio file to the test host Documents directory") }
+        // Some AVAssetReader builds reject FLAC. An independently, sequentially
+        // decoded WAV may supply the reference; the tested VLC input stays untouched.
+        let wave = folder.appendingPathComponent("music-probe-reference.wav")
+        let asset = AVURLAsset(url: FileManager.default.fileExists(atPath: wave.path) ? wave : input)
+        let audioTracks = try await asset.loadTracks(withMediaType: .audio)
+        let track = try XCTUnwrap(audioTracks.first)
+        let reader = try AVAssetReader(asset: asset)
+        let output = AVAssetReaderTrackOutput(track: track, outputSettings: [
+            AVFormatIDKey: kAudioFormatLinearPCM, AVLinearPCMBitDepthKey: 16,
+            AVLinearPCMIsFloatKey: false, AVLinearPCMIsNonInterleaved: false,
+            AVNumberOfChannelsKey: 1, AVSampleRateKey: 44100])
+        reader.add(output)
+        guard reader.startReading() else { throw reader.error ?? URLError(.cannotDecodeContentData) }
+        let reference = folder.appendingPathComponent("music-probe-reference.pcm")
+        FileManager.default.createFile(atPath: reference.path, contents: nil)
+        let handle = try FileHandle(forWritingTo: reference); defer { try? handle.close(); reader.cancelReading() }
+        var bytes = 0
+        while let sample = output.copyNextSampleBuffer(), let block = CMSampleBufferGetDataBuffer(sample) {
+            var data = Data(count: CMBlockBufferGetDataLength(block))
+            let count = data.count
+            let status = data.withUnsafeMutableBytes { CMBlockBufferCopyDataBytes(block, atOffset: 0, dataLength: count, destination: $0.baseAddress!) }
+            XCTAssertEqual(status, kCMBlockBufferNoErr)
+            try handle.write(contentsOf: data); bytes += count
+        }
+        XCTAssertEqual(reader.status, .completed)
+        let duration = Double(bytes) / 88200
+        XCTAssertGreaterThan(duration, 10)
+        var results: [[String: String]] = []
+        for fraction in [0.2, 0.5, 0.8] {
+            let probe = VLCAudioProbe(); defer { probe.stop() }
+            probe.player.media = VLCMedia(url: input); probe.player.play()
+            try await wait { probe.player.isSeekable && probe.player.time.intValue > 100 }
+            let target = Int32(duration * fraction * 1000)
+            probe.beginCapture(); probe.player.time = VLCTime(int: target)
+            try await wait { probe.capturedPCM().count >= 88200 }
+            probe.player.pause()
+            let name = "music-probe-seek-\(target).pcm"
+            try probe.capturedPCM().prefix(88200).write(to: folder.appendingPathComponent(name))
+            results.append(["targetMs": String(target), "file": name, "reportedMs": String(probe.player.time.intValue)])
+        }
+        let data = try JSONSerialization.data(withJSONObject: results, options: [.prettyPrinted, .sortedKeys])
+        try data.write(to: folder.appendingPathComponent("music-probe-pcm.json"))
     }
 
     private func wait(_ condition: () -> Bool) async throws {
