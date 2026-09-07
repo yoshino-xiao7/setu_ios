@@ -101,6 +101,14 @@ final class MusicPlaybackController {
     @ObservationIgnored private var seekID: UUID?
     @ObservationIgnored private var seekTarget: Double?
     @ObservationIgnored private var seekTimeout: Task<Void, Never>?
+    @ObservationIgnored private var seekPreparationTask: Task<Void, Never>?
+    @ObservationIgnored private var seekOriginItem: AVPlayerItem?
+    @ObservationIgnored private var seekOriginPosition: Double?
+    @ObservationIgnored private var seekReadyItem: AVPlayerItem?
+    @ObservationIgnored private var streamingSourceURL: URL?
+    @ObservationIgnored private var precisePrefetchTask: Task<Void, Never>?
+    @ObservationIgnored private let preciseSeekCache: PreciseSeekAudioCache
+    @ObservationIgnored private let seekPreparationTimeout: Duration
     private(set) var playMode: MusicPlayMode {
         get { queue.mode }
         set { queue.mode = newValue }
@@ -176,8 +184,12 @@ final class MusicPlaybackController {
         snapshotStore: PlaybackSnapshotStore? = nil,
         nowPlayingCoordinator: NowPlayingCoordinator? = nil,
         remoteCommandCoordinator: RemoteCommandCoordinator? = nil,
-        sleepTimerController: SleepTimerController? = nil
+        sleepTimerController: SleepTimerController? = nil,
+        preciseSeekCache: PreciseSeekAudioCache? = nil,
+        seekPreparationTimeout: Duration = .seconds(30)
     ) {
+        self.preciseSeekCache = preciseSeekCache ?? PreciseSeekAudioCache()
+        self.seekPreparationTimeout = seekPreparationTimeout
         self.persistsPlayback = persistsPlayback
         self.preferences = preferences
         self.snapshotStore = snapshotStore ?? PlaybackSnapshotStore(enabled: persistsPlayback, preferences: preferences)
@@ -472,7 +484,8 @@ final class MusicPlaybackController {
             } else { requestRadioRefill() }
             return
         }
-        if player?.currentItem == nil || player?.currentItem?.status == .failed || currentSource.map({ !$0.isValid(at: Date()) }) == true {
+        let usesLocalAudio = (player?.currentItem?.asset as? AVURLAsset)?.url.isFileURL == true
+        if player?.currentItem == nil || player?.currentItem?.status == .failed || (!usesLocalAudio && currentSource.map({ !$0.isValid(at: Date()) }) == true) {
             resumeRestoredCurrentTrack()
             return
         }
@@ -520,6 +533,9 @@ final class MusicPlaybackController {
         resumeTask = nil
         removeItemObservers()
         player?.replaceCurrentItem(with: nil)
+        precisePrefetchTask?.cancel(); precisePrefetchTask = nil
+        preciseSeekCache.invalidate()
+        streamingSourceURL = nil
         currentTrack = nil
         endRadioSession()
         context = nil
@@ -540,27 +556,58 @@ final class MusicPlaybackController {
     }
 
     func seek(to seconds: Double) {
-        guard let player, let item = player.currentItem, seconds.isFinite else { return }
+        guard let player, let item = player.currentItem, let source = streamingSourceURL, seconds.isFinite else { return }
+        let original = seekOriginItem ?? item
+        let originalPosition = seekOriginPosition ?? currentTimeSeconds
         cancelSeek()
         let ticket = UUID()
         seekID = ticket
         seekTarget = max(0, seconds)
+        seekOriginItem = original
+        seekOriginPosition = originalPosition
         isSeeking = true
         isBuffering = true
         playbackError = nil
+        loadingTimeout?.cancel(); loadingTimeout = nil
         player.pause()
         updateNowPlaying()
-        seekTimeout = Task { [weak self, weak item] in
-            do { try await Task.sleep(for: .seconds(10)) } catch { return }
-            guard let self, let item, self.seekID == ticket, self.player?.currentItem === item else { return }
-            self.failPlayback(UserFacingError(message: "跳转超时，请重新获取播放地址"))
+        let timeout = seekPreparationTimeout
+        seekTimeout = Task { [weak self] in
+            do { try await Task.sleep(for: timeout) } catch { return }
+            guard let self, self.seekID == ticket else { return }
+            self.failSeek(message: "准备跳转超时，已保留原播放位置")
         }
-        if item.status == .readyToPlay { performPendingSeek(on: item) }
+        let cache = preciseSeekCache
+        seekPreparationTask = Task { [weak self] in
+            do {
+                try Task.checkCancellation()
+                let asset = try await cache.prepare(source: source)
+                try Task.checkCancellation()
+                guard let self, self.seekID == ticket, self.streamingSourceURL == source,
+                      let player = self.player else { return }
+                let preciseItem: AVPlayerItem
+                if let current = player.currentItem, current.asset === asset {
+                    preciseItem = current
+                } else {
+                    preciseItem = AVPlayerItem(asset: asset)
+                    self.removeItemObservers(cancelPendingSeek: false)
+                    player.replaceCurrentItem(with: preciseItem)
+                    self.seekReadyItem = preciseItem
+                    self.addItemObservers(for: preciseItem)
+                }
+                self.seekReadyItem = preciseItem
+                if preciseItem.status == .readyToPlay { self.performPendingSeek(on: preciseItem) }
+            } catch {
+                guard let self, self.seekID == ticket, !Task.isCancelled else { return }
+                self.failSeek(message: "无法准备精确跳转，已保留原播放位置，请稍后重试")
+            }
+        }
     }
 
     private func performPendingSeek(on item: AVPlayerItem) {
-        guard let player, player.currentItem === item, let ticket = seekID, let target = seekTarget else { return }
-        seekTarget = nil // A ready-status callback must not issue the same seek twice.
+        guard let player, player.currentItem === item, seekReadyItem === item,
+              let ticket = seekID, let target = seekTarget else { return }
+        seekTarget = nil
         refreshDuration(for: item)
         let destination = boundedPlaybackTime(target)
         player.seek(to: CMTime(seconds: destination, preferredTimescale: 600),
@@ -569,11 +616,13 @@ final class MusicPlaybackController {
                 guard let self, let item, self.seekID == ticket, self.player?.currentItem === item else { return }
                 guard finished, let actual = self.player?.currentTime().seconds, actual.isFinite,
                       abs(actual - destination) <= 1 else {
-                    self.failPlayback(UserFacingError(message: "未能跳转到所选位置，请重新获取播放地址"))
+                    self.failSeek(message: "跳转未完成，已保留原播放位置")
                     return
                 }
                 self.seekID = nil
                 self.seekTimeout?.cancel(); self.seekTimeout = nil
+                self.seekPreparationTask = nil
+                self.seekOriginItem = nil; self.seekOriginPosition = nil; self.seekReadyItem = nil
                 self.isSeeking = false
                 self.isBuffering = false
                 self.currentTimeSeconds = self.boundedPlaybackTime(actual)
@@ -584,12 +633,40 @@ final class MusicPlaybackController {
         }
     }
 
+    private func failSeek(message: String) {
+        let original = seekOriginItem
+        let position = seekOriginPosition ?? currentTimeSeconds
+        cancelSeek()
+        if let original, player?.currentItem !== original {
+            removeItemObservers()
+            player?.replaceCurrentItem(with: original)
+            addItemObservers(for: original)
+        }
+        currentTimeSeconds = position
+        isBuffering = false
+        itemLoadDeadline = nil
+        feedback = .warning(message)
+        if isPlaying, let item = player?.currentItem { playWhenSessionReady(item) }
+        updateNowPlaying()
+    }
+
     private func cancelSeek() {
         seekID = nil
         seekTarget = nil
         seekTimeout?.cancel(); seekTimeout = nil
+        seekPreparationTask?.cancel(); seekPreparationTask = nil
+        seekOriginItem = nil; seekOriginPosition = nil; seekReadyItem = nil
         isSeeking = false
         player?.currentItem?.cancelPendingSeeks()
+    }
+
+    private func prefetchPreciseAudio() {
+        guard precisePrefetchTask == nil, let source = streamingSourceURL else { return }
+        let cache = preciseSeekCache
+        precisePrefetchTask = Task(priority: .utility) {
+            guard !Task.isCancelled else { return }
+            _ = try? await cache.prepare(source: source)
+        }
     }
 
     func setPlayMode(_ mode: MusicPlayMode) {
@@ -995,6 +1072,11 @@ final class MusicPlaybackController {
         playbackDiagnostics.replaceBegin(installing: true)
         #endif // P0.1 instrumentation
         player.replaceCurrentItem(with: item)
+        if streamingSourceURL != url {
+            precisePrefetchTask?.cancel(); precisePrefetchTask = nil
+            preciseSeekCache.invalidate()
+        }
+        streamingSourceURL = url
         #if DEBUG // P0.1 instrumentation
         playbackDiagnostics.replaceEnd(installing: true)
         #endif // P0.1 instrumentation
@@ -1048,6 +1130,7 @@ final class MusicPlaybackController {
         #endif // P0.1 instrumentation
         isBuffering = isPlaying && player.timeControlStatus == .waitingToPlayAtSpecifiedRate
         if player.timeControlStatus == .playing {
+            prefetchPreciseAudio()
             isBuffering = false
             loadingTimeout?.cancel(); loadingTimeout = nil
             itemLoadDeadline = nil
@@ -1268,7 +1351,10 @@ final class MusicPlaybackController {
                 self.playbackDiagnostics.itemStatus(item.status)
                 #endif // P0.1 instrumentation
                 switch item.status {
-                case .failed: self.handleItemFailure(item, error: item.error)
+                case .failed:
+                    if self.isSeeking, self.seekReadyItem === item {
+                        self.failSeek(message: "缓存音频无法播放，已保留原播放位置")
+                    } else { self.handleItemFailure(item, error: item.error) }
                 case .readyToPlay:
                     self.refreshDuration(for: item)
                     self.performPendingSeek(on: item)
@@ -1310,8 +1396,8 @@ final class MusicPlaybackController {
         itemObservers = [end, failed, stalled]
     }
 
-    private func removeItemObservers() {
-        cancelSeek()
+    private func removeItemObservers(cancelPendingSeek: Bool = true) {
+        if cancelPendingSeek { cancelSeek() }
         itemStatusObservation?.invalidate(); itemStatusObservation = nil
         itemDurationObservation?.invalidate(); itemDurationObservation = nil
         mediaDurationSeconds = nil

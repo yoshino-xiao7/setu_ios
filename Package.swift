@@ -29,7 +29,8 @@ let package = Package(
         .testTarget(
             name: "SetuIOSAppTests",
             dependencies: ["SetuIOSCore", "SetuIOSApp"],
-            path: "Tests/SetuIOSAppTests"
+            path: "Tests/SetuIOSAppTests",
+            resources: [.process("Fixtures")]
         ),
     ]
 )

@@ -7,7 +7,8 @@ final class ImageFeedBrowsePolicyTests: XCTestCase {
         XCTAssertEqual(display.text, "12123456")
         XCTAssertEqual(display.title, "PID 12123456")
         XCTAssertEqual(display.copyText, "12123456")
-        XCTAssertEqual(display.accessibilityLabel, "PID 12123456，轻点复制")
+        XCTAssertEqual(display.fieldLabel, "插画 ID")
+        XCTAssertEqual(display.accessibilityLabel, "插画 ID 12123456，轻点复制")
     }
 
     func testPidDisplayIncludesPageWhenNotZero() {

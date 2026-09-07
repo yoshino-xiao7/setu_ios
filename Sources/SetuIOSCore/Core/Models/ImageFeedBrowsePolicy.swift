@@ -18,9 +18,11 @@ public struct ImagePidDisplay: Equatable, Sendable {
 
     public var title: String { "PID \(text)" }
 
+    public var fieldLabel: String { "插画 ID" }
+
     public var copyText: String { text }
 
-    public var accessibilityLabel: String { "\(title)，轻点复制" }
+    public var accessibilityLabel: String { "\(fieldLabel) \(text)，轻点复制" }
 }
 
 public enum ImageFeedBrowsePolicy {

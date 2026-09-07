@@ -286,7 +286,7 @@ extension NowPlayingSheet {
             HStack(spacing: SetuSpacing.sm) {
                 ProgressView()
                     .tint(SetuColor.brandPink)
-                Text("正在缓冲…")
+                Text(player.isSeeking ? "正在准备跳转…" : "正在缓冲…")
                     .font(SetuTypography.caption)
                     .foregroundStyle(SetuColor.textSecondary)
                 Spacer(minLength: 0)

@@ -2,33 +2,29 @@ import SetuIOSCore
 import SwiftUI
 
 struct ImagePidCopyButton: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let display: ImagePidDisplay
     var onCopied: () -> Void
 
     var body: some View {
         Button(action: copy) {
-            HStack(spacing: SetuSpacing.sm) {
-                Text("PID")
-                    .font(.caption.weight(.bold))
+            HStack(spacing: 4) {
+                Text(display.fieldLabel)
                     .foregroundStyle(SetuColor.textSecondary)
                 Text(display.text)
-                    .font(.title3.monospacedDigit().weight(.semibold))
+                    .font(.caption.monospacedDigit().weight(.medium))
                     .foregroundStyle(SetuColor.textPrimary)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.75)
+                    .minimumScaleFactor(0.8)
                 Image(systemName: "doc.on.doc")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(SetuColor.brandInk)
+                    .font(.caption2)
+                    .foregroundStyle(SetuColor.textTertiary)
                     .accessibilityHidden(true)
             }
-            .padding(.horizontal, SetuSpacing.md)
-            .padding(.vertical, SetuSpacing.sm)
-            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-            .background(SetuColor.brandSoft.opacity(0.42), in: RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous)
-                    .stroke(SetuColor.brandInk.opacity(0.18), lineWidth: 1)
-            }
+            .font(.caption)
+            .padding(.vertical, 2)
+            .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 44 : 28, alignment: .leading)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(display.accessibilityLabel)

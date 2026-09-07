@@ -14,7 +14,6 @@ struct RandomImageSwipeView: View {
     @State private var imageState: LoadState<ImageFeedCard> = .idle
     @State private var currentCard: ImageFeedCard?
     @State private var displayedCards: [ImageFeedCard] = []
-    @State private var scrollTargetID: String?
     @State private var unlockedImagesByKey: [String: SetuImageItem] = [:]
     @State private var unlockedItems: [String: SetuImageItem] = [:]
     @State private var unlockingTokens: Set<String> = []
@@ -37,6 +36,7 @@ struct RandomImageSwipeView: View {
     @State private var favoriteToastTarget: ImageCollectionReference?
     @State private var collectionTarget: ImageCollectionReference?
     @State private var originalPreviewItem: UserImagePreviewItem?
+    @State private var deleteTarget: RandomImageDeleteTarget?
 
     private let preloadLimit = 10
     private let refillThreshold = 3
@@ -47,12 +47,14 @@ struct RandomImageSwipeView: View {
             SetuColor.pageGradient
                 .ignoresSafeArea()
 
-            VStack(spacing: SetuSpacing.md) {
-                if !hasTransientFeedback { feedbackBanner }
+            VStack(spacing: 0) {
+                if !hasTransientFeedback {
+                    feedbackBanner
+                        .padding(.horizontal, SetuSpacing.lg)
+                        .padding(.bottom, SetuSpacing.sm)
+                }
                 feedStage
-                actionBar
             }
-            .padding(.horizontal, SetuSpacing.lg)
             .padding(.bottom, SetuSpacing.sm)
         }
         .overlay(alignment: .top) {
@@ -143,6 +145,11 @@ struct RandomImageSwipeView: View {
         .sheet(item: $originalPreviewItem) { item in
             UserImagePreviewSheet(item: item)
         }
+        .sheet(item: $deleteTarget) { target in
+            RandomImageDeleteRequestSheet(environment: environment, target: target) { result in
+                present(result)
+            }
+        }
         .task {
             let generation = feedGeneration
             await loadBalance(expectedGeneration: generation)
@@ -211,7 +218,7 @@ struct RandomImageSwipeView: View {
                     if displayedCards.isEmpty {
                         SetuEmptyState(title: "暂无图片", systemImage: "photo.on.rectangle")
                     } else {
-                        feedScroll(containerSize: proxy.size)
+                        browseLayout(containerSize: proxy.size)
                     }
                 }
 
@@ -222,54 +229,138 @@ struct RandomImageSwipeView: View {
         }
     }
 
-    private func feedScroll(containerSize: CGSize) -> some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(spacing: SetuSpacing.xxl) {
-                    ForEach(displayedCards) { card in
-                        RandomImageFeedPost(
-                            card: card,
-                            unlockedItem: unlockedItems[card.token],
-                            containerWidth: containerSize.width,
-                            maxImageHeight: max(containerSize.height * 0.72, 180),
-                            onCopyPID: { copyPID(of: card) }
-                        )
-                        .id(card.id)
-                        .background {
-                            GeometryReader { geo in
-                                Color.clear.preference(
-                                    key: FeedCardMinYKey.self,
-                                    value: [card.id: geo.frame(in: .named("imageFeed")).minY]
-                                )
-                            }
-                        }
-                        .onAppear {
-                            if card.id == displayedCards.last?.id {
-                                let generation = feedGeneration
-                                Task { await prefetchIfNeeded(expectedGeneration: generation) }
-                            }
-                        }
-                    }
+    private func browseLayout(containerSize: CGSize) -> some View {
+        let reservedDetailHeight: CGFloat = dynamicTypeSize.isAccessibilitySize ? 220 : 148
+        let pagerHeight = min(
+            max(containerSize.height * 0.56, 200),
+            max(containerSize.height - reservedDetailHeight, 180)
+        )
+        return VStack(spacing: 0) {
+            imagePager(pageSize: CGSize(width: containerSize.width, height: pagerHeight))
+            if let currentCard {
+                ScrollView {
+                    imageDetail(currentCard)
+                        .padding(.horizontal, SetuSpacing.lg)
+                        .padding(.top, 10)
+                        .padding(.bottom, SetuSpacing.sm)
+                }
+                .scrollIndicators(.hidden)
+            }
+        }
+    }
 
-                    if isPrefetching && currentCard != nil {
-                        SetuLoadMoreFooter(state: .loading)
-                    }
-                }
-                .padding(.bottom, SetuSpacing.sm)
+    private func imagePager(pageSize: CGSize) -> some View {
+        TabView(selection: pagerSelection) {
+            ForEach(displayedCards) { card in
+                RandomImagePagerPage(
+                    card: card,
+                    unlockedItem: unlockedItems[card.token],
+                    pageSize: pageSize
+                )
+                .tag(card.id)
             }
-            .coordinateSpace(name: "imageFeed")
-            .scrollIndicators(.hidden)
-            .onPreferenceChange(FeedCardMinYKey.self) { updateFocusedCard(from: $0) }
-            .onChange(of: scrollTargetID) { _, id in
-                guard let id else { return }
-                if reduceMotion {
-                    proxy.scrollTo(id, anchor: .top)
+        }
+        #if os(iOS)
+        .tabViewStyle(.page(indexDisplayMode: .never))
+        #endif
+        .frame(width: pageSize.width, height: pageSize.height)
+        .background(SetuColor.surfaceMuted)
+    }
+
+    private var pagerSelection: Binding<String> {
+        Binding(
+            get: { currentCard?.id ?? displayedCards.first?.id ?? "" },
+            set: { newID in
+                guard let card = displayedCards.first(where: { $0.id == newID }),
+                      card.id != currentCard?.id,
+                      !showingUnlockConfirmation,
+                      !hasActiveImageMutation else { return }
+                playSwipeFeedback()
+                selectCard(card, reason: "已换到下一张图片，预览免费")
+            }
+        )
+    }
+
+    private func imageDetail(_ card: ImageFeedCard) -> some View {
+        let hasURL = card.hasDisplayableURL(unlockedItem: unlockedItems[card.token])
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: SetuSpacing.sm) {
+                Text(title(for: card))
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(SetuColor.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier(hasURL ? "image.metadata.overlay" : "image.detail.title")
+                Spacer(minLength: 8)
+                if r18Value(for: card) {
+                    Text("R18")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(SetuColor.danger)
+                }
+                Text(unlockedItems[card.token] == nil ? "预览" : "已解锁")
+                    .font(.caption2)
+                    .foregroundStyle(SetuColor.textTertiary)
+            }
+
+            compactFacts(card)
+
+            authorRow(card)
+
+            if !tags(for: card).isEmpty {
+                TagFlow(tags: tags(for: card).map { $0.hasPrefix("#") ? $0 : "#\($0)" })
+            }
+
+            compactActions
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func compactFacts(_ card: ImageFeedCard) -> some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                ImagePidCopyButton(display: pidDisplay(for: card)) {
+                    copyPID(of: card)
+                }
+                Text("分辨率 \(width(for: card))×\(height(for: card))")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(SetuColor.textSecondary)
+                    .lineLimit(1)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                ImagePidCopyButton(display: pidDisplay(for: card)) {
+                    copyPID(of: card)
+                }
+                Text("分辨率 \(width(for: card))×\(height(for: card))")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(SetuColor.textSecondary)
+            }
+        }
+    }
+
+    private func authorRow(_ card: ImageFeedCard) -> some View {
+        HStack(spacing: SetuSpacing.sm) {
+            Text(author(for: card))
+                .font(.caption)
+                .foregroundStyle(SetuColor.textSecondary)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            Button {
+                if isCurrentUnlocked {
+                    Task { await openOriginal() }
                 } else {
-                    withAnimation(.snappy(duration: 0.28)) {
-                        proxy.scrollTo(id, anchor: .top)
-                    }
+                    showingUnlockConfirmation = true
                 }
+            } label: {
+                Text(isCurrentUnlocked ? "查看高清图" : "查看高清图 · \(costPerImage)")
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 5)
+                    .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 44 : 28)
+                    .foregroundStyle(.white)
+                    .background(SetuColor.brandInk, in: Capsule())
             }
+            .disabled(currentCard == nil || hasActiveImageMutation)
+            .accessibilityHint("低清预览免费，确认后才会消费积分")
+            .accessibilityIdentifier("image.unlock")
         }
     }
 
@@ -294,96 +385,107 @@ struct RandomImageSwipeView: View {
         .background(.thinMaterial, in: Capsule())
     }
 
-    private var actionBar: some View {
-        VStack(spacing: SetuSpacing.sm) {
-            Button {
-                if isCurrentUnlocked {
-                    Task { await openOriginal() }
-                } else {
-                    showingUnlockConfirmation = true
-                }
-            } label: {
-                Label(
-                    isCurrentUnlocked || dynamicTypeSize.isAccessibilitySize ? "查看高清图" : "查看高清图 · \(costPerImage) 积分",
-                    systemImage: isCurrentUnlocked ? "lock.open" : "lock"
-                )
-                .frame(maxWidth: .infinity, minHeight: 48)
+    private var compactActions: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
+                favoriteButton
+                shareButton
+                nextButton
+                deleteButton
             }
-            .disabled(currentCard == nil || hasActiveImageMutation)
-            .buttonStyle(.borderedProminent)
-            .tint(SetuColor.gradientTop)
-            .accessibilityHint("低清预览免费，确认后才会消费积分")
-            .accessibilityIdentifier("image.unlock")
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    favoriteButton
+                    shareButton
+                }
+                HStack(spacing: 8) {
+                    nextButton
+                    deleteButton
+                }
+            }
+        }
+    }
 
-            HStack(spacing: SetuSpacing.xs) {
-                Button {
+    private var favoriteButton: some View {
+        Button {
+            Task { await handleFavoriteAction() }
+        } label: {
+            CompactImageActionLabel(title: currentFavoriteButtonTitle, systemImage: currentFavoriteButtonSystemImage)
+        }
+        .setuButtonFeedback()
+        .disabled(!canUseCurrentFavoriteAction)
+        .accessibilityIdentifier("image.favorite")
+        .accessibilityHint(currentFavoriteAccessibilityHint)
+        .highPriorityGesture(
+            LongPressGesture().exclusively(before: TapGesture()).onEnded { gesture in
+                switch gesture {
+                case .first:
+                    openCollectionPicker()
+                case .second:
                     Task { await handleFavoriteAction() }
-                } label: {
-                    ImageSwipeActionLabel(title: currentFavoriteButtonTitle, systemImage: currentFavoriteButtonSystemImage)
                 }
-                .setuButtonFeedback()
-                .disabled(!canUseCurrentFavoriteAction)
-                .accessibilityIdentifier("image.favorite")
-                .accessibilityHint(currentFavoriteAccessibilityHint)
-                .highPriorityGesture(
-                    LongPressGesture().exclusively(before: TapGesture()).onEnded { gesture in
-                        switch gesture {
-                        case .first:
-                            openCollectionPicker()
-                        case .second:
-                            Task { await handleFavoriteAction() }
-                        }
-                    }
-                )
-                .accessibilityAction(named: "选择收藏夹") { openCollectionPicker() }
-
-                Button {
-                    if let currentCard {
-                        originalPreviewItem = UserImagePreviewItem(
-                            id: currentCard.id,
-                            pid: currentCard.preview.pid,
-                            page: currentCard.preview.page,
-                            title: title(for: currentCard),
-                            author: author(for: currentCard),
-                            width: width(for: currentCard),
-                            height: height(for: currentCard),
-                            r18: r18Value(for: currentCard),
-                            displayURLString: currentCard.displayURLString(unlockedItem: unlockedItems[currentCard.token]),
-                            originalURLString: unlockedItems[currentCard.token]?.originalURLString
-                        )
-                    }
-                } label: {
-                    ImageSwipeActionLabel(title: "分享", systemImage: "square.and.arrow.up")
-                }
-                .setuButtonFeedback()
-                .disabled(currentCard == nil || hasActiveImageMutation)
-                .accessibilityIdentifier("image.share")
-
-                Button {
-                    playSwipeFeedback()
-                    let generation = feedGeneration
-                    Task {
-                        await loadNextImage(
-                            reason: "已换到下一张图片，预览免费",
-                            expectedGeneration: generation
-                        )
-                    }
-                } label: {
-                    ImageSwipeActionLabel(title: "下一张", systemImage: "arrow.down.circle.fill")
-                }
-                .setuButtonFeedback()
-                .disabled(isLoadingImage || hasActiveImageMutation)
             }
+        )
+        .accessibilityAction(named: "选择收藏夹") { openCollectionPicker() }
+    }
+
+    private var shareButton: some View {
+        Button {
+            if let currentCard {
+                originalPreviewItem = UserImagePreviewItem(
+                    id: currentCard.id,
+                    pid: currentCard.preview.pid,
+                    page: currentCard.preview.page,
+                    title: title(for: currentCard),
+                    author: author(for: currentCard),
+                    width: width(for: currentCard),
+                    height: height(for: currentCard),
+                    r18: r18Value(for: currentCard),
+                    displayURLString: currentCard.displayURLString(unlockedItem: unlockedItems[currentCard.token]),
+                    originalURLString: unlockedItems[currentCard.token]?.originalURLString
+                )
+            }
+        } label: {
+            CompactImageActionLabel(title: "分享", systemImage: "square.and.arrow.up")
         }
-        .fixedSize(horizontal: false, vertical: true)
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, SetuSpacing.sm)
-        .padding(.horizontal, SetuSpacing.sm)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: SetuRadius.lg, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: SetuRadius.lg, style: .continuous)
-                .stroke(SetuColor.separator, lineWidth: 1)
+        .setuButtonFeedback()
+        .disabled(currentCard == nil || hasActiveImageMutation)
+        .accessibilityIdentifier("image.share")
+    }
+
+    private var nextButton: some View {
+        Button {
+            playSwipeFeedback()
+            let generation = feedGeneration
+            Task {
+                await loadNextImage(
+                    reason: "已换到下一张图片，预览免费",
+                    expectedGeneration: generation
+                )
+            }
+        } label: {
+            CompactImageActionLabel(title: "下一张", systemImage: "arrow.right")
         }
+        .setuButtonFeedback()
+        .disabled(isLoadingImage || hasActiveImageMutation)
+    }
+
+    private var deleteButton: some View {
+        Button {
+            if let currentCard {
+                deleteTarget = RandomImageDeleteTarget(
+                    pid: currentCard.preview.pid,
+                    page: currentCard.preview.page,
+                    title: title(for: currentCard),
+                    author: author(for: currentCard)
+                )
+            }
+        } label: {
+            CompactImageActionLabel(title: "申请删除", systemImage: "trash")
+        }
+        .setuButtonFeedback()
+        .disabled(currentCard == nil || hasActiveImageMutation)
+        .accessibilityIdentifier("image.delete-request")
     }
 
     private func pidDisplay(for card: ImageFeedCard) -> ImagePidDisplay {
@@ -393,27 +495,13 @@ struct RandomImageSwipeView: View {
     private func copyPID(of card: ImageFeedCard) {
         let display = pidDisplay(for: card)
         PlatformClipboard.copy(display.copyText)
-        present(.success("\(display.title) 已复制"))
+        present(.success("\(display.fieldLabel) \(display.text) 已复制"))
         #if os(iOS)
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         #endif
     }
 
-    private func updateFocusedCard(from minYs: [String: CGFloat]) {
-        guard !showingUnlockConfirmation, !hasActiveImageMutation else { return }
-        if let scrollTargetID {
-            if let y = minYs[scrollTargetID], abs(y) < 120 {
-                self.scrollTargetID = nil
-            }
-            return
-        }
-        guard let focusedID = minYs.min(by: { abs($0.value) < abs($1.value) })?.key,
-              let card = displayedCards.first(where: { $0.id == focusedID }),
-              currentCard?.id != card.id else { return }
-        Task { selectCard(card, reason: nil, scroll: false) }
-    }
-
-    private func selectCard(_ card: ImageFeedCard, reason: String?, scroll: Bool) {
+    private func selectCard(_ card: ImageFeedCard, reason: String?) {
         if let unlocked = unlockedImagesByKey[imageKey(for: card)] {
             unlockedItems[card.token] = unlocked
         }
@@ -429,11 +517,9 @@ struct RandomImageSwipeView: View {
             feedback = nil
             favoriteToastTarget = nil
         }
-        if scroll {
-            scrollTargetID = card.id
-        }
         let generation = feedGeneration
         Task { await refreshFavoriteStatus(for: card, expectedGeneration: generation) }
+        prefetchIfLow(expectedGeneration: generation)
     }
 
     private var hasTransientFeedback: Bool {
@@ -561,7 +647,6 @@ struct RandomImageSwipeView: View {
         activePrefetchID = nil
         currentCard = nil
         displayedCards = []
-        scrollTargetID = nil
         unlockedItems = [:]
         favoriteStates = [:]
         favoriteStatusLoadIDs = [:]
@@ -587,13 +672,13 @@ struct RandomImageSwipeView: View {
         pruneExpiredCards()
 
         if let currentCard, let next = nextCard(after: currentCard) {
-            selectCard(next, reason: reason, scroll: true)
+            selectCard(next, reason: reason)
             prefetchIfLow(expectedGeneration: generation)
             return
         }
 
         if currentCard == nil, let first = displayedCards.first(where: { !ImageFeedExpiryPolicy.isExpired($0.expiresAt) }) {
-            selectCard(first, reason: reason, scroll: false)
+            selectCard(first, reason: reason)
             prefetchIfLow(expectedGeneration: generation)
             return
         }
@@ -606,7 +691,7 @@ struct RandomImageSwipeView: View {
             }
             guard generation == feedGeneration else { return }
             if let currentCard, let next = nextCard(after: currentCard) {
-                selectCard(next, reason: reason, scroll: true)
+                selectCard(next, reason: reason)
                 return
             }
         }
@@ -616,11 +701,11 @@ struct RandomImageSwipeView: View {
         pruneExpiredCards()
 
         if let currentCard, let next = nextCard(after: currentCard) {
-            selectCard(next, reason: reason, scroll: true)
+            selectCard(next, reason: reason)
             return
         }
         if currentCard == nil, let first = displayedCards.first(where: { !ImageFeedExpiryPolicy.isExpired($0.expiresAt) }) {
-            selectCard(first, reason: reason, scroll: false)
+            selectCard(first, reason: reason)
             return
         }
         if currentCard == nil {
@@ -977,25 +1062,29 @@ struct RandomImageSwipeView: View {
     }
 }
 
-private struct ImageSwipeActionLabel: View {
+private struct CompactImageActionLabel: View {
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let title: String
     let systemImage: String
 
     var body: some View {
-        VStack(spacing: SetuSpacing.xs) {
-            Image(systemName: systemImage)
-                .font(.system(size: 20, weight: .semibold))
-                .accessibilityHidden(true)
+        Label {
             Text(title)
-                .font(.caption)
-                .fixedSize(horizontal: false, vertical: true)
+                .font(.caption.weight(.medium))
+        } icon: {
+            Image(systemName: systemImage)
+                .font(.caption.weight(.semibold))
         }
-        .frame(maxWidth: .infinity, minHeight: 52)
-        .padding(SetuSpacing.xs)
+        .labelStyle(.titleAndIcon)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 44 : 30)
         .foregroundStyle(SetuColor.brandInk)
-        .background(SetuColor.brandSoft.opacity(0.2), in: RoundedRectangle(cornerRadius: SetuRadius.md))
-        .opacity(isEnabled ? 1 : 0.5)
+        .background(SetuColor.brandSoft.opacity(0.28), in: Capsule())
+        .opacity(isEnabled ? 1 : 0.45)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
     }
 }
 
@@ -1150,45 +1239,21 @@ private struct RandomImageCollectionSheet: View {
     }
 }
 
-private struct FeedCardMinYKey: PreferenceKey {
-    static var defaultValue: [String: CGFloat] = [:]
-
-    static func reduce(value: inout [String: CGFloat], nextValue: () -> [String: CGFloat]) {
-        value.merge(nextValue(), uniquingKeysWith: { $1 })
-    }
-}
-
-private struct RandomImageFeedPost: View {
+private struct RandomImagePagerPage: View {
     let card: ImageFeedCard
     let unlockedItem: SetuImageItem?
-    let containerWidth: CGFloat
-    let maxImageHeight: CGFloat
-    let onCopyPID: () -> Void
+    let pageSize: CGSize
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SetuSpacing.md) {
-            imageStage
-            if hasDisplayableURL {
-                metadata
-                    .accessibilityIdentifier("image.metadata.overlay")
-            } else {
-                pidRow
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var imageStage: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: SetuRadius.lg, style: .continuous)
-                .fill(SetuColor.surfaceMuted)
-            if hasDisplayableURL {
+            SetuColor.surfaceMuted
+            if card.hasDisplayableURL(unlockedItem: unlockedItem) {
                 SetuRemoteImage(
                     urlString: card.displayURLString(unlockedItem: unlockedItem),
                     accessibilityLabel: "随机图片：\(displayTitle)，作者 \(displayAuthor)",
-                    width: containerWidth,
-                    height: imageHeight,
-                    cornerRadius: SetuRadius.lg,
+                    width: pageSize.width,
+                    height: pageSize.height,
+                    cornerRadius: 0,
                     contentMode: .fit
                 )
             } else {
@@ -1198,114 +1263,20 @@ private struct RandomImageFeedPost: View {
                         message: "\(displayTitle) · 作者 \(displayAuthor)",
                         systemImage: "photo"
                     )
-
                     Label("图片预览暂不可用", systemImage: "photo")
-                        .font(.body)
+                        .font(.footnote)
                         .foregroundStyle(SetuColor.textSecondary)
                         .padding(SetuSpacing.md)
-
                     Image(systemName: "photo")
-                        .font(.system(size: 32))
+                        .font(.system(size: 28))
                         .foregroundStyle(SetuColor.textSecondary)
-                        .padding(SetuSpacing.sm)
                 }
                 .accessibilityLabel("图片预览暂不可用，\(displayTitle)，作者 \(displayAuthor)")
                 .accessibilityIdentifier("image.card.placeholder")
             }
         }
-        .frame(width: containerWidth, height: imageHeight)
-        .clipShape(RoundedRectangle(cornerRadius: SetuRadius.lg, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: SetuRadius.lg, style: .continuous)
-                .stroke(SetuColor.separator, lineWidth: 1)
-        }
-    }
-
-    private var metadata: some View {
-        VStack(alignment: .leading, spacing: SetuSpacing.sm) {
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .top, spacing: SetuSpacing.sm) {
-                    titleBlock
-                    Spacer(minLength: SetuSpacing.sm)
-                    statusPills
-                }
-                VStack(alignment: .leading, spacing: SetuSpacing.sm) {
-                    titleBlock
-                    statusPills
-                }
-            }
-
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .center, spacing: SetuSpacing.sm) {
-                    pidRow
-                    Spacer(minLength: SetuSpacing.sm)
-                    resolutionLabel
-                }
-                VStack(alignment: .leading, spacing: SetuSpacing.sm) {
-                    pidRow
-                    resolutionLabel
-                }
-            }
-
-            if !displayTags.isEmpty {
-                TagFlow(tags: displayTags)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var titleBlock: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(displayTitle)
-                .font(SetuTypography.headline)
-                .foregroundStyle(SetuColor.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-            Text(displayAuthor)
-                .font(.footnote)
-                .foregroundStyle(SetuColor.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    private var statusPills: some View {
-        HStack(spacing: SetuSpacing.xs) {
-            if isR18 {
-                SetuPill(text: "成人内容", tone: .danger)
-            }
-            SetuPill(
-                text: unlockedItem == nil ? "预览" : "已解锁",
-                tone: unlockedItem == nil ? .muted : .success
-            )
-        }
-    }
-
-    private var pidRow: some View {
-        ImagePidCopyButton(display: pidDisplay, onCopied: onCopyPID)
-    }
-
-    private var resolutionLabel: some View {
-        Label("\(displayWidth)×\(displayHeight)", systemImage: "aspectratio")
-            .font(.footnote.weight(.semibold).monospacedDigit())
-            .foregroundStyle(SetuColor.textSecondary)
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
-    }
-
-    private var hasDisplayableURL: Bool {
-        card.hasDisplayableURL(unlockedItem: unlockedItem)
-    }
-
-    private var imageHeight: CGFloat {
-        ImageFeedBrowsePolicy.imageHeight(
-            containerWidth: containerWidth,
-            pixelWidth: displayWidth,
-            pixelHeight: displayHeight,
-            maxHeight: maxImageHeight
-        )
-    }
-
-    private var pidDisplay: ImagePidDisplay {
-        ImagePidDisplay(pid: card.preview.pid, page: unlockedItem?.page ?? card.preview.page)
+        .frame(width: pageSize.width, height: pageSize.height)
+        .clipped()
     }
 
     private var displayTitle: String {
@@ -1315,21 +1286,94 @@ private struct RandomImageFeedPost: View {
     private var displayAuthor: String {
         unlockedItem?.author ?? card.preview.author
     }
+}
 
-    private var displayWidth: Int {
-        unlockedItem?.width ?? card.preview.width
+private struct RandomImageDeleteTarget: Identifiable {
+    let pid: Int
+    let page: Int
+    let title: String
+    let author: String
+
+    var id: String { "\(pid)-\(page)" }
+}
+
+private struct RandomImageDeleteRequestSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Bindable var environment: AppEnvironment
+    let target: RandomImageDeleteTarget
+    let onDone: (SetuFeedback) -> Void
+
+    @State private var reason = ""
+    @State private var submitting = false
+    @State private var feedback: SetuFeedback?
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    SetuCard {
+                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                            SetuSectionHeader(title: "图片", subtitle: "确认要申请删除的图片")
+                            LabeledContent("标题", value: target.title)
+                            LabeledContent("作者", value: target.author)
+                            LabeledContent("插画 ID", value: ImagePidDisplay(pid: target.pid, page: target.page).text)
+                        }
+                    }
+                }
+                .setuListRow()
+
+                if let feedback {
+                    Section {
+                        SetuFeedbackBanner(feedback: feedback)
+                    }
+                    .setuListRow()
+                }
+
+                Section {
+                    SetuCard {
+                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                            SetuSectionHeader(title: "原因", subtitle: "可选填写，便于管理员判断")
+                            TextField("可选", text: $reason, axis: .vertical)
+                                .lineLimit(3...6)
+                                .textFieldStyle(.roundedBorder)
+                        }
+                    }
+                }
+                .setuListRow()
+            }
+            .listStyle(.plain)
+            .setuBackground()
+            .navigationTitle("申请删除")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("提交") {
+                        Task { await submit() }
+                    }
+                    .disabled(submitting)
+                    .accessibilityIdentifier("image.delete-request.submit")
+                }
+            }
+        }
     }
 
-    private var displayHeight: Int {
-        unlockedItem?.height ?? card.preview.height
-    }
-
-    private var displayTags: [String] {
-        unlockedItem?.tags ?? card.preview.tags ?? []
-    }
-
-    private var isR18: Bool {
-        (unlockedItem?.r18 == 1) || card.preview.r18
+    private func submit() async {
+        submitting = true
+        do {
+            let trimmedReason = reason.trimmingCharacters(in: .whitespacesAndNewlines)
+            try await environment.imageDeleteRequestClient.submit(
+                pid: target.pid,
+                p: target.page,
+                reason: trimmedReason.isEmpty ? nil : trimmedReason
+            )
+            onDone(.success("申请已提交，请在我的删除申请中查看进度"))
+            dismiss()
+        } catch {
+            feedback = .error(UserFacingErrorMapper.map(error))
+        }
+        submitting = false
     }
 }
 

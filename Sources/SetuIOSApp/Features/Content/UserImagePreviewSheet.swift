@@ -175,7 +175,7 @@ struct UserImagePreviewSheet: View {
                     .foregroundStyle(SetuColor.textSecondary)
                 if item.pid != 0 {
                     ImagePidCopyButton(display: ImagePidDisplay(pid: item.pid, page: item.page)) {
-                        exportState = .message("\(ImagePidDisplay(pid: item.pid, page: item.page).title) 已复制", .success)
+                        exportState = .message("\(ImagePidDisplay(pid: item.pid, page: item.page).fieldLabel) \(ImagePidDisplay(pid: item.pid, page: item.page).text) 已复制", .success)
                     }
                 }
                 HStack(spacing: SetuSpacing.sm) {
