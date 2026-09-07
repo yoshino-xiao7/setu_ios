@@ -270,33 +270,28 @@ struct RandomImageSwipeView: View {
     }
 
     private func imagePager(pageSize: CGSize) -> some View {
-        TabView(selection: pagerSelection) {
-            ForEach(displayedCards) { card in
-                RandomImagePagerPage(
-                    card: card,
-                    unlockedItem: unlockedItems[card.token],
-                    pageSize: pageSize
-                )
-                .tag(card.id)
+        Group {
+            if let card = currentCard {
+                RandomImagePagerPage(card: card, unlockedItem: unlockedItems[card.token], pageSize: pageSize)
+                    .id(card.id)
             }
         }
-        #if os(iOS)
-        .tabViewStyle(.page(indexDisplayMode: .never))
-        #endif
         .frame(width: pageSize.width, height: pageSize.height)
-        .background(SetuColor.surfaceMuted)
-    }
-
-    private var pagerSelection: Binding<String> {
-        Binding(
-            get: { currentCard?.id ?? displayedCards.first?.id ?? "" },
-            set: { newID in
-                guard let card = displayedCards.first(where: { $0.id == newID }),
-                      card.id != currentCard?.id,
-                      !showingUnlockConfirmation,
-                      !hasActiveImageMutation else { return }
-                playSwipeFeedback()
-                selectCard(card, reason: "已换到下一张图片，预览免费")
+        .contentShape(Rectangle())
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 30).onEnded { value in
+                guard !showingUnlockConfirmation, !hasActiveImageMutation,
+                      let direction = ImageBrowseLayout.swipeDirection(translation: value.translation),
+                      let card = currentCard else { return }
+                if direction < 0 {
+                    let generation = feedGeneration
+                    playSwipeFeedback()
+                    Task { await loadNextImage(reason: "已换到下一张图片，预览免费", expectedGeneration: generation) }
+                } else if let index = displayedCards.firstIndex(where: { $0.id == card.id }),
+                          let previous = displayedCards[..<index].last(where: { !ImageFeedExpiryPolicy.isExpired($0.expiresAt) }) {
+                    playSwipeFeedback()
+                    selectCard(previous, reason: "已切换图片")
+                }
             }
         )
     }

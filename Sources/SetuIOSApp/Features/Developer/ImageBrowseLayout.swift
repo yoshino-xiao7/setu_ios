@@ -2,6 +2,13 @@ import SwiftUI
 
 /// Layout-only rules; image loading and consumption remain in the feed controller.
 enum ImageBrowseLayout {
+    /// Vertical and diagonal reading gestures must never change the selected image.
+    static func swipeDirection(translation: CGSize) -> Int? {
+        guard abs(translation.width) >= 60,
+              abs(translation.width) > abs(translation.height) * 1.5 else { return nil }
+        return translation.width < 0 ? -1 : 1
+    }
+
     static func imageHeight(containerWidth: CGFloat, pixelWidth: Int, pixelHeight: Int) -> CGFloat {
         guard containerWidth.isFinite, containerWidth > 0 else { return 0 }
         guard pixelWidth > 0, pixelHeight > 0 else { return containerWidth }
