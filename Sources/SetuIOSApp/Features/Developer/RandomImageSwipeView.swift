@@ -44,89 +44,30 @@ struct RandomImageSwipeView: View {
 
     var body: some View {
         ZStack {
-            SetuColor.pageGradient
-                .ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                if !hasTransientFeedback {
-                    feedbackBanner
-                        .padding(.horizontal, SetuSpacing.lg)
-                        .padding(.bottom, SetuSpacing.sm)
-                }
-                feedStage
-            }
-            .padding(.bottom, SetuSpacing.sm)
+            SetuColor.surface.ignoresSafeArea()
+            feedStage.ignoresSafeArea(edges: .top)
         }
         .overlay(alignment: .top) {
-            if hasTransientFeedback {
-                feedbackBanner
-                    .padding(.horizontal, SetuSpacing.lg)
+            VStack(spacing: 8) {
+                browseToolbar
+                feedbackBanner.padding(.horizontal, 20)
+            }
+        }
+        .overlay(alignment: .bottomTrailing) {
+            if currentCard != nil {
+                favoriteButton
+                    .padding(.trailing, 20)
+                    .padding(.bottom, 16)
             }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("image.swipe.page")
-        .navigationTitle("随机图片")
         .setuRefreshAfterLogin(environment.authSession) { Task { await reloadFromParameters() } }
         .setuRetry { Task { await reloadFromParameters() } }
         #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .navigationBar)
         #endif
         .setuFeedbackPresentation($feedback)
-        .toolbar {
-            ToolbarItemGroup {
-                Button { router.navigate(to: .pointsLogs) } label: {
-                    HStack(spacing: SetuSpacing.xs) {
-                        Image(systemName: "bolt.fill")
-                            .font(.system(size: 14, weight: .semibold))
-                            .accessibilityHidden(true)
-                        Text(balance.map(String.init) ?? "—")
-                            .font(.caption.weight(.semibold))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
-                    }
-                    .fixedSize(horizontal: true, vertical: false)
-                }
-                .accessibilityLabel("当前余额 \(balanceText)")
-                .accessibilityIdentifier("image.balance")
-                Button {
-                    showingParameters = true
-                } label: {
-                    Image(systemName: "slider.horizontal.3")
-                }
-                .disabled(hasActiveImageMutation)
-                .accessibilityLabel("调整找图设置")
-                Menu {
-                    Button("重新加载") { Task { await reloadFromParameters() } }
-                    Button("默认收藏") { router.navigate(to: .favorites) }
-                    Button("我的收藏夹") { router.navigate(to: .collections) }
-                    Button("API Key 管理") { router.navigate(to: .apiKeys) }
-                    Button {
-                        router.navigate(to: .points)
-                    } label: {
-                        Label("按条件找图", systemImage: "slider.horizontal.3")
-                    }
-                    Button {
-                        router.navigate(to: .pointsLogs)
-                    } label: {
-                        Label("积分明细", systemImage: "list.bullet.rectangle")
-                    }
-                    Button {
-                        router.navigate(to: .galleryUploads)
-                    } label: {
-                        Label("图库投稿", systemImage: "square.and.arrow.up")
-                    }
-                    Button {
-                        router.navigate(to: .imageDeleteRequests)
-                    } label: {
-                        Label("我的删除申请", systemImage: "trash")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                }
-                .disabled(hasActiveImageMutation)
-                .accessibilityLabel("更多图片操作")
-            }
-        }
         .sheet(isPresented: $showingParameters) {
             RandomImageParameterSheet(
                 initialParameters: currentParameters
@@ -191,6 +132,77 @@ struct RandomImageSwipeView: View {
         }
     }
 
+    private var browseToolbar: some View {
+        HStack(spacing: 8) {
+            if !router.path.isEmpty {
+                Button { router.path.removeLast() } label: {
+                    Image(systemName: "chevron.left")
+                        .frame(width: 44, height: 44)
+                }
+                .background(.regularMaterial, in: Circle())
+                .accessibilityLabel("返回")
+            }
+            Spacer(minLength: 0)
+            Button { router.navigate(to: .pointsLogs) } label: {
+                Label(balance.map(String.init) ?? "—", systemImage: "bolt.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .padding(.horizontal, 12)
+                    .frame(minWidth: 44, minHeight: 44)
+            }
+            .background(.regularMaterial, in: Capsule())
+            .accessibilityLabel("当前余额 \(balanceText)")
+            .accessibilityIdentifier("image.balance")
+            Button { showingParameters = true } label: {
+                Image(systemName: "slider.horizontal.3").frame(width: 44, height: 44)
+            }
+            .background(.regularMaterial, in: Circle())
+            .disabled(hasActiveImageMutation)
+            .accessibilityLabel("调整找图设置")
+            Menu {
+                shareButton
+                nextButton
+                deleteButton
+                Divider()
+                Button("重新加载") { Task { await reloadFromParameters() } }
+                Button("默认收藏") { router.navigate(to: .favorites) }
+                Button("我的收藏夹") { router.navigate(to: .collections) }
+                Button("API Key 管理") { router.navigate(to: .apiKeys) }
+                Button {
+                    router.navigate(to: .points)
+                } label: {
+                    Label("按条件找图", systemImage: "slider.horizontal.3")
+                }
+                Button {
+                    router.navigate(to: .pointsLogs)
+                } label: {
+                    Label("积分明细", systemImage: "list.bullet.rectangle")
+                }
+                Button {
+                    router.navigate(to: .galleryUploads)
+                } label: {
+                    Label("图库投稿", systemImage: "square.and.arrow.up")
+                }
+                Button {
+                    router.navigate(to: .imageDeleteRequests)
+                } label: {
+                    Label("我的删除申请", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis").frame(width: 44, height: 44)
+            }
+            .background(.regularMaterial, in: Circle())
+            .disabled(hasActiveImageMutation)
+            .accessibilityLabel("更多图片操作")
+            .accessibilityIdentifier("image.more")
+        }
+        .font(.system(size: 18, weight: .medium))
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+        .foregroundStyle(SetuColor.textPrimary)
+        .buttonStyle(.plain)
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+    }
+
     @ViewBuilder
     private var feedStage: some View {
         GeometryReader { proxy in
@@ -230,21 +242,29 @@ struct RandomImageSwipeView: View {
     }
 
     private func browseLayout(containerSize: CGSize) -> some View {
-        let reservedDetailHeight: CGFloat = dynamicTypeSize.isAccessibilitySize ? 220 : 148
-        let pagerHeight = min(
-            max(containerSize.height * 0.56, 200),
-            max(containerSize.height - reservedDetailHeight, 180)
+        let card = currentCard
+        let imageHeight = ImageBrowseLayout.imageHeight(
+            containerWidth: containerSize.width,
+            pixelWidth: card.map { width(for: $0) } ?? 0,
+            pixelHeight: card.map { height(for: $0) } ?? 0
         )
-        return VStack(spacing: 0) {
-            imagePager(pageSize: CGSize(width: containerSize.width, height: pagerHeight))
-            if let currentCard {
-                ScrollView {
-                    imageDetail(currentCard)
-                        .padding(.horizontal, SetuSpacing.lg)
-                        .padding(.top, 10)
-                        .padding(.bottom, SetuSpacing.sm)
+        return ScrollViewReader { scroll in
+            ScrollView {
+                VStack(spacing: 0) {
+                    Color.clear.frame(height: 0).id("image.top")
+                    imagePager(pageSize: CGSize(width: containerSize.width, height: imageHeight))
+                    if let currentCard {
+                        imageDetail(currentCard)
+                            .padding(.horizontal, 20)
+                            .padding(.top, 20)
+                            .padding(.bottom, 96)
+                    }
                 }
-                .scrollIndicators(.hidden)
+            }
+            .scrollIndicators(.hidden)
+            .accessibilityIdentifier("image.detail.scroll")
+            .onChange(of: currentCard?.id) { _, _ in
+                scroll.scrollTo("image.top", anchor: .top)
             }
         }
     }
@@ -283,10 +303,10 @@ struct RandomImageSwipeView: View {
 
     private func imageDetail(_ card: ImageFeedCard) -> some View {
         let hasURL = card.hasDisplayableURL(unlockedItem: unlockedItems[card.token])
-        return VStack(alignment: .leading, spacing: 10) {
+        return VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .firstTextBaseline, spacing: SetuSpacing.sm) {
                 Text(title(for: card))
-                    .font(.body.weight(.semibold))
+                    .font(.title2.weight(.semibold))
                     .foregroundStyle(SetuColor.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier(hasURL ? "image.metadata.overlay" : "image.detail.title")
@@ -306,10 +326,17 @@ struct RandomImageSwipeView: View {
             authorRow(card)
 
             if !tags(for: card).isEmpty {
-                TagFlow(tags: tags(for: card).map { $0.hasPrefix("#") ? $0 : "#\($0)" })
+                ImageBrowseTagLayout {
+                    ForEach(Array(tags(for: card).enumerated()), id: \.offset) { _, tag in
+                        Text(tag.hasPrefix("#") ? tag : "#\(tag)")
+                            .font(.subheadline)
+                            .foregroundStyle(SetuColor.brandInk)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(SetuColor.brandSoft, in: Capsule())
+                    }
+                }
             }
-
-            compactActions
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -317,7 +344,7 @@ struct RandomImageSwipeView: View {
     private func compactFacts(_ card: ImageFeedCard) -> some View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 12) {
-                ImagePidCopyButton(display: pidDisplay(for: card)) {
+                ImagePidCopyButton(display: pidDisplay(for: card), minimumHitHeight: 44) {
                     copyPID(of: card)
                 }
                 Text("分辨率 \(width(for: card))×\(height(for: card))")
@@ -326,7 +353,7 @@ struct RandomImageSwipeView: View {
                     .lineLimit(1)
             }
             VStack(alignment: .leading, spacing: 2) {
-                ImagePidCopyButton(display: pidDisplay(for: card)) {
+                ImagePidCopyButton(display: pidDisplay(for: card), minimumHitHeight: 44) {
                     copyPID(of: card)
                 }
                 Text("分辨率 \(width(for: card))×\(height(for: card))")
@@ -337,31 +364,42 @@ struct RandomImageSwipeView: View {
     }
 
     private func authorRow(_ card: ImageFeedCard) -> some View {
-        HStack(spacing: SetuSpacing.sm) {
-            Text(author(for: card))
-                .font(.caption)
-                .foregroundStyle(SetuColor.textSecondary)
-                .lineLimit(1)
-            Spacer(minLength: 8)
-            Button {
-                if isCurrentUnlocked {
-                    Task { await openOriginal() }
-                } else {
-                    showingUnlockConfirmation = true
-                }
-            } label: {
-                Text(isCurrentUnlocked ? "查看高清图" : "查看高清图 · \(costPerImage)")
-                    .font(.caption.weight(.semibold))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 5)
-                    .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 44 : 28)
-                    .foregroundStyle(.white)
-                    .background(SetuColor.brandInk, in: Capsule())
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 16) {
+                Text(author(for: card))
+                    .font(.subheadline)
+                    .foregroundStyle(SetuColor.textSecondary)
+                    .fixedSize()
+                Spacer(minLength: 0)
+                unlockButton
             }
-            .disabled(currentCard == nil || hasActiveImageMutation)
-            .accessibilityHint("低清预览免费，确认后才会消费积分")
-            .accessibilityIdentifier("image.unlock")
+            VStack(alignment: .leading, spacing: 12) {
+                Text(author(for: card))
+                    .font(.subheadline)
+                    .foregroundStyle(SetuColor.textSecondary)
+                unlockButton
+            }
         }
+    }
+
+    private var unlockButton: some View {
+        Button {
+            if isCurrentUnlocked {
+                Task { await openOriginal() }
+            } else {
+                showingUnlockConfirmation = true
+            }
+        } label: {
+            Text(isCurrentUnlocked ? "查看高清图" : "查看高清图 · \(costPerImage)")
+                .font(.subheadline.weight(.semibold))
+                .padding(.horizontal, 16)
+                .frame(minHeight: 44)
+                .foregroundStyle(.white)
+                .background(SetuColor.brandInk, in: Capsule())
+        }
+        .disabled(currentCard == nil || hasActiveImageMutation)
+        .accessibilityHint("低清预览免费，确认后才会消费积分")
+        .accessibilityIdentifier("image.unlock")
     }
 
     private var loadingPlaceholder: some View {
@@ -385,35 +423,20 @@ struct RandomImageSwipeView: View {
         .background(.thinMaterial, in: Capsule())
     }
 
-    private var compactActions: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 8) {
-                favoriteButton
-                shareButton
-                nextButton
-                deleteButton
-            }
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
-                    favoriteButton
-                    shareButton
-                }
-                HStack(spacing: 8) {
-                    nextButton
-                    deleteButton
-                }
-            }
-        }
-    }
-
     private var favoriteButton: some View {
         Button {
             Task { await handleFavoriteAction() }
         } label: {
-            CompactImageActionLabel(title: currentFavoriteButtonTitle, systemImage: currentFavoriteButtonSystemImage)
+            Image(systemName: currentFavoriteButtonSystemImage)
+                .font(.system(size: 25, weight: .medium))
+                .foregroundStyle(SetuColor.brandInk)
+                .frame(width: 56, height: 56)
+                .background(SetuColor.brandSoft, in: RoundedRectangle(cornerRadius: 20))
+                .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
         }
         .setuButtonFeedback()
         .disabled(!canUseCurrentFavoriteAction)
+        .accessibilityLabel(currentFavoriteButtonTitle)
         .accessibilityIdentifier("image.favorite")
         .accessibilityHint(currentFavoriteAccessibilityHint)
         .highPriorityGesture(
@@ -446,7 +469,7 @@ struct RandomImageSwipeView: View {
                 )
             }
         } label: {
-            CompactImageActionLabel(title: "分享", systemImage: "square.and.arrow.up")
+            Label("分享", systemImage: "square.and.arrow.up")
         }
         .setuButtonFeedback()
         .disabled(currentCard == nil || hasActiveImageMutation)
@@ -464,7 +487,7 @@ struct RandomImageSwipeView: View {
                 )
             }
         } label: {
-            CompactImageActionLabel(title: "下一张", systemImage: "arrow.right")
+            Label("下一张", systemImage: "arrow.right")
         }
         .setuButtonFeedback()
         .disabled(isLoadingImage || hasActiveImageMutation)
@@ -481,7 +504,7 @@ struct RandomImageSwipeView: View {
                 )
             }
         } label: {
-            CompactImageActionLabel(title: "申请删除", systemImage: "trash")
+            Label("申请删除", systemImage: "trash")
         }
         .setuButtonFeedback()
         .disabled(currentCard == nil || hasActiveImageMutation)
@@ -520,13 +543,6 @@ struct RandomImageSwipeView: View {
         let generation = feedGeneration
         Task { await refreshFavoriteStatus(for: card, expectedGeneration: generation) }
         prefetchIfLow(expectedGeneration: generation)
-    }
-
-    private var hasTransientFeedback: Bool {
-        switch feedback {
-        case .success, .info: true
-        default: false
-        }
     }
 
     @ViewBuilder
@@ -1062,32 +1078,6 @@ struct RandomImageSwipeView: View {
     }
 }
 
-private struct CompactImageActionLabel: View {
-    @Environment(\.isEnabled) private var isEnabled
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    let title: String
-    let systemImage: String
-
-    var body: some View {
-        Label {
-            Text(title)
-                .font(.caption.weight(.medium))
-        } icon: {
-            Image(systemName: systemImage)
-                .font(.caption.weight(.semibold))
-        }
-        .labelStyle(.titleAndIcon)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 44 : 30)
-        .foregroundStyle(SetuColor.brandInk)
-        .background(SetuColor.brandSoft.opacity(0.28), in: Capsule())
-        .opacity(isEnabled ? 1 : 0.45)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(title)
-    }
-}
-
 private struct ImageFeedCard: Identifiable, Sendable {
     let feedID: String
     let preview: ImageFeedItem
@@ -1252,7 +1242,7 @@ private struct RandomImagePagerPage: View {
                     urlString: card.displayURLString(unlockedItem: unlockedItem),
                     accessibilityLabel: "随机图片：\(displayTitle)，作者 \(displayAuthor)",
                     width: pageSize.width,
-                    height: pageSize.height,
+                    height: min(pageSize.height, ImageBrowseLayout.imageHeight(containerWidth: pageSize.width, pixelWidth: unlockedItem?.width ?? card.preview.width, pixelHeight: unlockedItem?.height ?? card.preview.height)),
                     cornerRadius: 0,
                     contentMode: .fit
                 )

@@ -731,7 +731,7 @@ private enum SetuPreviewAPI {
         case "/ai/capabilities":
             return json(aiCapabilities)
         case "/mobile/images/feed":
-            return json(imageFeed)
+            return json(imageLayoutFeed ?? imageFeed)
         case let value where value.hasPrefix("/favorite/exists/"):
             return json(favoriteKeys.contains(value.replacingOccurrences(of: "/favorite/exists/", with: "/favorite/")) ? "true" : "false")
         case "/square/collections":
@@ -941,6 +941,25 @@ private enum SetuPreviewAPI {
       "workers":[{"workerId":"preview-worker","nodeName":"离线预览节点","status":"ONLINE","message":"可用"}]
     }
     """
+
+    /// Opt-in local artwork for simulator layout checks; regular fixtures stay unchanged.
+    private static var imageLayoutFeed: String? {
+        guard ProcessInfo.processInfo.arguments.contains("-ui-testing-image-layout"),
+              let base = ProcessInfo.processInfo.environment["SETU_IMAGE_LAYOUT_FIXTURE_BASE_URL"],
+              var payload = try? JSONSerialization.jsonObject(with: Data(imageFeed.utf8)) as? [String: Any],
+              var items = payload["items"] as? [[String: Any]] else { return nil }
+        for index in items.indices {
+            items[index]["previewUrl"] = "\(base)/\(index).png"
+        }
+        items[0]["tags"] = ["星空", "湖面", "插画", "粉色晚霞", "夏日的温柔瞬间", "原创作品"]
+        items[2]["width"] = 1000
+        items[2]["height"] = 4000
+        items[2]["title"] = "沿着山间的小路走到星空尽头，记录旅途中的每一个温柔瞬间"
+        items[2]["tags"] = []
+        payload["items"] = items
+        guard let data = try? JSONSerialization.data(withJSONObject: payload) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
 
     private static let imageFeed = """
     {

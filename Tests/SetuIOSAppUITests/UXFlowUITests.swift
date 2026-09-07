@@ -136,7 +136,10 @@ final class UXFlowUITests: XCTestCase {
         let app = launch(["-ui-testing-root-images"])
         defer { app.terminate() }
         XCTAssertTrue(app.buttons["image.unlock"].waitForExistence(timeout: 8))
-        for _ in 0..<5 { app.buttons["下一张"].tap() }
+        for _ in 0..<5 {
+            app.buttons["image.more"].tap()
+            app.buttons["下一张"].tap()
+        }
         XCTAssertFalse(element("image.feedback", in: app).exists)
     }
 
