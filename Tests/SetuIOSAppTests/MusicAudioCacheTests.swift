@@ -112,7 +112,7 @@ final class MusicAudioCacheTests: XCTestCase {
         bytes[43] = 7; bytes[47] = 100
         bytes[48] = 0; bytes[49] = 0; bytes[50] = 0x27; bytes[51] = 0x10
         for index in 0..<100 { bytes[52 + index] = UInt8(index * 255 / 100) }
-        XCTAssertTrue(AudioSeekIndex.supportsDirectSeek(header: bytes, fileLength: 10_000))
+        XCTAssertFalse(AudioSeekIndex.supportsDirectSeek(header: bytes, fileLength: 10_000))
         XCTAssertFalse(AudioSeekIndex.supportsDirectSeek(header: bytes, fileLength: 30_000))
         bytes[43] = 3
         XCTAssertFalse(AudioSeekIndex.supportsDirectSeek(header: bytes, fileLength: 10_000))

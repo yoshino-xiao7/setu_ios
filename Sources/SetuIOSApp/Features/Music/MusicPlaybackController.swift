@@ -1231,6 +1231,7 @@ final class MusicPlaybackController {
         isBuffering = isPlaying && player.timeControlStatus == .waitingToPlayAtSpecifiedRate
         cacheSettings?.playbackWaiting(isBuffering)
         if player.timeControlStatus == .playing {
+            stalledCount = 0
             prefetchPreciseAudio()
             isBuffering = false
             loadingTimeout?.cancel(); loadingTimeout = nil

@@ -27,9 +27,11 @@ partial data; otherwise partial bytes are discarded.
 
 ## Seeking
 
-Recognized MP4/FLAC containers and a structurally consistent MP3 Xing byte/TOC index
-can use direct AVPlayer seeking. Missing or contradictory VBR indexes use complete,
-precisely indexed audio, assembled from the same downloaded parts. Concurrent
+Recognized MP4/FLAC containers can use direct AVPlayer seeking. MP3 uses complete,
+precisely indexed audio, assembled from the same downloaded parts. A syntactically
+valid, monotonic Xing TOC is insufficient: the regression fixture confirms that
+AVPlayer can report 19 seconds while decoding the sound near 30 seconds. Local
+precise indexing corrects that mapping without downloading a second copy. Concurrent
 foreground/background assembly shares one job. The selected time is committed only
 after AVPlayer confirms it; synthetic audio tests also verify the decoded segment.
 During preparation the original item keeps playing. Cancel/replace operations revoke
@@ -56,3 +58,8 @@ history or persist intermediate playback positions, and restores the original
 position afterward. Results are written to `Documents/music-cache-benchmark.json`.
 The measured endpoint is AVPlayer entering playing state; it is not a microphone
 measurement. Build/install success does not establish the P95 acceptance targets.
+
+Recovered playback resets the consecutive stall counter. Separate transient stalls
+must not accumulate into a permanent network error; sustained buffering still uses
+the existing timeout and source-recovery path. Regression tests post four recovered
+stall notifications and verify playback remains active.

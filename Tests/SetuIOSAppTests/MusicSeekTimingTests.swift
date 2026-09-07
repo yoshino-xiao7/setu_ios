@@ -366,14 +366,14 @@ final class MusicSeekTimingTests: XCTestCase {
         try await assertRequestedSound(in: XCTUnwrap(restored.player?.currentItem).asset)
     }
 
-    func testIndexedMP3SeeksUsingSharedStreamWithoutCompleteFile() async throws {
+    func testIndexedMP3UsesVerifiedLocalTimingAndSharedBytes() async throws {
         #if SWIFT_PACKAGE
         let bundle = Bundle.module
         #else
         let bundle = Bundle(for: Self.self)
         #endif
         let bytes = try Data(contentsOf: XCTUnwrap(bundle.url(forResource: "seek-markers-indexed", withExtension: "mp3")))
-        XCTAssertTrue(AudioSeekIndex.supportsDirectSeek(header: bytes, fileLength: Int64(bytes.count)))
+        XCTAssertFalse(AudioSeekIndex.supportsDirectSeek(header: bytes, fileLength: Int64(bytes.count)))
         let storage = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: storage) }
         let cache = MusicAudioCache(directory: storage, transport: { request in
@@ -395,10 +395,68 @@ final class MusicSeekTimingTests: XCTestCase {
         controller.pause()
         let original = controller.player?.currentItem
         controller.seek(to: 19); await waitForSeek(controller)
-        XCTAssertTrue(controller.player?.currentItem === original)
-        try await assertRequestedSound(in: XCTUnwrap(controller.player?.currentItem).asset, requiresPreciseFlag: false)
+        XCTAssertFalse(controller.player?.currentItem === original)
+        try await assertRequestedSound(in: XCTUnwrap(controller.player?.currentItem).asset)
         let files = try FileManager.default.contentsOfDirectory(at: storage, includingPropertiesForKeys: nil)
-        XCTAssertFalse(files.contains(where: { $0.pathExtension == "mp3" }), "Direct seeking must not assemble a complete local file")
+        XCTAssertTrue(files.contains(where: { $0.pathExtension == "mp3" }))
+    }
+
+    func testMonotonicButIncorrectXingTableCannotMoveSoundAwayFromLyrics() async throws {
+        #if SWIFT_PACKAGE
+        let bundle = Bundle.module
+        #else
+        let bundle = Bundle(for: Self.self)
+        #endif
+        var mutated = try Data(contentsOf: XCTUnwrap(bundle.url(forResource: "seek-markers-indexed", withExtension: "mp3")))
+        let xing = try XCTUnwrap(mutated.range(of: Data("Xing".utf8))).lowerBound
+        for index in 0..<100 { mutated[xing + 16 + index] = UInt8(min(255, index * 4)) }
+        let bytes = mutated
+        XCTAssertFalse(AudioSeekIndex.supportsDirectSeek(header: bytes, fileLength: Int64(bytes.count)))
+        let storage = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: storage) }
+        let cache = MusicAudioCache(directory: storage, transport: { request in
+            AsyncThrowingStream { continuation in
+                let range = request.value(forHTTPHeaderField: "Range")!.dropFirst(6).split(separator: "-")
+                let start = Int(range[0])!, end = min(bytes.count, Int(range[1])! + 1)
+                continuation.yield(.response(HTTPURLResponse(url: request.url!, statusCode: 206, httpVersion: nil, headerFields: [
+                    "Content-Type": "audio/mpeg", "Content-Length": "\(end - start)", "Content-Range": "bytes \(start)-\(end - 1)/\(bytes.count)"])!))
+                continuation.yield(.bytes(bytes.subdata(in: start..<end))); continuation.finish()
+            }
+        })
+        let controller = MusicPlaybackController(persistsPlayback: false, audioAssets: CachedAudioAssetFactory(cache: cache))
+        defer { controller.stop() }
+        controller.play(url: URL(string: "https://audio.example/indexed.mp3")!, track: try playbackTracks()[0])
+        let started = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            MainActor.assumeIsolated { controller.player?.timeControlStatus == .playing }
+        }, object: nil)
+        await fulfillment(of: [started], timeout: 6)
+        controller.pause()
+        let original = controller.player?.currentItem
+        controller.seek(to: 19); await waitForSeek(controller)
+        XCTAssertFalse(controller.player?.currentItem === original)
+        try await assertRequestedSound(in: XCTUnwrap(controller.player?.currentItem).asset)
+        let files = try FileManager.default.contentsOfDirectory(at: storage, includingPropertiesForKeys: nil)
+        XCTAssertTrue(files.contains(where: { $0.pathExtension == "mp3" }))
+        let metrics = await cache.statistics()
+        XCTAssertEqual(metrics.networkBytes, Int64(bytes.count), "Exact seeking must reuse the stream bytes")
+    }
+
+    func testRecoveredBufferingDoesNotAccumulateIntoPermanentNetworkFailure() async throws {
+        let controller = MusicPlaybackController(persistsPlayback: false)
+        defer { controller.stop() }
+        controller.play(url: try fixtureURL(), track: try playbackTracks()[0])
+        let started = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            MainActor.assumeIsolated { controller.player?.timeControlStatus == .playing }
+        }, object: nil)
+        await fulfillment(of: [started], timeout: 5)
+        let item = try XCTUnwrap(controller.player?.currentItem)
+        for _ in 0..<4 {
+            NotificationCenter.default.post(name: .AVPlayerItemPlaybackStalled, object: item)
+            try await Task.sleep(for: .milliseconds(30))
+            controller.observeTimeControlStatus()
+        }
+        XCTAssertNil(controller.playbackError, "Recovered buffering must not permanently fail a healthy playing item")
+        XCTAssertTrue(controller.isPlaying)
     }
 
     private func waitForSeek(_ controller: MusicPlaybackController) async {
