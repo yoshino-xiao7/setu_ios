@@ -320,6 +320,7 @@ public struct PixivCrawlerTaskList: Decodable, Sendable {
 }
 
 public struct PixivCrawlerTask: Decodable, Identifiable, Sendable {
+    public var results: [PixivPIDImportResult]? = nil
     public let taskID: String
     public let status: String
     public let mode: String
@@ -353,6 +354,7 @@ public struct PixivCrawlerTask: Decodable, Identifiable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
+        case results
         case taskID = "task_id"
         case status
         case mode
@@ -509,4 +511,22 @@ public struct ImageAvailabilityCheckResponse: Decodable, Sendable {
     public let successCount: Int
     public let failureCount: Int
     public let results: [ImageAvailabilityCheckResult]
+}
+
+public struct PixivPIDImportResult: Decodable, Sendable, Identifiable {
+    public let pid: Int
+    public let expectedPages: Int
+    public let presentPages: [Int]
+    public let missingPages: [Int]
+    public let verified: Bool
+    public let galleryVerified: Bool?
+    public let message: String?
+    public var id: Int { pid }
+    enum CodingKeys: String, CodingKey {
+        case pid, verified, message
+        case expectedPages = "expected_pages"
+        case presentPages = "present_pages"
+        case missingPages = "missing_pages"
+        case galleryVerified = "gallery_verified"
+    }
 }

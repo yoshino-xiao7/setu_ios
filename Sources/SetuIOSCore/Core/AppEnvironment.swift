@@ -11,6 +11,15 @@ public final class AppEnvironment {
     public let dashboardClient: DashboardClient
     public let apiKeyClient: ApiKeyClient
     public let pointsClient: PointsClient
+    private let suppliedPixivClient: (any PixivOnlineServing)?
+    private var localPixivClient: (owner: String, client: PixivLocalClient)?
+    public var artworkClient: ArtworkClient {
+        if let suppliedPixivClient { return ArtworkClient(apiClient: apiClient, online: suppliedPixivClient) }
+        guard let id = authSession.currentUser?.id else { return ArtworkClient(apiClient: apiClient) }
+        let owner = String(id)
+        if localPixivClient?.owner != owner { localPixivClient = (owner, PixivLocalClient(owner: owner, keychain: keychain, imageHost: { .current })) }
+        return ArtworkClient(apiClient: apiClient, online: localPixivClient?.client)
+    }
     public let imageFeedClient: ImageFeedClient
     public let notificationClient: NotificationClient
     public let statusClient: StatusClient
@@ -52,7 +61,8 @@ public final class AppEnvironment {
         downloadClient: DownloadClient,
         galleryUploadClient: GalleryUploadClient,
         adminClient: AdminClient,
-        authSession: AuthSession
+        authSession: AuthSession,
+        pixivOnlineClient: (any PixivOnlineServing)? = nil
     ) {
         self.config = config
         self.keychain = keychain
@@ -78,6 +88,7 @@ public final class AppEnvironment {
         self.galleryUploadClient = galleryUploadClient
         self.adminClient = adminClient
         self.authSession = authSession
+        self.suppliedPixivClient = pixivOnlineClient
     }
 
     public static func live() -> AppEnvironment {

@@ -314,7 +314,7 @@ struct RootAppView: View {
         case .ai:
             AiDrawView(environment: environment)
         case .images:
-            RandomImageSwipeView(environment: environment)
+            ArtworkBrowserView(environment: environment)
         case .music:
             MusicHomeView(environment: environment, player: musicPlayer)
         case .square:

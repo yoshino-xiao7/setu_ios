@@ -1,0 +1,18 @@
+[package]
+name = "setu-rhttp-native"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[dependencies]
+base64 = "0.22"
+futures-util = "0.3"
+chrono = "0.4.45"
+rustls = "0.23"
+rustls-platform-verifier = "0.7"
+serde_json = "1.0"
+webpki-root-certs = "1.0"
+tokio = { version = "1.52", features = ["full"] }
+tokio-util = "0.7.18"
+reqwest = { path = "third_party/reqwest", version = "0.13.4", default-features = false, features = ["charset", "cookies", "form", "http2", "http3", "query", "rustls", "stream", "multipart", "socks", "brotli", "deflate", "gzip", "zstd"] }

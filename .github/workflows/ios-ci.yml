@@ -15,6 +15,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Build native Pixiv ECH transport
+        # SwiftPM requires the local binary target before manifest resolution.
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal
+          rustup target add --toolchain 1.98.1 aarch64-apple-darwin x86_64-apple-darwin aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios
+          RUSTUP_TOOLCHAIN=1.98.1 bash Native/PixivTransport/build.sh
+          RUSTFLAGS="--cfg reqwest_unstable" cargo +1.98.1 test --manifest-path Native/PixivTransport/Cargo.toml
+
       - name: Run SetuIOSCore unit tests (swift test)
         run: swift test
 

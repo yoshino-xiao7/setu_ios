@@ -1,0 +1,13 @@
+[package]
+name = "setu-ech-probe"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rustls = "=0.23.43"
+webpki-roots = "1"
+base64 = "0.22"
+reqwest = { version = "0.13", default-features = false, features = ["blocking", "rustls", "http2", "gzip"] }
+serde_json = "1"
+socket2 = { version = "0.6", features = ["all"] }
+libc = "0.2"

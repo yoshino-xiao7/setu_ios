@@ -27,9 +27,6 @@ struct RandomImageSwipeView: View {
     @State private var excludeAI = true
     @State private var feedback: SetuFeedback?
     @State private var showingParameters = false
-    @State private var balance: Int?
-    @State private var costPerImage = 20
-    @State private var showingUnlockConfirmation = false
     @State private var favoriteStates: [String: LoadState<Bool>] = [:]
     @State private var favoriteStatusLoadIDs: [String: UUID] = [:]
     @State private var favoriteLoadingKeys: Set<String> = []
@@ -105,7 +102,6 @@ struct RandomImageSwipeView: View {
         }
         .task {
             let generation = feedGeneration
-            await loadBalance(expectedGeneration: generation)
             guard generation == feedGeneration else { return }
             await prefetchIfNeeded(force: true, expectedGeneration: generation)
             guard generation == feedGeneration else { return }
@@ -124,24 +120,7 @@ struct RandomImageSwipeView: View {
             }
             await prefetchIfNeeded(force: true, expectedGeneration: generation)
         }
-        .alert(
-            unlockConfirmationTitle,
-            isPresented: $showingUnlockConfirmation,
-        ) {
-            if hasEnoughPoints {
-                Button("查看高清图 · \(costPerImage) 积分") {
-                    Task { await openOriginal() }
-                }
-                .accessibilityIdentifier("image.unlock.confirm")
-            } else {
-                Button("查看积分明细") {
-                    router.navigate(to: .pointsLogs)
-                }
-            }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("低清预览免费。当前余额：\(balanceText)；已解锁图片在本次浏览中再次查看不扣分。")
-        }
+
     }
 
     private var browseToolbar: some View {
@@ -155,15 +134,6 @@ struct RandomImageSwipeView: View {
                 .accessibilityLabel("返回")
             }
             Spacer(minLength: 0)
-            Button { router.navigate(to: .pointsLogs) } label: {
-                Label(balance.map(String.init) ?? "—", systemImage: "bolt.fill")
-                    .font(.subheadline.weight(.semibold))
-                    .padding(.horizontal, 12)
-                    .frame(minWidth: 44, minHeight: 44)
-            }
-            .background(.regularMaterial, in: Capsule())
-            .accessibilityLabel("当前余额 \(balanceText)")
-            .accessibilityIdentifier("image.balance")
             Button { showingParameters = true } label: {
                 Image(systemName: "slider.horizontal.3").frame(width: 44, height: 44)
             }
@@ -183,11 +153,6 @@ struct RandomImageSwipeView: View {
                     router.navigate(to: .points)
                 } label: {
                     Label("按条件找图", systemImage: "slider.horizontal.3")
-                }
-                Button {
-                    router.navigate(to: .pointsLogs)
-                } label: {
-                    Label("积分明细", systemImage: "list.bullet.rectangle")
                 }
                 Button {
                     router.navigate(to: .galleryUploads)
@@ -247,7 +212,7 @@ struct RandomImageSwipeView: View {
                 }
 
                 if isCurrentUnlocking {
-                    floatingStatus(systemImage: "lock.open", title: "正在解锁")
+                    floatingStatus(systemImage: "lock.open", title: "正在加载原图")
                 }
             }
             .onAppear { pageWidth = proxy.size.width }
@@ -287,7 +252,7 @@ struct RandomImageSwipeView: View {
         .simultaneousGesture(
             DragGesture(minimumDistance: 30)
                 .onChanged { value in
-                    guard !reduceMotion, !showingUnlockConfirmation, !hasActiveImageMutation,
+                    guard !reduceMotion, !hasActiveImageMutation,
                           abs(value.translation.width) > abs(value.translation.height) * 1.5,
                           let card = currentCard else { return }
                     pagingForward = value.translation.width < 0
@@ -297,7 +262,7 @@ struct RandomImageSwipeView: View {
                 }
                 .onEnded { value in
                     guard !isPageAnimating else { return }
-                    guard !showingUnlockConfirmation, !hasActiveImageMutation,
+                    guard !hasActiveImageMutation,
                           let direction = ImageBrowseLayout.swipeDirection(translation: value.translation),
                           let card = currentCard else { resetPageDrag(); return }
                     if direction < 0 {
@@ -376,7 +341,7 @@ struct RandomImageSwipeView: View {
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(SetuColor.danger)
                 }
-                Text(unlockedItems[card.token] == nil ? "预览" : "已解锁")
+                Text(unlockedItems[card.token] == nil ? "预览" : "原图已就绪")
                     .font(.caption2)
                     .foregroundStyle(SetuColor.textTertiary)
             }
@@ -444,13 +409,9 @@ struct RandomImageSwipeView: View {
 
     private var unlockButton: some View {
         Button {
-            if isCurrentUnlocked {
-                Task { await openOriginal() }
-            } else {
-                showingUnlockConfirmation = true
-            }
+            Task { await openOriginal() }
         } label: {
-            Text(isCurrentUnlocked ? "查看高清图" : "查看高清图 · \(costPerImage)")
+            Text("查看高清图")
                 .font(.subheadline.weight(.semibold))
                 .padding(.horizontal, 16)
                 .frame(minHeight: 44)
@@ -458,7 +419,7 @@ struct RandomImageSwipeView: View {
                 .background(SetuColor.brandInk, in: Capsule())
         }
         .disabled(currentCard == nil || hasActiveImageMutation)
-        .accessibilityHint("低清预览免费，确认后才会消费积分")
+        .accessibilityHint("免费查看高清原图")
         .accessibilityIdentifier("image.unlock")
     }
 
@@ -645,19 +606,6 @@ struct RandomImageSwipeView: View {
         }
     }
 
-    private var balanceText: String {
-        balance.map { "\($0) 积分" } ?? "积分加载中"
-    }
-
-    private var hasEnoughPoints: Bool {
-        guard let balance else { return true }
-        return balance >= costPerImage
-    }
-
-    private var unlockConfirmationTitle: String {
-        hasEnoughPoints ? "确认查看高清图？" : "积分不足"
-    }
-
     private var isLoadingImage: Bool {
         if case .loading = imageState {
             return true
@@ -706,18 +654,6 @@ struct RandomImageSwipeView: View {
         )
     }
 
-    private func loadBalance(expectedGeneration: Int? = nil) async {
-        let generation = expectedGeneration ?? feedGeneration
-        do {
-            let points = try await environment.pointsClient.balance().points
-            guard generation == feedGeneration else { return }
-            balance = points
-        } catch {
-            guard generation == feedGeneration else { return }
-            balance = nil
-        }
-    }
-
     private func reloadFromParameters() async {
         guard let generation = beginReload() else { return }
         await completeReload(generation: generation)
@@ -762,7 +698,6 @@ struct RandomImageSwipeView: View {
 
     private func completeReload(generation: Int) async {
         guard generation == feedGeneration else { return }
-        await loadBalance(expectedGeneration: generation)
         guard generation == feedGeneration else { return }
         await prefetchIfNeeded(force: true, expectedGeneration: generation)
         guard generation == feedGeneration, !displayedCards.isEmpty else { return }
@@ -882,8 +817,6 @@ struct RandomImageSwipeView: View {
         do {
             let response = try await environment.imageFeedClient.feed(request)
             guard generation == feedGeneration, activePrefetchID == requestID else { return }
-            costPerImage = response.costPerImage
-            balance = response.balance
             let cards = response.items.map { ImageFeedCard(feedID: response.feedId, preview: $0, expiresAt: ImageFeedExpiryPolicy.expirationDate(response.expiresAt)) }
             appendUniqueCards(cards)
             if cards.isEmpty {
@@ -930,12 +863,11 @@ struct RandomImageSwipeView: View {
             )
             unlockedItems[card.token] = response.item
             unlockedImagesByKey[imageKey(for: card)] = response.item
-            balance = response.balance
             if currentCard?.token == card.token {
                 imageState = .loaded(card)
             }
             if showSuccess {
-                present(.success(response.charged ? "已解锁，消耗 \(response.cost) 积分" : "已解锁，未重复扣分"))
+                present(.success("原图已就绪"))
             }
             return response.item
         } catch {
@@ -1516,7 +1448,7 @@ private struct RandomImageParameterSheet: View {
                 Section {
                     SetuCard {
                         Label(
-                            "列表会提前缓存一批免费预览图。只有你主动确认查看高清图时才会消费积分，已解锁图片在本次浏览中再次查看不扣分。",
+                            "列表会提前缓存一批预览图。浏览、查看高清图和保存图片均免费。",
                             systemImage: "hand.draw"
                         )
                         .font(SetuTypography.caption)
