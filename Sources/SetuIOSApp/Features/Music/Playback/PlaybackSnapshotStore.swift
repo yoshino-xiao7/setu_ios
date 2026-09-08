@@ -11,6 +11,7 @@ final class PlaybackSnapshotStore {
         let currentTimeSeconds: Double
         let playMode: MusicPlayMode
         let updatedAt: Date
+        var mediaDurationSeconds: Double? = nil
     }
 
     private struct LegacySnapshot: Codable {

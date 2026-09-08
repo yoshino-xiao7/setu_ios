@@ -4,6 +4,7 @@ import SwiftUI
 struct ImagePidCopyButton: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let display: ImagePidDisplay
+    var minimumHitHeight: CGFloat? = nil
     var onCopied: () -> Void
 
     var body: some View {
@@ -23,7 +24,7 @@ struct ImagePidCopyButton: View {
             }
             .font(.caption)
             .padding(.vertical, 2)
-            .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 44 : 28, alignment: .leading)
+            .frame(minHeight: minimumHitHeight ?? (dynamicTypeSize.isAccessibilitySize ? 44 : 28), alignment: .leading)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

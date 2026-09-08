@@ -35,7 +35,7 @@ struct MusicQualityMenu: View {
                     Image(systemName: "waveform")
                         .accessibilityHidden(true)
                 }
-                Text(player.audioQuality.title)
+                Text(player.actualQualityTitle)
                     .font(.caption.weight(.semibold))
                     .lineLimit(1)
             }
@@ -43,7 +43,7 @@ struct MusicQualityMenu: View {
             .frame(minHeight: 44)
         }
         .disabled(player.isChangingQuality)
-        .accessibilityLabel("优先音质：\(player.audioQuality.title)")
+        .accessibilityLabel("优先音质：\(player.audioQuality.title)，当前音质：\(player.actualQualityTitle)")
         .accessibilityHint("选择音质，实际可用音质取决于音源")
         .accessibilityIdentifier("music.quality")
         .alert("音质提示", isPresented: Binding(
@@ -282,7 +282,7 @@ extension NowPlayingSheet {
                 .buttonStyle(.borderless)
                 .frame(minWidth: 44, minHeight: 44)
             }
-        } else if player.isBuffering {
+        } else if player.isBuffering || player.isSeeking {
             HStack(spacing: SetuSpacing.sm) {
                 ProgressView()
                     .tint(SetuColor.brandPink)
@@ -290,6 +290,14 @@ extension NowPlayingSheet {
                     .font(SetuTypography.caption)
                     .foregroundStyle(SetuColor.textSecondary)
                 Spacer(minLength: 0)
+                if player.isSeeking {
+                    Button("取消") { player.cancelPendingSeek() }.buttonStyle(.borderless)
+                        .accessibilityIdentifier("music.seek.cancel")
+                    if player.isRestoringPosition {
+                        Button("从头播放") { player.restartFromBeginning() }.buttonStyle(.borderless)
+                            .accessibilityIdentifier("music.seek.restart")
+                    }
+                }
             }
         }
     }

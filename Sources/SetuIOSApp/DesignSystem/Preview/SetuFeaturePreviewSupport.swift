@@ -1,6 +1,9 @@
 import Foundation
 import SetuIOSCore
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 #if DEBUG
 
@@ -130,6 +133,11 @@ private struct SetuRootUITestContext {
         player = MusicPlaybackController(persistsPlayback: false)
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-player") {
             player.configurePreview(songs: SetuPreviewAPI.musicSongs)
+        }
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-music-cache") {
+            UserDefaults.standard.removeObject(forKey: "music.cache.capacityMB")
+            UserDefaults.standard.removeObject(forKey: "music.cache.prefetch")
+            navigation.navigate(to: .home, route: .account)
         }
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-images") { navigation.selectedTab = .images }
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-ai") { navigation.selectedTab = .ai }
@@ -453,7 +461,8 @@ enum SetuPreviewEnvironment {
             downloadClient: DownloadClient(apiClient: apiClient),
             galleryUploadClient: GalleryUploadClient(apiClient: apiClient),
             adminClient: AdminClient(apiClient: apiClient),
-            authSession: authSession
+            authSession: authSession,
+            pixivOnlineClient: PreviewPixivOnlineClient(api: apiClient)
         )
     }
 
@@ -579,6 +588,38 @@ private enum SetuPreviewAPI {
             let (status, data) = MusicDetailPreviewFixtures.response(path: path, query: request.url?.query)
             return Fixture(statusCode: status, data: data)
         }
+        if path.hasPrefix("/user/pixiv") || path.hasPrefix("/user/images") {
+            if path.hasPrefix("/user/images/media/") {
+                #if canImport(UIKit)
+                return Fixture(statusCode: 200, data: UIImage(named: "AuthBackground")?.pngData() ?? Data())
+                #else
+                return Fixture(statusCode: 404, data: Data())
+                #endif
+            }
+            if path == "/user/pixiv/account" {
+                return json("{\"bound\":true,\"accountId\":\"77\",\"name\":\"小雪\",\"version\":\"fixture\"}")
+            }
+            let media = "/user/images/media/00000000-0000-4000-8000-000000000001?scope=gallery"
+            let source = path.hasPrefix("/user/images") ? "gallery" : "pixiv"
+            let artist: [String: Any] = ["id": "77", "name": "小雪", "avatarUrl": media, "followed": false]
+            func work(_ id: Int) -> [String: Any] {
+                let pages = (0..<(id == 1 ? 2 : 1)).map { page in
+                    ["index": page, "pid": String(id), "width": 800, "height": id % 2 == 0 ? 700 : 1000,
+                     "thumbnailUrl": media, "previewUrl": media, "originalUrl": media, "bookmarked": false] as [String: Any]
+                }
+                return ["source": source, "id": String(id), "pid": String(id), "title": "画集 \(id)", "artist": artist,
+                        "kind": "illust", "pageCount": pages.count, "pages": pages, "tags": ["原创", "插画"],
+                        "caption": "图片模块视觉样例，使用本站已有素材。", "bookmarked": false, "restricted": false, "aiGenerated": false]
+            }
+            let value: Any
+            if request.httpMethod != "GET" { value = ["ok": true] }
+            else if path.hasSuffix("/artists") { value = [artist] }
+            else if path.hasSuffix("/spotlights") { value = [["id": "1", "title": "原创插画特辑", "thumbnailUrl": media, "url": "https://www.pixivision.net/zh/a/1"]] }
+            else if path.hasSuffix("/works") { value = ["items": (1...8).map(work), "nextCursor": NSNull()] }
+            else { value = work(Int(path.split(separator: "/").last ?? "1") ?? 1) }
+            return Fixture(statusCode: 200, data: (try? JSONSerialization.data(withJSONObject: value)) ?? Data())
+        }
+
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-dashboard-failures"),
            dashboardFailurePaths.contains(path) {
             return json("{\"message\":\"预览中的模拟服务故障\"}", statusCode: 503)
@@ -731,7 +772,7 @@ private enum SetuPreviewAPI {
         case "/ai/capabilities":
             return json(aiCapabilities)
         case "/mobile/images/feed":
-            return json(imageFeed)
+            return json(imageLayoutFeed ?? imageFeed)
         case let value where value.hasPrefix("/favorite/exists/"):
             return json(favoriteKeys.contains(value.replacingOccurrences(of: "/favorite/exists/", with: "/favorite/")) ? "true" : "false")
         case "/square/collections":
@@ -941,6 +982,25 @@ private enum SetuPreviewAPI {
       "workers":[{"workerId":"preview-worker","nodeName":"离线预览节点","status":"ONLINE","message":"可用"}]
     }
     """
+
+    /// Opt-in local artwork for simulator layout checks; regular fixtures stay unchanged.
+    private static var imageLayoutFeed: String? {
+        guard ProcessInfo.processInfo.arguments.contains("-ui-testing-image-layout"),
+              let base = ProcessInfo.processInfo.environment["SETU_IMAGE_LAYOUT_FIXTURE_BASE_URL"],
+              var payload = try? JSONSerialization.jsonObject(with: Data(imageFeed.utf8)) as? [String: Any],
+              var items = payload["items"] as? [[String: Any]] else { return nil }
+        for index in items.indices {
+            items[index]["previewUrl"] = "\(base)/\(index).png"
+        }
+        items[0]["tags"] = ["星空", "湖面", "插画", "粉色晚霞", "夏日的温柔瞬间", "原创作品"]
+        items[2]["width"] = 1000
+        items[2]["height"] = 4000
+        items[2]["title"] = "沿着山间的小路走到星空尽头，记录旅途中的每一个温柔瞬间"
+        items[2]["tags"] = []
+        payload["items"] = items
+        guard let data = try? JSONSerialization.data(withJSONObject: payload) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
 
     private static let imageFeed = """
     {

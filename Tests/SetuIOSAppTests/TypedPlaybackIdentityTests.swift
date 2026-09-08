@@ -119,13 +119,13 @@ final class TypedPlaybackIdentityTests: XCTestCase {
         let track = try typedTrack("future:track:A%2Fb")
         player.play(url: local, track: track)
         let item = try XCTUnwrap(player.player?.currentItem)
-        player.handleItemFailure(item, error: URLError(.timedOut))
-        player.handleItemFailure(item, error: URLError(.timedOut))
+        player.handleItemFailure(item, error: NSError(domain: NSURLErrorDomain, code: NSURLErrorBadServerResponse, userInfo: ["HTTPStatusCode": 403]))
+        player.handleItemFailure(item, error: NSError(domain: NSURLErrorDomain, code: NSURLErrorBadServerResponse, userInfo: ["HTTPStatusCode": 403]))
         for _ in 0..<100 where player.playbackError == nil { try await Task.sleep(nanoseconds: 10_000_000) }
         XCTAssertNotNil(player.playbackError)
         XCTAssertFalse(player.isBuffering)
         XCTAssertEqual(capture.requests.count, 1)
-        XCTAssertTrue(capture.requests[0].url!.absoluteString.contains("future%3Atrack%3AA%252Fb"))
+        XCTAssertTrue(try XCTUnwrap(capture.requests.first?.url).absoluteString.contains("future%3Atrack%3AA%252Fb"))
         XCTAssertEqual(player.currentTrack?.id, track.id)
     }
 
@@ -142,11 +142,11 @@ final class TypedPlaybackIdentityTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: local) }
         player.play(url: local, track: try typedTrack("netease:track:1"))
         let original = try XCTUnwrap(player.player?.currentItem)
-        player.handleItemFailure(original, error: URLError(.timedOut))
+        player.handleItemFailure(original, error: NSError(domain: NSURLErrorDomain, code: NSURLErrorBadServerResponse, userInfo: ["HTTPStatusCode": 403]))
         for _ in 0..<100 where player.player?.currentItem === original { try await Task.sleep(nanoseconds: 10_000_000) }
         let replacement = try XCTUnwrap(player.player?.currentItem)
         XCTAssertFalse(replacement === original)
-        player.handleItemFailure(replacement, error: URLError(.timedOut))
+        player.handleItemFailure(replacement, error: NSError(domain: NSURLErrorDomain, code: NSURLErrorBadServerResponse, userInfo: ["HTTPStatusCode": 403]))
         XCTAssertNotNil(player.playbackError)
         XCTAssertEqual(capture.requests.count, 1)
     }

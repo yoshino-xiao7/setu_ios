@@ -13,9 +13,14 @@ let package = Package(
         .library(name: "SetuIOSCore", targets: ["SetuIOSCore"]),
         .executable(name: "SetuIOSApp", targets: ["SetuIOSApp"]),
     ],
+    dependencies: [
+        .package(url: "https://github.com/weichsel/ZIPFoundation.git", exact: "0.9.20"),
+    ],
     targets: [
+        .binaryTarget(name: "SetuPixivTransport", path: "Native/PixivTransport/build/SetuPixivTransport.xcframework"),
         .target(
             name: "SetuIOSCore",
+            dependencies: ["SetuPixivTransport", "ZIPFoundation"],
             path: "Sources/SetuIOSCore"
         ),
         .executableTarget(

@@ -36,8 +36,17 @@ struct RootAppView: View {
         Group {
             if isSessionReady {
                 if environment.authSession.isSignedIn || environment.authSession.requiresReauthentication {
-                    appTabs
-                        .id(sessionOwnerID)
+                    #if DEBUG && canImport(MobileVLCKit)
+                    if ProcessInfo.processInfo.arguments.contains("-development-vlc-probe") {
+                        VLCProbeView(environment: environment, resolver: musicPlayer.urlResolver) { identity in
+                            guard let resolver = musicPlayer.urlResolver else { throw UserFacingError(message: "地址解析尚未就绪") }
+                            return try await resolver.resolve(trackID: identity, quality: musicPlayer.audioQuality)
+                        }
+                        .onAppear { musicPlayer.pause() }
+                    } else { appTabs.id(sessionOwnerID) }
+                    #else
+                    appTabs.id(sessionOwnerID)
+                    #endif
                 } else {
                     NavigationStack(path: Binding(
                         get: { loggedOutRouter.path },
@@ -69,6 +78,15 @@ struct RootAppView: View {
         .task {
             switchMusicPlaybackUser(from: environment.authSession.currentUser?.id, to: environment.authSession.currentUser?.id)
             configureMusicPlayerResolver()
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("-development-cache-benchmark") {
+                for _ in 0..<100 {
+                    if musicPlayer.currentTrack != nil && isSessionReady { break }
+                    try? await Task.sleep(for: .milliseconds(100))
+                }
+                await musicPlayer.runCacheBenchmark()
+            }
+            #endif
         }
         .onChange(of: environment.authSession.currentUser?.id) { oldUserID, newUserID in
             musicStore.reset(for: newUserID)
@@ -296,7 +314,7 @@ struct RootAppView: View {
         case .ai:
             AiDrawView(environment: environment)
         case .images:
-            RandomImageSwipeView(environment: environment)
+            ArtworkBrowserView(environment: environment)
         case .music:
             MusicHomeView(environment: environment, player: musicPlayer)
         case .square:

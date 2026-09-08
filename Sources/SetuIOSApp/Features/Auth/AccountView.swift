@@ -108,6 +108,15 @@ struct AccountView: View {
             .setuListRow()
 
             Section {
+                NavigationLink {
+                    MusicCacheSettingsView(settings: MusicAudioRuntime.shared.settings)
+                } label: {
+                    Label("音乐缓存", systemImage: "internaldrive")
+                }
+                .accessibilityIdentifier("account.music-cache")
+            }
+
+            Section {
                 SetuCard {
                     VStack(spacing: SetuSpacing.lg) {
                         SetuSectionHeader(title: "账号与安全")

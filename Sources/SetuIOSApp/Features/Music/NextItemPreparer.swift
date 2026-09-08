@@ -34,7 +34,8 @@ final class NextItemPreparer {
         prepared = nil; targetID = nil; self.quality = nil
     }
 
-    func prepare(trackID: MusicPlaybackIdentity, quality: MusicAudioQuality, resolver: PlaybackURLResolver) async {
+    func prepare(trackID: MusicPlaybackIdentity, quality: MusicAudioQuality, resolver: PlaybackURLResolver,
+                 makeCachedItem: (@MainActor (ResolvedPlaybackURL) async throws -> AVPlayerItem)? = nil) async {
         invalidate(unlessTrackID: trackID, quality: quality)
         if let prepared, prepared.source.isValid(at: Date()), prepared.item.status != .failed { return }
         if let task { await task.value; return }
@@ -43,7 +44,8 @@ final class NextItemPreparer {
         let work = Task { [weak self] in
             do {
                 let source = try await resolver.resolve(trackID: trackID, quality: quality)
-                let item = try await makeItem(source.url)
+                let item: AVPlayerItem
+                if let makeCachedItem { item = try await makeCachedItem(source) } else { item = try await makeItem(source.url) }
                 try Task.checkCancellation()
                 guard let self, self.revision == ticket, source.isValid(at: Date()) else { return }
                 self.prepared = Prepared(trackID: trackID, quality: quality, source: source, item: item)

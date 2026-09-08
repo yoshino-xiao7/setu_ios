@@ -1,0 +1,82 @@
+{
+  "builtFrom": "/Users/yukiryou/github/setu/setu_ios",
+  "baseCommit": "71b547a",
+  "worktreeHasUncommittedChanges": true,
+  "bundleIdentifier": "icu.yukiryou.setuios",
+  "version": "1.1",
+  "build": "4",
+  "executableSha256": "08616d21b904539175f7b30af481d9c6e5cc92af8225bece020797a658129a09",
+  "installationLog": "/tmp/setu-pixiv-custom-install.log",
+  "backendCommit": "0806ad3",
+  "backendWorkflow": "https://github.com/yoshino-xiao7/setu_api_full/actions/runs/34190867426",
+  "backendHealth": "UP",
+  "loginDefault": "standard WebKit; enhanced optional",
+  "actualBindingVerified": true,
+  "buildLog": "/tmp/setu-pixiv-custom-app-build.log",
+  "installedAt": "2026-09-08T16:27:52.432055+08:00",
+  "nativeComponent": "Pixez rhttp (MIT), upstream 0750c38b0c8aaf200e992ec9b4303f5cd6abba87",
+  "pixezComparisonVersion": "1.9.86+511",
+  "swiftTests": "300 tests, 2 opt-in network tests skipped, 0 failures",
+  "nativeDependencyVersions": {
+    "rustls": "0.23.40",
+    "aws-lc-rs": "1.17.0",
+    "h2": "0.4.14",
+    "hyper": "1.10.1"
+  },
+  "debugDylibSha256": "08616d21b904539175f7b30af481d9c6e5cc92af8225bece020797a658129a09",
+  "bundleExecutableSha256": "b4e2a82990e6be5e23d665618264edf71a5433f52ec5aa68375814d5e765ea59",
+  "coreExecutableSha256": "2b7fda6052f9e1374f8738e31437548253cbb227f2e33de48ace9c4b9f9a9f75",
+  "oauthTransport": "Same automatic route selection before a single OAuth POST, no POST replay",
+  "publicOAuthProbe": {
+    "result": "HTTP 400 JSON; synthetic invalid code; no blocked page",
+    "evidence": "/tmp/setu-pixiv-system-final-phone-probe.txt",
+    "actualAccountAuthentication": false
+  },
+  "actualBindingEvidence": "User confirmed successful Pixiv binding, then reported works HTTP 403",
+  "contentLoadingVerified": true,
+  "swiftTestsLog": "/tmp/setu-pixiv-custom-full-tests.log",
+  "apiTransport": "Automatic credential-free ECH/system probes, 30s cache, single-flight, one retry for safe GET only",
+  "publicAPIProbe": {
+    "result": "same iPhone: enhanced HTTP 403 non-JSON; selected system HTTP 400 JSON; no authentication supplied",
+    "evidence": "/tmp/setu-pixiv-api-system-phone-probe.txt",
+    "actualContentLoading": false
+  },
+  "restoredNormalAppLog": "/tmp/setu-pixiv-custom-normal-launch.log",
+  "contentLoadingEvidence": "User confirmed: 关闭代理，列表和大图都正常",
+  "contentAcceptanceNetwork": "VPN/proxy disabled, confirmed by user",
+  "proxyFreeContentVerified": true,
+  "proxyFreeAPIProbe": {
+    "evidence": "/tmp/setu-pixiv-auto-api-phone.txt",
+    "result": "enhanced and automatically selected API both HTTP 400 JSON without credentials; user confirmed VPN disabled"
+  },
+  "proxyFreeOAuthProbe": {
+    "evidence": "/tmp/setu-pixiv-auto-oauth-phone.txt",
+    "result": "HTTP 400 JSON, synthetic invalid code, no challenge/blocked page; VPN disabled"
+  },
+  "initialGalleryLoadingVerified": true,
+  "mediaQueuePolicy": "Separate native API and media queues, 4 operations each, 45s deadline including queue time, immediate queued cancellation",
+  "nativeTests": "10 passed, 4 opt-in public probes ignored",
+  "mediaDNS": "Bounded Cloudflare DoH, validated public IPv4, TTL cache, official node fallback and rotation",
+  "publicOriginalDownloadVerified": true,
+  "publicOriginalDownloadEvidence": "/tmp/setu-pixiv-custom-production-phone.txt",
+  "scrollCacheVerifiedOnDevice": true,
+  "scrollCachePolicy": "Binding-private 64 MiB / 256 entry memory LRU, validated URL reuse, shared in-flight requests, cleared on unlink/rebind",
+  "latestUserObservation": "Metadata loads normally. Images eventually load slowly; later images faster. Previously viewed images redownload on return scroll in previous build.",
+  "scrollCacheEvidence": "User confirmed: 来回滚动确实不会重复下载了，但是直连下载慢确实没解决",
+  "imageSpeedProbeLaunchLog": "/tmp/setu-pixiv-custom-production-probe-launch.log",
+  "imageSpeedProbeOnDevice": "Production mirror 2617/1446ms; configured-host branch 2730/1519ms; all HTTP 200, 990263 bytes",
+  "normalLaunchForCurrentArtifactVerified": true,
+  "nativeTestsLog": "/tmp/setu-pixiv-custom-native-tests.log",
+  "imageSpeedProbeEvidence": "/tmp/setu-pixiv-custom-production-phone.txt",
+  "imageHostPolicy": "Default i.pixiv.re; original or validated custom HTTPS hostname selectable in image settings",
+  "initialGalleryLoadingEvidence": "User confirmed with proxy disabled: 首页和新大图都明显变快",
+  "imageHostSettingsUITests": {
+    "375ptLight": "passed",
+    "430ptDark": "passed",
+    "invalidInputFeedback": "passed",
+    "results": [
+      "/tmp/setu-pixiv-custom-settings-375.xcresult",
+      "/tmp/setu-pixiv-custom-settings-430-dark.xcresult"
+    ]
+  }
+}
