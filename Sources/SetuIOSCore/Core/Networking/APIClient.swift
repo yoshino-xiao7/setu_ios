@@ -336,8 +336,8 @@ public final class SessionInvalidationNotifier: @unchecked Sendable {
     }
 
     public func notifyUnauthorized() async {
-        let handler = lock.withLock { handler }
-        await handler?()
+        let callback = lock.withLock { self.handler }
+        await callback?()
     }
 }
 
@@ -354,8 +354,8 @@ public final class SignatureRefreshNotifier: @unchecked Sendable {
     }
 
     public func refreshSignature() async -> Bool {
-        let handler = lock.withLock { handler }
-        return await handler?() ?? false
+        let callback = lock.withLock { self.handler }
+        return await callback?() ?? false
     }
 }
 
