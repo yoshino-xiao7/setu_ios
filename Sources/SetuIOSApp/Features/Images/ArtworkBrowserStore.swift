@@ -27,6 +27,22 @@ final class ArtworkChannelState {
 @Observable
 final class ArtworkBrowserStore {
     let client: ArtworkClient
+    let images: ArtworkImageStore
+    var importTasks: [String: String] = [:]
+    private var details: [String: BrowserArtwork] = [:]
+    private var detailOrder: [String] = []
+
+    func cachedDetail(source: ArtworkSource, id: String) -> BrowserArtwork? {
+        details["\(source.rawValue):\(id)"]
+    }
+    func rememberDetail(_ work: BrowserArtwork) {
+        let key = work.transitionID
+        details[key] = work
+        detailOrder.removeAll { $0 == key }; detailOrder.append(key)
+        while detailOrder.count > 24 { details[detailOrder.removeFirst()] = nil }
+        update(work)
+    }
+
     var pixiv = ArtworkChannelState()
     var gallery = ArtworkChannelState()
     var binding: PixivAccountBinding?
@@ -37,7 +53,23 @@ final class ArtworkBrowserStore {
     var busyIDs: Set<String> = []
     private var accountGeneration = UUID()
 
-    init(client: ArtworkClient) { self.client = client }
+    init(client: ArtworkClient) {
+        self.client = client
+        images = ArtworkImageStore(fetch: { try await client.media($0) })
+    }
+    func prefetchNeighbors(source: ArtworkSource, id: String) async {
+        let items = state(source).items
+        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+        let neighbors = [index - 1, index + 1].filter { items.indices.contains($0) }.map { items[$0] }
+        await withTaskGroup(of: Void.self) { group in
+            for work in neighbors {
+                guard let page = work.pages.first, let path = page.previewUrl else { continue }
+                group.addTask { [images] in
+                    _ = try? await images.load(path, identity: work.imageIdentity(page), quality: .preview)
+                }
+            }
+        }
+    }
     func state(_ source: ArtworkSource) -> ArtworkChannelState { source == .pixiv ? pixiv : gallery }
 
     func load(_ source: ArtworkSource, reset: Bool = false) async {
@@ -73,7 +105,8 @@ final class ArtworkBrowserStore {
         do {
             let result = try await client.binding()
             guard accountGeneration == generation, !Task.isCancelled else { return }
-            if binding?.version != result.version {
+            if binding?.version != result.version || binding?.bound != result.bound {
+                images.clear(); details.removeAll(); detailOrder.removeAll()
                 pixiv.generation = UUID()
                 pixiv = ArtworkChannelState()
                 artists = []; spotlights = []
@@ -101,6 +134,7 @@ final class ArtworkBrowserStore {
         var updated = work; updated.bookmarked.toggle(); update(updated)
     }
     func update(_ work: BrowserArtwork) {
+        if details[work.transitionID] != nil { details[work.transitionID] = work }
         let state = state(work.source)
         if let index = state.items.firstIndex(where: { $0.id == work.id }) { state.items[index] = work }
     }

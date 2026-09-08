@@ -4,14 +4,16 @@ import SwiftUI
 import AVKit
 import Photos
 
-struct ArtworkDetailView: View {
+struct ArtworkDetailPage: View {
     let source: ArtworkSource
     @Bindable var store: ArtworkBrowserStore
     let environment: AppEnvironment
     let onArtist: (String) -> Void
     let onTag: (String) -> Void
-    @Environment(\.dismiss) private var dismiss
-    @State private var workID: String
+    let active: Bool
+    let close: () -> Void
+    let select: (String) -> Void
+    let workID: String
     @State private var work: BrowserArtwork?
     @State private var related: [BrowserArtwork] = []
     @State private var error: String?
@@ -19,42 +21,43 @@ struct ArtworkDetailView: View {
     @State private var busy = false
     @State private var saving = ""
     @State private var zoom: ArtworkPage?
-    @State private var showImport = false
+    @State private var importing = false
+    private var importTaskID: String? { store.importTasks[work?.pid ?? workID] }
     @State private var reloadID = UUID()
+    @State private var loadedReloadID: UUID?
     @State private var animationMessage: String?
     @State private var videoFile: URL?
     @State private var player: AVQueuePlayer?
     @State private var videoLooper: AVPlayerLooper?
 
     init(source: ArtworkSource, initialID: String, store: ArtworkBrowserStore, environment: AppEnvironment,
+         active: Bool, close: @escaping () -> Void, select: @escaping (String) -> Void,
          onArtist: @escaping (String) -> Void, onTag: @escaping (String) -> Void) {
         self.source = source; self.store = store; self.environment = environment
         self.onArtist = onArtist; self.onTag = onTag
-        _workID = State(initialValue: initialID)
+        self.active = active; self.close = close; self.select = select; self.workID = initialID
+        _work = State(initialValue: store.cachedDetail(source: source, id: initialID)
+                      ?? store.state(source).items.first { $0.id == initialID })
     }
     private var index: Int? { store.state(source).items.firstIndex { $0.id == workID } }
-    private var hasPrevious: Bool { (index ?? 0) > 0 }
-    private var hasNext: Bool { index.map { $0 + 1 < store.state(source).items.count } ?? false }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 if let work {
-                    VStack(spacing: 0) {
+                    LazyVStack(spacing: 0) {
                         if work.kind == "ugoira" { animationView(work) }
                         else {
                             ForEach(Array(work.pages.enumerated()), id: \.element.id) { offset, page in
                                 Button { zoom = page } label: {
-                                    ArtworkMediaImage(path: page.previewUrl, client: store.client, ratio: page.aspectRatio, label: work.title, maxPixelSize: 2000)
+                                    ArtworkMediaImage(path: page.previewUrl, client: store.client, ratio: page.aspectRatio, label: work.title, maxPixelSize: 2000, identity: work.imageIdentity(page), quality: .preview)
+                                        .accessibilityIdentifier("artwork-image-\(work.id)-\(page.index)")
                                 }.buttonStyle(.plain)
+                                    .contextMenu { saveMenu(work, page: page) }
                                 if work.pages.count > 1 {
                                     HStack {
                                         Text("\(offset + 1) / \(work.pages.count)").font(.caption).foregroundStyle(SetuColor.textSecondary)
                                         Spacer()
-                                        if source == .gallery {
-                                            Button(page.bookmarked == true ? "已收藏" : "收藏本页") { Task { await bookmark(page) } }.disabled(busy)
-                                        }
-                                        Button("保存本页") { Task { await save([page]) } }.disabled(!saving.isEmpty)
                                     }.font(.caption).padding()
                                 }
                             }
@@ -65,32 +68,40 @@ struct ArtworkDetailView: View {
                     VStack(spacing: 16) { Text(error).font(.subheadline); Button("重试") { reloadID = UUID() } }.padding(30)
                 } else { ProgressView("正在加载作品").padding(.top, 100) }
             }
-            .id(workID)
-            .simultaneousGesture(DragGesture(minimumDistance: 35).onEnded { value in
-                guard zoom == nil, abs(value.translation.width) > 90,
-                      abs(value.translation.width) > abs(value.translation.height) * 1.8 else { return }
-                navigate(value.translation.width < 0 ? 1 : -1)
-            })
             .setuBackground()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button { dismiss() } label: { Image(systemName: "chevron.down") }.accessibilityLabel("关闭作品") }
+                ToolbarItem(placement: .topBarLeading) { Button(action: close) { Image(systemName: "chevron.down") }.accessibilityLabel("关闭作品") }
                 ToolbarItem(placement: .principal) { Text(source.title).font(.caption).foregroundStyle(SetuColor.textSecondary) }
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button { navigate(-1) } label: { Image(systemName: "chevron.left") }.disabled(!hasPrevious).accessibilityLabel("上一部作品")
-                    Button { navigate(1) } label: { Image(systemName: "chevron.right") }.disabled(!hasNext).accessibilityLabel("下一部作品")
                     Menu {
                         Button("重新加载作品") { reloadID = UUID() }
                         if environment.authSession.currentUser?.role == .admin && source == .pixiv {
-                            Button("通过 PID 导入本站") { showImport = true }
+                            Button(importTaskID != nil ? "已提交至管理员图片任务" : importing ? "正在提交 PID…" : "通过 PID 导入本站") { Task { await importCurrentPID() } }.disabled(importing || importTaskID != nil)
                         }
                     } label: { Image(systemName: "ellipsis") }.accessibilityLabel("作品操作")
                 }
             }
-            .task(id: "\(workID)-\(reloadID)") { await load() }
+            .overlay(alignment: .bottomTrailing) {
+                if let work {
+                    Button { Task { await bookmark(nil) } } label: {
+                        Image(systemName: work.bookmarked ? "heart.fill" : "heart")
+                            .font(.system(size: 27, weight: .medium)).frame(width: 60, height: 60)
+                            .background(SetuColor.brandSoft, in: RoundedRectangle(cornerRadius: 20))
+                            .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
+                    }.buttonStyle(.plain).foregroundStyle(SetuColor.brandPink).disabled(busy)
+                        .accessibilityLabel(work.bookmarked ? "取消收藏作品" : "收藏作品")
+                        .accessibilityIdentifier("artwork-favorite")
+                        .padding(16)
+                }
+            }
+            .safeAreaInset(edge: .bottom) {
+                if !saving.isEmpty { Text(saving).font(.caption).padding(8).background(.regularMaterial, in: Capsule()) }
+            }
+            .task(id: "\(active)-\(reloadID)") { if active { await load() } else { clearVideo() } }
             .onDisappear { clearVideo() }
-            .fullScreenCover(item: $zoom) { page in ArtworkZoomView(page: page, client: store.client) }
-            .sheet(isPresented: $showImport) { ArtworkPIDImportView(environment: environment, initialPID: work?.pid ?? "") { Task { await store.load(.gallery, reset: true) } } }
+            .fullScreenCover(item: $zoom) { page in ArtworkZoomView(page: page, client: store.client, identity: work?.imageIdentity(page) ?? page.id)
+                .environment(\.artworkImages, store.images) }
             .alert("图片", isPresented: Binding(get: { feedback != nil }, set: { if !$0 { feedback = nil } })) {
                 Button("知道了", role: .cancel) { }
             } message: { Text(feedback ?? "") }
@@ -98,15 +109,15 @@ struct ArtworkDetailView: View {
     }
     @ViewBuilder private func animationView(_ work: BrowserArtwork) -> some View {
         if let player {
-            VideoPlayer(player: player).aspectRatio(work.pages.first?.aspectRatio ?? 1, contentMode: .fit)
+            VideoPlayer(player: player).contextMenu { Button("保存 MP4") { Task { await saveVideo() } }.disabled(!saving.isEmpty) }.aspectRatio(work.pages.first?.aspectRatio ?? 1, contentMode: .fit)
                 .onAppear { player.play() }
         } else {
-            ArtworkMediaImage(path: work.pages.first?.previewUrl, client: store.client, ratio: work.pages.first?.aspectRatio ?? 1, label: work.title)
+            ArtworkMediaImage(path: work.pages.first?.previewUrl, client: store.client, ratio: work.pages.first?.aspectRatio ?? 1, label: work.title, identity: work.pages.first.map { work.imageIdentity($0) }, quality: .preview)
             HStack { Text(animationMessage ?? "正在准备动图…").font(.caption); Button("重试") { reloadID = UUID() } }.padding()
         }
     }
     private func information(_ value: BrowserArtwork) -> some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 12) {
             Text(value.title).font(.title2.weight(.medium)).textSelection(.enabled)
             HStack(spacing: 14) {
                 if let views = value.views { Label(String(views), systemImage: "eye") }
@@ -127,14 +138,11 @@ struct ArtworkDetailView: View {
                 }
             }
             ArtworkTagFlow(tags: value.tags, select: onTag)
+            if let error {
+                HStack { Text(error).font(.caption); Button("重试详情") { reloadID = UUID() } }
+                    .foregroundStyle(SetuColor.textSecondary)
+            }
             if let caption = value.caption, !caption.isEmpty { Text(caption).font(.subheadline).foregroundStyle(SetuColor.textSecondary).textSelection(.enabled) }
-            HStack {
-                Button { Task { await bookmark(nil) } } label: { Label(value.bookmarked ? "已收藏" : "收藏", systemImage: value.bookmarked ? "heart.fill" : "heart") }
-                    .buttonStyle(.borderedProminent).tint(SetuColor.brandPink).disabled(busy)
-                Button { Task { if value.kind == "ugoira" { await saveVideo() } else { await save(value.pages) } } } label: {
-                    Label(saving.isEmpty ? value.kind == "ugoira" ? "保存动图" : value.pages.count > 1 ? "保存整部作品" : "保存原图" : saving, systemImage: "square.and.arrow.down")
-                }.buttonStyle(.bordered).disabled(!saving.isEmpty || value.kind == "ugoira" && videoFile == nil)
-            }.font(.subheadline)
             if !related.isEmpty {
                 Text("继续发现").font(.title2.bold()).padding(.top, 20)
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
@@ -145,24 +153,24 @@ struct ArtworkDetailView: View {
             }
         }.padding(20).padding(.bottom, 40)
     }
-    private func navigate(_ offset: Int) {
-        guard let index, store.state(source).items.indices.contains(index + offset) else { return }
-        workID = store.state(source).items[index + offset].id
-    }
     private func openRelated(_ item: BrowserArtwork) {
         if !store.state(source).items.contains(where: { $0.id == item.id }) { store.state(source).items.append(item) }
-        workID = item.id
+        select(item.id)
     }
     private func load() async {
         let id = workID
-        clearVideo(); work = nil; related = []; error = nil
+        clearVideo(); error = nil
         do {
-            let value = try await store.client.detail(source: source, id: id)
+            let value: BrowserArtwork
+            if let cached = store.cachedDetail(source: source, id: id), error == nil, (loadedReloadID == nil || loadedReloadID == reloadID) {
+                value = cached
+            } else { value = try await store.client.detail(source: source, id: id) }
+            loadedReloadID = reloadID
             try Task.checkCancellation()
             guard workID == id else { return }
-            work = value
+            work = value; store.rememberDetail(value)
             if let index, index > store.state(source).items.count - 6 { await store.load(source) }
-            if let result = try? await store.client.works(source: source, params: source == .pixiv ? ["view": "related", "relatedId": id] : ["sort": "random", "tag": value.tags.first ?? ""]) {
+            if related.isEmpty, let result = try? await store.client.works(source: source, params: source == .pixiv ? ["view": "related", "relatedId": id] : ["sort": "random", "tag": value.tags.first ?? ""]) {
                 try Task.checkCancellation()
                 related = Array(result.items.filter { $0.id != id }.prefix(12))
             }
@@ -223,6 +231,30 @@ struct ArtworkDetailView: View {
             if workID == value.id { work = value }
         } catch { feedback = error.localizedDescription }
     }
+    @ViewBuilder private func saveMenu(_ value: BrowserArtwork, page: ArtworkPage) -> some View {
+        if source == .gallery && value.pages.count > 1 {
+            Button(page.bookmarked == true ? "取消收藏本页" : "收藏本页", systemImage: page.bookmarked == true ? "heart.fill" : "heart") {
+                Task { await bookmark(page) }
+            }.disabled(busy)
+        }
+        Button("保存原图", systemImage: "square.and.arrow.down") { Task { await save([page]) } }
+            .disabled(!saving.isEmpty)
+        if value.pages.count > 1 {
+            Button("保存整部作品（\(value.pages.count) 张）") { Task { await save(value.pages) } }
+                .disabled(!saving.isEmpty)
+        }
+    }
+    private func importCurrentPID() async {
+        guard !importing, importTaskID == nil, source == .pixiv,
+              environment.authSession.currentUser?.role == .admin, let work else { return }
+        importing = true; defer { importing = false }
+        do {
+            let response = try await environment.adminClient.crawlPixivByIDs(PixivPIDInput.parse(work.pid), skipExisting: true)
+            guard let taskID = response.taskID, !taskID.isEmpty else { throw APIError.invalidResponse }
+            store.importTasks[work.pid] = taskID
+            feedback = "已提交 PID \(work.pid)，可在管理员页面的「图片任务」查看进度和结果。"
+        } catch { feedback = error.localizedDescription }
+    }
     private func photoPermission() async -> Bool {
         let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
         if status == .authorized || status == .limited { return true }
@@ -258,7 +290,7 @@ private struct ArtworkTagFlow: View {
     let tags: [String]
     let select: (String) -> Void
     var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 135), alignment: .leading)], alignment: .leading, spacing: 8) {
+        ImageBrowseTagLayout(spacing: 6) {
             ForEach(tags, id: \.self) { tag in
                 Button { select(tag) } label: { Text("#\(tag)").font(.caption).lineLimit(2).padding(.horizontal, 12).padding(.vertical, 8).background(SetuColor.brandSoft, in: Capsule()) }
                     .buttonStyle(.plain).foregroundStyle(SetuColor.textSecondary)
@@ -270,6 +302,7 @@ private struct ArtworkTagFlow: View {
 private struct ArtworkZoomView: View {
     let page: ArtworkPage
     let client: ArtworkClient
+    let identity: String
     @Environment(\.dismiss) private var dismiss
     @State private var scale: CGFloat = 1
     @State private var initialScale: CGFloat = 1
@@ -278,7 +311,7 @@ private struct ArtworkZoomView: View {
             Color.black.ignoresSafeArea()
             GeometryReader { geometry in
                 ScrollView([.horizontal, .vertical]) {
-                    ArtworkMediaImage(path: page.originalUrl ?? page.previewUrl, client: client, ratio: page.aspectRatio, maxPixelSize: 4000)
+                    ArtworkMediaImage(path: page.originalUrl ?? page.previewUrl, client: client, ratio: page.aspectRatio, maxPixelSize: 4000, identity: identity, quality: .original)
                         .frame(width: geometry.size.width * scale)
                         .gesture(MagnifyGesture().onChanged { scale = min(5, max(1, initialScale * $0.magnification)) }.onEnded { _ in initialScale = scale })
                         .onTapGesture(count: 2) { scale = scale == 1 ? 2.5 : 1; initialScale = scale }

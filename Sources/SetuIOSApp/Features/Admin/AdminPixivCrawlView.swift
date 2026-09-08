@@ -38,7 +38,7 @@ struct AdminPixivCrawlView: View {
         }
         .listStyle(.plain)
         .setuBackground()
-        .navigationTitle("新增图片")
+        .navigationTitle("图片任务")
         .task { await loadAll() }
         .refreshable { await loadAll() }
     }
@@ -265,6 +265,8 @@ struct AdminPixivTaskDetailView: View {
     let taskID: String
     @State private var state: LoadState<PixivCrawlerTask> = .idle
     @State private var message: String?
+    @State private var retryingPID: Int?
+    @State private var retryTasks: [Int: String] = [:]
 
     var body: some View {
         List {
@@ -293,7 +295,14 @@ struct AdminPixivTaskDetailView: View {
                 }
             }
         }
-        .task { await load() }
+        .task {
+            await load()
+            while !Task.isCancelled {
+                guard case .loaded(let task) = state, ["pending", "running"].contains(task.status) else { return }
+                do { try await Task.sleep(for: .seconds(3)); try Task.checkCancellation() } catch { return }
+                await load(keepContent: true)
+            }
+        }
         .refreshable { await load() }
     }
 
@@ -346,6 +355,26 @@ struct AdminPixivTaskDetailView: View {
                 .setuListRow()
             }
 
+            if let results = task.results, !results.isEmpty {
+                SetuCard {
+                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                        SetuSectionHeader(title: "入库结果")
+                        ForEach(results) { result in
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("PID \(result.pid)").font(.subheadline)
+                                Text(result.galleryVerified == true ? "已进入图库" : result.message ?? "尚未核验入库")
+                                    .font(.caption).foregroundStyle(result.galleryVerified == true ? SetuColor.success : SetuColor.textSecondary)
+                                if let retryTask = retryTasks[result.pid] {
+                                    Text("已重新提交：\(retryTask)").font(.caption)
+                                } else if result.galleryVerified != true && !["pending", "running"].contains(task.status) {
+                                    Button("重试 PID \(result.pid)") { Task { await retry(result.pid) } }.disabled(retryingPID != nil)
+                                }
+                            }.frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                }.setuListRow()
+            }
+
             SetuCard {
                 VStack(alignment: .leading, spacing: SetuSpacing.md) {
                     SetuSectionHeader(title: "日志")
@@ -359,14 +388,25 @@ struct AdminPixivTaskDetailView: View {
         }
     }
 
-    private func load() async {
+    private func load(keepContent: Bool = false) async {
         guard environment.authSession.currentUser?.role == .admin else { return }
-        state = .loading
+        if !keepContent { state = .loading }
         do {
             state = .loaded(try await environment.adminClient.pixivTask(taskID: taskID))
         } catch {
             state = .failed(error.localizedDescription)
         }
+    }
+
+    private func retry(_ pid: Int) async {
+        guard retryingPID == nil, retryTasks[pid] == nil, environment.authSession.currentUser?.role == .admin else { return }
+        retryingPID = pid; defer { retryingPID = nil }
+        do {
+            let response = try await environment.adminClient.crawlPixivByIDs([pid], skipExisting: true)
+            guard let id = response.taskID, !id.isEmpty else { throw APIError.invalidResponse }
+            retryTasks[pid] = id
+            message = "已重新提交，返回图片任务列表可查看新任务。"
+        } catch { message = error.localizedDescription }
     }
 
     private func cancel(_ task: PixivCrawlerTask) async {
@@ -419,7 +459,7 @@ private struct PixivTaskRow: View {
                 Button(action: onOpen) {
                     Label("详情", systemImage: "doc.text.magnifyingglass")
                         .frame(minHeight: 44)
-                }
+                }.accessibilityIdentifier("pixiv-task-detail-\(task.taskID)")
                 Spacer()
                 if ["pending", "running"].contains(task.status) {
                     Button(role: .destructive, action: onCancel) {

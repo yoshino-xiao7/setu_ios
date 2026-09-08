@@ -12,6 +12,7 @@ struct ArtworkBrowserView: View {
     @Bindable var environment: AppEnvironment
     @State private var store: ArtworkBrowserStore
     @State private var source: ArtworkSource = .pixiv
+    @Namespace private var artworkTransition
     @State private var selection: ArtworkSelection?
     @State private var authorization: PixivAuthorization?
     @State private var showImport = false
@@ -42,7 +43,7 @@ struct ArtworkBrowserView: View {
                 ProgressView("正在获取 Pixiv 绑定状态").frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if source == .pixiv && store.binding?.bound != true { bindingView }
             else {
-                ArtworkChannelView(source: source, state: store.state(source), store: store, open: { work in
+                ArtworkChannelView(source: source, state: store.state(source), store: store, transition: artworkTransition, open: { work in
                     selection = ArtworkSelection(source: work.source, workID: work.id)
                 }, bookmark: { work in
                     Task { do { try await store.bookmark(work) } catch { feedback = error.localizedDescription } }
@@ -50,6 +51,7 @@ struct ArtworkBrowserView: View {
                 .id(source)
             }
         }
+        .environment(\.artworkImages, store.images)
         .setuBackground()
         .navigationTitle("图片")
         .toolbar {
@@ -76,13 +78,14 @@ struct ArtworkBrowserView: View {
             if source == .gallery { await store.load(.gallery) }
             await store.loadAccount()
         }
+        .onChange(of: store.binding?.version) { _, _ in selection = nil }
         .onChange(of: source) { _, value in
             UserDefaults.standard.set(value.rawValue, forKey: preferenceKey)
             Task { await store.load(value) }
         }
         .sheet(isPresented: $showImageHost) { imageHostSettings }
         .fullScreenCover(item: $selection) { selected in
-            ArtworkDetailView(source: selected.source, initialID: selected.workID, store: store, environment: environment) { id in
+            ArtworkDetailView(source: selected.source, initialID: selected.workID, store: store, environment: environment, transition: artworkTransition) { id in
                 selection = nil; source = .pixiv; Task { await store.selectArtist(id) }
             } onTag: { tag in
                 selection = nil; source = selected.source; Task { await store.selectTag(tag, source: selected.source) }
@@ -93,7 +96,7 @@ struct ArtworkBrowserView: View {
                 Task { await store.loadAccount() }
             }
         }
-        .sheet(isPresented: $showImport) { ArtworkPIDImportView(environment: environment) { Task { await store.load(.gallery, reset: true) } } }
+        .sheet(isPresented: $showImport) { ArtworkPIDImportView(environment: environment) { feedback = "任务已提交，可在管理员页面的「图片任务」查看进度和结果。" } }
         .sheet(isPresented: $showFilters) { ArtworkFiltersView(state: store.state(source), source: source) { Task { await store.load(source, reset: true) } } }
         .confirmationDialog("解除 Pixiv 绑定？", isPresented: $showUnlink, titleVisibility: .visible) {
             Button("解除绑定", role: .destructive) {
@@ -164,6 +167,7 @@ private struct ArtworkChannelView: View {
     let source: ArtworkSource
     @Bindable var state: ArtworkChannelState
     @Bindable var store: ArtworkBrowserStore
+    let transition: Namespace.ID
     let open: (BrowserArtwork) -> Void
     let bookmark: (BrowserArtwork) -> Void
     let artist: (String) -> Void
@@ -213,7 +217,7 @@ private struct ArtworkChannelView: View {
                     ForEach(0..<2) { column in
                         LazyVStack(spacing: 12) {
                             ForEach(columns[column]) { work in
-                                ArtworkTile(work: work, client: store.client, busy: store.busyIDs.contains(work.id), open: { open(work) }, bookmark: { bookmark(work) })
+                                ArtworkTile(work: work, client: store.client, transition: transition, busy: store.busyIDs.contains(work.id), open: { open(work) }, bookmark: { bookmark(work) })
                                     .id(work.id)
                             }
                         }.scrollTargetLayout()

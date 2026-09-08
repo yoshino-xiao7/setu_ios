@@ -118,6 +118,7 @@ struct AdminOverviewView: View {
                     SetuNavigationRow(title: "黑名单", subtitle: "管理封禁 IP 与访问控制", systemImage: "nosign") { router.navigate(to: .adminBlacklist) }
                     SetuNavigationRow(title: "系统监控", subtitle: "服务状态与健康检查", systemImage: "waveform.path.ecg.rectangle") { router.navigate(to: .adminSystemStatus) }
                     SetuNavigationRow(title: "网易云 Token 管理", subtitle: "音乐服务凭据状态", systemImage: "music.mic") { router.navigate(to: .adminMusicTokens) }
+                    SetuNavigationRow(title: "图片任务", subtitle: "PID 导入、抓取进度与入库结果", systemImage: "photo.badge.plus") { router.navigate(to: .adminPixivCrawl) }
                     SetuNavigationRow(title: "图片审核与详情", subtitle: "图片库、投稿、删除申请", systemImage: "photo.badge.checkmark") { router.navigate(to: .adminImageAudit) }
                     SetuNavigationRow(title: "AI 生成与审核", subtitle: "生成记录、Worker、审核队列", systemImage: "sparkles.rectangle.stack") { router.navigate(to: .adminAiGenerations) }
                     SetuNavigationRow(title: "操作日志", subtitle: "后台行为审计", systemImage: "doc.text.magnifyingglass") { router.navigate(to: .adminOperationLogs) }

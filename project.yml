@@ -166,3 +166,16 @@ schemes:
       config: Release
     analyze:
       config: Debug
+
+  SetuImages:
+    build:
+      targets:
+        SetuIOSApp: all
+        SetuIOSCore: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - SetuIOSAppTests
+        - SetuIOSAppUITests

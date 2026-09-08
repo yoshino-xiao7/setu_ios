@@ -139,6 +139,7 @@ private struct SetuRootUITestContext {
             UserDefaults.standard.removeObject(forKey: "music.cache.prefetch")
             navigation.navigate(to: .home, route: .account)
         }
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-image-tasks") { navigation.navigate(to: .home, route: .adminPixivCrawl) }
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-images") { navigation.selectedTab = .images }
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-ai") { navigation.selectedTab = .ai }
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-music") { navigation.selectedTab = .music }
@@ -467,8 +468,9 @@ enum SetuPreviewEnvironment {
     }
 
     private static func previewProfile() -> UserProfile? {
+        let role = ProcessInfo.processInfo.arguments.contains("-ui-testing-artwork-admin") ? 1 : 0
         let data = Data("""
-        {"id":42,"email":"preview@xueliang.local","nickname":"小雪","avatarUrl":null,"role":0,"createdAt":"2026-01-01T00:00:00+08:00","lastLoginIp":null}
+        {"id":42,"email":"preview@xueliang.local","nickname":"小雪","avatarUrl":null,"role":\(role),"createdAt":"2026-01-01T00:00:00+08:00","lastLoginIp":null}
         """.utf8)
         return try? JSONDecoder().decode(UserProfile.self, from: data)
     }
@@ -516,6 +518,11 @@ private final class SetuPreviewURLProtocol: URLProtocol {
             return
         }
 
+        // Deterministic slow detail for the image continuity regression scenario.
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-artwork-continuity"),
+           url.path.range(of: #"/user/(pixiv|images)/works/[^/]+$"#, options: .regularExpression) != nil {
+            Thread.sleep(forTimeInterval: 3)
+        }
         let fixture = SetuPreviewAPI.fixture(for: request)
         guard let response = HTTPURLResponse(
             url: url,
@@ -588,6 +595,18 @@ private enum SetuPreviewAPI {
             let (status, data) = MusicDetailPreviewFixtures.response(path: path, query: request.url?.query)
             return Fixture(statusCode: status, data: data)
         }
+        if path == "/user/info", ProcessInfo.processInfo.arguments.contains("-ui-testing-artwork-admin") {
+            return json("{\"id\":42,\"email\":\"preview@xueliang.local\",\"nickname\":\"小雪\",\"role\":1,\"createdAt\":\"2026-09-02T10:00:00\"}")
+        }
+        if path == "/admin/pixiv/crawl/illust", ProcessInfo.processInfo.arguments.contains("-ui-testing-artwork-admin") {
+            return json("{\"task_id\":\"fixture-import-task\",\"status\":\"pending\"}")
+        }
+        if path.hasPrefix("/admin/pixiv"), ProcessInfo.processInfo.arguments.contains("-ui-testing-artwork-admin") {
+            let task = "{\"task_id\":\"fixture-import-task\",\"mode\":\"ids\",\"status\":\"completed\",\"results\":[{\"pid\":1,\"expected_pages\":1,\"present_pages\":[0],\"missing_pages\":[],\"verified\":true,\"gallery_verified\":true},{\"pid\":2,\"expected_pages\":1,\"present_pages\":[],\"missing_pages\":[0],\"verified\":false,\"gallery_verified\":false,\"message\":\"上游图片暂不可用\"}]}"
+            if path == "/admin/pixiv/tasks" { return json("{\"total\":1,\"tasks\":[\(task)]}") }
+            if path.hasPrefix("/admin/pixiv/tasks/") { return json(task) }
+            if path == "/admin/pixiv/health" { return json("{\"status\":\"ok\"}") }
+        }
         if path.hasPrefix("/user/pixiv") || path.hasPrefix("/user/images") {
             if path.hasPrefix("/user/images/media/") {
                 #if canImport(UIKit)
@@ -608,7 +627,7 @@ private enum SetuPreviewAPI {
                      "thumbnailUrl": media, "previewUrl": media, "originalUrl": media, "bookmarked": false] as [String: Any]
                 }
                 return ["source": source, "id": String(id), "pid": String(id), "title": "画集 \(id)", "artist": artist,
-                        "kind": "illust", "pageCount": pages.count, "pages": pages, "tags": ["原创", "插画"],
+                        "kind": "illust", "pageCount": pages.count, "pages": pages, "tags": ["原创", "插画", "星穹铁道", "春天", "长标签也应该按实际文字宽度自动换行"],
                         "caption": "图片模块视觉样例，使用本站已有素材。", "bookmarked": false, "restricted": false, "aiGenerated": false]
             }
             let value: Any
