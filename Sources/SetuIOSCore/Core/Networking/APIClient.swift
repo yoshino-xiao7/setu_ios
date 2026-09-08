@@ -70,6 +70,10 @@ public struct APIClient: Sendable {
         try await request(path, method: "GET", body: Optional<Data>.none, signed: signed, headers: headers)
     }
 
+    public func getData(_ path: String) async throws -> Data {
+        try await request(path, method: "GET", body: Optional<Data>.none, signed: true)
+    }
+
     public func post<Request: Encodable & Sendable, Value: Decodable & Sendable>(
         _ path: String,
         body: Request,
@@ -159,7 +163,7 @@ public struct APIClient: Sendable {
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         if signed {
             await refreshSignatureIfNeeded()
-            let headers = try signer.signedHeaders(method: "POST", path: url.path)
+            let headers = try signer.signedHeaders(method: "POST", path: url.path(percentEncoded: true))
             for (name, value) in headers {
                 request.setValue(value, forHTTPHeaderField: name)
             }
@@ -223,7 +227,7 @@ public struct APIClient: Sendable {
             urlRequest.setValue(value, forHTTPHeaderField: name)
         }
         if signed {
-            let headers = try signer.signedHeaders(method: method, path: url.path)
+            let headers = try signer.signedHeaders(method: method, path: url.path(percentEncoded: true))
             for (name, value) in headers {
                 urlRequest.setValue(value, forHTTPHeaderField: name)
             }
@@ -245,6 +249,8 @@ public struct APIClient: Sendable {
         guard (200..<300).contains(httpResponse.statusCode) else {
             throw makeHTTPStatusError(response: httpResponse, data: data, requestID: requestID)
         }
+
+        if Value.self == Data.self { return data as! Value }
 
         if Value.self == EmptyResponse.self {
             return EmptyResponse() as! Value

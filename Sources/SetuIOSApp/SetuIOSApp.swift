@@ -32,7 +32,15 @@ struct SetuIOSApp: App {
     @ViewBuilder
     private var appContent: some View {
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("-ui-testing-root") })
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-pixiv-image-speed-probe") {
+            SetuPixivImageSpeedProbe()
+        } else if ProcessInfo.processInfo.arguments.contains("-ui-testing-pixiv-api-probe") {
+            SetuPixivAPIProbe()
+        } else if ProcessInfo.processInfo.arguments.contains("-ui-testing-pixiv-token-probe") {
+            SetuPixivTokenProbe()
+        } else if ProcessInfo.processInfo.arguments.contains("-ui-testing-pixiv-login-probe") {
+            SetuPixivLoginProbe(url: URL(string: "https://app-api.pixiv.net/web/v1/login?code_challenge=0123456789012345678901234567890123456789012AA&code_challenge_method=S256&client=pixiv-android")!, failed: { _ in }, codeReceived: { _ in })
+        } else if ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("-ui-testing-root") })
             || ProcessInfo.processInfo.arguments.contains("-ui-testing-welcome-fixture") {
             SetuRootUITestScenario()
         } else if ProcessInfo.processInfo.arguments.contains("-ui-testing-public-ai-work")
@@ -101,5 +109,125 @@ private struct SetuUITestAppearance: ViewModifier {
             content
         }
     }
+}
+#endif
+
+#if DEBUG
+private struct SetuPixivLoginProbe: View {
+    let url: URL
+    let failed: (String) -> Void
+    let codeReceived: (String) -> Void
+    var body: some View {
+        #if os(iOS)
+        PixivLoginWebView(url: url, failed: failed, codeReceived: codeReceived)
+        #else
+        Text("Requires iOS WebKit")
+        #endif
+    }
+}
+#endif
+
+#if DEBUG
+/// Public, unauthenticated API differential. Never opens the account Keychain.
+private struct SetuPixivImageSpeedProbe: View {
+    @State private var status = "正在检查公开图片下载"
+    var body: some View {
+        Text(status).task {
+            let transport = PixivNativeHTTPTransport()
+            var results: [String] = []
+            for round in 1...2 {
+                for variant: UInt8 in [0, 9] {
+                    var request = PixivHTTPRequest(url: "https://i.pixiv.re/img-original/img/2025/05/15/00/08/58/130412285_p0.jpg")
+                    request.headers = ["Referer": "https://www.pixiv.net/", "User-Agent": "PixivIOSApp/5.8.0"]
+                    request.max_bytes = 2 * 1024 * 1024
+                    request.public_image_probe = 0
+                    if variant == 9 { request.image_mirror_host = "i.pixiv.re" }
+                    let started = Date()
+                    do {
+                        let response = try await transport.send(request)
+                        results.append("round=\(round) variant=\(variant) HTTP=\(response.status) bytes=\(response.data.count) ms=\(Int(Date().timeIntervalSince(started) * 1000))")
+                    } catch { results.append("round=\(round) variant=\(variant) failed ms=\(Int(Date().timeIntervalSince(started) * 1000))") }
+                    status = results.joined(separator: "\n")
+                    if let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+                        try? status.write(to: directory.appendingPathComponent("pixiv-image-speed-probe.txt"), atomically: true, encoding: .utf8)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Credential-free public API comparison, independent of image diagnostics.
+private struct SetuPixivAPIProbe: View {
+    @State private var status = "正在检查公开作品接口"
+    var body: some View {
+        Text(status).task {
+            var request = PixivHTTPRequest(url: "https://app-api.pixiv.net/v1/illust/recommended?filter=for_ios&include_ranking_label=true")
+            request.headers = ["User-Agent": "PixivAndroidApp/5.0.155 (Android 10.0; Pixel C)",
+                "App-OS": "Android", "App-OS-Version": "Android 10.0", "App-Version": "5.0.166"]
+            var results: [String] = []
+            let paths: [(String, any PixivHTTPTransport)] = [
+                ("enhanced", PixivNativeHTTPTransport()), ("selected", PixivDirectHTTPTransport())]
+            for (name, transport) in paths {
+                do {
+                    let response = try await transport.send(request)
+                    results.append("\(name) public API HTTP \(response.status), JSON \(response.contentType.contains("application/json"))")
+                } catch { results.append("\(name) public API connection failed") }
+            }
+            status = results.joined(separator: "\n")
+            if let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+                try? status.write(to: directory.appendingPathComponent("pixiv-api-probe.txt"), atomically: true, encoding: .utf8)
+            }
+        }
+    }
+}
+
+/// One deliberately invalid, synthetic authorization code. No account or Keychain access.
+private struct SetuPixivTokenProbe: View {
+    @State private var status = "正在检查公开令牌接口"
+    var body: some View {
+        Text(status).task {
+            let transport = PixivPublicProbeTransport()
+            let client = PixivLocalClient(owner: "public-transport-probe", keychain: PixivProbeKeychain(), transport: transport)
+            do {
+                let session = try await client.authorize()
+                _ = try await client.complete(sessionID: session.id, code: "setu-public-invalid-code")
+            } catch { }
+            status = await transport.summary
+        }
+    }
+}
+private actor PixivPublicProbeTransport: PixivHTTPTransport {
+    var summary = "未完成公开接口检查"
+    func send(_ request: PixivHTTPRequest) async throws -> PixivHTTPResponse {
+        do {
+            let result = try await PixivDirectHTTPTransport().send(request)
+            summary = describe("selected", result)
+            save()
+            return result
+        } catch {
+            summary = "selected public OAuth transport failed"
+            save()
+            throw error
+        }
+    }
+    private func save() {
+        if let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+            try? summary.write(to: directory.appendingPathComponent("pixiv-token-probe.txt"), atomically: true, encoding: .utf8)
+        }
+    }
+    private func describe(_ name: String, _ result: PixivHTTPResponse) -> String {
+        // Fixed metadata only, never OAuth bodies, headers, account values or page text.
+        let json = result.contentType.lowercased().contains("application/json")
+        let body = String(decoding: result.data, as: UTF8.self).lowercased()
+        let challenge = body.contains("cf-chl-") || body.contains("just a moment")
+        let blocked = body.contains("已被阻止") || body.contains("your access has been blocked") || body.contains("access denied")
+        return "\(name) public OAuth HTTP \(result.status), JSON \(json), challenge \(challenge), blocked \(blocked)"
+    }
+}
+private struct PixivProbeKeychain: KeychainStoring {
+    func string(for key: String) throws -> String? { nil }
+    func setString(_ value: String, for key: String) throws { }
+    func remove(_ key: String) throws { }
 }
 #endif

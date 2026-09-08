@@ -12,5 +12,27 @@
 	<array>
 		<string>audio</string>
 	</array>
+	<!-- Fixed login-proxy hosts use a per-session pinned local anchor.
+	     TLS 1.2+, forward secrecy and native upstream verification remain enforced. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>app-api.pixiv.net</key>
+			<dict><key>NSExceptionAllowsInsecureHTTPLoads</key><true/></dict>
+			<key>accounts.pixiv.net</key>
+			<dict><key>NSExceptionAllowsInsecureHTTPLoads</key><true/></dict>
+			<key>oauth.secure.pixiv.net</key>
+			<dict><key>NSExceptionAllowsInsecureHTTPLoads</key><true/></dict>
+			<key>www.pixiv.net</key>
+			<dict><key>NSExceptionAllowsInsecureHTTPLoads</key><true/></dict>
+			<key>i.pximg.net</key>
+			<dict><key>NSExceptionAllowsInsecureHTTPLoads</key><true/></dict>
+			<key>s.pximg.net</key>
+			<dict><key>NSExceptionAllowsInsecureHTTPLoads</key><true/></dict>
+			<key>i-cf.pximg.net</key>
+			<dict><key>NSExceptionAllowsInsecureHTTPLoads</key><true/></dict>
+		</dict>
+	</dict>
 </dict>
 </plist>

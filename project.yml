@@ -17,12 +17,21 @@ settings:
     MARKETING_VERSION: "1.1"
     CURRENT_PROJECT_VERSION: "4"
 
+packages:
+  ZIPFoundation:
+    url: https://github.com/weichsel/ZIPFoundation.git
+    exactVersion: 0.9.20
+
 targets:
   SetuIOSCore:
     type: framework
     platform: iOS
     sources:
       - path: Sources/SetuIOSCore
+    dependencies:
+      - framework: Native/PixivTransport/build/SetuPixivTransport.xcframework
+        embed: false
+      - package: ZIPFoundation
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
@@ -40,6 +49,10 @@ targets:
           - Resources
           - Info.plist
       - path: Sources/SetuIOSApp/Resources/Assets.xcassets
+        buildPhase: resources
+      - path: Sources/SetuIOSApp/Resources/ZIPFoundation-LICENSE.txt
+        buildPhase: resources
+      - path: Native/PixivTransport/build/ThirdPartyNotices.txt
         buildPhase: resources
     dependencies:
       - target: SetuIOSCore

@@ -1,6 +1,9 @@
 import Foundation
 import SetuIOSCore
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 #if DEBUG
 
@@ -388,7 +391,8 @@ enum SetuPreviewEnvironment {
             downloadClient: DownloadClient(apiClient: apiClient),
             galleryUploadClient: GalleryUploadClient(apiClient: apiClient),
             adminClient: AdminClient(apiClient: apiClient),
-            authSession: authSession
+            authSession: authSession,
+            pixivOnlineClient: PreviewPixivOnlineClient(api: apiClient)
         )
     }
 
@@ -500,6 +504,38 @@ private enum SetuPreviewAPI {
         defer { stateLock.unlock() }
         guard let path = request.url?.path else {
             return json("{\"message\":\"无效的预览请求\"}", statusCode: 400)
+        }
+
+        if path.hasPrefix("/user/pixiv") || path.hasPrefix("/user/images") {
+            if path.hasPrefix("/user/images/media/") {
+                #if canImport(UIKit)
+                return Fixture(statusCode: 200, data: UIImage(named: "AuthBackground")?.pngData() ?? Data())
+                #else
+                return Fixture(statusCode: 404, data: Data())
+                #endif
+            }
+            if path == "/user/pixiv/account" {
+                return json("{\"bound\":true,\"accountId\":\"77\",\"name\":\"小雪\",\"version\":\"fixture\"}")
+            }
+            let media = "/user/images/media/00000000-0000-4000-8000-000000000001?scope=gallery"
+            let source = path.hasPrefix("/user/images") ? "gallery" : "pixiv"
+            let artist: [String: Any] = ["id": "77", "name": "小雪", "avatarUrl": media, "followed": false]
+            func work(_ id: Int) -> [String: Any] {
+                let pages = (0..<(id == 1 ? 2 : 1)).map { page in
+                    ["index": page, "pid": String(id), "width": 800, "height": id % 2 == 0 ? 700 : 1000,
+                     "thumbnailUrl": media, "previewUrl": media, "originalUrl": media, "bookmarked": false] as [String: Any]
+                }
+                return ["source": source, "id": String(id), "pid": String(id), "title": "画集 \(id)", "artist": artist,
+                        "kind": "illust", "pageCount": pages.count, "pages": pages, "tags": ["原创", "插画"],
+                        "caption": "图片模块视觉样例，使用本站已有素材。", "bookmarked": false, "restricted": false, "aiGenerated": false]
+            }
+            let value: Any
+            if request.httpMethod != "GET" { value = ["ok": true] }
+            else if path.hasSuffix("/artists") { value = [artist] }
+            else if path.hasSuffix("/spotlights") { value = [["id": "1", "title": "原创插画特辑", "thumbnailUrl": media, "url": "https://www.pixivision.net/zh/a/1"]] }
+            else if path.hasSuffix("/works") { value = ["items": (1...8).map(work), "nextCursor": NSNull()] }
+            else { value = work(Int(path.split(separator: "/").last ?? "1") ?? 1) }
+            return Fixture(statusCode: 200, data: (try? JSONSerialization.data(withJSONObject: value)) ?? Data())
         }
 
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-dashboard-failures"),

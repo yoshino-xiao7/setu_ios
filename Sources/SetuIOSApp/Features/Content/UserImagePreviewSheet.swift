@@ -65,6 +65,8 @@ struct UserImagePreviewItem: Identifiable {
 
     init(
         id: String,
+        pid: Int = 0,
+        page: Int = 0,
         title: String,
         author: String,
         width: Int?,
@@ -75,8 +77,8 @@ struct UserImagePreviewItem: Identifiable {
         originalURLString: String?
     ) {
         self.id = id
-        pid = 0
-        page = 0
+        self.pid = pid
+        self.page = page
         self.title = title
         self.author = author
         self.width = width
@@ -171,6 +173,11 @@ struct UserImagePreviewSheet: View {
                 Text(item.author)
                     .font(.subheadline)
                     .foregroundStyle(SetuColor.textSecondary)
+                if item.pid != 0 {
+                    ImagePidCopyButton(display: ImagePidDisplay(pid: item.pid, page: item.page)) {
+                        exportState = .message("\(ImagePidDisplay(pid: item.pid, page: item.page).fieldLabel) \(ImagePidDisplay(pid: item.pid, page: item.page).text) 已复制", .success)
+                    }
+                }
                 HStack(spacing: SetuSpacing.sm) {
                     if let width = item.width, let height = item.height, width > 0, height > 0 {
                         SetuPill(text: "\(width) × \(height)", systemImage: "aspectratio", tone: .muted)

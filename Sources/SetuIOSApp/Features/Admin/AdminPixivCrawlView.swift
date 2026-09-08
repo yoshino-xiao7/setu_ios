@@ -76,7 +76,7 @@ struct AdminPixivCrawlView: View {
             VStack(alignment: .leading, spacing: SetuSpacing.md) {
                 SetuSectionHeader(title: "新建任务", subtitle: "Pixiv 抓取")
                 Picker("模式", selection: $mode) {
-                    Text("按 ID").tag("ids")
+                    Text("按 PID").tag("ids")
                     Text("按画师").tag("user")
                     Text("按标签").tag("tag")
                 }
@@ -97,6 +97,10 @@ struct AdminPixivCrawlView: View {
                                     .padding(.leading, SetuSpacing.md)
                             }
                         }
+                    if !idsInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                       case .failure(let error) = Result(catching: { try PixivPIDInput.parse(idsInput) }) {
+                        Text(error.localizedDescription).font(.caption).foregroundStyle(SetuColor.danger)
+                    }
                 } else if mode == "user" {
                     TextField("画师 UID", text: $userID)
                         .textFieldStyle(.roundedBorder)
@@ -164,11 +168,7 @@ struct AdminPixivCrawlView: View {
     }
 
     private var parsedIDs: [Int] {
-        idsInput
-            .split { character in
-                character == "," || character == "，" || character == "\n" || character == " "
-            }
-            .compactMap { Int($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+        (try? PixivPIDInput.parse(idsInput)) ?? []
     }
 
     private var canSubmit: Bool {

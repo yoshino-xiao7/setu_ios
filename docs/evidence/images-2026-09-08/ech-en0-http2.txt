@@ -1,0 +1,3 @@
+host=app-api.pixiv.net status=400 Bad Request protocol=HTTP/2.0 server=Some("cloudflare") challenge=None
+host=oauth.secure.pixiv.net status=404 Not Found protocol=HTTP/2.0 server=Some("cloudflare") challenge=None
+host=accounts.pixiv.net status=200 OK protocol=HTTP/2.0 server=Some("cloudflare") challenge=None

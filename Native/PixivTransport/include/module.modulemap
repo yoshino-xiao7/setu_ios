@@ -1,0 +1,4 @@
+module SetuPixivTransport {
+    header "SetuPixivTransport.h"
+    export *
+}
