@@ -71,8 +71,8 @@ targets:
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_NSSupportsLiveActivities: YES
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
-        INFOPLIST_KEY_CFBundleDisplayName: 雪涼云
-        INFOPLIST_KEY_CFBundleName: 雪涼云
+        INFOPLIST_KEY_CFBundleDisplayName: 亦可 YK
+        INFOPLIST_KEY_CFBundleName: 亦可 YK
         INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait"
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: false

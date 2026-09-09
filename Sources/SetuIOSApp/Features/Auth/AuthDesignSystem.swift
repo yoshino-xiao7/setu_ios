@@ -8,28 +8,18 @@ import AppKit
 #endif
 
 
+enum AuthPalette {
+    static let background = Color("auth/background")
+    static let onAccent = Color("auth/onAccent")
+}
+
 struct AuthWelcomeBackdrop: View {
     var body: some View {
-        SetuColor.pageGradient
-            .overlay {
-                Circle()
-                    .fill(SetuColor.brandSoft.opacity(0.22))
-                    .frame(width: 300, height: 300)
-                    .blur(radius: 28)
-                    .offset(x: 150, y: -260)
-            }
-            .overlay {
-                Circle()
-                    .fill(SetuColor.gradientBottom.opacity(0.12))
-                    .frame(width: 260, height: 260)
-                    .blur(radius: 36)
-                    .offset(x: -150, y: 290)
-            }
-            .accessibilityHidden(true)
+        AuthPalette.background.accessibilityHidden(true)
     }
 }
 
-struct AuthGlassPanel<Content: View>: View {
+struct AuthFormPanel<Content: View>: View {
     let content: Content
 
     init(@ViewBuilder content: () -> Content) {
@@ -37,44 +27,30 @@ struct AuthGlassPanel<Content: View>: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            content
-        }
-        .padding(.horizontal, 26)
-        .padding(.vertical, 30)
-        .frame(maxWidth: .infinity)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 32, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 32, style: .continuous)
-                .stroke(SetuColor.separator.opacity(0.9), lineWidth: 1)
-        }
-        .shadow(color: SetuColor.brandPink.opacity(0.16), radius: 28, x: 0, y: 18)
+        content
+            .padding(.vertical, 24)
+            .frame(maxWidth: .infinity)
     }
 }
 
 struct AuthPanelHeader: View {
+    @ScaledMetric(relativeTo: .title2) private var titleSize = 24.0
+    @ScaledMetric(relativeTo: .subheadline) private var subtitleSize = 13.0
     let title: LocalizedStringKey
     let subtitle: LocalizedStringKey
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.title.weight(.bold))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [SetuColor.brandInk, SetuColor.brandPink.opacity(0.78)],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-                .multilineTextAlignment(.center)
+                .font(.system(size: titleSize, weight: .medium))
+                .tracking(0.5)
+                .foregroundStyle(SetuColor.textPrimary)
             Text(subtitle)
-                .font(.subheadline.weight(.semibold))
+                .font(.system(size: subtitleSize, weight: .regular))
                 .foregroundStyle(SetuColor.textSecondary)
-                .multilineTextAlignment(.center)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.bottom, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.bottom, 10)
     }
 }
 
@@ -124,49 +100,37 @@ struct AuthSecureInputRow: View {
     }
 }
 
-struct AuthGradientButtonLabel: View {
+struct AuthPrimaryButtonLabel: View {
+    @ScaledMetric(relativeTo: .body) private var textSize = 15.0
     let title: LocalizedStringKey
 
     var body: some View {
         Text(title)
-            .font(.headline.weight(.bold))
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity, minHeight: 56)
-            .background(
-                LinearGradient(
-                    colors: [
-                        SetuColor.gradientTop,
-                        SetuColor.gradientBottom
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                ),
-                in: RoundedRectangle(cornerRadius: 18, style: .continuous)
-            )
-            .shadow(color: SetuColor.brandPink.opacity(0.26), radius: 14, x: 0, y: 8)
+            .font(.system(size: textSize, weight: .medium))
+            .tracking(0.3)
+            .foregroundStyle(AuthPalette.onAccent)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity, minHeight: 52)
+            .background(SetuColor.brandPink, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 
-struct AuthGradientProgressLabel: View {
+struct AuthPrimaryProgressLabel: View {
+    @ScaledMetric(relativeTo: .body) private var textSize = 15.0
     let title: String
 
     var body: some View {
         HStack(spacing: SetuSpacing.sm) {
-            ProgressView()
-                .tint(.white)
+            ProgressView().tint(AuthPalette.onAccent)
             Text(title)
-                .font(.headline)
-                .foregroundStyle(.white)
+                .font(.system(size: textSize, weight: .medium))
+                .foregroundStyle(AuthPalette.onAccent)
         }
-        .frame(maxWidth: .infinity, minHeight: 56)
-        .background(
-            LinearGradient(
-                colors: [SetuColor.info.opacity(0.70), SetuColor.brandPink.opacity(0.70)],
-                startPoint: .leading,
-                endPoint: .trailing
-            ),
-            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
-        )
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, minHeight: 52)
+        .background(SetuColor.brandPink, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 
@@ -228,9 +192,11 @@ struct AuthHeaderImage: View {
             RoundedRectangle(cornerRadius: 8)
                 .fill(authImageBackground)
 
-            Image("AuthHeader")
+            Image("BrandLogo")
                 .resizable()
-                .scaledToFill()
+                .scaledToFit()
+                .foregroundStyle(SetuColor.textPrimary)
+                .padding(32)
         }
         .frame(maxWidth: .infinity)
         .frame(height: 168)

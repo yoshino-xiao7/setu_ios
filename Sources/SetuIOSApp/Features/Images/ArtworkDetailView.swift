@@ -258,7 +258,7 @@ struct ArtworkDetailPage: View {
     private func photoPermission() async -> Bool {
         let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
         if status == .authorized || status == .limited { return true }
-        feedback = "请在系统设置中允许雪涼云添加照片后重试"; return false
+        feedback = "请在系统设置中允许亦可添加照片后重试"; return false
     }
     private func save(_ pages: [ArtworkPage]) async {
         guard saving.isEmpty, await photoPermission() else { return }

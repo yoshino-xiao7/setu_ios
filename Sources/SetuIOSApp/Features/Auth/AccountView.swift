@@ -16,6 +16,7 @@ enum AuthFocusField: Hashable {
 
 struct AccountView: View {
     @Environment(RouterPath.self) private var router
+    @Environment(\.loginConfirmationActive) private var loginConfirmed
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Bindable var environment: AppEnvironment
@@ -53,10 +54,20 @@ struct AccountView: View {
 
     var body: some View {
         Group {
-            if let user = environment.authSession.currentUser {
+            if let user = environment.authSession.currentUser, !loginConfirmed {
                 authenticatedContent(user: user)
             } else {
                 unauthenticatedAuthScreen
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if loginConfirmed, authPage != .login {
+                Label("登录成功", systemImage: "checkmark.circle.fill")
+                    .font(.headline)
+                    .foregroundStyle(SetuColor.brandPink)
+                    .padding()
+                    .background(AuthPalette.background, in: Capsule())
+                    .padding(.bottom, 24)
             }
         }
         .task {
@@ -150,7 +161,7 @@ struct AccountView: View {
                         SetuNavigationRow(title: "服务条款", subtitle: "了解使用规则与内容说明", systemImage: "doc.text.magnifyingglass") {
                             router.navigate(to: .terms)
                         }
-                        SetuNavigationRow(title: "关于雪涼云", subtitle: "产品介绍与版本信息", systemImage: "info.circle") {
+                        SetuNavigationRow(title: "关于亦可", subtitle: "产品介绍与版本信息", systemImage: "info.circle") {
                             router.navigate(to: .about)
                         }
                     }
@@ -277,40 +288,44 @@ struct AccountView: View {
             AuthWelcomeBackdrop()
                 .ignoresSafeArea()
 
-            ScrollView {
-                Group {
-                    if authPage == .landing {
-                        AuthWelcomeView(
-                            environment: environment,
-                            isAppleLoading: appleLoading,
-                            sessionFeedback: environment.authSession.lastError.map(SetuFeedback.error),
-                            onAppleRequest: prepareAppleRequest,
-                            onAppleCompletion: completeAppleLogin,
-                            onEmailLogin: { showAuthPage(.login) },
-                            onRegister: { showAuthPage(.register) },
-                            onPasskey: { Task { await loginWithPasskey() } },
-                            onPrivacy: { router.navigate(to: .privacy) },
-                            onTerms: { router.navigate(to: .terms) }
-                        )
-                        .transition(.opacity.combined(with: .move(edge: .bottom)))
-                    } else {
-                        AuthGlassPanel {
-                            unauthenticatedContent
+            GeometryReader { geometry in
+                ScrollView {
+                    Group {
+                        if authPage == .landing {
+                            AuthWelcomeView(
+                                isAppleLoading: appleLoading,
+                                sessionFeedback: passkeyActionFeedback ?? environment.authSession.lastError.map(SetuFeedback.error),
+                                onAppleRequest: prepareAppleRequest,
+                                onAppleCompletion: completeAppleLogin,
+                                onEmailLogin: { showAuthPage(.login) },
+                                onRegister: { showAuthPage(.register) },
+                                onPasskey: { Task { await loginWithPasskey() } },
+                                onPrivacy: { router.navigate(to: .privacy) },
+                                onTerms: { router.navigate(to: .terms) },
+                                minimumHeight: max(0, geometry.size.height - 32),
+                                isPasskeyLoading: passkeyLoading
+                            )
+                            .transition(.opacity)
+                        } else {
+                            AuthFormPanel {
+                                unauthenticatedContent
+                            }
+                            .frame(maxWidth: 390)
+                            .transition(.opacity)
                         }
-                        .frame(maxWidth: 520)
-                        .transition(.opacity.combined(with: .move(edge: .bottom)))
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, SetuSpacing.lg)
+                .scrollDismissesKeyboard(.interactively)
             }
-            .scrollDismissesKeyboard(.interactively)
-            .padding(.horizontal, SetuSpacing.xl)
-            .padding(.vertical, SetuSpacing.sm)
+            .padding(.horizontal, 30)
+
         }
         .navigationTitle("")
         #if os(iOS)
         .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbar(authPage == .landing ? .hidden : .visible, for: .navigationBar)
         #endif
     }
 
@@ -343,7 +358,7 @@ struct AccountView: View {
             VStack(alignment: .center, spacing: 16) {
                 AuthHeaderImage()
                 VStack(alignment: .center, spacing: 6) {
-                    Text("雪涼云登录")
+                    Text("亦可登录")
                         .font(.largeTitle.bold())
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity)
@@ -403,10 +418,12 @@ struct AccountView: View {
             Button {
                 Task { await loginWithPassword() }
             } label: {
-                if authActionLoading {
-                    AuthGradientProgressLabel(title: "正在登录")
+                if loginConfirmed {
+                    AuthPrimaryButtonLabel(title: "✓ 登录成功")
+                } else if authActionLoading {
+                    AuthPrimaryProgressLabel(title: "正在登录")
                 } else {
-                    AuthGradientButtonLabel(title: "登录")
+                    AuthPrimaryButtonLabel(title: "登录")
                 }
             }
             .buttonStyle(.plain)
@@ -447,10 +464,12 @@ struct AccountView: View {
             Button {
                 Task { await registerAccount() }
             } label: {
-                if authActionLoading {
-                    AuthGradientProgressLabel(title: "正在注册")
+                if loginConfirmed {
+                    AuthPrimaryButtonLabel(title: "✓ 登录成功")
+                } else if authActionLoading {
+                    AuthPrimaryProgressLabel(title: "正在注册")
                 } else {
-                    AuthGradientButtonLabel(title: "注册")
+                    AuthPrimaryButtonLabel(title: "注册")
                 }
             }
             .buttonStyle(.plain)
@@ -494,10 +513,12 @@ struct AccountView: View {
             Button {
                 Task { await sendPasswordRecoveryEmail() }
             } label: {
-                if authActionLoading {
-                    AuthGradientProgressLabel(title: "正在发送重置邮件")
+                if loginConfirmed {
+                    AuthPrimaryButtonLabel(title: "✓ 登录成功")
+                } else if authActionLoading {
+                    AuthPrimaryProgressLabel(title: "正在发送重置邮件")
                 } else {
-                    AuthGradientButtonLabel(title: "发送重置邮件")
+                    AuthPrimaryButtonLabel(title: "发送重置邮件")
                 }
             }
             .buttonStyle(.plain)
@@ -531,10 +552,12 @@ struct AccountView: View {
             Button {
                 Task { await submitPasswordReset() }
             } label: {
-                if authActionLoading {
-                    AuthGradientProgressLabel(title: "正在重置密码")
+                if loginConfirmed {
+                    AuthPrimaryButtonLabel(title: "✓ 登录成功")
+                } else if authActionLoading {
+                    AuthPrimaryProgressLabel(title: "正在重置密码")
                 } else {
-                    AuthGradientButtonLabel(title: "重置密码")
+                    AuthPrimaryButtonLabel(title: "重置密码")
                 }
             }
             .buttonStyle(.plain)
@@ -933,7 +956,7 @@ enum AuthPage {
 
     var title: String {
         switch self {
-        case .landing: "雪涼云登录"
+        case .landing: "亦可登录"
         case .login: "邮箱登录"
         case .register: "注册账号"
         case .recovery: "找回密码"

@@ -7,6 +7,8 @@ struct RootAppView: View {
     @Bindable var environment: AppEnvironment
     @Bindable var pushNotifications: SystemPushCoordinator
     @State private var navigationCoordinator = AppNavigationCoordinator()
+    @State private var moduleContentFrame = CGRect.zero
+    @State private var moduleTransitionSequence = 0
     @State private var loggedOutRouter = RouterPath()
     @State var musicStore: MusicStore
     @State var musicPlayer = MusicPlaybackController()
@@ -14,6 +16,12 @@ struct RootAppView: View {
     @State private var musicInsetHeight: CGFloat = 0
     @State private var musicInsetFrame: CGRect = .zero
     @State private var isSessionReady = false
+    @State private var hasFinishedBrandSplash = false
+    @State private var retainingLoginScreen: Bool
+    @State private var loginConfirmed = false
+    @State private var loginScreenOpacity = 1.0
+    @State private var showingLoginWelcome = false
+    @State private var loginTransitionTask: Task<Void, Never>?
     @State private var showingReauthentication = false
     @State private var sessionOwnerID: Int?
 
@@ -26,6 +34,7 @@ struct RootAppView: View {
         _musicStore = State(initialValue: MusicStore(client: environment.musicClient, userID: environment.authSession.currentUser?.id))
         _musicPlayer = State(initialValue: musicPlayer ?? MusicPlaybackController())
         _navigationCoordinator = State(initialValue: navigationCoordinator ?? AppNavigationCoordinator())
+        _retainingLoginScreen = State(initialValue: environment.authSession.currentUser == nil)
         self.environment = environment
         _sessionOwnerID = State(initialValue: environment.authSession.currentUser?.id)
         self.pushNotifications = pushNotifications
@@ -35,7 +44,7 @@ struct RootAppView: View {
     var body: some View {
         Group {
             if isSessionReady {
-                if environment.authSession.isSignedIn || environment.authSession.requiresReauthentication {
+                if (environment.authSession.isSignedIn && !retainingLoginScreen) || environment.authSession.requiresReauthentication {
                     #if DEBUG && canImport(MobileVLCKit)
                     if ProcessInfo.processInfo.arguments.contains("-development-vlc-probe") {
                         VLCProbeView(environment: environment, resolver: musicPlayer.urlResolver) { identity in
@@ -58,6 +67,7 @@ struct RootAppView: View {
                             }
                     }
                     .environment(loggedOutRouter)
+                    .opacity(loginScreenOpacity)
                 }
             } else {
                 ZStack {
@@ -67,6 +77,13 @@ struct RootAppView: View {
                         .padding()
                 }
             }
+        }
+        .environment(\.loginConfirmationActive, loginConfirmed)
+        .environment(\.brandSplashActive, !hasFinishedBrandSplash || showingLoginWelcome)
+        .allowsHitTesting(hasFinishedBrandSplash && !showingLoginWelcome && !loginConfirmed)
+        .accessibilityHidden(!hasFinishedBrandSplash || showingLoginWelcome)
+        .overlayPreferenceValue(WelcomeLogoAnchorKey.self) { anchors in
+            self.greetingSplashOverlay(greeting: anchors.greeting, logo: anchors.logo)
         }
         .task(id: environment.authSession.currentUser?.id) {
             await ensureSessionState()
@@ -89,6 +106,7 @@ struct RootAppView: View {
             #endif
         }
         .onChange(of: environment.authSession.currentUser?.id) { oldUserID, newUserID in
+            handleLoginTransition(from: oldUserID, to: newUserID)
             musicStore.reset(for: newUserID)
             switchMusicPlaybackUser(from: oldUserID, to: newUserID)
             configureMusicPlayerResolver()
@@ -101,7 +119,8 @@ struct RootAppView: View {
         .onChange(of: pushNotifications.pendingDestination) {
             openPendingPushIfPossible()
         }
-        .onChange(of: navigationCoordinator.selectedTab) { oldValue, _ in
+        .onChange(of: navigationCoordinator.selectedTab) { oldValue, newValue in
+            moduleTransitionSequence += 1
             if oldValue == .music {
                 musicPlayer.savePlaybackSnapshot()
             }
@@ -127,6 +146,68 @@ struct RootAppView: View {
         }
         .environment(pushNotifications)
         .environment(musicStore)
+    }
+
+    private func greetingSplashOverlay(greeting: HomeGreetingAnchor?, logo: Anchor<CGRect>?) -> some View {
+        Color.clear
+            .overlay {
+                if !hasFinishedBrandSplash || showingLoginWelcome {
+                    GeometryReader { geometry in
+                        BrandSplashView(
+                            destination: logo.map { geometry[$0] },
+                            reduceMotion: reducesSplashMotion,
+                            signedIn: environment.authSession.isSignedIn && !retainingLoginScreen,
+                            loginWelcome: showingLoginWelcome,
+                            greetingDestination: greeting.map { geometry[$0.bounds] },
+                            greetingTitle: greeting?.title ?? "欢迎回来"
+                        ) {
+                            hasFinishedBrandSplash = true
+                            showingLoginWelcome = false
+                            loginConfirmed = false
+                            openPendingPushIfPossible()
+                        }
+                        .id(showingLoginWelcome)
+                    }
+                }
+            }
+    }
+
+    private func handleLoginTransition(from oldID: Int?, to newID: Int?) {
+        loginTransitionTask?.cancel()
+        guard newID != nil else {
+            retainingLoginScreen = true
+            showingLoginWelcome = false
+            loginConfirmed = false
+            loginScreenOpacity = 1
+            return
+        }
+        guard oldID == nil, retainingLoginScreen else { return }
+        loginConfirmed = true
+        loginTransitionTask = Task { @MainActor in
+            do {
+                try await Task.sleep(for: .milliseconds(reducesSplashMotion ? 100 : 280))
+                withAnimation(.easeInOut(duration: reducesSplashMotion ? 0.1 : 0.33)) { loginScreenOpacity = 0 }
+                try await Task.sleep(for: .milliseconds(reducesSplashMotion ? 100 : 330))
+                navigationCoordinator.selectedTab = .home
+                retainingLoginScreen = false
+                showingLoginWelcome = true
+            } catch { }
+        }
+    }
+
+    private var moduleTransitionAccessibilityValue: String {
+        #if DEBUG
+        return ProcessInfo.processInfo.arguments.contains("-ui-testing-root-player") ? "transition=\(moduleTransitionSequence)" : ""
+        #else
+        return ""
+        #endif
+    }
+
+    private var reducesSplashMotion: Bool {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-reduce-motion") { return true }
+        #endif
+        return reduceMotion
     }
 
     private func beginReauthentication() {
@@ -210,7 +291,11 @@ struct RootAppView: View {
                 set: { navigationCoordinator.selectedTab = $0 }
             )) {
                 ForEach(AppTab.allCases) { tab in
-                    tabContent(for: tab)
+                    Color.clear
+                        .background(SetuColor.pageGradient.ignoresSafeArea())
+                        .anchorPreference(key: ModuleViewportKey.self, value: .bounds) {
+                            navigationCoordinator.selectedTab == tab ? $0 : nil
+                        }
                         .tabItem {
                             tab.label
                         }
@@ -218,6 +303,17 @@ struct RootAppView: View {
                 }
             }
             .background(SetuColor.pageGradient.ignoresSafeArea())
+            .overlayPreferenceValue(ModuleViewportKey.self) { anchor in
+                GeometryReader { geometry in
+                    let viewport = anchor.map { geometry[$0] } ?? CGRect(origin: .zero, size: geometry.size)
+                    ModulePageContainer(selection: navigationCoordinator.selectedTab, reduceMotion: reducesSplashMotion) { tab in
+                        tabContent(for: tab)
+                    }
+                    .frame(width: viewport.width, height: viewport.height)
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { moduleContentFrame = $0 }
+                    .position(x: viewport.midX, y: viewport.midY)
+                }
+            }
             .overlay {
                 if musicPlayer.currentTrack != nil {
                     GeometryReader { rootGeometry in
@@ -226,7 +322,7 @@ struct RootAppView: View {
                             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { musicInsetHeight = $0 }
                             .position(
                                 x: rootGeometry.size.width / 2,
-                                y: musicInsetFrame.minY - rootGeometry.frame(in: .global).minY + musicInsetHeight / 2
+                                y: min(musicInsetFrame.minY, moduleContentFrame.isEmpty ? musicInsetFrame.minY : moduleContentFrame.maxY - musicInsetHeight) - rootGeometry.frame(in: .global).minY + musicInsetHeight / 2
                             )
                             .opacity(musicInsetFrame.isEmpty ? 0 : 1)
                     }
@@ -268,6 +364,9 @@ struct RootAppView: View {
                 }
                 .safeAreaInset(edge: .bottom, spacing: 0) { musicPlayerSpace(for: tab) }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("module.content.\(tab.rawValue)")
+        .accessibilityValue(moduleTransitionAccessibilityValue)
         .environment(navigationCoordinator.router(for: tab))
         .environment(\.setuRecoveryActions, SetuRecoveryActions(
             signIn: beginReauthentication,
@@ -347,7 +446,7 @@ struct RootAppView: View {
     }
 
     private func openPendingPushIfPossible() {
-        guard environment.authSession.isSignedIn,
+        guard environment.authSession.isSignedIn, !retainingLoginScreen, !showingLoginWelcome, hasFinishedBrandSplash,
               let destination = pushNotifications.consumePendingDestination() else { return }
         let targetType = (destination.targetType ?? "").uppercased()
         let target: AppTab

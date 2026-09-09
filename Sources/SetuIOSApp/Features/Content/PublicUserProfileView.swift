@@ -174,7 +174,7 @@ struct PublicUserProfileView: View {
 
     private func displayName(_ profile: PublicUserProfile) -> String {
         let name = profile.nickname?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return name.isEmpty ? "雪涼云用户" : name
+        return name.isEmpty ? "亦可用户" : name
     }
 
     private func sectionCountText(loaded: Int, total: Int, unit: String) -> String {

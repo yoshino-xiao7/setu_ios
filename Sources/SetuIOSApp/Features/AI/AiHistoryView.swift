@@ -501,7 +501,7 @@ struct AiGenerationImagePreviewSheet: View {
             .joined(separator: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let title = sanitized.isEmpty ? "AI作品" : String(sanitized.prefix(24))
-        return "雪涼云-\(title).png"
+        return "亦可-\(title).png"
     }
 
     private func copyPrompt() {

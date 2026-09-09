@@ -2,6 +2,11 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>auth/background</string>
+	</dict>
 	<!--
 	  Supplementary Info.plist merged on top of the generated one
 	  (GENERATE_INFOPLIST_FILE=YES). UIBackgroundModes is not produced by any

@@ -2,6 +2,9 @@ import SetuIOSCore
 import SwiftUI
 
 struct DashboardView: View {
+    @State private var initialLoadCount = 0
+    @State private var lifetimeID = UUID()
+    @Environment(\.brandSplashActive) private var brandSplashActive
     @Bindable var environment: AppEnvironment
     @Bindable var player: MusicPlaybackController
     @Environment(AppNavigationCoordinator.self) private var navigation
@@ -53,6 +56,7 @@ struct DashboardView: View {
             UserImagePreviewSheet(item: item)
         }
         .task {
+            initialLoadCount += 1
             await load()
         }
         .refreshable {
@@ -346,6 +350,8 @@ struct DashboardView: View {
     private var greetingCopy: some View {
         VStack(alignment: .leading, spacing: SetuSpacing.sm) {
             Text(greetingTitle)
+                .anchorPreference(key: WelcomeLogoAnchorKey.self, value: .bounds) { EntryAnchors(greeting: HomeGreetingAnchor(bounds: $0, title: greetingTitle)) }
+                .opacity(brandSplashActive ? 0 : 1)
                 .font(SetuTypography.display)
                 .foregroundStyle(SetuColor.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -354,6 +360,18 @@ struct DashboardView: View {
                 .foregroundStyle(SetuColor.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("dashboard.greeting")
+        .accessibilityValue(diagnosticLoadValue)
+    }
+
+    private var diagnosticLoadValue: String {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-player") {
+            return "\(lifetimeID):loads=\(initialLoadCount)"
+        }
+        #endif
+        return ""
     }
 
     private var hasMeaningfulDraft: Bool {

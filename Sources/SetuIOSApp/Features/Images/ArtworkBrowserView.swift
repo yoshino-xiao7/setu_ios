@@ -54,7 +54,11 @@ struct ArtworkBrowserView: View {
         .environment(\.artworkImages, store.images)
         .setuBackground()
         .navigationTitle("图片")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                SetuToolbarLogo(assetName: "ImageHomeLogo", accessibilityLabel: "图片")
+            }
             ToolbarItemGroup(placement: .topBarTrailing) {
                 if admin { Button { showImport = true } label: { Image(systemName: "plus") }.accessibilityLabel("新增图片") }
                 Menu {

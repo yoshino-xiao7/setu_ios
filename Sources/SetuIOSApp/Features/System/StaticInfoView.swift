@@ -12,7 +12,7 @@ enum StaticInfoKind {
         case .docs:
             "使用帮助"
         case .about:
-            "关于雪涼云"
+            "关于亦可"
         case .privacy:
             "隐私政策"
         case .terms:
@@ -38,7 +38,7 @@ enum StaticInfoKind {
         case .docs:
             "手机端常用功能与使用说明。"
         case .about:
-            "雪涼云的定位、角色和 App 入口。"
+            "亦可的定位、角色和 App 入口。"
         case .privacy:
             "了解个人数据的使用方式与安全措施。"
         case .terms:
@@ -122,7 +122,7 @@ struct StaticInfoView: View {
 
         StaticInfoSectionCard(title: "AI 绘画与账号") {
             InfoParagraph("AI 绘画页可以输入提示词、选择画布比例和生成参数，并在历史记录中查看作品、申请删除或进入广场浏览公开作品。")
-            InfoPair(title: "我的", value: "管理个人资料、QQ 绑定、修改密码、通行密钥、隐私政策和关于雪涼云。")
+            InfoPair(title: "我的", value: "管理个人资料、QQ 绑定、修改密码、通行密钥、隐私政策和关于亦可。")
             InfoPair(title: "管理员模式", value: "仅管理员账号会显示入口，普通用户不会看到后台管理功能。")
         }
     }
@@ -177,8 +177,8 @@ struct StaticInfoView: View {
 
     @ViewBuilder
     private var aboutContent: some View {
-        StaticInfoSectionCard(title: "雪涼云") {
-            InfoParagraph("雪涼云是一个围绕图片浏览、AI 绘画、音乐播放和公开广场展开的个人内容 App。")
+        StaticInfoSectionCard(title: "亦可") {
+            InfoParagraph("亦可是一个围绕图片浏览、AI 绘画、音乐播放和公开广场展开的个人内容 App。")
             InfoPair(title: "定位", value: "图片、AI 创作、音乐、收藏整理和个人账户管理。")
             InfoPair(title: "用途", value: "学习、研究、个人娱乐和内容收藏。")
         }
@@ -214,7 +214,7 @@ struct StaticInfoView: View {
     @ViewBuilder
     private var termsContent: some View {
         StaticInfoSectionCard(title: "服务说明") {
-            InfoParagraph("雪涼云提供图片浏览、AI 绘画、音乐播放、个人收藏管理和公开广场。本服务仅供学习、研究和个人娱乐使用。")
+            InfoParagraph("亦可提供图片浏览、AI 绘画、音乐播放、个人收藏管理和公开广场。本服务仅供学习、研究和个人娱乐使用。")
         }
 
         StaticInfoSectionCard(title: "版权声明") {

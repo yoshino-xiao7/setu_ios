@@ -388,9 +388,9 @@ struct MusicHomeView: View {
                                     .fixedSize(horizontal: false, vertical: true)
                                     .frame(maxWidth: .infinity, minHeight: 44)
                                     .padding(.vertical, SetuSpacing.xs)
+                                    .contentShape(Rectangle())
                             }
                             .frame(maxWidth: .infinity, minHeight: 44)
-                            .contentShape(Rectangle())
                             .setuButtonFeedback()
                         }
                     }

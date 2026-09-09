@@ -263,9 +263,9 @@ struct UserImagePreviewSheet: View {
     private var photoPermissionMessage: String {
         switch photoPermissionState {
         case .notDetermined:
-            "只有在你主动保存图片时才会询问，雪涼云不会读取你的相册。"
+            "只有在你主动保存图片时才会询问，亦可不会读取你的相册。"
         case .granted:
-            "已允许添加图片；雪涼云只会保存你主动选择的作品。"
+            "已允许添加图片；亦可只会保存你主动选择的作品。"
         case .denied:
             "照片权限已关闭，可前往系统设置后再保存。"
         }
@@ -385,7 +385,7 @@ private enum ImageExportError: LocalizedError {
         case .invalidImage:
             "图片下载失败，请稍后重试"
         case .photoPermissionDenied:
-            "未能保存，请在系统设置中允许雪涼云添加照片"
+            "未能保存，请在系统设置中允许亦可添加照片"
         }
     }
 }

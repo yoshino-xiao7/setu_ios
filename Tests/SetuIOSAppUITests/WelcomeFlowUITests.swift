@@ -1,29 +1,89 @@
 import XCTest
 
 final class WelcomeFlowUITests: XCTestCase {
+    func testSplashDoesNotReplayWhenReturningFromBackground() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing-welcome-fixture"]
+        app.launch()
+        XCTAssertTrue(app.buttons["auth.welcome.email"].waitForExistence(timeout: 8))
+        XCUIDevice.shared.press(.home)
+        app.activate()
+        XCTAssertTrue(app.buttons["auth.welcome.email"].isHittable)
+        XCTAssertFalse(app.otherElements["app.brandSplash"].exists)
+    }
+
+    func testReducedMotionLaunchReachesWelcome() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing-welcome-fixture", "-ui-testing-reduce-motion"]
+        app.launch()
+        XCTAssertTrue(app.buttons["auth.welcome.email"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["auth.welcome.email"].isHittable)
+        XCTAssertFalse(app.otherElements["app.brandSplash"].exists)
+    }
+
+    func testSignedInSplashReachesAppWithoutShowingLogin() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing-root-images"]
+        app.launch()
+        XCTAssertTrue(app.buttons["图片设置"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.buttons["图片设置"].wait(for: \.isHittable, toEqual: true, timeout: 8))
+        XCTAssertFalse(app.buttons["auth.welcome.email"].exists)
+        XCTAssertFalse(app.otherElements["app.brandSplash"].exists)
+    }
+
     func testSignedOutLaunchLeadsWithValueAndNativeAuthenticationChoices() {
         let app = XCUIApplication()
         app.launchArguments = ["-ui-testing-reset-session"]
         app.launch()
 
-        XCTAssertTrue(app.staticTexts["auth.welcome.title"].waitForExistence(timeout: 8))
-        XCTAssertEqual(app.staticTexts["auth.welcome.title"].label, "把灵感变成作品")
-        XCTAssertEqual(app.staticTexts["auth.welcome.subtitle"].label, "AI 绘画、高清图片与音乐，都在雪涼云")
+        XCTAssertTrue(app.descendants(matching: .any)["auth.welcome.title"].waitForExistence(timeout: 8))
+        XCTAssertEqual(app.descendants(matching: .any)["auth.welcome.title"].label, "亦可 YK")
+        XCTAssertEqual(app.staticTexts["auth.welcome.subtitle"].label, "图片、AI 创作与音乐")
         XCTAssertTrue(app.buttons["auth.welcome.apple"].isHittable)
         XCTAssertTrue(app.buttons["auth.welcome.email"].isHittable)
         XCTAssertTrue(app.buttons["auth.welcome.register"].isHittable)
+        XCTAssertTrue(app.buttons["auth.welcome.passkey"].isHittable)
         XCTAssertFalse(app.buttons["auth.welcome.preview"].exists)
         XCTAssertTrue(app.buttons["auth.welcome.privacy"].exists)
         XCTAssertTrue(app.buttons["auth.welcome.terms"].exists)
-        XCTAssertFalse(app.staticTexts["雪凉云 API"].exists)
+        XCTAssertFalse(app.staticTexts["亦可 API"].exists)
 
         let accessibilityOrder = app.descendants(matching: .any)
             .allElementsBoundByAccessibilityElement
             .map(\.identifier)
         assertAppearsBefore("auth.welcome.title", "auth.welcome.subtitle", in: accessibilityOrder)
-        assertAppearsBefore("auth.welcome.subtitle", "auth.welcome.apple", in: accessibilityOrder)
-        assertAppearsBefore("auth.welcome.apple", "auth.welcome.email", in: accessibilityOrder)
-        assertAppearsBefore("auth.welcome.email", "auth.welcome.register", in: accessibilityOrder)
+        assertAppearsBefore("auth.welcome.subtitle", "auth.welcome.email", in: accessibilityOrder)
+        assertAppearsBefore("auth.welcome.email", "auth.welcome.apple", in: accessibilityOrder)
+        assertAppearsBefore("auth.welcome.apple", "auth.welcome.register", in: accessibilityOrder)
+    }
+
+    func testEmailLoginAndReturnRemainReachable() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing-reset-session"]
+        app.launch()
+        let emailEntry = app.buttons["auth.welcome.email"]
+        XCTAssertTrue(emailEntry.waitForExistence(timeout: 8))
+        emailEntry.tap()
+        XCTAssertTrue(app.textFields["auth.login.email"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.secureTextFields["auth.login.password"].exists)
+        app.buttons["返回"].firstMatch.tap()
+        XCTAssertTrue(emailEntry.waitForExistence(timeout: 5))
+    }
+
+    func testLegalPagesCanReturnToWelcome() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing-reset-session"]
+        app.launch()
+        for identifier in ["auth.welcome.privacy", "auth.welcome.terms"] {
+            let entry = app.buttons[identifier]
+            XCTAssertTrue(entry.waitForExistence(timeout: 8))
+            entry.tap()
+            let back = app.navigationBars.buttons.firstMatch
+            XCTAssertTrue(back.waitForExistence(timeout: 5))
+            XCTAssertTrue(back.isHittable)
+            back.tap()
+            XCTAssertTrue(app.buttons["auth.welcome.email"].waitForExistence(timeout: 5))
+        }
     }
 
     func testRegistrationFormRemainsReachableWithKeyboardAndAccessibilityText() throws {
@@ -37,6 +97,7 @@ final class WelcomeFlowUITests: XCTestCase {
 
         let registerEntry = app.buttons["auth.welcome.register"]
         XCTAssertTrue(registerEntry.waitForExistence(timeout: 8))
+        scrollUntilHittable(registerEntry, in: app)
         registerEntry.tap()
 
         let email = app.textFields["auth.register.email"]
@@ -78,7 +139,7 @@ final class WelcomeFlowUITests: XCTestCase {
         app.launchArguments = ["-ui-testing-reset-session"]
         app.launch()
 
-        XCTAssertTrue(app.staticTexts["auth.welcome.title"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.descendants(matching: .any)["auth.welcome.title"].waitForExistence(timeout: 8))
         try app.performAccessibilityAudit(for: [
             .hitRegion,
             .sufficientElementDescription,

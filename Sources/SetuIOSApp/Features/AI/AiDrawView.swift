@@ -60,6 +60,9 @@ struct AiDrawView: View {
         .setuRefreshAfterLogin(environment.authSession) { Task { await loadMetadata() } }
         .setuRetry { Task { await loadMetadata() } }
         .navigationTitle("AI 绘画")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ai.draw.page")
         .scrollDismissesKeyboard(.interactively)
@@ -89,6 +92,9 @@ struct AiDrawView: View {
         .onChange(of: styleNotes) { saveDraft() }
         .toolbar {
             #if os(iOS)
+            ToolbarItem(placement: .topBarLeading) {
+                SetuToolbarLogo(assetName: "AiDrawLogo", accessibilityLabel: "AI 绘画")
+            }
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
                 Button("完成") { promptFocused = false }
@@ -103,14 +109,12 @@ struct AiDrawView: View {
                 }
                 .accessibilityLabel("AI 绘画历史")
 
-                Button {
-                    router.navigate(to: .aiDeleteRequests)
-                } label: {
-                    Image(systemName: "xmark.bin")
-                }
-                .accessibilityLabel("我的删除记录")
-
                 Menu {
+                    Button {
+                        router.navigate(to: .aiDeleteRequests)
+                    } label: {
+                        Label("我的删除记录", systemImage: "xmark.bin")
+                    }
                     Button("清空当前草稿", role: .destructive) {
                         showingClearDraftConfirmation = true
                     }

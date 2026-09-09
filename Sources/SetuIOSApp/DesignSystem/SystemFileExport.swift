@@ -86,7 +86,7 @@ enum RemoteFileExportService {
         let invalid = CharacterSet(charactersIn: "/\\:?%*|\"<>")
         let components = filename.components(separatedBy: invalid)
         let value = components.joined(separator: "-").trimmingCharacters(in: .whitespacesAndNewlines)
-        return value.isEmpty ? "雪涼云下载" : value
+        return value.isEmpty ? "亦可下载" : value
     }
 }
 

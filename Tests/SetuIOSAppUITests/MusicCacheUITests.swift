@@ -42,9 +42,58 @@ final class MusicCacheUITests: XCTestCase {
         attach(app, name: "music-playlist-cached-reentry")
     }
 
-    private func launch() -> XCUIApplication {
+    func testManagePlaylistsEntireRowIsTappable() {
+        verifyManagePlaylistsHitRegions(contentSize: "UICTContentSizeCategoryL")
+    }
+
+    func testManagePlaylistsEntireRowIsTappableAtAX5() {
+        verifyManagePlaylistsHitRegions(contentSize: "UICTContentSizeCategoryAccessibilityExtraExtraExtraLarge")
+    }
+
+    private func verifyManagePlaylistsHitRegions(contentSize: String) {
+        continueAfterFailure = false
+        let app = launch(contentSize: contentSize)
+        defer { app.terminate() }
+        let manage = app.buttons["管理全部歌单"]
+        XCTAssertTrue(app.navigationBars["音乐"].waitForExistence(timeout: 10))
+        // Exercise physical hit testing, not an accessibility activation of the Button.
+        for region in ["text", "center", "spacer", "right", "center-after-return"] {
+            for _ in 0..<10 {
+                if manage.isHittable,
+                   manage.frame.minY >= app.navigationBars.firstMatch.frame.maxY,
+                   manage.frame.maxY <= app.tabBars.firstMatch.frame.minY { break }
+                app.swipeUp()
+            }
+            XCTAssertTrue(manage.isHittable, "Visible management row: \(region), \(contentSize)")
+            XCTAssertLessThanOrEqual(manage.frame.maxY, app.tabBars.firstMatch.frame.minY)
+            if region == "text" {
+                let text = manage.staticTexts["管理全部歌单"]
+                XCTAssertTrue(text.exists)
+                attach(app, name: "music-manage-row-\(contentSize)")
+                text.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            } else if region == "spacer" {
+                // At AX5 the text can cover the row center; also hit the actual gap.
+                let text = manage.staticTexts["管理全部歌单"]
+                let chevron = manage.images["chevron.right"]
+                XCTAssertTrue(chevron.exists)
+                let gapStart = text.frame.maxX, gapEnd = chevron.frame.minX
+                XCTAssertGreaterThan(gapEnd, gapStart)
+                let x = ((gapStart + gapEnd) / 2 - manage.frame.minX) / manage.frame.width
+                manage.coordinate(withNormalizedOffset: CGVector(dx: x, dy: 0.5)).tap()
+            } else {
+                let x: CGFloat = region == "right" ? 0.95 : 0.5
+                manage.coordinate(withNormalizedOffset: CGVector(dx: x, dy: 0.5)).tap()
+            }
+            XCTAssertTrue(app.navigationBars["我的歌单"].waitForExistence(timeout: 5),
+                          "Tap \(region) must open playlists at \(contentSize)")
+            app.navigationBars["我的歌单"].buttons.firstMatch.tap()
+            XCTAssertTrue(app.navigationBars["音乐"].waitForExistence(timeout: 5))
+        }
+    }
+
+    private func launch(contentSize: String = "UICTContentSizeCategoryL") -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["-ui-testing-root-music", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"]
+        app.launchArguments = ["-ui-testing-root-music", "-UIPreferredContentSizeCategoryName", contentSize]
         app.launch()
         return app
     }

@@ -40,7 +40,7 @@ public struct ArtworkClient: Sendable {
         return try await apiClient.getData(path)
     }
     private func requireOnline() throws -> any PixivOnlineServing {
-        guard let online else { throw PixivClientError("请登录雪涼云并重新打开图片页") }
+        guard let online else { throw PixivClientError("请登录亦可并重新打开图片页") }
         return online
     }
     private func segment(_ value: String) -> String { value.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "" }

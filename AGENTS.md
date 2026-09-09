@@ -1,5 +1,15 @@
 # AGENTS.md
 
+## 基线与跨会话交接（必须执行）
+
+- 日常入口为本仓库的主工作目录 `setu_ios`，交付基线是实时核验后的 `main` / `origin/main`。历史 `restore-*`、临时 worktree、旧安装包和记忆里的提交号只用于溯源，不能直接作为最新版。
+- 每次新会话开始修改，以及构建或安装前，先运行 `git status --short`、`git worktree list`、`git fetch origin main`，再运行 `bash scripts/check-baseline.sh`。网络不可用时明确说明无法核验远端最新状态，不能声称是最新版。
+- 当前分支必须包含本地与远端主线；若未包含，先核对其他 worktree 和未提交内容，备份并协调合并，再继续工作。不得丢弃未提交改动或在旧实现上另写一套已有功能。
+- 用户允许修改现有未提交内容。图片使用既有 `ArtworkPager`、`ArtworkImageStore` 与原位缩放转场；音乐沿用主线的首页、资料库和播放器实现，先比较差异再修改。
+- 新建分支必须以 `yukiryou/` 开头，并从核验后的主线创建。合入主线后，将日常目录切回 `main`；远端合并是否完成要单独核实。
+- 真机安装前记录源码目录、HEAD、分支、未提交差异/源码清单、版本号及实际产物哈希，确认产物来自该源码。安装、启动、模拟器测试、真机播放和视觉验收分别报告；旧回执不能用于新包。
+- 历史报告保留其当时的证据边界。最新操作状态以 Git 和本次构建/安装回执为准，不以文档中的固定 SHA 推断“最新版”。
+
 ## Project Overview
 
 `setu_ios` is the native SwiftUI iOS client for XueLiang Cloud (雪涼云). It reimplements the existing `setu_cloud` feature set natively — it is **not** a WebView wrapper (see `docs/adr-0001-native-ios-shell.md`). It reuses the existing `setu_api_full` Spring Boot backend and its browser auth model.
