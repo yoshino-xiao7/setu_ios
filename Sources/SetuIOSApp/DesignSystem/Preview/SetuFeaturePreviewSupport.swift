@@ -139,6 +139,8 @@ private struct SetuRootUITestContext {
             UserDefaults.standard.removeObject(forKey: "music.cache.prefetch")
             navigation.navigate(to: .home, route: .account)
         }
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-admin") { navigation.navigate(to: .home, route: .admin) }
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-admin-audit") { navigation.navigate(to: .home, route: .adminImageAudit) }
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-image-tasks") { navigation.navigate(to: .home, route: .adminPixivCrawl) }
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-images") { navigation.selectedTab = .images }
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-ai") { navigation.selectedTab = .ai }
@@ -412,6 +414,10 @@ enum SetuPreviewEnvironment {
         let signer = AuthSigner(keychain: keychain)
         let sessionConfiguration = URLSessionConfiguration.ephemeral
         sessionConfiguration.protocolClasses = [SetuPreviewURLProtocol.self]
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-admin-interactions") {
+            // AsyncImage uses its own URLSession; keep thumbnail requests offline too.
+            URLProtocol.registerClass(SetuPreviewURLProtocol.self)
+        }
         sessionConfiguration.urlCache = nil
         sessionConfiguration.requestCachePolicy = .reloadIgnoringLocalCacheData
         let invalidation = SessionInvalidationNotifier()
@@ -575,6 +581,7 @@ private enum SetuPreviewAPI {
     private static let stateLock = NSLock()
     private static var favoriteKeys: Set<String> = []
     private static var loggedInAfterExpiry = false
+    private static var adminOverviewRequests = 0
 
     static func fixture(for request: URLRequest) -> Fixture {
         stateLock.lock()
@@ -594,6 +601,31 @@ private enum SetuPreviewAPI {
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-music-details"), path.hasPrefix("/user/music/v2/") {
             let (status, data) = MusicDetailPreviewFixtures.response(path: path, query: request.url?.query)
             return Fixture(statusCode: status, data: data)
+        }
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-admin-interactions") {
+            switch path {
+            case "/admin/blog/stats":
+                adminOverviewRequests += 1
+                return json("{\"totalCalls\":100,\"updatedAt\":\"统计请求 \(adminOverviewRequests)\"}")
+            case "/admin/users": return json("{\"total\":3,\"list\":[]}")
+            case "/admin/blacklist/ip": return json("[]")
+            case "/status/image-count": return json("2")
+            case "/admin/sync/image-count": return json("\"ok\"")
+            case "/admin/image-audit/availability-check":
+                return json("{\"total\":1,\"successCount\":1,\"failureCount\":0,\"results\":[]}")
+            case "/admin/image-audit/submit": return json("\"ok\"")
+            case "/admin/image-audit/list":
+                let items = (1...2).map { id in
+                    ["id": id, "pid": 1000 + id, "p": 0, "uid": 77,
+                     "title": "审核图片 \(id)", "author": "测试作者", "r18": 0,
+                     "width": 1200, "height": 800, "ext": "jpg", "aiType": 0,
+                     "uploadDate": 0, "urlOriginal": "https://preview.setu.invalid/user/images/media/admin-thumbnail", "availabilityStatus": "UNKNOWN"] as [String: Any]
+                }
+                return Fixture(statusCode: 200, data: try! JSONSerialization.data(withJSONObject:
+                    ["total": 2, "page": 1, "pageSize": 12, "list": items,
+                     "stats": ["unreviewed": 2, "dueReview": 0, "all": 2]]))
+            default: break
+            }
         }
         if path == "/user/info", ProcessInfo.processInfo.arguments.contains("-ui-testing-artwork-admin") {
             return json("{\"id\":42,\"email\":\"preview@xueliang.local\",\"nickname\":\"小雪\",\"role\":1,\"createdAt\":\"2026-09-02T10:00:00\"}")

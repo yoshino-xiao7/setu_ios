@@ -19,26 +19,31 @@ struct AdminImageAuditView: View {
     private let pageSize = 12
 
     var body: some View {
-        List {
-            if environment.authSession.currentUser?.role != .admin {
-                AdminImageAuditStateSection(title: "权限", stateTitle: "需要管理员权限", message: "请使用管理员账号登录后管理图片库。", systemImage: "shield.slash")
-            } else {
-                filterSection
-                statsSection
-                bulkSection
-                if let message {
-                    SetuCard {
-                        Label(message, systemImage: "checkmark.circle")
-                            .font(SetuTypography.caption)
-                            .foregroundStyle(SetuColor.textSecondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+        ScrollView {
+            LazyVStack(spacing: SetuSpacing.lg) {
+                if environment.authSession.currentUser?.role != .admin {
+                    AdminImageAuditStateSection(title: "权限", stateTitle: "需要管理员权限", message: "请使用管理员账号登录后管理图片库。", systemImage: "shield.slash")
+                } else {
+                    filterSection
+                    statsSection
+                    bulkSection
+                    if let message {
+                        SetuCard {
+                            Label(message, systemImage: "checkmark.circle")
+                                .accessibilityIdentifier("admin-audit-message")
+                                .font(SetuTypography.caption)
+                                .foregroundStyle(SetuColor.textSecondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
-                    .setuListRow()
+                    content
                 }
-                content
             }
+            .padding(.horizontal, SetuSpacing.lg)
+            .padding(.vertical, SetuSpacing.sm)
         }
-        .listStyle(.plain)
+        .buttonStyle(.borderless)
+        .scrollDismissesKeyboard(.interactively)
         .setuBackground()
         .navigationTitle("图片库管理")
         .sheet(item: $reasonDraft) { draft in
@@ -46,7 +51,10 @@ struct AdminImageAuditView: View {
                 Task { await submitReasonAction(draft, reason: reason) }
             }
         }
-        .task { await load(resetPage: true) }
+        .task {
+            if case .loaded = state { return }
+            await load(resetPage: false)
+        }
         .refreshable { await load(resetPage: false) }
     }
 
@@ -77,12 +85,19 @@ struct AdminImageAuditView: View {
                         .keyboardType(.numberPad)
                         #endif
                 }
-                Picker("可用性", selection: $availabilityStatus) {
-                    Text("全部").tag("ALL")
-                    Text("未知").tag("UNKNOWN")
-                    Text("可用").tag("OK")
-                    Text("疑似失效").tag("SUSPECTED_BROKEN")
-                    Text("已失效").tag("BROKEN")
+                HStack {
+                    Text("可用性")
+                    Spacer()
+                    Picker("可用性", selection: $availabilityStatus) {
+                        Text("全部").tag("ALL")
+                        Text("未知").tag("UNKNOWN")
+                        Text("可用").tag("OK")
+                        Text("疑似失效").tag("SUSPECTED_BROKEN")
+                        Text("已失效").tag("BROKEN")
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                    .frame(minHeight: 44)
                 }
                 Toggle("只看失效", isOn: $onlyBroken)
                 HStack {
@@ -93,15 +108,15 @@ struct AdminImageAuditView: View {
                             .frame(minHeight: 44)
                     }
                     Spacer()
-                    Button("重置") {
+                    Button {
                         resetFilters()
                         Task { await load(resetPage: true) }
+                    } label: {
+                        Text("重置").frame(minWidth: 44, minHeight: 44)
                     }
-                    .frame(minHeight: 44)
                 }
             }
         }
-        .setuListRow()
     }
 
     @ViewBuilder
@@ -120,7 +135,6 @@ struct AdminImageAuditView: View {
                     }
                 }
             }
-            .setuListRow()
         }
     }
 
@@ -132,12 +146,17 @@ struct AdminImageAuditView: View {
                     SetuSectionHeader(title: "批量审核")
                     AdminImageAuditMetadataRow(title: "已选", value: "\(selectedImageIDs.count) / \(result.list.count)")
                 HStack {
-                    Button(selectedImageIDs.count == result.list.count ? "取消全选" : "选择当前页") {
+                    Button {
                         toggleCurrentPage(result.list)
+                    } label: {
+                        Text(selectedImageIDs.count == result.list.count ? "取消全选" : "选择当前页")
+                            .frame(minHeight: 44)
                     }
                     Spacer()
-                    Button("清空") {
+                    Button {
                         selectedImageIDs.removeAll()
+                    } label: {
+                        Text("清空").frame(minWidth: 44, minHeight: 44)
                     }
                     .disabled(selectedImageIDs.isEmpty)
                 }
@@ -167,7 +186,6 @@ struct AdminImageAuditView: View {
                 }
             }
             }
-            .setuListRow()
         }
     }
 
@@ -182,14 +200,9 @@ struct AdminImageAuditView: View {
             if result.list.isEmpty {
                 AdminImageAuditStateSection(title: "图片库", stateTitle: "暂无图片", message: "当前筛选条件下没有图片。", systemImage: "photo.stack")
             } else {
-                SetuCard {
-                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                        SetuSectionHeader(title: "共 \(result.total) 张", subtitle: "图片库")
-                    ForEach(Array(result.list.enumerated()), id: \.element.id) { index, image in
-                            if index > 0 {
-                                Divider()
-                                    .overlay(SetuColor.separator)
-                            }
+                SetuSectionHeader(title: "共 \(result.total) 张", subtitle: "图片库")
+                ForEach(result.list) { image in
+                    SetuCard {
                         ImageAuditRow(
                             image: image,
                             isAuditScope: isAuditScope,
@@ -210,8 +223,6 @@ struct AdminImageAuditView: View {
                         .disabled(isSubmitting)
                     }
                 }
-                }
-                .setuListRow()
                 pagerSection(result)
             }
         }
@@ -247,7 +258,6 @@ struct AdminImageAuditView: View {
                 .disabled(result.page * result.pageSize >= result.total)
             }
         }
-        .setuListRow()
     }
 
     private var isAuditScope: Bool {
@@ -273,7 +283,7 @@ struct AdminImageAuditView: View {
                 onlyBroken: onlyBroken ? true : nil
             ))
         } catch {
-            state = .failed(error.localizedDescription)
+            state = Task.isCancelled ? .idle : .failed(error.localizedDescription)
         }
     }
 
@@ -305,6 +315,7 @@ struct AdminImageAuditView: View {
     }
 
     private func submitSingle(_ image: ImageAuditItem, status: Int, remark: String?) async {
+        guard !isSubmitting else { return }
         isSubmitting = true
         message = nil
         do {
@@ -321,6 +332,7 @@ struct AdminImageAuditView: View {
     private func submitBatch(status: Int, remark: String?) async {
         let ids = Array(selectedImageIDs)
         guard !ids.isEmpty else { return }
+        guard !isSubmitting else { return }
         isSubmitting = true
         message = nil
         do {
@@ -337,6 +349,7 @@ struct AdminImageAuditView: View {
 
     private func checkAvailability(_ ids: [Int]) async {
         guard !ids.isEmpty else { return }
+        guard !isSubmitting else { return }
         isSubmitting = true
         message = nil
         do {
@@ -375,6 +388,7 @@ struct AdminImageAuditView: View {
     }
 
     private func submitDeleteRequest(_ image: ImageAuditItem, reason: String) async {
+        guard !isSubmitting else { return }
         isSubmitting = true
         message = nil
         do {
@@ -412,6 +426,7 @@ private struct ImageAuditRow: View {
                             .frame(width: 44, height: 44)
                     }
                     .buttonStyle(.borderless)
+                    .accessibilityLabel(isSelected ? "取消选择 \(image.pidText)" : "选择 \(image.pidText)")
                 }
                 ImageAuditThumbnail(urlString: image.urlOriginal)
                 VStack(alignment: .leading, spacing: SetuSpacing.xs) {
@@ -471,43 +486,53 @@ private struct ImageAuditRow: View {
     }
 
     private var actionRow: some View {
-        HStack {
-            if let url = URL(string: image.urlOriginal) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: SetuSpacing.sm)], spacing: SetuSpacing.sm) {
+            if let url = URL(string: image.urlOriginal), !image.urlOriginal.isEmpty {
                 Link(destination: url) {
                     Label("查看", systemImage: "eye")
+                        .frame(maxWidth: .infinity, minHeight: 44)
                 }
             }
             Button {
                 onDetail()
             } label: {
                 Label("详情", systemImage: "info.circle")
+                    .frame(maxWidth: .infinity, minHeight: 44)
             }
+            .accessibilityIdentifier("admin-audit-detail-\(image.id)")
             Button {
                 onCheckAvailability()
             } label: {
                 Label("检测", systemImage: "checkmark.shield")
+                    .frame(maxWidth: .infinity, minHeight: 44)
             }
-            Spacer()
+            .accessibilityIdentifier("admin-audit-check-\(image.id)")
             if isAuditScope {
                 Button {
                     onPass()
                 } label: {
                     Label("正常", systemImage: "checkmark.circle")
+                        .frame(maxWidth: .infinity, minHeight: 44)
                 }
+                .accessibilityIdentifier("admin-audit-pass-\(image.id)")
                 Button(role: .destructive) {
                     onProblem()
                 } label: {
                     Label("问题", systemImage: "xmark.circle")
+                        .frame(maxWidth: .infinity, minHeight: 44)
                 }
+                .accessibilityIdentifier("admin-audit-problem-\(image.id)")
             } else {
                 Button(role: .destructive) {
                     onDeleteRequest()
                 } label: {
                     Label("申请删除", systemImage: "trash")
+                        .frame(maxWidth: .infinity, minHeight: 44)
                 }
+                .accessibilityIdentifier("admin-audit-delete-\(image.id)")
             }
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(.bordered)
         .font(SetuTypography.caption)
     }
 
@@ -562,6 +587,9 @@ private struct ImageAuditThumbnail: View {
             }
         }
         .frame(width: 92, height: 112)
+        .contentShape(Rectangle())
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
         .background(SetuColor.brandSoft.opacity(0.12), in: RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous))
         .clipShape(RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous))
         .overlay {

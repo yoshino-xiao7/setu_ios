@@ -6,6 +6,7 @@ struct AdminOverviewView: View {
     @Bindable var environment: AppEnvironment
     @State private var state: LoadState<AdminOverviewSnapshot> = .idle
     @State private var syncing = false
+    @State private var isLoading = false
     @State private var message: String?
 
     var body: some View {
@@ -32,7 +33,11 @@ struct AdminOverviewView: View {
         .listStyle(.plain)
         .setuBackground()
         .navigationTitle("后台概览")
-        .task { await load() }
+        .task {
+            // Popping a management page starts this task again; retain the loaded snapshot.
+            if case .loaded = state { return }
+            await load()
+        }
         .refreshable { await load() }
     }
 
@@ -86,6 +91,8 @@ struct AdminOverviewView: View {
                         if let updatedAt = snapshot.blogStats.updatedAt {
                             LabeledContent("统计更新时间", value: updatedAt)
                                 .font(.footnote)
+                                .accessibilityIdentifier("admin-overview-updated-at")
+                                .accessibilityValue(updatedAt)
                         }
                     }
                 }
@@ -103,7 +110,7 @@ struct AdminOverviewView: View {
                         Label("同步图库统计", systemImage: "arrow.triangle.2.circlepath")
                     }
                 }
-                .disabled(syncing)
+                .disabled(syncing || isLoading)
             }
             .setuListRow()
         }
@@ -145,23 +152,34 @@ struct AdminOverviewView: View {
     }
 
     private func load() async {
-        guard environment.authSession.currentUser?.role == .admin else { return }
-        state = .loading
+        guard environment.authSession.currentUser?.role == .admin, !isLoading else { return }
+        isLoading = true
+        defer { isLoading = false }
+        let hasSnapshot: Bool
+        if case .loaded = state { hasSnapshot = true } else { hasSnapshot = false }
+        if !hasSnapshot { state = .loading }
         message = nil
         do {
             state = .loaded(try await environment.adminClient.overview())
         } catch {
-            state = .failed(error.localizedDescription)
+            if Task.isCancelled {
+                if !hasSnapshot { state = .idle }
+            } else if hasSnapshot {
+                message = "统计更新失败：\(error.localizedDescription)"
+            } else {
+                state = .failed(error.localizedDescription)
+            }
         }
     }
 
     private func syncImageCount() async {
+        guard !syncing, !isLoading else { return }
         syncing = true
         message = nil
         do {
             try await environment.adminClient.syncImageCount()
-            message = "同步成功，数据已更新"
             await load()
+            if message == nil { message = "同步成功，数据已更新" }
         } catch {
             message = error.localizedDescription
         }
