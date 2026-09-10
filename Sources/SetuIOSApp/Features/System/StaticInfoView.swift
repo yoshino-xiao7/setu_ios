@@ -38,7 +38,7 @@ enum StaticInfoKind {
         case .docs:
             "手机端常用功能与使用说明。"
         case .about:
-            "亦可的定位、角色和 App 入口。"
+            "了解亦可 YK（原雪涼云）的故事与功能。"
         case .privacy:
             "了解个人数据的使用方式与安全措施。"
         case .terms:
@@ -177,8 +177,9 @@ struct StaticInfoView: View {
 
     @ViewBuilder
     private var aboutContent: some View {
-        StaticInfoSectionCard(title: "亦可") {
-            InfoParagraph("亦可是一个围绕图片浏览、AI 绘画、音乐播放和公开广场展开的个人内容 App。")
+        StaticInfoSectionCard(title: "亦可 YK（原雪涼云）") {
+            InfoParagraph("从雪涼云到亦可 YK，我们把图片浏览、音乐播放、AI 绘画和收藏分享汇聚在一起，让你在 Web 与 iOS 客户端探索、创作和整理喜欢的内容。")
+            InfoPair(title: "品牌", value: "中文名「亦可」，英文标识 YIKE，简称 YK。")
             InfoPair(title: "定位", value: "图片、AI 创作、音乐、收藏整理和个人账户管理。")
             InfoPair(title: "用途", value: "学习、研究、个人娱乐和内容收藏。")
         }
