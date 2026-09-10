@@ -10,6 +10,12 @@ extension RootAppView {
         switch route {
         case .account:
             AccountView(environment: environment)
+        case .musicCacheSettings:
+            MusicCacheSettingsView(settings: MusicAudioRuntime.shared.settings)
+        case .imageDisplaySettings:
+            ImageDisplaySettingsView()
+        case .sessionDiagnostics:
+            SessionDiagnosticsView(environment: environment)
         case .profile:
             ProfileView(environment: environment)
         case .docs:

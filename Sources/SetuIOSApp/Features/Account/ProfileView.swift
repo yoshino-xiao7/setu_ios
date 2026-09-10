@@ -4,7 +4,6 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct ProfileView: View {
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var environment: AppEnvironment
     @State private var state: LoadState<UserProfile> = .idle
     @State private var nickname = ""
@@ -38,47 +37,24 @@ struct ProfileView: View {
             case .loaded(let profile):
                 Section {
                     SetuCard(padding: SetuSpacing.xl) {
-                        Group {
-                            if dynamicTypeSize.isAccessibilitySize {
-                                VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                                    AvatarView(urlString: profile.avatarUrl, name: profile.displayName)
-                                    profileIdentity(profile)
-                                }
-                            } else {
-                                HStack(spacing: SetuSpacing.lg) {
-                                    AvatarView(urlString: profile.avatarUrl, name: profile.displayName)
-                                    profileIdentity(profile)
-                                }
-                            }
-                        }
-
-                        PhotosPicker(selection: $selectedAvatarItem, matching: .images) {
-                            if isUploadingAvatar {
+                        VStack(spacing: SetuSpacing.md) {
+                            AvatarView(urlString: profile.avatarUrl, name: profile.displayName)
+                            profileIdentity(profile)
+                            PhotosPicker(selection: $selectedAvatarItem, matching: .images) {
                                 HStack(spacing: SetuSpacing.sm) {
-                                    ProgressView()
-                                        .tint(SetuColor.brandPink)
-                                    Text("正在更换头像")
+                                    if isUploadingAvatar { ProgressView() }
+                                    Label(isUploadingAvatar ? "正在更换头像" : "更换头像", systemImage: "camera")
                                 }
+                                .font(SetuTypography.headline)
                                 .frame(minHeight: 44)
-                            } else {
-                                Label("更换头像", systemImage: "photo.badge.plus")
-                                    .frame(minHeight: 44)
+                                .padding(.horizontal, SetuSpacing.lg)
                             }
+                            .buttonStyle(.bordered)
+                            .tint(SetuColor.brandPink)
+                            .disabled(isUploadingAvatar)
+                            .accessibilityIdentifier("profile.avatar.change")
                         }
-                        .buttonStyle(.bordered)
-                        .tint(SetuColor.brandPink)
-                        .disabled(isUploadingAvatar)
-                        .padding(.top, SetuSpacing.md)
-                    }
-                }
-                .setuListRow()
-
-                Section {
-                    SetuCard {
-                        VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                            SetuSectionHeader(title: "账号")
-                            LabeledContent("注册时间", value: SetuDateFormatter.string(from: profile.createdAt, style: .full))
-                        }
+                        .frame(maxWidth: .infinity)
                     }
                 }
                 .setuListRow()
@@ -87,15 +63,36 @@ struct ProfileView: View {
                     SetuCard {
                         VStack(alignment: .leading, spacing: SetuSpacing.md) {
                             SetuSectionHeader(title: "昵称")
-                            TextField("昵称", text: $nickname)
-                                .textFieldStyle(.roundedBorder)
+                            Text("这个名字会展示在首页和你的作品中。")
+                                .font(SetuTypography.caption)
+                                .foregroundStyle(SetuColor.textSecondary)
+                            TextField("填写昵称", text: $nickname)
+                                .font(SetuTypography.body)
+                                .padding(SetuSpacing.md)
+                                .background(SetuColor.surfaceMuted, in: RoundedRectangle(cornerRadius: SetuRadius.sm))
+                                .accessibilityLabel("昵称")
+                                .accessibilityIdentifier("profile.nickname")
                             SetuPrimaryButton {
                                 Task { await saveNickname() }
                             } label: {
-                                Label("保存昵称", systemImage: "checkmark.circle")
+                                Label("保存昵称", systemImage: "checkmark")
                             }
                             .disabled(nickname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            .accessibilityIdentifier("profile.nickname.save")
                         }
+                    }
+                }
+                .setuListRow()
+
+                Section {
+                    SetuCard {
+                        VStack(alignment: .leading, spacing: SetuSpacing.lg) {
+                            SetuSectionHeader(title: "账号信息")
+                            accountDetail("邮箱", value: profile.email, systemImage: "envelope")
+                            Divider().overlay(SetuColor.separator)
+                            accountDetail("注册时间", value: SetuDateFormatter.string(from: profile.createdAt, style: .full), systemImage: "calendar")
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
                 .setuListRow()
@@ -111,7 +108,10 @@ struct ProfileView: View {
         .listStyle(.plain)
         .setuBackground()
         .setuFeedbackPresentation($feedback)
-        .navigationTitle("个人中心")
+        .navigationTitle("个人资料")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
         .onChange(of: selectedAvatarItem) {
             Task { await uploadSelectedAvatar() }
         }
@@ -120,19 +120,35 @@ struct ProfileView: View {
     }
 
     private func profileIdentity(_ profile: UserProfile) -> some View {
-        VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+        VStack(spacing: SetuSpacing.sm) {
             Text(profile.displayName)
                 .font(SetuTypography.title)
                 .foregroundStyle(SetuColor.textPrimary)
-                .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
-            Text(profile.email)
-                .font(SetuTypography.caption)
-                .foregroundStyle(SetuColor.textSecondary)
-                .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
             if profile.role == .admin {
                 SetuPill(text: "管理员", systemImage: "person.crop.circle.fill", tone: .brand)
             }
         }
+    }
+
+    private func accountDetail(_ title: String, value: String, systemImage: String) -> some View {
+        HStack(alignment: .top, spacing: SetuSpacing.md) {
+            Image(systemName: systemImage)
+                .foregroundStyle(SetuColor.brandPink)
+                .frame(width: 24)
+            VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+                Text(title)
+                    .font(SetuTypography.caption)
+                    .foregroundStyle(SetuColor.textSecondary)
+                Text(value)
+                    .font(SetuTypography.body)
+                    .foregroundStyle(SetuColor.textPrimary)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 
     private func load() async {
@@ -209,7 +225,7 @@ private struct AvatarView: View {
                 placeholder
             }
         }
-        .frame(width: 56, height: 56)
+        .frame(width: 88, height: 88)
         .clipShape(Circle())
         .accessibilityHidden(true)
     }

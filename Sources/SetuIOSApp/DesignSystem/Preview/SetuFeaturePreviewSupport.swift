@@ -628,7 +628,7 @@ private enum SetuPreviewAPI {
                 }
                 return ["source": source, "id": String(id), "pid": String(id), "title": "画集 \(id)", "artist": artist,
                         "kind": "illust", "pageCount": pages.count, "pages": pages, "tags": ["原创", "插画", "星穹铁道", "春天", "长标签也应该按实际文字宽度自动换行"],
-                        "caption": "图片模块视觉样例，使用本站已有素材。", "bookmarked": false, "restricted": false, "aiGenerated": false]
+                        "caption": "图片模块视觉样例，使用本站已有素材。", "bookmarked": false, "restricted": ProcessInfo.processInfo.arguments.contains("-ui-testing-image-blur") && id == 1, "aiGenerated": false]
             }
             let value: Any
             if request.httpMethod != "GET" { value = ["ok": true] }

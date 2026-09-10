@@ -4,6 +4,9 @@ import SwiftUI
 enum AppRoute: Hashable {
     case account
     case profile
+    case musicCacheSettings
+    case imageDisplaySettings
+    case sessionDiagnostics
     case docs
     case about
     case privacy

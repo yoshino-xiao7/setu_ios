@@ -2,6 +2,8 @@ import SetuIOSCore
 import SwiftUI
 
 struct DashboardView: View {
+    @AppStorage("setu.images.blurPreviews") private var blurPreviews = true
+    @State private var hasLoadedInitialContent = false
     @State private var initialLoadCount = 0
     @State private var lifetimeID = UUID()
     @Environment(\.brandSplashActive) private var brandSplashActive
@@ -27,14 +29,20 @@ struct DashboardView: View {
             greetingSection
             continueSection
             favoritesSection
-            recommendationSection
+            if !blurPreviews { recommendationSection }
             remindersSection
         }
         .listStyle(.plain)
         .setuBackground()
         .accessibilityIdentifier("dashboard.page")
         .navigationTitle("首页")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                SetuToolbarLogo(assetName: "HomeLogo", accessibilityLabel: "首页")
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button { navigation.navigate(to: .home, route: .notifications) } label: {
                     Image(systemName: hasUnreadNotifications ? "bell.badge" : "bell")
@@ -56,8 +64,11 @@ struct DashboardView: View {
             UserImagePreviewSheet(item: item)
         }
         .task {
+            draft = AiDrawDraftStore.load()
+            guard !hasLoadedInitialContent else { return }
             initialLoadCount += 1
             await load()
+            if !Task.isCancelled { hasLoadedInitialContent = true }
         }
         .refreshable {
             await load()
@@ -72,19 +83,8 @@ struct DashboardView: View {
     private var greetingSection: some View {
         Section {
             SetuCard(padding: SetuSpacing.xl) {
-                if dynamicTypeSize.isAccessibilitySize {
-                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
-                        greetingCopy
-                        HomeAccountAvatar(user: environment.authSession.currentUser)
-                            .frame(maxWidth: .infinity, alignment: .trailing)
-                    }
-                } else {
-                    HStack(alignment: .top, spacing: SetuSpacing.lg) {
-                        greetingCopy
-                        Spacer(minLength: SetuSpacing.sm)
-                        HomeAccountAvatar(user: environment.authSession.currentUser)
-                    }
-                }
+                greetingCopy
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .setuListRow()
@@ -587,6 +587,7 @@ private struct FavoritePreviewTile: View {
                 cornerRadius: SetuRadius.md,
                 allowsTapToRetry: false
             )
+            .modifier(ImagePreviewBlur())
             Text(item.image?.title.nonEmpty ?? "未命名作品")
                 .font(SetuTypography.caption)
                 .foregroundStyle(SetuColor.textPrimary)

@@ -82,6 +82,8 @@ struct ArtworkTile: View {
         VStack(spacing: 0) {
             Button(action: open) {
                 ArtworkMediaImage(path: work.pages.first?.thumbnailUrl, client: client, ratio: work.pages.first?.aspectRatio ?? 1, label: work.title, identity: work.pages.first.map { work.imageIdentity($0) })
+                    .modifier(ImagePreviewBlur(eligible: work.restricted, label: work.title))
+                    .contentShape(Rectangle())
                     .modifier(ArtworkTransitionSource(id: work.transitionID, namespace: transition))
                     .overlay(alignment: .topTrailing) {
                         if work.pageCount > 1 || work.kind == "ugoira" {
@@ -90,6 +92,7 @@ struct ArtworkTile: View {
                         }
                     }
             }.buttonStyle(.plain)
+                .accessibilityIdentifier("artwork-thumbnail-\(work.id)")
             HStack(spacing: 0) {
                 Button(action: open) {
                     VStack(alignment: .leading, spacing: 3) {
