@@ -46,6 +46,14 @@ enum AppRoute: Hashable {
     case recommendedPlaylists
     case notifications
     case favorites
+    case plaza
+    case asmrHome
+    case asmrWork(String)
+    case asmrFavorites
+    case jmHome
+    case jmAlbum(String)
+    case jmReader(albumID: String, chapterID: String)
+    case jmFavorites
     case imageDeleteRequests
     case imageDeleteRequestDetail(Int)
     case qqBinding
@@ -136,7 +144,7 @@ enum AppTab: String, CaseIterable, Identifiable {
     case ai
     case images
     case music
-    case square
+    case more
 
     var id: String { rawValue }
 
@@ -155,8 +163,8 @@ enum AppTab: String, CaseIterable, Identifiable {
             "图片"
         case .music:
             "音乐"
-        case .square:
-            "广场"
+        case .more:
+            "更多"
         }
     }
 
@@ -170,8 +178,8 @@ enum AppTab: String, CaseIterable, Identifiable {
             "photo.on.rectangle"
         case .music:
             "music.note"
-        case .square:
-            "rectangle.stack"
+        case .more:
+            "square.grid.2x2"
         }
     }
 }

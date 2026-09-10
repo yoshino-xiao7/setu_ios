@@ -86,6 +86,19 @@ final class WelcomeFlowUITests: XCTestCase {
         }
     }
 
+    func testGuestBrowseOpensMoreTabWithoutSigningIn() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing-welcome-fixture"]
+        app.launch()
+        let browse = app.buttons["auth.welcome.browse"]
+        XCTAssertTrue(browse.waitForExistence(timeout: 8))
+        browse.tap()
+        XCTAssertTrue(app.tabBars.buttons["更多"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.descendants(matching: .any)["more.hub.page"].firstMatch.waitForExistence(timeout: 8))
+        XCTAssertTrue(app.descendants(matching: .any)["more.hub.asmr"].firstMatch.exists)
+        XCTAssertTrue(app.descendants(matching: .any)["more.hub.jm"].firstMatch.exists)
+    }
+
     func testRegistrationFormRemainsReachableWithKeyboardAndAccessibilityText() throws {
         let app = XCUIApplication()
         app.launchArguments = [

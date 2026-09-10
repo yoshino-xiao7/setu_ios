@@ -162,7 +162,7 @@ actor SetuRemoteImageLoader {
                     memory.insert(decoded, for: key, generation: epoch)
                     return decoded
                 } catch {
-                    session.configuration.urlCache?.removeCachedResponse(for: URLRequest(url: key.url, cachePolicy: .returnCacheDataElseLoad))
+                    session.configuration.urlCache?.removeCachedResponse(for: Self.imageRequest(url: key.url, cachePolicy: .returnCacheDataElseLoad))
                     throw error
                 }
             })
@@ -208,13 +208,20 @@ actor SetuRemoteImageLoader {
     }
 
     private nonisolated static func fetchData(from url: URL, session: URLSession) async throws -> Data {
-        let request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad)
+        let request = imageRequest(url: url, cachePolicy: .returnCacheDataElseLoad)
         if let cached = session.configuration.urlCache?.cachedResponse(for: request) { return cached.data }
         do { return try await fetch(request, session: session) }
         catch {
             try Task.checkCancellation()
-            return try await fetch(URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData), session: session)
+            return try await fetch(imageRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData), session: session)
         }
+    }
+
+    private nonisolated static func imageRequest(url: URL, cachePolicy: URLRequest.CachePolicy) -> URLRequest {
+        guard JmAppToken.isImageCDN(url) else {
+            return URLRequest(url: url, cachePolicy: cachePolicy)
+        }
+        return JmAppToken.imageRequest(url: url, cachePolicy: cachePolicy)
     }
 
     private nonisolated static func fetch(_ request: URLRequest, session: URLSession) async throws -> Data {

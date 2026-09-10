@@ -74,6 +74,7 @@ extension NowPlayingSheet {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 if environment.config.musicFeatureFlags.likedTracksEnabled,
+                   !track.usesDirectStream,
                    case .canonical(let id) = track.id {
                     MusicLikeButton(id: id, environment: environment, iconOnly: true)
                 }
@@ -166,7 +167,9 @@ extension NowPlayingSheet {
                         AirPlayRouteButton().frame(width: 44, height: 44)
                     }
                 }
-                MusicQualityMenu(player: player)
+                if !track.usesDirectStream {
+                    MusicQualityMenu(player: player)
+                }
                 if track.hasMV {
                     Button {
                         afterMoreDismisses { mvTrack = track }
@@ -175,18 +178,20 @@ extension NowPlayingSheet {
                     }
                 }
 
-                Button {
-                    afterMoreDismisses { playlistTrack = track }
-                } label: {
-                    Label("收藏到歌单", systemImage: "text.badge.plus")
-                }
+                if !track.usesDirectStream {
+                    Button {
+                        afterMoreDismisses { playlistTrack = track }
+                    } label: {
+                        Label("收藏到歌单", systemImage: "text.badge.plus")
+                    }
 
-                Button {
-                    afterMoreDismisses { Task { await download(track) } }
-                } label: {
-                    Label(isDownloading ? "正在准备下载…" : "下载", systemImage: "arrow.down.circle")
+                    Button {
+                        afterMoreDismisses { Task { await download(track) } }
+                    } label: {
+                        Label(isDownloading ? "正在准备下载…" : "下载", systemImage: "arrow.down.circle")
+                    }
+                    .disabled(isDownloading)
                 }
-                .disabled(isDownloading)
 
                 ShareLink(item: "\(track.title) - \(track.artist)") {
                     Label("分享", systemImage: "square.and.arrow.up")

@@ -22,6 +22,13 @@ final class NowPlayingLyricsModel {
         state = .idle
     }
 
+    func skipExternalCatalog() {
+        generation += 1
+        store = nil
+        identity = nil
+        state = .loaded([])
+    }
+
     func load(identity next: MusicPlaybackIdentity, environment: AppEnvironment) async {
         let user = environment.authSession.currentUser?.id
         let enabled = environment.config.musicFeatureFlags.wordByWordLyricsEnabled

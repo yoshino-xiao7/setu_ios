@@ -218,7 +218,7 @@ struct PublicAiWorkDetailView: View {
                         subtitle: "查看对方公开分享的作品与收藏夹",
                         systemImage: "person.crop.circle"
                     ) {
-                        navigation.navigate(to: .square, route: .publicUserProfile(ownerUserID))
+                        navigation.navigate(to: .more, route: .publicUserProfile(ownerUserID))
                     }
                 }
             }

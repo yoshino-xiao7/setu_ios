@@ -23,6 +23,7 @@ struct RootAppView: View {
     @State private var showingLoginWelcome = false
     @State private var loginTransitionTask: Task<Void, Never>?
     @State private var showingReauthentication = false
+    @State private var guestBrowseEnabled = false
     @State private var sessionOwnerID: Int?
 
     init(
@@ -44,7 +45,9 @@ struct RootAppView: View {
     var body: some View {
         Group {
             if isSessionReady {
-                if (environment.authSession.isSignedIn && !retainingLoginScreen) || environment.authSession.requiresReauthentication {
+                if (environment.authSession.isSignedIn && !retainingLoginScreen)
+                    || environment.authSession.requiresReauthentication
+                    || guestBrowseEnabled {
                     #if DEBUG && canImport(MobileVLCKit)
                     if ProcessInfo.processInfo.arguments.contains("-development-vlc-probe") {
                         VLCProbeView(environment: environment, resolver: musicPlayer.urlResolver) { identity in
@@ -61,7 +64,7 @@ struct RootAppView: View {
                         get: { loggedOutRouter.path },
                         set: { loggedOutRouter.path = $0 }
                     )) {
-                        AccountView(environment: environment)
+                        AccountView(environment: environment, onGuestBrowse: enterGuestBrowse)
                             .navigationDestination(for: AppRoute.self) { route in
                                 destination(for: route)
                             }
@@ -146,6 +149,7 @@ struct RootAppView: View {
         }
         .environment(pushNotifications)
         .environment(musicStore)
+        .environment(musicPlayer)
     }
 
     private func greetingSplashOverlay(greeting: HomeGreetingAnchor?, logo: Anchor<CGRect>?) -> some View {
@@ -176,6 +180,7 @@ struct RootAppView: View {
         loginTransitionTask?.cancel()
         guard newID != nil else {
             retainingLoginScreen = true
+            guestBrowseEnabled = false
             showingLoginWelcome = false
             loginConfirmed = false
             loginScreenOpacity = 1
@@ -214,6 +219,14 @@ struct RootAppView: View {
         environment.authSession.invalidateLocalSession()
         loggedOutRouter.reset()
         showingReauthentication = true
+    }
+
+    private func enterGuestBrowse() {
+        loggedOutRouter.reset()
+        navigationCoordinator.selectedTab = .more
+        guestBrowseEnabled = true
+        retainingLoginScreen = false
+        loginScreenOpacity = 1
     }
 
     private func updateSessionOwner() {
@@ -416,8 +429,8 @@ struct RootAppView: View {
             ArtworkBrowserView(environment: environment)
         case .music:
             MusicHomeView(environment: environment, player: musicPlayer)
-        case .square:
-            SquareHubView(environment: environment)
+        case .more:
+            MoreHubView(environment: environment)
         }
     }
 
@@ -430,6 +443,7 @@ struct RootAppView: View {
             contentDestination(for: route)
             aiDestination(for: route)
             musicDestination(for: route)
+            moreDestination(for: route)
             adminDestination(for: route)
         }
     }

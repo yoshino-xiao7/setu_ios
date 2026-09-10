@@ -236,7 +236,7 @@ final class UXFlowUITests: XCTestCase {
             if largeText { arguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityExtraExtraExtraLarge"] }
             let app = launch(arguments)
             defer { app.terminate() }
-            for tab in ["首页", "AI 绘画", "图片", "音乐", "广场"] {
+            for tab in ["首页", "AI 绘画", "图片", "音乐", "更多"] {
                 let tabButton = app.tabBars.buttons[tab]
                 XCTAssertTrue(tabButton.waitForExistence(timeout: 8))
                 tabButton.tap()

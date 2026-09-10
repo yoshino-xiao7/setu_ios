@@ -19,6 +19,7 @@ struct AuthWelcomeView: View {
     let onPasskey: () -> Void
     let onPrivacy: () -> Void
     let onTerms: () -> Void
+    var onBrowse: (() -> Void)? = nil
     var minimumHeight: CGFloat = 0
     var isPasskeyLoading = false
 
@@ -43,6 +44,18 @@ struct AuthWelcomeView: View {
 
                 secondaryActions
                     .padding(.top, 4)
+                if let onBrowse {
+                    Button(action: onBrowse) {
+                        Text("先浏览更多")
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: subtitleSize, weight: .regular))
+                    .tracking(0.4)
+                    .foregroundStyle(SetuColor.textSecondary)
+                    .accessibilityIdentifier("auth.welcome.browse")
+                }
             }
             .disabled(isAppleLoading || isPasskeyLoading)
             .padding(.top, dynamicTypeSize.isAccessibilitySize ? 32 : 64)

@@ -70,6 +70,10 @@ struct NowPlayingSheet: View {
                 .padding(.top, SetuSpacing.md)
                 .padding(.bottom, SetuSpacing.lg)
                 .task(id: track.id) {
+                    if track.usesDirectStream {
+                        lyrics.skipExternalCatalog()
+                        return
+                    }
                     await lyrics.load(identity: track.id, environment: environment)
                 }
                 .task(id: SetuImageKey.music(track.coverURLString, size: .large)) {

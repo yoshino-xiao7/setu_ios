@@ -87,6 +87,7 @@ struct SetuFeaturePreviewHost<Content: View>: View {
         .environment(navigation)
         .environment(pushNotifications)
         .environment(musicStore)
+        .environment(player)
         .tint(SetuColor.brandPink)
     }
 }
@@ -145,6 +146,7 @@ private struct SetuRootUITestContext {
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-images") { navigation.selectedTab = .images }
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-ai") { navigation.selectedTab = .ai }
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-music") { navigation.selectedTab = .music }
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-more") { navigation.selectedTab = .more }
         let args = ProcessInfo.processInfo.arguments
         if args.contains("-ui-testing-music-discover"), let index = args.firstIndex(of: "-ui-testing-discover-page"), args.indices.contains(index + 1) {
             switch args[index + 1] {
@@ -339,7 +341,7 @@ struct SetuCollectionSquareUITestScenario: View {
 struct SetuSquareHubUITestScenario: View {
     var body: some View {
         SetuFeaturePreviewHost { environment, _ in
-            SquareHubView(environment: environment)
+            MoreHubView(environment: environment)
         }
     }
 }
@@ -444,6 +446,9 @@ enum SetuPreviewEnvironment {
             publicClient = PublicBlogClient(apiClient: apiClient)
         }
 
+        let favoriteClient = FavoriteClient(apiClient: apiClient)
+        let catalogSession = URLSession(configuration: sessionConfiguration)
+
         return AppEnvironment(
             config: config,
             keychain: keychain,
@@ -461,7 +466,17 @@ enum SetuPreviewEnvironment {
             appleAuthClient: AppleAuthClient(apiClient: apiClient),
             collectionClient: CollectionClient(apiClient: apiClient),
             aiGenerationClient: AiGenerationClient(apiClient: apiClient),
-            favoriteClient: FavoriteClient(apiClient: apiClient),
+            favoriteClient: favoriteClient,
+            moduleFavoriteClient: ModuleFavoriteClient(apiClient: apiClient),
+            asmrCatalogClient: AsmrCatalogClient(
+                session: catalogSession,
+                baseURLs: [URL(string: "https://api.asmr.one")!]
+            ),
+            jmCatalogClient: JmCatalogClient(
+                session: catalogSession,
+                apiHosts: [URL(string: "https://jm.preview.invalid")!],
+                imageHosts: [URL(string: "https://cdn.preview.invalid")!]
+            ),
             imageDeleteRequestClient: ImageDeleteRequestClient(apiClient: apiClient),
             musicClient: MusicClient(apiClient: apiClient),
             musicV2Client: MusicV2Client(apiClient: apiClient),
@@ -511,7 +526,12 @@ private final class SetuPreviewKeychain: KeychainStoring, @unchecked Sendable {
 
 private final class SetuPreviewURLProtocol: URLProtocol {
     override class func canInit(with request: URLRequest) -> Bool {
-        request.url?.host == "preview.setu.invalid"
+        switch request.url?.host {
+        case "preview.setu.invalid", "api.asmr.one", "jm.preview.invalid":
+            return true
+        default:
+            return false
+        }
     }
 
     override class func canonicalRequest(for request: URLRequest) -> URLRequest {
@@ -588,6 +608,12 @@ private enum SetuPreviewAPI {
         defer { stateLock.unlock() }
         guard let path = request.url?.path else {
             return json("{\"message\":\"无效的预览请求\"}", statusCode: 400)
+        }
+        if request.url?.host == "api.asmr.one" {
+            return asmrCatalogFixture(path: path)
+        }
+        if request.url?.host == "jm.preview.invalid" {
+            return jmCatalogFixture(path: path)
         }
 
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-music-library"), path.contains("/library") {
@@ -803,6 +829,16 @@ private enum SetuPreviewAPI {
             return json("{\"total\":0,\"page\":1,\"pageSize\":20,\"list\":[]}")
         case "/favorite/list":
             return json(favoritePage)
+        case "/module-favorites":
+            if request.httpMethod == "POST" {
+                return json("{\"id\":1,\"module\":\"ASMR\",\"externalId\":\"41001\",\"title\":\"第一夜\"}")
+            }
+            return json("{\"page\":1,\"size\":24,\"total\":1,\"items\":[{\"id\":1,\"module\":\"ASMR\",\"externalId\":\"41001\",\"title\":\"第一夜\"}]}")
+        case let value where value.hasPrefix("/module-favorites/"):
+            if value.contains("/exists/") {
+                return json("false")
+            }
+            return json("\"ok\"")
         case "/ai/generations":
             return json(aiMinePage)
         case "/ai/square":
@@ -927,6 +963,38 @@ private enum SetuPreviewAPI {
         do { try data.write(to: url, options: .atomic); return url }
         catch { return nil }
     }()
+
+    private static func asmrCatalogFixture(path: String) -> Fixture {
+        if path.hasPrefix("/api/tracks/") {
+            return json("""
+            [{"type":"folder","title":"CD1","children":[{"type":"audio","title":"雨声","mediaStreamUrl":"https://cdn.preview.invalid/rain.mp3","hash":"rain","duration":120}]}]
+            """)
+        }
+        if path.hasPrefix("/api/workInfo/") {
+            return json("""
+            {"id":41001,"title":"第一夜","circle":{"name":"雪社"},"mainCoverUrl":null,"duration":3660}
+            """)
+        }
+        return json("""
+        {"pagination":{"currentPage":1,"pageSize":20,"totalCount":1},"works":[{"id":41001,"title":"第一夜","circle":{"name":"雪社"},"mainCoverUrl":null,"duration":3660}]}
+        """)
+    }
+
+    private static func jmCatalogFixture(path: String) -> Fixture {
+        if path == "/album" {
+            return json("""
+            {"id":88001,"name":"示例本子","author":["画师A"],"tags":["百合"],"series":[{"id":88001,"name":"第1话"}]}
+            """)
+        }
+        if path == "/chapter" {
+            return json("""
+            {"id":88001,"images":["00001.webp","00002.webp"],"scramble_id":220980}
+            """)
+        }
+        return json("""
+        {"list":[{"id":88001,"name":"示例本子","author":["画师A"],"tags":["百合"]}],"total":1}
+        """)
+    }
 
     private static func json(_ value: String, statusCode: Int = 200) -> Fixture {
         Fixture(statusCode: statusCode, data: Data(value.utf8))

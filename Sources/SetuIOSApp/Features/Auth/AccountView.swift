@@ -43,8 +43,11 @@ struct AccountView: View {
     @State private var authPage: AuthPage
     @FocusState private var focusedField: AuthFocusField?
 
-    init(environment: AppEnvironment, initialAuthPage: AuthPage = .landing) {
+    var onGuestBrowse: (() -> Void)? = nil
+
+    init(environment: AppEnvironment, initialAuthPage: AuthPage = .landing, onGuestBrowse: (() -> Void)? = nil) {
         self.environment = environment
+        self.onGuestBrowse = onGuestBrowse
         _authPage = State(initialValue: initialAuthPage)
     }
 
@@ -245,6 +248,7 @@ struct AccountView: View {
                                 onPasskey: { Task { await loginWithPasskey() } },
                                 onPrivacy: { router.navigate(to: .privacy) },
                                 onTerms: { router.navigate(to: .terms) },
+                                onBrowse: onGuestBrowse,
                                 minimumHeight: max(0, geometry.size.height - 32),
                                 isPasskeyLoading: passkeyLoading
                             )

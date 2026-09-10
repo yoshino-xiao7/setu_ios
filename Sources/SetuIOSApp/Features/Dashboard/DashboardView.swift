@@ -234,7 +234,7 @@ struct DashboardView: View {
                     case .loaded(let recommendation?):
                         Button {
                             navigation.navigate(
-                                to: .square,
+                                to: .more,
                                 route: .publicAiWork(PublicAiWorkSnapshot(work: recommendation))
                             )
                         } label: {

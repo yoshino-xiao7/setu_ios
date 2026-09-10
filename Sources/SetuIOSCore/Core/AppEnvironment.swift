@@ -29,6 +29,9 @@ public final class AppEnvironment {
     public let collectionClient: CollectionClient
     public let aiGenerationClient: AiGenerationClient
     public let favoriteClient: FavoriteClient
+    public let moduleFavoriteClient: ModuleFavoriteClient
+    public let asmrCatalogClient: AsmrCatalogClient
+    public let jmCatalogClient: JmCatalogClient
     public let imageDeleteRequestClient: ImageDeleteRequestClient
     public let musicClient: MusicClient
     public let musicV2Client: MusicV2Client
@@ -55,6 +58,9 @@ public final class AppEnvironment {
         collectionClient: CollectionClient,
         aiGenerationClient: AiGenerationClient,
         favoriteClient: FavoriteClient,
+        moduleFavoriteClient: ModuleFavoriteClient? = nil,
+        asmrCatalogClient: AsmrCatalogClient = AsmrCatalogClient(),
+        jmCatalogClient: JmCatalogClient = JmCatalogClient(),
         imageDeleteRequestClient: ImageDeleteRequestClient,
         musicClient: MusicClient,
         musicV2Client: MusicV2Client,
@@ -81,6 +87,9 @@ public final class AppEnvironment {
         self.collectionClient = collectionClient
         self.aiGenerationClient = aiGenerationClient
         self.favoriteClient = favoriteClient
+        self.moduleFavoriteClient = moduleFavoriteClient ?? ModuleFavoriteClient(apiClient: apiClient)
+        self.asmrCatalogClient = asmrCatalogClient
+        self.jmCatalogClient = jmCatalogClient
         self.imageDeleteRequestClient = imageDeleteRequestClient
         self.musicClient = musicClient
         self.musicV2Client = musicV2Client
@@ -149,6 +158,9 @@ public final class AppEnvironment {
             collectionClient: collectionClient,
             aiGenerationClient: aiGenerationClient,
             favoriteClient: favoriteClient,
+            moduleFavoriteClient: ModuleFavoriteClient(apiClient: client),
+            asmrCatalogClient: AsmrCatalogClient(),
+            jmCatalogClient: JmCatalogClient(),
             imageDeleteRequestClient: imageDeleteRequestClient,
             musicClient: musicClient,
             musicV2Client: musicV2Client,

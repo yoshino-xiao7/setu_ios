@@ -8,7 +8,7 @@ final class MusicArchitectureUITests: XCTestCase {
         XCTAssertTrue(bar.waitForExistence(timeout: 10))
         let identity = bar.value as? String
         XCTAssertTrue(identity?.hasPrefix("instances=1;") == true)
-        for tab in ["首页", "AI 绘画", "图片", "音乐", "广场"] {
+        for tab in ["首页", "AI 绘画", "图片", "音乐", "更多"] {
             app.tabBars.buttons[tab].tap()
             XCTAssertEqual(bar.value as? String, identity, "Same live instance on \(tab)")
             XCTAssertLessThanOrEqual(bar.frame.maxY, app.tabBars.firstMatch.frame.minY + 1)

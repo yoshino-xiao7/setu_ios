@@ -1,7 +1,111 @@
 import SetuIOSCore
 import SwiftUI
 
-struct SquareHubView: View {
+struct MoreHubView: View {
+    @Environment(RouterPath.self) private var router
+    @Bindable var environment: AppEnvironment
+
+    var body: some View {
+        List {
+            Section {
+                MoreLandingHeader()
+            }
+            .setuListRow()
+
+            Section {
+                SetuCard {
+                    VStack(spacing: SetuSpacing.lg) {
+                        SetuSectionHeader(title: "功能页")
+                        HubNavigationRow(title: "广场", subtitle: "公开收藏夹和 AI 绘画作品", systemImage: "rectangle.stack") {
+                            router.navigate(to: .plaza)
+                        }
+                        .accessibilityIdentifier("more.hub.plaza")
+                        HubNavigationRow(title: "ASMR", subtitle: "asmr.one 音声作品", systemImage: "headphones") {
+                            router.navigate(to: .asmrHome)
+                        }
+                        .accessibilityIdentifier("more.hub.asmr")
+                        HubNavigationRow(title: "JM 本子", subtitle: "禁漫天堂目录与阅读", systemImage: "book.closed") {
+                            router.navigate(to: .jmHome)
+                        }
+                        .accessibilityIdentifier("more.hub.jm")
+                    }
+                }
+            }
+            .setuListRow()
+        }
+        .listStyle(.plain)
+        .setuBackground()
+        .navigationTitle("更多")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
+        .toolbar {
+            #if os(iOS)
+            ToolbarItem(placement: .topBarLeading) {
+                moreToolbarLogo
+            }
+            #else
+            ToolbarItem(placement: .automatic) {
+                moreToolbarLogo
+            }
+            #endif
+        }
+        .accessibilityIdentifier("more.hub.page")
+    }
+
+    private var moreToolbarLogo: some View {
+        SetuToolbarLogo(assetName: "SquareLogo", accessibilityLabel: "更多")
+    }
+}
+
+private struct MoreLandingHeader: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SetuSpacing.lg) {
+            Group {
+                if dynamicTypeSize.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: SetuSpacing.md) {
+                        moreIcon
+                        moreCopy
+                    }
+                } else {
+                    HStack(spacing: SetuSpacing.lg) {
+                        moreIcon
+                        moreCopy
+                    }
+                }
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(SetuSpacing.xl)
+        .background(SetuColor.heroGradient, in: RoundedRectangle(cornerRadius: SetuRadius.lg, style: .continuous))
+        .shadow(color: SetuColor.brandPink.opacity(0.28), radius: 18, y: 10)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var moreIcon: some View {
+        Image(systemName: "square.grid.2x2.fill")
+            .font(.title2)
+            .foregroundStyle(.white)
+            .frame(width: 52, height: 52)
+            .background(.white.opacity(0.18), in: RoundedRectangle(cornerRadius: SetuRadius.sm, style: .continuous))
+            .accessibilityHidden(true)
+    }
+
+    private var moreCopy: some View {
+        VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+            Text("更多")
+                .font(SetuTypography.title)
+            Text("广场、ASMR 与 JM 本子都在这里，按模块进入功能页。")
+                .font(SetuTypography.caption)
+                .opacity(0.9)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+struct PlazaHubView: View {
     @Environment(RouterPath.self) private var router
     @Bindable var environment: AppEnvironment
     @State private var collectionPreviewState: LoadState<[CollectionInfo]> = .idle
@@ -66,6 +170,7 @@ struct SquareHubView: View {
         .listStyle(.plain)
         .setuBackground()
         .navigationTitle("广场")
+        .accessibilityIdentifier("plaza.hub.page")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif

@@ -7,7 +7,7 @@ final class ModuleTransitionUITests: XCTestCase {
         app.launch()
         defer { app.terminate() }
         XCTAssertTrue(app.tabBars.buttons["首页"].wait(for: \.isHittable, toEqual: true, timeout: 15))
-        let modules: [(String, String?)] = [("首页", nil), ("音乐", "MusicHomeLogo"), ("AI 绘画", "AiDrawLogo"), ("图片", "ImageHomeLogo"), ("广场", "SquareLogo")]
+        let modules: [(String, String?)] = [("首页", nil), ("音乐", "MusicHomeLogo"), ("AI 绘画", "AiDrawLogo"), ("图片", "ImageHomeLogo"), ("更多", "SquareLogo")]
         for (tab, asset) in modules {
             app.tabBars.buttons[tab].tap()
             if let asset {
@@ -77,7 +77,7 @@ final class ModuleTransitionUITests: XCTestCase {
         search.tap()
         search.typeText("测试\n")
         XCTAssertTrue(app.navigationBars["搜索音乐"].waitForExistence(timeout: 5))
-        for name in ["图片", "首页", "广场", "AI 绘画", "音乐"] {
+        for name in ["图片", "首页", "更多", "AI 绘画", "音乐"] {
             let tab = app.tabBars.buttons[name]
             tab.tap()
             XCTAssertTrue(tab.wait(for: \.isSelected, toEqual: true, timeout: 5))
@@ -90,5 +90,53 @@ final class ModuleTransitionUITests: XCTestCase {
         screenshot.name = reduceMotion ? "module-reduced-motion" : "module-slide-round-trip"
         screenshot.lifetime = .keepAlways
         add(screenshot)
+    }
+
+    func testMoreTabOpensPlazaAsmrAndJm() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing-root-more"]
+        app.launch()
+        defer { app.terminate() }
+        XCTAssertTrue(app.tabBars.buttons["更多"].wait(for: \.isHittable, toEqual: true, timeout: 15))
+        XCTAssertTrue(element("more.hub.page", in: app).waitForExistence(timeout: 8))
+        XCTAssertTrue(element("more.hub.plaza", in: app).exists)
+        XCTAssertTrue(element("more.hub.asmr", in: app).exists)
+        XCTAssertTrue(element("more.hub.jm", in: app).exists)
+
+        element("more.hub.plaza", in: app).tap()
+        XCTAssertTrue(element("plaza.hub.page", in: app).waitForExistence(timeout: 8))
+        XCTAssertTrue(app.navigationBars["广场"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons.firstMatch.tap()
+
+        element("more.hub.asmr", in: app).tap()
+        XCTAssertTrue(element("asmr.home.page", in: app).waitForExistence(timeout: 8))
+        XCTAssertTrue(app.navigationBars["ASMR"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons.firstMatch.tap()
+
+        element("more.hub.jm", in: app).tap()
+        XCTAssertTrue(element("jm.home.page", in: app).waitForExistence(timeout: 8))
+        XCTAssertTrue(app.navigationBars["JM 本子"].waitForExistence(timeout: 5))
+    }
+
+    func testAsmrSearchKeepsMiniPlayerVisible() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing-root-player", "-ui-testing-root-more"]
+        app.launch()
+        defer { app.terminate() }
+        XCTAssertTrue(app.tabBars.buttons["更多"].wait(for: \.isHittable, toEqual: true, timeout: 15))
+        XCTAssertTrue(app.otherElements["music.mini-player"].firstMatch.waitForExistence(timeout: 8))
+        element("more.hub.asmr", in: app).tap()
+        XCTAssertTrue(element("asmr.home.page", in: app).waitForExistence(timeout: 8))
+        let search = app.textFields["asmr.search.field"]
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap()
+        search.typeText("雨声")
+        XCTAssertTrue(app.otherElements["music.mini-player"].firstMatch.waitForExistence(timeout: 3))
+        XCTAssertTrue(app.otherElements["music.mini-player"].firstMatch.isHittable)
+        XCTAssertFalse(app.searchFields.firstMatch.exists)
+    }
+
+    private func element(_ id: String, in app: XCUIApplication) -> XCUIElement {
+        app.descendants(matching: .any).matching(identifier: id).firstMatch
     }
 }

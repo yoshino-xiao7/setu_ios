@@ -366,6 +366,11 @@ final class MusicPlaybackController {
     @discardableResult
     func play(track: MusicPlaybackTrack, in tracks: [MusicPlaybackTrack] = [],
               context: PlaybackContext? = nil, playMode: MusicPlayMode? = nil) async -> Bool {
+        if let url = track.streamURL {
+            if context?.isInfinite != true { endRadioSession() }
+            play(url: url, track: track, context: context, queueTracks: tracks.isEmpty ? [track] : tracks, playMode: playMode)
+            return true
+        }
         do { try await urlResolver?.authorizeNewSession(canonical: track.id.legacyID == nil) }
         catch { showFeedback(.error(UserFacingErrorMapper.map(error))); return false }
         if context?.isInfinite != true { endRadioSession() }
@@ -452,6 +457,10 @@ final class MusicPlaybackController {
         isPlaying = autoplay; isBuffering = autoplay; playbackError = nil
         currentSource = nil
         feedback = .info("正在准备播放")
+        if let url = track.streamURL {
+            load(url: url, track: track, index: index, resumeAt: resumeAt, autoplay: autoplay)
+            return true
+        }
         #if DEBUG // P0.1 instrumentation
         playbackDiagnostics.mark("PreparedLookupStarted")
         #endif // P0.1 instrumentation
@@ -508,6 +517,7 @@ final class MusicPlaybackController {
     }
 
     private func enqueueHistory(_ track: MusicPlaybackTrack) {
+        guard !track.usesDirectStream else { return }
         guard let recordPlaybackHistory, historyInFlightIDs.insert(track.id).inserted else { return }
         let owner = sessionID, id = UUID()
         historyTasks[id] = Task { [weak self] in
@@ -1102,6 +1112,12 @@ final class MusicPlaybackController {
     private func resumeRestoredCurrentTrack() {
         guard resumeTask == nil, let track = currentTrack else { return }
         let position = restoredResumePosition ?? currentTimeSeconds
+        if let url = track.streamURL {
+            beginTransition()
+            currentSource = nil
+            load(url: url, track: track, index: currentQueueIndex, resumeAt: position)
+            return
+        }
         if audioAssets == nil, let local = preciseSeekCache.cachedSource(identity: preciseAudioKey(for: track)) {
             beginTransition()
             currentSource = nil
@@ -1325,8 +1341,10 @@ final class MusicPlaybackController {
 
     func prepareNextIfNeeded() {
         guard !isBenchmarking else { return }
-        guard isPlaying, let urlResolver else { return }
+        guard isPlaying else { return }
         guard let track = queue.nextForPreparation() else { prefetchCurrentRemainder(); return }
+        if track.usesDirectStream { return }
+        guard let urlResolver else { return }
         let preparer = nextItemPreparer, quality = audioQuality
         if let audioAssets {
             guard cacheSettings?.permitsPrefetch == true, !isBuffering else { return }
@@ -1866,6 +1884,10 @@ struct MusicPlaybackTrack: Identifiable, Sendable, Codable {
     let durationMilliseconds: Int
     /// Netease MV id when the track has one; enables in-app MV playback from the player.
     let mvID: Int?
+    /// Direct media URL for external modules (ASMR). Skips the Netease resolver and music history.
+    let streamURL: URL?
+
+    var usesDirectStream: Bool { streamURL != nil }
 
     var contextTrackID: PlaybackContext.TrackID {
         switch id {
@@ -1883,6 +1905,7 @@ struct MusicPlaybackTrack: Identifiable, Sendable, Codable {
         durationMilliseconds = track.durationMs ?? 0
         // V2 MV summaries have no playback operation. Do not invent legacy IDs.
         mvID = nil
+        streamURL = nil
     }
 
     var durationSeconds: Double {
@@ -1900,7 +1923,8 @@ struct MusicPlaybackTrack: Identifiable, Sendable, Codable {
         album: String,
         coverURLString: String?,
         durationMilliseconds: Int,
-        mvID: Int?
+        mvID: Int?,
+        streamURL: URL? = nil
     ) {
         self.id = .legacy(id)
         self.title = title
@@ -1909,6 +1933,27 @@ struct MusicPlaybackTrack: Identifiable, Sendable, Codable {
         self.coverURLString = coverURLString
         self.durationMilliseconds = durationMilliseconds
         self.mvID = mvID
+        self.streamURL = streamURL
+    }
+
+    init(
+        identity: MusicPlaybackIdentity,
+        title: String,
+        artist: String,
+        album: String,
+        coverURLString: String?,
+        durationMilliseconds: Int,
+        mvID: Int? = nil,
+        streamURL: URL? = nil
+    ) {
+        self.id = identity
+        self.title = title
+        self.artist = artist
+        self.album = album
+        self.coverURLString = coverURLString
+        self.durationMilliseconds = durationMilliseconds
+        self.mvID = mvID
+        self.streamURL = streamURL
     }
 
     init(song: MusicSong) {
@@ -1919,6 +1964,7 @@ struct MusicPlaybackTrack: Identifiable, Sendable, Codable {
         coverURLString = song.coverURLString
         durationMilliseconds = song.durationMilliseconds
         mvID = song.mv
+        streamURL = nil
     }
 
     init(song: PlaylistSong) {
@@ -1929,6 +1975,7 @@ struct MusicPlaybackTrack: Identifiable, Sendable, Codable {
         coverURLString = song.coverUrl
         durationMilliseconds = song.duration ?? 0
         mvID = nil
+        streamURL = nil
     }
 
     init(record: MusicHistoryRecord) {
@@ -1939,6 +1986,7 @@ struct MusicPlaybackTrack: Identifiable, Sendable, Codable {
         coverURLString = record.coverUrl
         durationMilliseconds = record.duration ?? 0
         mvID = nil
+        streamURL = nil
     }
 }
 
