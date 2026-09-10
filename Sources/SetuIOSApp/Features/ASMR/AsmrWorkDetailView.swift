@@ -101,6 +101,7 @@ struct AsmrWorkDetailView: View {
         }
         let queue = AsmrPlayback.queue(tracks, work: work)
         guard let mapped = queue.first(where: { $0.streamURL == track.url }) else { return }
+        environment.moduleWatchHistoryStore.record(work.watchRecord)
         player.play(
             url: track.url,
             track: mapped,
@@ -114,6 +115,7 @@ struct AsmrWorkDetailView: View {
         tracksState = .loading
         do {
             let work = try await environment.asmrCatalogClient.work(id: workID)
+            environment.moduleWatchHistoryStore.record(work.watchRecord)
             workState = .loaded(work)
         } catch {
             workState = .failed(UserFacingErrorMapper.map(error))

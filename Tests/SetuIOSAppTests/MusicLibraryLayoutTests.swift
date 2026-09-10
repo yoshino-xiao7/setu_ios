@@ -73,4 +73,18 @@ final class MusicLibraryLayoutTests: XCTestCase {
         let a = XCTAttachment(image: image); a.name = "p15-liked-loading"; a.lifetime = .keepAlways; add(a)
     }
 }
+
+final class MiniPlayerAnchorTests: XCTestCase {
+    func testKeepsTheReportedInsetWhenItSitsOnTheVisibleModuleBottom() {
+        let module = CGRect(x: 0, y: 100, width: 390, height: 700)
+        let y = MiniPlayerAnchor.overlayMinY(reportedInsetMinY: 736, moduleFrame: module, insetHeight: 64)
+        XCTAssertEqual(y, 736)
+    }
+
+    func testIgnoresACoveredPageInsetThatWouldLiftTheBar() {
+        let module = CGRect(x: 0, y: 100, width: 390, height: 700)
+        let y = MiniPlayerAnchor.overlayMinY(reportedInsetMinY: 420, moduleFrame: module, insetHeight: 64)
+        XCTAssertEqual(y, 736)
+    }
+}
 #endif

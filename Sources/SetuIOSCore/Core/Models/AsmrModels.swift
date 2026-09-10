@@ -25,6 +25,10 @@ public struct AsmrWork: Decodable, Identifiable, Sendable, Hashable {
         )
     }
 
+    public var watchRecord: ModuleWatchRecord {
+        ModuleWatchRecord(module: .asmr, externalId: String(id), title: displayTitle, coverUrl: coverURL, subtitle: subtitle)
+    }
+
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeFlexibleInt(forKey: .id)

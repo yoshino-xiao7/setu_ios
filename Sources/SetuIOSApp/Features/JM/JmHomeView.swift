@@ -8,12 +8,22 @@ struct JmHomeView: View {
     @State private var pager = PagingController<JmAlbum>(pageSize: 20)
     @State private var searchText = ""
     @State private var keyword = ""
+    @State private var history: [ModuleWatchRecord] = []
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: SetuSpacing.lg) {
                 ModuleCatalogSearchField(text: $searchText, prompt: "搜索本子", identifier: "jm.search.field") {
                     submitSearch()
+                }
+                ModuleWatchHistoryStrip(
+                    title: "观看历史",
+                    records: history,
+                    progressText: { environment.jmReadingProgressStore.progress(albumID: $0.externalId)?.pageProgressText }
+                ) {
+                    router.navigate(to: .jmHistory)
+                } onOpen: { record in
+                    router.navigate(to: .jmAlbum(record.externalId))
                 }
                 if pager.phase == .loadingInitial {
                     SetuCard {
@@ -61,8 +71,9 @@ struct JmHomeView: View {
                 Button("我的收藏") { router.navigate(to: .jmFavorites) }
             }
         }
-        .task { await loadFirstPage() }
-        .refreshable { await loadFirstPage(clearExisting: true) }
+        .task { reloadHistory(); await loadFirstPage() }
+        .refreshable { reloadHistory(); await loadFirstPage(clearExisting: true) }
+        .onAppear { reloadHistory() }
         .accessibilityIdentifier("jm.home.page")
     }
 
@@ -109,5 +120,9 @@ struct JmHomeView: View {
     private func submitSearch() {
         keyword = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         Task { await loadFirstPage(clearExisting: true) }
+    }
+
+    private func reloadHistory() {
+        history = environment.moduleWatchHistoryStore.records(module: .jm)
     }
 }

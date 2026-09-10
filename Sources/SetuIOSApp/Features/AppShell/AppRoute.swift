@@ -50,10 +50,12 @@ enum AppRoute: Hashable {
     case asmrHome
     case asmrWork(String)
     case asmrFavorites
+    case asmrHistory
     case jmHome
     case jmAlbum(String)
     case jmReader(albumID: String, chapterID: String)
     case jmFavorites
+    case jmHistory
     case imageDeleteRequests
     case imageDeleteRequestDetail(Int)
     case qqBinding

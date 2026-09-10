@@ -50,6 +50,17 @@ final class UserFacingErrorMapperTests: XCTestCase {
         XCTAssertFalse(mapped.message.contains("HTTP"))
     }
 
+    func testModuleFavoriteLimitUsesProductLanguage() {
+        let mapped = UserFacingErrorMapper.map(
+            APIError.httpStatus(400, message: "每个模块最多收藏 500 个", code: "MODULE_FAVORITE_LIMIT")
+        )
+
+        XCTAssertEqual(mapped.title, "收藏已满")
+        XCTAssertEqual(mapped.message, "每个模块最多收藏 500 个")
+        XCTAssertEqual(mapped.action, .goBack)
+        XCTAssertFalse(mapped.message.contains("HTTP"))
+    }
+
     func testEveryRecoveryActionHasAUserFacingButtonTitle() {
         let expected: [(UserFacingErrorAction, String)] = [
             (.retry, "重试"),

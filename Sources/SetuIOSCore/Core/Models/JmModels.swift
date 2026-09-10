@@ -26,6 +26,10 @@ public struct JmAlbum: Decodable, Identifiable, Sendable, Hashable {
         )
     }
 
+    public var watchRecord: ModuleWatchRecord {
+        ModuleWatchRecord(module: .jm, externalId: id, title: title, coverUrl: coverURL, subtitle: subtitle)
+    }
+
     public init(
         id: String,
         title: String,

@@ -5,6 +5,7 @@ struct ModuleFavoriteButton: View {
     @Environment(RouterPath.self) private var router
     @Bindable var environment: AppEnvironment
     let snapshot: ModuleFavoriteSnapshot
+    var showsTitle: Bool = true
     var onChanged: ((Bool) -> Void)?
 
     @State private var isFavorite: Bool?
@@ -16,7 +17,15 @@ struct ModuleFavoriteButton: View {
         Button {
             Task { await toggle() }
         } label: {
-            Label(isFavorite == true ? "已收藏" : "收藏", systemImage: isFavorite == true ? "heart.fill" : "heart")
+            if showsTitle {
+                Label(isFavorite == true ? "已收藏" : "收藏", systemImage: isFavorite == true ? "heart.fill" : "heart")
+            } else {
+                Image(systemName: isFavorite == true ? "heart.fill" : "heart")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(SetuColor.brandPink)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .accessibilityLabel(isFavorite == true ? "已收藏" : "收藏")
+            }
         }
         .disabled(isBusy)
         .accessibilityIdentifier("module.favorite.\(snapshot.module.rawValue).\(snapshot.externalId)")

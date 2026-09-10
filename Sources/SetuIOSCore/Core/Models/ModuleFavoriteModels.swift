@@ -50,6 +50,10 @@ public struct ModuleFavoriteItem: Decodable, Identifiable, Sendable, Hashable {
         createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
     }
 
+    public var readingProgress: JmReadingProgress? {
+        JmReadingProgress.fromExtraJSON(extraJson)?.assigning(albumID: externalId)
+    }
+
     private enum CodingKeys: String, CodingKey {
         case id, favoriteId, module, externalId, title, coverUrl, subtitle, extraJson, createdAt
     }
@@ -109,6 +113,12 @@ public struct ModuleFavoriteSnapshot: Encodable, Sendable {
         self.coverUrl = coverUrl
         self.subtitle = subtitle
         self.extraJson = extraJson
+    }
+
+    public func attaching(extraJson: String?) -> ModuleFavoriteSnapshot {
+        var copy = self
+        copy.extraJson = extraJson
+        return copy
     }
 }
 

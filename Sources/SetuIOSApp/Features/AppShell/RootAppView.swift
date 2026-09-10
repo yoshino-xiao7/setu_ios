@@ -1,6 +1,19 @@
 import SetuIOSCore
 import SwiftUI
 
+enum MiniPlayerAnchor {
+    static func overlayMinY(reportedInsetMinY: CGFloat?, moduleFrame: CGRect, insetHeight: CGFloat) -> CGFloat {
+        let anchoredToModule = moduleFrame.maxY - insetHeight
+        guard let reported = reportedInsetMinY else {
+            return moduleFrame.isEmpty ? 0 : anchoredToModule
+        }
+        if !moduleFrame.isEmpty, anchoredToModule - reported > 24 {
+            return anchoredToModule
+        }
+        return reported
+    }
+}
+
 struct RootAppView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -335,9 +348,13 @@ struct RootAppView: View {
                             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { musicInsetHeight = $0 }
                             .position(
                                 x: rootGeometry.size.width / 2,
-                                y: min(musicInsetFrame.minY, moduleContentFrame.isEmpty ? musicInsetFrame.minY : moduleContentFrame.maxY - musicInsetHeight) - rootGeometry.frame(in: .global).minY + musicInsetHeight / 2
+                                y: MiniPlayerAnchor.overlayMinY(
+                                    reportedInsetMinY: musicInsetFrame.isEmpty ? nil : musicInsetFrame.minY,
+                                    moduleFrame: moduleContentFrame,
+                                    insetHeight: musicInsetHeight
+                                ) - rootGeometry.frame(in: .global).minY + musicInsetHeight / 2
                             )
-                            .opacity(musicInsetFrame.isEmpty ? 0 : 1)
+                            .opacity(musicInsetFrame.isEmpty && moduleContentFrame.isEmpty ? 0 : 1)
                     }
                 }
             }
@@ -375,7 +392,11 @@ struct RootAppView: View {
                     destination(for: route)
                         .safeAreaInset(edge: .bottom, spacing: 0) { musicPlayerSpace(for: tab) }
                 }
-                .safeAreaInset(edge: .bottom, spacing: 0) { musicPlayerSpace(for: tab) }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if navigationCoordinator.router(for: tab).path.isEmpty {
+                        musicPlayerSpace(for: tab)
+                    }
+                }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("module.content.\(tab.rawValue)")
@@ -401,7 +422,7 @@ struct RootAppView: View {
                 .frame(height: musicInsetHeight)
                 .onGeometryChange(for: CGRect.self) {
                     isSelected ? $0.frame(in: .global) : .zero
-                } action: { frame in
+                }                 action: { frame in
                     if navigationCoordinator.selectedTab == tab, !frame.isEmpty { musicInsetFrame = frame }
                 }
         }

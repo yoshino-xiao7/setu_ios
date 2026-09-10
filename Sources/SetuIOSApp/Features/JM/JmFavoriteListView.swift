@@ -25,6 +25,12 @@ struct JmFavoriteListView: View {
                                         .font(.footnote.weight(.semibold))
                                         .foregroundStyle(SetuColor.textPrimary)
                                         .lineLimit(2)
+                                    if let progress = item.readingProgress ?? environment.jmReadingProgressStore.progress(albumID: item.externalId) {
+                                        Text(progress.pageProgressText)
+                                            .font(.caption2)
+                                            .foregroundStyle(SetuColor.brandPink)
+                                            .lineLimit(1)
+                                    }
                                 }
                             }
                             .buttonStyle(.plain)
@@ -72,9 +78,16 @@ struct JmFavoriteListView: View {
         return .idle
     }
 
+    private func ingest(_ items: [ModuleFavoriteItem]) {
+        for item in items {
+            environment.jmReadingProgressStore.mergeFromFavorite(albumID: item.externalId, extraJSON: item.extraJson)
+        }
+    }
+
     private func loadFirstPage(clearExisting: Bool = false) async {
         await pager.loadFirstPage(clearExisting: clearExisting) { page in
             let result = try await environment.moduleFavoriteClient.list(module: .jm, page: page, size: pager.pageSize)
+            ingest(result.items)
             return .init(items: result.items, total: result.total)
         }
     }
@@ -82,6 +95,7 @@ struct JmFavoriteListView: View {
     private func loadMore() async {
         await pager.loadMore { page in
             let result = try await environment.moduleFavoriteClient.list(module: .jm, page: page, size: pager.pageSize)
+            ingest(result.items)
             return .init(items: result.items, total: result.total)
         }
     }

@@ -8,12 +8,22 @@ struct AsmrHomeView: View {
     @State private var pager = PagingController<AsmrWork>(pageSize: 20)
     @State private var searchText = ""
     @State private var keyword = ""
+    @State private var history: [ModuleWatchRecord] = []
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: SetuSpacing.lg) {
                 ModuleCatalogSearchField(text: $searchText, prompt: "搜索作品", identifier: "asmr.search.field") {
                     submitSearch()
+                }
+                ModuleWatchHistoryStrip(
+                    title: "观看历史",
+                    records: history,
+                    aspectRatio: 1
+                ) {
+                    router.navigate(to: .asmrHistory)
+                } onOpen: { record in
+                    router.navigate(to: .asmrWork(record.externalId))
                 }
                 if pager.phase == .loadingInitial {
                     SetuCard {
@@ -55,8 +65,9 @@ struct AsmrHomeView: View {
                 Button("我的收藏") { router.navigate(to: .asmrFavorites) }
             }
         }
-        .task { await loadFirstPage() }
-        .refreshable { await loadFirstPage(clearExisting: true) }
+        .task { reloadHistory(); await loadFirstPage() }
+        .refreshable { reloadHistory(); await loadFirstPage(clearExisting: true) }
+        .onAppear { reloadHistory() }
         .accessibilityIdentifier("asmr.home.page")
     }
 
@@ -121,6 +132,10 @@ struct AsmrHomeView: View {
     private func submitSearch() {
         keyword = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         Task { await loadFirstPage(clearExisting: true) }
+    }
+
+    private func reloadHistory() {
+        history = environment.moduleWatchHistoryStore.records(module: .asmr)
     }
 }
 

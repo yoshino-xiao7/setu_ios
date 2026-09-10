@@ -143,13 +143,21 @@ public enum UserFacingErrorMapper {
                 action: .retry,
                 diagnosticCode: nil
             )
-        case .httpStatus(let status, let backendMessage, let requestID, let traceID, _):
+        case .httpStatus(let status, let backendMessage, let requestID, let traceID, let code):
             let diagnosticCode = diagnosticCode(requestID: requestID, traceID: traceID)
             if [400, 409, 422].contains(status), isPointsError(backendMessage) {
                 return UserFacingError(
                     title: "积分不足",
                     message: "当前积分不足以完成此操作，请先查看积分获取方式。",
                     action: .viewPoints,
+                    diagnosticCode: diagnosticCode
+                )
+            }
+            if code == "MODULE_FAVORITE_LIMIT" {
+                return UserFacingError(
+                    title: "收藏已满",
+                    message: backendMessage ?? "每个模块最多收藏 500 个。",
+                    action: .goBack,
                     diagnosticCode: diagnosticCode
                 )
             }

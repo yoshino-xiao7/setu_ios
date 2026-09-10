@@ -30,6 +30,8 @@ public final class AppEnvironment {
     public let aiGenerationClient: AiGenerationClient
     public let favoriteClient: FavoriteClient
     public let moduleFavoriteClient: ModuleFavoriteClient
+    public let moduleWatchHistoryStore: ModuleWatchHistoryStore
+    public let jmReadingProgressStore: JmReadingProgressStore
     public let asmrCatalogClient: AsmrCatalogClient
     public let jmCatalogClient: JmCatalogClient
     public let imageDeleteRequestClient: ImageDeleteRequestClient
@@ -88,6 +90,12 @@ public final class AppEnvironment {
         self.aiGenerationClient = aiGenerationClient
         self.favoriteClient = favoriteClient
         self.moduleFavoriteClient = moduleFavoriteClient ?? ModuleFavoriteClient(apiClient: apiClient)
+        self.moduleWatchHistoryStore = ModuleWatchHistoryStore(ownerID: {
+            authSession.currentUser.map { String($0.id) } ?? "guest"
+        })
+        self.jmReadingProgressStore = JmReadingProgressStore(ownerID: {
+            authSession.currentUser.map { String($0.id) } ?? "guest"
+        })
         self.asmrCatalogClient = asmrCatalogClient
         self.jmCatalogClient = jmCatalogClient
         self.imageDeleteRequestClient = imageDeleteRequestClient

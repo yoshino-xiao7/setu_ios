@@ -14,6 +14,8 @@ extension RootAppView {
             AsmrWorkDetailView(environment: environment, workID: workID)
         case .asmrFavorites:
             AsmrFavoriteListView(environment: environment)
+        case .asmrHistory:
+            ModuleWatchHistoryView(environment: environment, module: .asmr, aspectRatio: 1)
         case .jmHome:
             JmHomeView(environment: environment)
         case .jmAlbum(let albumID):
@@ -22,6 +24,8 @@ extension RootAppView {
             JmReaderView(environment: environment, albumID: albumID, chapterID: chapterID)
         case .jmFavorites:
             JmFavoriteListView(environment: environment)
+        case .jmHistory:
+            ModuleWatchHistoryView(environment: environment, module: .jm)
         default:
             EmptyView()
         }

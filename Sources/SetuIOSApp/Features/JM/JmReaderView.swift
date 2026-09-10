@@ -10,6 +10,11 @@ struct JmReaderView: View {
     let chapterID: String
     @State private var pagesState: LoadState<[JmPageImage]> = .idle
     @State private var pageIndex = 0
+    @State private var syncsFavorite = false
+    @State private var chapterTitle: String?
+    @State private var favoriteSyncTask: Task<Void, Never>?
+    @State private var restorePageIndex: Int?
+    @State private var acceptsPageChanges = false
 
     var body: some View {
         Group {
@@ -44,6 +49,19 @@ struct JmReaderView: View {
                             .background(.ultraThinMaterial, in: Capsule())
                             .padding(.bottom, SetuSpacing.lg)
                     }
+                    .task {
+                        let target = restorePageIndex ?? pageIndex
+                        pageIndex = target
+                        try? await Task.sleep(for: .milliseconds(50))
+                        pageIndex = target
+                        restorePageIndex = nil
+                        acceptsPageChanges = true
+                        persist(scheduleFavoriteSync: false)
+                    }
+                    .onChange(of: pageIndex) { _, _ in
+                        guard acceptsPageChanges else { return }
+                        persist(scheduleFavoriteSync: true)
+                    }
                 }
             }
         }
@@ -52,17 +70,108 @@ struct JmReaderView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                ModuleFavoriteButton(
+                    environment: environment,
+                    snapshot: favoriteSnapshot,
+                    showsTitle: false,
+                    onChanged: { syncsFavorite = $0 }
+                )
+            }
+        }
         .task { await load() }
+        .onDisappear {
+            favoriteSyncTask?.cancel()
+            persist(scheduleFavoriteSync: false)
+            Task { await flushFavoriteProgress() }
+        }
         .accessibilityIdentifier("jm.reader.page")
     }
 
     private func load() async {
         pagesState = .loading
         do {
-            pagesState = .loaded(try await environment.jmCatalogClient.pages(chapterID: chapterID))
+            let pages = try await environment.jmCatalogClient.pages(chapterID: chapterID)
+            if let progress = environment.jmReadingProgressStore.progress(albumID: albumID), progress.chapterID == chapterID {
+                pageIndex = min(max(progress.pageIndex, 0), max(pages.count - 1, 0))
+                chapterTitle = progress.chapterTitle
+            } else {
+                pageIndex = 0
+            }
+            restorePageIndex = pageIndex
+            acceptsPageChanges = false
+            if environment.authSession.isSignedIn, !environment.authSession.requiresReauthentication {
+                syncsFavorite = (try? await environment.moduleFavoriteClient.exists(module: .jm, externalId: albumID)) ?? false
+            }
+            pagesState = .loaded(pages)
+            persist(scheduleFavoriteSync: false)
         } catch {
             pagesState = .failed(UserFacingErrorMapper.map(error))
         }
+    }
+
+    private func persist(scheduleFavoriteSync: Bool) {
+        guard case .loaded(let pages) = pagesState, !pages.isEmpty else { return }
+        let progress = currentProgress(pageCount: pages.count)
+        environment.jmReadingProgressStore.save(progress)
+        if var record = environment.moduleWatchHistoryStore.records(module: .jm).first(where: { $0.externalId == albumID }) {
+            record.subtitle = progress.pageProgressText
+            record.viewedAt = Date()
+            environment.moduleWatchHistoryStore.record(record)
+        }
+        if scheduleFavoriteSync {
+            favoriteSyncTask?.cancel()
+            favoriteSyncTask = Task { [syncsFavorite] in
+                try? await Task.sleep(for: .milliseconds(1200))
+                guard !Task.isCancelled, syncsFavorite else { return }
+                await flushFavoriteProgress()
+            }
+        }
+    }
+
+    private var favoriteSnapshot: ModuleFavoriteSnapshot {
+        let record = environment.moduleWatchHistoryStore.records(module: .jm).first(where: { $0.externalId == albumID })
+        let extra: String?
+        if case .loaded(let pages) = pagesState, !pages.isEmpty {
+            extra = currentProgress(pageCount: pages.count).extraJSONString
+        } else {
+            extra = environment.jmReadingProgressStore.progress(albumID: albumID)?.extraJSONString
+        }
+        return ModuleFavoriteSnapshot(
+            module: .jm,
+            externalId: albumID,
+            title: record?.title ?? chapterTitle ?? "JM \(albumID)",
+            coverUrl: record?.coverUrl,
+            subtitle: record?.subtitle,
+            extraJson: extra
+        )
+    }
+
+    private func currentProgress(pageCount: Int) -> JmReadingProgress {
+        JmReadingProgress(
+            albumID: albumID,
+            chapterID: chapterID,
+            pageIndex: pageIndex,
+            pageCount: pageCount,
+            chapterTitle: chapterTitle
+        )
+    }
+
+    private func flushFavoriteProgress() async {
+        guard syncsFavorite, environment.authSession.isSignedIn else { return }
+        guard case .loaded(let pages) = pagesState, !pages.isEmpty else { return }
+        let progress = currentProgress(pageCount: pages.count)
+        guard let record = environment.moduleWatchHistoryStore.records(module: .jm).first(where: { $0.externalId == albumID }) else { return }
+        let snapshot = ModuleFavoriteSnapshot(
+            module: .jm,
+            externalId: albumID,
+            title: record.title,
+            coverUrl: record.coverUrl,
+            subtitle: record.subtitle,
+            extraJson: progress.extraJSONString
+        )
+        _ = try? await environment.moduleFavoriteClient.add(snapshot)
     }
 }
 
