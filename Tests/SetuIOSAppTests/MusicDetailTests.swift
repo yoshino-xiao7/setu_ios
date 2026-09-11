@@ -102,6 +102,54 @@ final class MusicDetailTests: XCTestCase {
         XCTAssertEqual(requests.filter { $0 == "GET /user/playlists/1" }.count, 2)
     }
 
+    func testPlayingPlaylistQueuesEveryPageNotJustTheFirstFifty() async throws {
+        let playlistID = MusicV2PlaylistID.provider(.init(rawValue: "netease:playlist:big"))
+        let total = 70
+        MusicV2URLProtocol.handler = { request in
+            let offset = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?
+                .queryItems?.first { $0.name == "offset" }?.value.flatMap(Int.init) ?? 0
+            let page = playlistMembershipPage(playlistID: playlistID.rawValue, offset: offset, total: total)
+            if request.url!.path.hasSuffix("/tracks") {
+                return .init(body: Data(page.utf8))
+            }
+            let playlist = MusicV2Fixtures.providerPlaylist
+                .replacingOccurrences(of: "netease:playlist:1", with: playlistID.rawValue)
+                .replacingOccurrences(of: "\"trackCount\":0", with: "\"trackCount\":\(total)")
+            return .init(body: Data("{\"playlist\":\(playlist),\"memberships\":\(page)}".utf8))
+        }
+        let store = MusicStore(client: musicTestClient(), userID: 1)
+        let player = MusicPlaybackController(persistsPlayback: false)
+        addTeardownBlock { await MainActor.run { player.stop() } }
+        let intent = MusicPlaybackIntent(player: player, store: store, libraryClient: makeMusicV2Client())
+        await store.loadPlaylistDetailV2(playlistID, client: makeMusicV2Client())
+        let data = try XCTUnwrap(store.playlistDetailV2(playlistID.rawValue).value)
+        XCTAssertEqual(data.tracks.count, 50)
+        XCTAssertNotNil(data.nextOffset)
+        let first = try XCTUnwrap(data.tracks.first)
+        await intent.play(first, in: data.tracks, context: data.context)
+        XCTAssertEqual(player.queueTracks.count, total)
+        XCTAssertEqual(player.queueTracks.first?.title, "Song 0")
+        XCTAssertEqual(player.queueTracks.last?.title, "Song 69")
+        XCTAssertEqual(store.playlistDetailV2(playlistID.rawValue).value?.tracks.count, total)
+    }
+
+    func testPlaylistRemainderDoesNotJoinADifferentQueue() async throws {
+        let url = URL(fileURLWithPath: "/private/tmp/nonexistent-playback-fixture")
+        let player = MusicPlaybackController(persistsPlayback: false)
+        addTeardownBlock { await MainActor.run { player.stop() } }
+        let current = MusicPlaybackTrack(id: 1, title: "Current", artist: "", album: "", coverURLString: nil,
+                                         durationMilliseconds: 1_000, mvID: nil, streamURL: url)
+        let leftover = MusicPlaybackTrack(id: 2, title: "Leftover", artist: "", album: "", coverURLString: nil,
+                                          durationMilliseconds: 1_000, mvID: nil, streamURL: url)
+        let playlist = PlaybackContext.playlist(id: .provider(.canonical(.init(rawValue: "netease:playlist:a"))), label: "A")
+        let other = PlaybackContext.playlist(id: .provider(.canonical(.init(rawValue: "netease:playlist:b"))), label: "B")
+        player.play(url: url, track: current, context: other, queueTracks: [current])
+        player.appendUpcoming([leftover], matching: playlist)
+        XCTAssertEqual(player.queueTracks.map(\.title), ["Current"])
+        player.appendUpcoming([leftover], matching: other)
+        XCTAssertEqual(player.queueTracks.map(\.title), ["Current", "Leftover"])
+    }
+
     func testRoutesOffAndUnknownOrNullIdentityStayUnavailable() {
         var flags = MusicFeatureFlags()
         XCTAssertNil(MusicDetailRoutes.artist(.init(rawValue: "netease:artist:1"), flags: flags))
@@ -112,4 +160,16 @@ final class MusicDetailTests: XCTestCase {
         XCTAssertNil(MusicDetailRoutes.album(nil, flags: flags))
         XCTAssertFalse(flags.usesV2Playback); XCTAssertFalse(flags.usesV2PlaylistDetail)
     }
+}
+
+private func playlistMembershipPage(playlistID: String, offset: Int, total: Int, limit: Int = 50) -> String {
+    let end = min(offset + limit, total)
+    let items = (offset..<end).map { index -> String in
+        let track = MusicV2Fixtures.track
+            .replacingOccurrences(of: "netease:track:1", with: "netease:track:\(index)")
+            .replacingOccurrences(of: "\"title\":\"Track\"", with: "\"title\":\"Song \(index)\"")
+        return "{\"playlistId\":\"\(playlistID)\",\"trackId\":\"netease:track:\(index)\",\"position\":\(index),\"track\":\(track),\"relationId\":null,\"addedAt\":null}"
+    }.joined(separator: ",")
+    let hasMore = end < total
+    return "{\"items\":[\(items)],\"offset\":\(offset),\"limit\":\(limit),\"hasMore\":\(hasMore),\"total\":\(total),\"nextOffset\":\(hasMore ? String(end) : "null")}"
 }

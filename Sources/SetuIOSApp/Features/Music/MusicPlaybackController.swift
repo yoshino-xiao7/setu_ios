@@ -566,8 +566,7 @@ final class MusicPlaybackController {
             } else { requestRadioRefill() }
             return
         }
-        let usesLocalAudio = (player?.currentItem?.asset as? AVURLAsset)?.url.isFileURL == true
-        if player?.currentItem == nil || player?.currentItem?.status == .failed || (!usesLocalAudio && currentSource.map({ !$0.isValid(at: Date()) }) == true) {
+        if player?.currentItem == nil || player?.currentItem?.status == .failed {
             resumeRestoredCurrentTrack()
             return
         }
@@ -980,6 +979,16 @@ final class MusicPlaybackController {
         currentQueueIndex = 0
         queueDidChange()
         feedback = .success("已清空待播队列")
+        persistPlaybackSnapshot()
+    }
+
+    func appendUpcoming(_ tracks: [MusicPlaybackTrack], matching context: PlaybackContext) {
+        guard self.context == context, context.isInfinite != true else { return }
+        let existing = Set(queueTracks.map(\.id))
+        let incoming = tracks.filter { !existing.contains($0.id) }
+        guard !incoming.isEmpty else { return }
+        queueTracks.append(contentsOf: incoming)
+        queueDidChange()
         persistPlaybackSnapshot()
     }
 

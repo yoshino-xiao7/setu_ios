@@ -361,6 +361,48 @@ final class MusicPlaybackControllerTests: XCTestCase {
         let count = await counter.count; XCTAssertEqual(count, 2, "Resolver's existing preferred + standard attempts, no controller loop")
     }
 
+    func testExpiredSourceResumeKeepsCurrentItem() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("resume-cache-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let wav = try playbackWave(seconds: 2)
+        defer { try? FileManager.default.removeItem(at: wav) }
+        let bytes = try Data(contentsOf: wav)
+        let cache = MusicAudioCache(directory: folder, transport: { request in
+            AsyncThrowingStream { continuation in
+                let values = (request.value(forHTTPHeaderField: "Range") ?? "bytes=0-0").dropFirst(6).split(separator: "-")
+                let start = Int(values.first ?? "0") ?? 0
+                let end = min(bytes.count, (Int(values.last ?? "0") ?? 0) + 1)
+                continuation.yield(.response(HTTPURLResponse(url: request.url!, statusCode: 206, httpVersion: nil, headerFields: [
+                    "Content-Type": "audio/wav", "Content-Length": "\(max(0, end - start))",
+                    "Content-Range": "bytes \(start)-\(max(start, end - 1))/\(bytes.count)", "ETag": "\"wav-v1\""])!))
+                if start < end { continuation.yield(.bytes(bytes.subdata(in: start..<end))) }
+                continuation.finish()
+            }
+        })
+        let counter = MusicTestCounter()
+        let controller = MusicPlaybackController(persistsPlayback: false, audioAssets: CachedAudioAssetFactory(cache: cache))
+        defer { controller.stop() }
+        let remote = URL(string: "https://audio.example/song.wav")!
+        controller.urlResolver = PlaybackURLResolver { ids, quality in
+            _ = await counter.next()
+            return try playbackResponse(ids: ids, quality: quality, expi: 6, url: remote)
+        }
+        let track = try playbackTracks()[0]
+        let started = await controller.play(track: track, in: [track])
+        XCTAssertTrue(started)
+        let original = try XCTUnwrap(controller.player?.currentItem)
+        let before = await counter.count
+        XCTAssertEqual(before, 1)
+        try await Task.sleep(for: .milliseconds(1200))
+        controller.pause()
+        controller.resume()
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertTrue(controller.player?.currentItem === original, "Expired signed URL must not rebuild a healthy item")
+        XCTAssertFalse(controller.isSeeking)
+        let after = await counter.count
+        XCTAssertEqual(after, before, "Resume of a healthy item must not resolve a new URL")
+    }
+
     func testAddressResolutionSurvivesFiveSecondsAndPauseRejectsLateResult() async throws {
         let clock = PlaybackManualClock(), gate = MusicTestGate()
         let url = try playbackWave(); defer { try? FileManager.default.removeItem(at: url) }

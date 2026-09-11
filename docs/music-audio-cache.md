@@ -22,8 +22,12 @@ removal when released; capacity reductions can temporarily retain those leases.
 Writing is disabled rather than interrupting playback when storage is unavailable.
 Legacy complete audio is imported on a matching account/song/requested-quality key;
 it is never spliced into a new partial stream. Actual response quality is recorded
-separately. A refreshed URL requires a matching strong ETag and length to reuse
-partial data; otherwise partial bytes are discarded.
+separately. A refreshed signed URL reuses partial bytes when the content prefix
+and length match, or when a strong ETag and length match; different content is
+discarded. Fully covered parts are assembled into a complete file so restart can
+use a local URL without waiting on the network. Pause/resume keeps a healthy
+player item even after the signed URL's refresh time; 401/403 still use the
+existing source-recovery path.
 
 ## Seeking
 

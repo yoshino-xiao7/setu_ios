@@ -43,7 +43,7 @@ struct PlaylistDetailView: View {
                                 else { mode = nil }
                                 await intent?.play(first, in: data.tracks, context: data.context, mode: mode)
                             }
-                        } label: { Label(data.nextOffset == nil ? "播放全部" : "播放已加载歌曲", systemImage: "play.fill").frame(minHeight: 44) }
+                        } label: { Label("播放全部", systemImage: "play.fill").frame(minHeight: 44) }
                     }
                     if data.memberships.isEmpty { ContentUnavailableView("暂无歌曲", systemImage: "music.note") }
                     ForEach(data.memberships.indices, id: \.self) { index in

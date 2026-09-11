@@ -98,6 +98,7 @@ final class MusicStore {
     @ObservationIgnored private var libraryKeys: Set<MusicCacheKey> = [.library]
     @ObservationIgnored private var likedPreparation: Task<Void, Never>?
     @ObservationIgnored private var savedPreparation: Task<Void, Never>?
+    @ObservationIgnored private var playlistRemainderLoads: [String: Task<Void, Never>] = [:]
     let homeFeed = MusicResource<MusicV2HomeFeed>()
     @ObservationIgnored private var homeRecovery: Task<Void, Never>?
     @ObservationIgnored private let homeRecoverySleep: @Sendable (UInt64) async throws -> Void
@@ -148,6 +149,8 @@ final class MusicStore {
         libraryRevision = UUID()
         likedPreparation?.cancel(); likedPreparation = nil
         savedPreparation?.cancel(); savedPreparation = nil
+        for task in playlistRemainderLoads.values { task.cancel() }
+        playlistRemainderLoads.removeAll()
         library.reset(); likedTracks.reset(); favoritePlaylists.reset()
         likedTrackIDs.removeAll(); savedPlaylistIDs.removeAll()
         libraryWriting = false; libraryMoreLoading.removeAll(); libraryMoreErrors.removeAll()
@@ -430,6 +433,34 @@ final class MusicStore {
             guard generation == owner, detailRevisions[key] == revision else { return }
             detailMoreErrors[key] = UserFacingErrorMapper.map(error)
         }
+    }
+
+    func loadRemainingPlaylistDetail(_ id: MusicV2PlaylistID, client: MusicV2Client) async {
+        let key = id.rawValue
+        if let existing = playlistRemainderLoads[key] {
+            await existing.value
+            return
+        }
+        let owner = generation
+        let task = Task { [weak self] in
+            guard let self else { return }
+            var steps = 0
+            while self.generation == owner, !Task.isCancelled, steps < 200 {
+                steps += 1
+                if self.detailMoreLoading.contains(key) {
+                    try? await Task.sleep(for: .milliseconds(20))
+                    continue
+                }
+                guard self.playlistDetailV2(key).value?.nextOffset != nil else { return }
+                let offset = self.playlistDetailV2(key).value?.nextOffset
+                await self.loadMorePlaylistDetail(id, client: client)
+                if self.detailMoreErrors[key] != nil { return }
+                if self.playlistDetailV2(key).value?.nextOffset == offset { return }
+            }
+        }
+        playlistRemainderLoads[key] = task
+        await task.value
+        if playlistRemainderLoads[key] != nil { playlistRemainderLoads[key] = nil }
     }
 
     func loadHistory(force: Bool = false) async {

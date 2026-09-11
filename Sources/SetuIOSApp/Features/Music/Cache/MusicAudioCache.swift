@@ -84,32 +84,58 @@ actor MusicAudioCache {
     private static func hash(_ string: String) -> String { SHA256.hash(data: Data(string.utf8)).map { String(format: "%02x", $0) }.joined() }
     func open(_ source: Source) async throws -> String {
         let id = Self.hash(source.key + "|" + source.quality)
-        let hash = Self.hash(source.url.absoluteString)
         if var entry = entries[id] {
-            if entry.sourceHash != hash, entry.complete == nil {
-                for key in Array(flights.keys) where key.hasPrefix(id + ":") { flights.removeValue(forKey: key)?.task.cancel() }
-                signal()
-                // Never splice partial data across signed URLs without strong content validation.
-                if let validator = entry.validator {
-                    var request = URLRequest(url: source.url); request.setValue("bytes=0-0", forHTTPHeaderField: "Range")
-                    var matches = false
-                    var stopValidation: (@Sendable () -> Void)?
-                    defer { stopValidation?() }
-                    for try await event in transport(request) {
-                        if case .cancellation(let cancel) = event { stopValidation = cancel }
-                        if case .response(let response) = event {
-                            matches = response.value(forHTTPHeaderField: "ETag") == validator && Self.totalLength(response) == entry.length
-                            break
-                        }
-                    }
-                    if !matches { removeFiles(entry); entry.segments = []; verifiedFormats.remove(id); entry.length = nil; entry.validator = nil }
-                } else { removeFiles(entry); entry.segments = []; verifiedFormats.remove(id); entry.length = nil }
-            }
-            entry.sourceHash = hash; entry.used = Date(); entries[id] = entry
-        } else { entries[id] = Entry(id: id, key: source.key, quality: source.quality, sourceHash: hash) }
+            await adopt(source, into: &entry)
+            entry.used = Date(); entries[id] = entry
+        } else { entries[id] = Entry(id: id, key: source.key, quality: source.quality, sourceHash: Self.hash(source.url.absoluteString)) }
         verifiedFormats.remove(id)
         sources[id] = source.url; leases[id, default: 0] += 1
         save(); return id
+    }
+    private func adopt(_ source: Source, into entry: inout Entry) async {
+        let hash = Self.hash(source.url.absoluteString)
+        if entry.sourceHash == hash { return }
+        if entry.complete == nil {
+            for key in Array(flights.keys) where key.hasPrefix(entry.id + ":") { flights.removeValue(forKey: key)?.task.cancel() }
+            signal()
+            if !(await canReusePartial(entry, url: source.url)) {
+                removeFiles(entry); entry.segments = []; verifiedFormats.remove(entry.id); entry.length = nil; entry.validator = nil
+            }
+        }
+        entry.sourceHash = hash
+    }
+    private func canReusePartial(_ entry: Entry, url: URL) async -> Bool {
+        let prefix = available(entry, offset: 0, count: 16) ?? Data()
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
+        request.setValue("bytes=0-\(max(prefix.count, 1) - 1)", forHTTPHeaderField: "Range")
+        var stopValidation: (@Sendable () -> Void)?
+        defer { stopValidation?() }
+        do {
+            var remote = Data()
+            var remoteLength: Int64?
+            for try await event in transport(request) {
+                switch event {
+                case .cancellation(let cancel): stopValidation = cancel
+                case .response(let response):
+                    remoteLength = Self.totalLength(response)
+                    if let known = entry.length, let remoteLength, known != remoteLength { return false }
+                    let tag = Self.strongETag(response)
+                    if let validator = entry.validator, let tag, validator == tag, remoteLength == entry.length { return true }
+                case .bytes(let data):
+                    remote.append(data)
+                    if !prefix.isEmpty, remote.count >= prefix.count {
+                        return remote.prefix(prefix.count) == prefix
+                    }
+                case .checkpoint(let consumed): consumed()
+                }
+            }
+            return !prefix.isEmpty && remote.prefix(prefix.count) == prefix
+        } catch {
+            return !entry.segments.isEmpty || entry.complete != nil
+        }
+    }
+    private static func strongETag(_ response: HTTPURLResponse) -> String? {
+        response.value(forHTTPHeaderField: "ETag").flatMap { $0.hasPrefix("W/") ? nil : $0 }
     }
     func leaseFile(_ url: URL) -> String? {
         guard let entry = entries.values.first(where: { $0.complete.map { directory.appendingPathComponent($0).standardizedFileURL.path == url.standardizedFileURL.path } == true }) else { return nil }
@@ -124,7 +150,10 @@ actor MusicAudioCache {
         evict(reserving: 0); save(); signal()
     }
     func cachedSource(key: String) -> (URL, String)? {
-        if !entries.values.contains(where: { $0.key == key && $0.complete != nil }) { importLegacy(key) }
+        if !entries.values.contains(where: { $0.key == key && $0.complete != nil }) {
+            importLegacy(key)
+            assembleCoveredParts(for: key)
+        }
         guard let entry = entries.values.filter({ $0.key == key && !$0.deleteWhenReleased && $0.complete != nil }).max(by: { $0.used < $1.used }),
               let name = entry.complete else { return nil }
         let url = directory.appendingPathComponent(name)
@@ -158,6 +187,51 @@ actor MusicAudioCache {
             var entry = Entry(id: id, key: key, quality: quality, sourceHash: Self.hash(destination.absoluteString))
             entry.length = Int64(size); entry.complete = name; entries[id] = entry; save()
         } catch { /* Legacy data is expendable; normal source resolution remains available. */ }
+    }
+
+    private func coveredBytes(_ entry: Entry) -> Int64 {
+        let sorted = entry.segments.sorted { $0.offset < $1.offset }
+        var position: Int64 = 0
+        for segment in sorted {
+            if segment.offset > position { return position }
+            position = max(position, segment.end)
+        }
+        return position
+    }
+
+    private func assembleCoveredParts(for key: String) {
+        guard var entry = entries.values.filter({ $0.key == key && !$0.deleteWhenReleased && $0.complete == nil }).max(by: { $0.used < $1.used }),
+              let length = entry.length, length > 0, coveredBytes(entry) >= length else { return }
+        let header = available(entry, offset: 0, count: 16) ?? Data()
+        let mime = AudioContentFormat.mime(header: header, advertised: entry.mime)
+        evict(reserving: length)
+        guard diskBytes() + length <= capacity, !writesDisabled else { return }
+        let fileExtension = UTType(mimeType: mime)?.preferredFilenameExtension ?? "audio"
+        let name = entry.id + "." + fileExtension
+        let temporary = directory.appendingPathComponent(entry.id + "-" + UUID().uuidString + ".assembling")
+        FileManager.default.createFile(atPath: temporary.path, contents: nil)
+        guard let handle = try? FileHandle(forWritingTo: temporary) else {
+            try? FileManager.default.removeItem(at: temporary); return
+        }
+        var assembledBytes: Int64 = 0
+        var offset: Int64 = 0
+        do {
+            while offset < length {
+                guard let data = available(entry, offset: offset, count: Self.blockSize), !data.isEmpty else {
+                    throw URLError(.cannotDecodeContentData)
+                }
+                try handle.write(contentsOf: data); offset += Int64(data.count)
+                assembledBytes += Int64(data.count); storedBytes += Int64(data.count)
+            }
+            try handle.close()
+            try FileManager.default.moveItem(at: temporary, to: directory.appendingPathComponent(name))
+            for segment in entry.segments { removeFile(segment.name); volatile[segment.name] = nil }
+            entry.segments = []; entry.complete = name; entry.mime = mime
+            entries[entry.id] = entry
+            save()
+        } catch {
+            try? handle.close(); try? FileManager.default.removeItem(at: temporary); storedBytes -= assembledBytes
+        }
     }
 
     func discard(key: String) {
@@ -310,10 +384,10 @@ actor MusicAudioCache {
                   start == requested, end >= start, end < length,
                   response.expectedContentLength < 0 || response.expectedContentLength == end - start + 1 else { throw URLError(.badServerResponse) }
         }
-        let tag = response.value(forHTTPHeaderField: "ETag").flatMap { $0.hasPrefix("W/") ? nil : $0 }
-        if let old = entry.validator, let tag, old != tag, !entry.segments.isEmpty { throw URLError(.resourceUnavailable) }
+        let tag = Self.strongETag(response)
         if let old = entry.length, old != length, !entry.segments.isEmpty { throw URLError(.resourceUnavailable) }
-        entry.length = length; entry.mime = verifiedFormats.contains(id) ? entry.mime : (response.mimeType ?? "application/octet-stream"); entry.ranges = response.statusCode == 206; entry.validator = tag
+        entry.length = length; entry.mime = verifiedFormats.contains(id) ? entry.mime : (response.mimeType ?? "application/octet-stream"); entry.ranges = response.statusCode == 206
+        if let tag { entry.validator = tag }
         entries[id] = entry; signal(); return entry.ranges ? requested : 0
     }
     private func store(_ data: Data, id: String, offset: Int64, flightKey: String, token: UUID) async throws {

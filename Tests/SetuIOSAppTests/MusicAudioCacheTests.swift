@@ -174,6 +174,54 @@ final class MusicAudioCacheTests: XCTestCase {
         await restored.release(newID)
     }
 
+    func testRefreshedSignedURLReusesPartialBytesWhenContentMatches() async throws {
+        let folder = temporaryDirectory(); defer { try? FileManager.default.removeItem(at: folder) }
+        let bytes = Data(repeating: 9, count: 500_000)
+        let cache = MusicAudioCache(directory: folder, transport: transport(bytes, validator: "\"v1\""))
+        let id = try await cache.open(source)
+        _ = try await cache.read(id, offset: 0, count: 100)
+        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        while ContinuousClock.now < deadline {
+            if (await cache.usage()).bytes >= 200_000 { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let stored = await cache.usage()
+        XCTAssertGreaterThanOrEqual(stored.bytes, 200_000)
+        await cache.release(id)
+        let restored = MusicAudioCache(directory: folder, transport: transport(bytes, validator: "\"v2\""))
+        let newID = try await restored.open(.init(key: source.key, url: URL(string: "https://audio.example/song.mp3?auth=2")!, quality: source.quality))
+        let data = try await restored.read(newID, offset: 0, count: 100)
+        XCTAssertEqual(data, Data(repeating: 9, count: 100))
+        let stats = await restored.statistics()
+        XCTAssertLessThan(stats.networkBytes, 1024, "Matching signed-URL refresh must not re-download a cached block")
+        await restored.release(newID)
+    }
+
+    func testFullyCoveredPartsBecomeCachedSourceWithoutNetwork() async throws {
+        let folder = temporaryDirectory(); defer { try? FileManager.default.removeItem(at: folder) }
+        let bytes = Data(repeating: 3, count: 400_000)
+        let cache = MusicAudioCache(directory: folder, transport: transport(bytes))
+        let id = try await cache.open(source)
+        var offset: Int64 = 0
+        while offset < Int64(bytes.count) {
+            let chunk = try await cache.read(id, offset: offset, count: MusicAudioCache.blockSize)
+            if chunk.isEmpty { break }
+            offset += Int64(chunk.count)
+        }
+        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        while ContinuousClock.now < deadline {
+            if (await cache.usage()).bytes >= Int64(bytes.count) { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        await cache.release(id)
+        let restored = MusicAudioCache(directory: folder, transport: { _ in
+            AsyncThrowingStream { $0.finish(throwing: URLError(.notConnectedToInternet)) }
+        })
+        let local = await restored.cachedSource(key: source.key)
+        XCTAssertNotNil(local, "Covered parts must assemble a complete file for restart")
+        XCTAssertEqual(try Data(contentsOf: XCTUnwrap(local?.0)), bytes)
+    }
+
     func testClearKeepsLeasedPlaybackAndRemovesAfterRelease() async throws {
         let folder = temporaryDirectory(); defer { try? FileManager.default.removeItem(at: folder) }
         let cache = MusicAudioCache(directory: folder, transport: transport(Data(repeating: 4, count: 300_000)))
