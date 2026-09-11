@@ -69,11 +69,15 @@ fi
 git tag -a "$tag" -m "$tag"
 git push origin "refs/tags/${tag}"
 
-gh release create "$tag" \
-  --title "亦可 YK ${tag}" \
-  --notes-file "$notes" \
-  --verify-tag \
-  "${prerelease_args[@]}"
+if gh release view "$tag" >/dev/null 2>&1; then
+  printf 'Release %s already exists (tag workflow may have created it).\n' "$tag"
+else
+  gh release create "$tag" \
+    --title "亦可 YK ${tag}" \
+    --notes-file "$notes" \
+    --verify-tag \
+    "${prerelease_args[@]}"
+fi
 
 printf 'Created source-only GitHub Release %s\n' "$tag"
 printf 'Confirm the Release page has no ipa/xcarchive attachments.\n'
