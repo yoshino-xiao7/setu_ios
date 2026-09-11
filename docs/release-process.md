@@ -52,6 +52,7 @@ bash scripts/create-source-release.sh YK-v1.0.0-alpha.1
 - 不要从脏工作区或非 `main` 提交打发版标签。
 - 不要改已发布标签指向的提交。修错就发下一个版本号。
 - 不要跳过 `docs/releases/<tag>.md`。没有说明文件，脚本会失败。
+- 公开 README、Changelog 和 Release 说明不要链接私有仓库、私有 Actions 或未公开的内部项目地址。
 
 ## 以后若要发安装包
 

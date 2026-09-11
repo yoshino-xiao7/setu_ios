@@ -2,9 +2,9 @@
 
 **亦可 YK（原雪涼云）** 的 SwiftUI 原生 iPhone 客户端。品牌英文标识为 **YIKE**，简称 **YK**，主屏幕显示名称为「亦可 YK」。
 
-这不是 Web 套壳。图片、音乐、AI 绘画、收藏、账户和管理后台都是原生界面，复用 [`setu_api_full`](https://github.com/yoshino-xiao7/setu_api_full) 后端；[`setu_cloud`](https://github.com/yoshino-xiao7/setu_cloud) 只作为功能与接口参考。
+这不是 Web 套壳。图片、音乐、AI 绘画、收藏、账户和管理后台都是原生界面，连接亦可自己的 API 服务。
 
-当前公开版本：**[YK-v1.0.0-alpha.1](https://github.com/yoshino-xiao7/setu_ios/releases/tag/YK-v1.0.0-alpha.1)**。这是首次源码发布，**只提供源码**，不附带 ipa、xcarchive 或 TestFlight 包。工程内部开发版本号仍为 `1.1 (5)`。
+当前公开版本：**[YK-v1.0.0-alpha.2](https://github.com/yoshino-xiao7/setu_ios/releases/tag/YK-v1.0.0-alpha.2)**。这是源码发布，**只提供源码**，不附带 ipa、xcarchive 或 TestFlight 包。工程内部开发版本号仍为 `1.1 (5)`。`YK-v1.0.0-alpha.1` 的 README 误放了内部仓库地址，请改用本版本。
 
 ## 本次 Alpha 说明
 
@@ -213,11 +213,6 @@ Bundle ID：应用 `icu.yukiryou.setuios`，Core `.core`，Live Activity `.livea
 - 标签格式：`YK-v主版本.次版本.修订号`，预发布加 `-alpha.N` / `-beta.N` / `-rc.N`
 - **alpha / beta / rc 只发布源码**，禁止附带 ipa、xcarchive、dSYM
 - 使用 `bash scripts/create-source-release.sh <tag>` 打标签并创建 Release
-
-## 相关项目
-
-- [setu_api_full](https://github.com/yoshino-xiao7/setu_api_full) — 后端
-- [setu_cloud](https://github.com/yoshino-xiao7/setu_cloud) — Web 控制台
 
 ## 说明
 
