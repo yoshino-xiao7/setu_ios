@@ -19,7 +19,10 @@ The quota includes parts, complete files, the catalog, assembly scratch space an
 remaining v1 cache files. Accounting is incremental, with directory reconciliation
 at startup. LRU eviction skips leased sources. Clearing marks leased entries for
 removal when released; capacity reductions can temporarily retain those leases.
-Writing is disabled rather than interrupting playback when storage is unavailable.
+Writing is disabled rather than interrupting playback when the disk itself cannot
+accept files. Quota pressure evicts idle audio so the current song can still be
+cached; it does not mark the store unavailable. Range writes keep a second copy
+for atomic replacement and do not reserve a separate 4 MiB assembly cushion.
 Legacy complete audio is imported on a matching account/song/requested-quality key;
 it is never spliced into a new partial stream. Actual response quality is recorded
 separately. A refreshed signed URL reuses partial bytes when the content prefix
@@ -65,5 +68,8 @@ measurement. Build/install success does not establish the P95 acceptance targets
 
 Recovered playback resets the consecutive stall counter. Separate transient stalls
 must not accumulate into a permanent network error; sustained buffering still uses
-the existing timeout and source-recovery path. Regression tests post four recovered
-stall notifications and verify playback remains active.
+the existing timeout and source-recovery path. A transient timeout on a still-usable
+item resumes that item instead of replacing it and seeking; a failed restoring seek
+was pausing playback after weak-network buffering. Regression tests post four recovered
+stall notifications and verify playback remains active, and they recover a timeout after
+progress without destroying the current item.

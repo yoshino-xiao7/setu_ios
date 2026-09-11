@@ -275,6 +275,36 @@ final class MusicAudioCacheTests: XCTestCase {
         let usage = await cache.usage(); XCTAssertLessThanOrEqual(usage.bytes, 3 * 1024 * 1024)
     }
 
+    func testNearQuotaWritesEvictIdleAudioInsteadOfDisablingTheStore() async throws {
+        let folder = temporaryDirectory(); defer { try? FileManager.default.removeItem(at: folder) }
+        let idle = Data(repeating: 3, count: 2_500_000)
+        let current = Data(repeating: 2, count: 400_000)
+        let kept = MusicAudioCache.Source(key: "other|song|high", url: URL(string: "https://audio.example/idle.mp3")!, quality: "lossless")
+        let cache = MusicAudioCache(directory: folder, capacity: 12 * 1024 * 1024, transport: { [self] request in
+            transport(request.url?.lastPathComponent == "playing.mp3" ? current : idle)(request)
+        })
+        let first = try await cache.open(source)
+        _ = try await cache.completeFile(first); await cache.release(first)
+        let second = try await cache.open(kept)
+        _ = try await cache.completeFile(second); await cache.release(second)
+        await cache.configure(capacity: 3 * 1024 * 1024, prefetchAllowed: false)
+        let usedBefore = (await cache.usage()).bytes
+        XCTAssertGreaterThan(usedBefore, 2_000_000)
+        let disabledBefore = (await cache.usage()).writeDisabled
+        XCTAssertFalse(disabledBefore)
+        let currentID = try await cache.open(MusicAudioCache.Source(key: "account|playing|high", url: URL(string: "https://audio.example/playing.mp3")!, quality: "high"))
+        _ = try await cache.read(currentID, offset: 0, count: 100)
+        let deadline = ContinuousClock.now.advanced(by: .seconds(1))
+        while !(await cache.usage()).writeDisabled, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let usage = await cache.usage()
+        XCTAssertFalse(usage.writeDisabled, "Quota pressure must evict idle files instead of marking the cache unavailable")
+        let replayed = try await cache.read(currentID, offset: 0, count: 100)
+        XCTAssertEqual(replayed, Data(repeating: 2, count: 100))
+        await cache.release(currentID)
+    }
+
     func testDiskUnavailableStillServesPlaybackData() async throws {
         let folder = temporaryDirectory(); try Data([1]).write(to: folder)
         defer { try? FileManager.default.removeItem(at: folder) }

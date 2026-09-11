@@ -337,14 +337,31 @@ final class MusicPlaybackControllerTests: XCTestCase {
         controller.play(url: url, track: tracks[0], queueTracks: [tracks[0]])
         let original = try XCTUnwrap(controller.player?.currentItem)
         controller.handleItemFailure(original, error: URLError(.timedOut))
-        controller.handleItemFailure(original, error: URLError(.timedOut))
-        let replaced = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            MainActor.assumeIsolated { controller.player?.currentItem !== original }
-        }, object: nil)
-        await fulfillment(of: [replaced], timeout: 3)
-        controller.handleItemFailure(try XCTUnwrap(controller.player?.currentItem), error: URLError(.cannotConnectToHost))
+        XCTAssertTrue(controller.player?.currentItem === original)
+        XCTAssertNil(controller.playbackError)
+        controller.handleItemFailure(original, error: URLError(.cannotConnectToHost))
         XCTAssertNotNil(controller.playbackError); XCTAssertFalse(controller.isBuffering); XCTAssertFalse(controller.isPlaying)
         let count = await counter.count; XCTAssertEqual(count, 0)
+    }
+
+    func testTransientStallAfterProgressKeepsPlayingWithoutDestroyingTheItem() async throws {
+        let cache = PreciseSeekAudioCache { _, _ in throw URLError(.notConnectedToInternet) }
+        let controller = MusicPlaybackController(persistsPlayback: false, preciseSeekCache: cache)
+        defer { controller.stop() }
+        let url = try playbackWave()
+        defer { try? FileManager.default.removeItem(at: url) }
+        controller.play(url: url, track: try playbackTracks()[0])
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            MainActor.assumeIsolated { controller.player?.currentItem?.status == .readyToPlay }
+        }, object: nil)
+        await fulfillment(of: [ready], timeout: 8)
+        let original = try XCTUnwrap(controller.player?.currentItem)
+        XCTAssertTrue(controller.isPlaying)
+        controller.handleItemFailure(original, error: URLError(.timedOut))
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertNil(controller.playbackError)
+        XCTAssertTrue(controller.isPlaying, "A recovered stall must not leave playback paused")
+        XCTAssertTrue(controller.player?.currentItem === original, "Keep the current item instead of seeking onto a replacement")
     }
 
     func testExpiredSourceRefreshFailureExitsWithoutLoop() async throws {

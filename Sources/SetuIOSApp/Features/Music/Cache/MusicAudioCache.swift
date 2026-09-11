@@ -396,19 +396,27 @@ actor MusicAudioCache {
         if entry.segments.contains(where: { $0.offset == offset && $0.count >= data.count &&
             (volatile[$0.name] != nil || FileManager.default.fileExists(atPath: directory.appendingPathComponent($0.name).path)) }) { return }
         let name = id + "-" + String(offset) + "-" + UUID().uuidString + ".part"
-        evict(reserving: Int64(data.count))
-        do {
-            guard !writesDisabled, diskBytes() + Int64(data.count) * 2 + 4 * 1024 * 1024 <= capacity else { throw CocoaError(.fileWriteOutOfSpace) }
-            try await diskWrite(data, directory.appendingPathComponent(name))
-            guard isCurrent(flightKey, token: token), !Task.isCancelled else {
-                try? FileManager.default.removeItem(at: directory.appendingPathComponent(name))
-                throw CancellationError()
+        let needed = Int64(data.count) * 2
+        evict(reserving: needed)
+        var persisted = false
+        if diskBytes() + needed <= capacity {
+            do {
+                try await diskWrite(data, directory.appendingPathComponent(name))
+                guard isCurrent(flightKey, token: token), !Task.isCancelled else {
+                    try? FileManager.default.removeItem(at: directory.appendingPathComponent(name))
+                    throw CancellationError()
+                }
+                storedBytes += Int64(data.count)
+                writesDisabled = false
+                persisted = true
+            } catch is CancellationError { throw CancellationError() }
+            catch {
+                guard isCurrent(flightKey, token: token), !Task.isCancelled else { throw CancellationError() }
+                writesDisabled = true
             }
-            storedBytes += Int64(data.count)
-        } catch is CancellationError { throw CancellationError() }
-        catch {
+        }
+        if !persisted {
             guard isCurrent(flightKey, token: token), !Task.isCancelled else { throw CancellationError() }
-            writesDisabled = true
             if volatile.values.reduce(0, { $0 + $1.count }) > 4 * 1024 * 1024 {
                 if let first = volatile.keys.first { volatile[first] = nil }
             }

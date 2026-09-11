@@ -1445,6 +1445,17 @@ final class MusicPlaybackController {
               expired || transient else {
             failPlayback(error as? UserFacingError ?? UserFacingErrorMapper.map(error ?? URLError(.cannotDecodeContentData))); return
         }
+        if transient && !expired, item.status != .failed {
+            recoveryCount += 1
+            isBuffering = isPlaying
+            if isPlaying {
+                playWhenSessionReady(item)
+                startLoadingTimeout(for: item)
+            }
+            updateNowPlaying()
+            persistPlaybackSnapshot()
+            return
+        }
         captureConfirmedPosition()
         player?.pause(); isActuallyPlaying = false; isBuffering = isPlaying
         recoveryCount += 1
