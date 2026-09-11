@@ -1,0 +1,47 @@
+name: Source Release Guard
+
+on:
+  push:
+    tags:
+      - 'YK-v*'
+
+jobs:
+  ensure-source-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Ensure GitHub Release exists without extra assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          notes="docs/releases/${TAG}.md"
+          if [[ ! -f "$notes" ]]; then
+            echo "::error::missing $notes — follow docs/release-process.md"
+            exit 1
+          fi
+
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            args=(release create "$TAG" --title "亦可 YK ${TAG}" --notes-file "$notes" --verify-tag)
+            case "$TAG" in
+              *-alpha.*|*-beta.*|*-rc.*) args+=(--prerelease) ;;
+            esac
+            gh "${args[@]}"
+          fi
+
+          extra="$(gh release view "$TAG" --json assets --jq '.assets | length')"
+          case "$TAG" in
+            *-alpha.*|*-beta.*|*-rc.*)
+              if [[ "$extra" != "0" ]]; then
+                echo "::error::prerelease $TAG must be source-only; uploaded assets: $extra"
+                gh release view "$TAG" --json assets
+                exit 1
+              fi
+              ;;
+          esac
+          echo "Release $TAG is present. Uploaded extra assets: $extra"

@@ -9,6 +9,7 @@
 - 新建分支必须以 `yukiryou/` 开头，并从核验后的主线创建。合入主线后，将日常目录切回 `main`；远端合并是否完成要单独核实。
 - 真机安装前记录源码目录、HEAD、分支、未提交差异/源码清单、版本号及实际产物哈希，确认产物来自该源码。安装、启动、模拟器测试、真机播放和视觉验收分别报告；旧回执不能用于新包。
 - 历史报告保留其当时的证据边界。最新操作状态以 Git 和本次构建/安装回执为准，不以文档中的固定 SHA 推断“最新版”。
+- GitHub 发版必须走 [docs/release-process.md](docs/release-process.md)。标签格式 `YK-vX.Y.Z` 或带 `-alpha.N` / `-beta.N` / `-rc.N`。预发布只含源码，使用 `bash scripts/create-source-release.sh <tag>`，不要上传 ipa。
 
 ## Project Overview
 
