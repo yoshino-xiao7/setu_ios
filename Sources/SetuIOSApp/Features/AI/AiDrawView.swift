@@ -600,6 +600,7 @@ struct AiDrawView: View {
                 )
             )
             feedback = .success("作品已提交，正在开始生成。")
+            resetGeneratedStyleStateForNextJob()
             AiDrawDraftStore.clear()
             AiAssetBrowserCacheStore.clearSelectedStyles()
             await AiGenerationLiveActivityCenter.start(job: job, mobileClient: environment.mobileAppClient)
@@ -750,6 +751,7 @@ struct AiDrawView: View {
         guard let draft = AiDrawDraftStore.loadIfPresent() else {
             AiAssetBrowserCacheStore.clearSelectedStyles()
             enabledStylePresetNames = []
+            applyGeneratedStyleReset()
             draftLoaded = true
             return
         }
@@ -779,6 +781,28 @@ struct AiDrawView: View {
         styleNotes = draft.styleNotes
         loadedDraftUpdatedAt = draft.updatedAt
         draftLoaded = true
+        isApplyingDraft = false
+    }
+
+    private func applyGeneratedStyleReset() {
+        var nextStyleTags = styleTags
+        var nextPositivePrompt = positivePrompt
+        var nextStyleNotes = styleNotes
+        AiDrawEditorDraftSync.resetGeneratedStyleState(
+            styleTags: &nextStyleTags,
+            positivePrompt: &nextPositivePrompt,
+            styleNotes: &nextStyleNotes
+        )
+        styleTags = nextStyleTags
+        positivePrompt = nextPositivePrompt
+        styleNotes = nextStyleNotes
+    }
+
+    private func resetGeneratedStyleStateForNextJob() {
+        isApplyingDraft = true
+        applyGeneratedStyleReset()
+        enabledStylePresetNames = []
+        loadedDraftUpdatedAt = nil
         isApplyingDraft = false
     }
 

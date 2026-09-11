@@ -213,6 +213,8 @@ enum AiDrawDraftStore {
         recommendedCheckpoint: String?
     ) {
         var draft = load()
+        let removedStyleTags = AiDrawEditorDraftSync.subtractTags(draft.styleTags, styleTags)
+        draft.promptPositive = AiDrawEditorDraftSync.subtractTags(draft.promptPositive, removedStyleTags)
         draft.styleTags = styleTags
         draft.negativePrompt = mergeTags(AiDrawDefaults.defaultNegativePrompt, negativePrompt)
         if let recommendedCheckpoint, !recommendedCheckpoint.isEmpty {
@@ -336,6 +338,39 @@ enum AiDrawDraftStore {
     private static func defaultNegativeBase(for current: String) -> String {
         let trimmed = current.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? AiDrawDefaults.defaultNegativePrompt : trimmed
+    }
+}
+
+enum AiDrawEditorDraftSync {
+    /// After a successful submit the persisted draft is cleared, but SwiftUI may
+    /// still save the in-memory editor on disappear. Reset generated style fields
+    /// first so an unchecked style cannot keep painting every later job.
+    static func resetGeneratedStyleState(
+        styleTags: inout String,
+        positivePrompt: inout String,
+        styleNotes: inout String
+    ) {
+        styleTags = ""
+        positivePrompt = ""
+        styleNotes = ""
+    }
+
+    static func subtractTags(_ prompt: String, _ injected: String) -> String {
+        let injectedKeys = Set(tags(in: injected).map(normalizedTagKey))
+        return tags(in: prompt)
+            .filter { !injectedKeys.contains(normalizedTagKey($0)) }
+            .joined(separator: ", ")
+    }
+
+    private static func tags(in value: String) -> [String] {
+        value
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    private static func normalizedTagKey(_ tag: String) -> String {
+        tag.lowercased().replacingOccurrences(of: "_", with: " ")
     }
 }
 
