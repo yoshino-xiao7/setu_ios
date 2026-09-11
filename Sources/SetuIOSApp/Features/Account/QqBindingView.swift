@@ -87,6 +87,10 @@ struct QqBindingView: View {
                         }
                         .disabled(!canSaveBinding)
                         .opacity(canSaveBinding ? 1 : 0.55)
+
+                        Text("AI 绘图推送需要先添加 bot QQ：2830323446，否则可能收不到队列和完成通知。")
+                            .font(.footnote)
+                            .foregroundStyle(SetuColor.textSecondary)
                     }
                 }
             }
