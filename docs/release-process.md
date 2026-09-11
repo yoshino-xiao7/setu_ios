@@ -27,7 +27,7 @@ Xcode 的 `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION` 是安装包显示版�
 
 1. 从已核验的 `origin/main` 拉出 `yukiryou/` 分支。
 2. 在 [`CHANGELOG.md`](../CHANGELOG.md) 顶部增加该版本一节。
-3. 新增 [`docs/releases/<tag>.md`](releases/)，写给 GitHub Release 看的说明。Alpha 要写清：只发源码、覆盖哪些功能、已知限制。
+3. 新增 [`docs/releases/<tag>.md`](releases/)，写给 GitHub Release 看的说明。**不要在文件开头再写一级标题**——GitHub 页面顶部已经有发行标题，正文从第一段开始即可。Alpha 要写清：只发源码、覆盖哪些功能、已知限制。
 4. 如有需要，更新 [`README.md`](../README.md) 里的「当前公开版本」。
 5. 合入 `main` 并推送。确认 `origin/main` 已包含发版提交。
 6. 工作区干净、当前就在 `main` 上时执行：

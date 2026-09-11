@@ -46,6 +46,11 @@ if [[ ! -f "$notes" ]]; then
   exit 1
 fi
 
+if [[ "$(head -n 1 "$notes")" == \#* ]]; then
+  printf 'STOP: %s starts with a markdown heading. GitHub already shows the release title; start the notes with body text.\n' "$notes" >&2
+  exit 1
+fi
+
 if ! grep -q "$tag" CHANGELOG.md; then
   printf 'STOP: CHANGELOG.md does not mention %s\n' "$tag" >&2
   exit 1
@@ -73,7 +78,7 @@ if gh release view "$tag" >/dev/null 2>&1; then
   printf 'Release %s already exists (tag workflow may have created it).\n' "$tag"
 else
   gh release create "$tag" \
-    --title "亦可 YK ${tag}" \
+    --title "${tag}" \
     --notes-file "$notes" \
     --verify-tag \
     "${prerelease_args[@]}"

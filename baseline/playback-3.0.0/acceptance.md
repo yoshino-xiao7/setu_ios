@@ -31,13 +31,13 @@ Only a service drop-in configured MUSIC_PLAYBACK_FRESHNESS_ID and MUSIC_PLAYBACK
 Final targeted: 36 tests, zero failures/errors/skips (runtime 25, wiring 1, policy 4, auth census 6).
 27 actual MockMvc HTTP-serialized JSON bodies passed the Frozen JSON schemas and privacy/cache/Vary checks, using both legacy and 3.0 schema selections. This checks serialization, not merely Java objects.
 
-Feature CI PASS: https://github.com/yoshino-xiao7/setu_api_full/actions/runs/33975708604 at e483dc0cf2ba517353d438ddb8b67713c28404d7. Formal CI includes full Maven tests and isolated MySQL checks. The initial CI failed the newly introduced protected-route census; the census was corrected before merge. No real database migration was performed.
+Feature CI PASS at e483dc0cf2ba517353d438ddb8b67713c28404d7. Formal CI includes full Maven tests and isolated MySQL checks. The initial CI failed the newly introduced protected-route census; the census was corrected before merge. No real database migration was performed.
 
 ## Backend Master / Deployment
 
 Accepted starting master: 6b3676e46a220cee0d9982226f99e60a80cb6042.
 Normal non-force merge master: `8416c3373915dc857b54404449c8e7e5db3f4ba1`.
-Development build/deploy PASS: https://github.com/yoshino-xiao7/setu_api_full/actions/runs/33976065786.
+Development build/deploy PASS for 8416c33.
 Downloaded CI artifact and running service JAR both SHA-256 `49c72f522889cacfb5fd7ea5047a36d1bffd51151fedabfe4cbaa8a768ff195a`. Runtime VERSION matched 8416c33; service active and health UP. Existing development global/FM gates were true. Only the existing authorized development pipeline was used.
 
 A release-directory metadata inconsistency was observed; the runtime binding above uses the running JAR, VERSION and CI artifact hash, not that directory's existence. No unrelated deployment refactor was made.

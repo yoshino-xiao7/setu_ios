@@ -43,7 +43,7 @@
 - 13:03:38 服务端拒绝 `/user/images/works/pixiv%2D138658877` 的签名。iOS 使用解码后的 URL.path 签名，与 Servlet 的实际编码 URI 不同；随后客户端清除了会话，匿名请求在 13:04 触发了临时 IP 封禁。
 - APIClient 普通请求和上传统一改为 `url.path(percentEncoded: true)` 签名。编码路径回归先失败后通过，连同登录会话/签名共 15 项通过。
 - 用户自行解封，未执行服务器会话凭据读取或解封脚本。
-- 后端 0806ad3：正常频率超限仅返回 429 和 Retry-After:60，不累计自动 IP 封禁；登录用户按账号预算（30次/秒，600次/分钟），API Key 原有预算/计费及人工黑名单保持。工作流成功：https://github.com/yoshino-xiao7/setu_api_full/actions/runs/34190867426 。
+- 后端 0806ad3：正常频率超限仅返回 429 和 Retry-After:60，不累计自动 IP 封禁；登录用户按账号预算（30次/秒，600次/分钟），API Key 原有预算/计费及人工黑名单保持。对应私有后端 CI 已通过。
 
 ## 已有验证
 

@@ -27,7 +27,7 @@ jobs:
           fi
 
           if ! gh release view "$TAG" >/dev/null 2>&1; then
-            args=(release create "$TAG" --title "亦可 YK ${TAG}" --notes-file "$notes" --verify-tag)
+            args=(release create "$TAG" --title "$TAG" --notes-file "$notes" --verify-tag)
             case "$TAG" in
               *-alpha.*|*-beta.*|*-rc.*) args+=(--prerelease) ;;
             esac

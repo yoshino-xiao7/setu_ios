@@ -7,7 +7,7 @@
 - `ModuleFavoriteClient`：外部 ID 作为单个 URL 路径片段编码，拒绝路径分隔符、控制字符和点路径；批量查询去重并按 100 个 ID 拆分。
 - `ModuleFavoriteButton`：未登录或需要重新认证时进入现有账号入口；收藏状态未知时先查询，再决定增加或删除；按账号、模块、外部 ID 刷新状态，忽略旧账号和过期刷新请求的结果。
 - 新增 `ModuleFavoriteContractTests`，XcodeGen 已将其加入测试目标。
-- 后端修正与接口说明见 [模块收藏接口](../../setu_api_full/docs/module-favorites-contract.zh.md)。
+- 后端修正与接口说明见内部 API 仓库的模块收藏契约文档。
 
 ## 验证结果
 

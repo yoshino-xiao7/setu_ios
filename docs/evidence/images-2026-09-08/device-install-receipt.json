@@ -8,7 +8,7 @@
   "executableSha256": "08616d21b904539175f7b30af481d9c6e5cc92af8225bece020797a658129a09",
   "installationLog": "/tmp/setu-pixiv-custom-install.log",
   "backendCommit": "0806ad3",
-  "backendWorkflow": "https://github.com/yoshino-xiao7/setu_api_full/actions/runs/34190867426",
+  "backendWorkflow": "",
   "backendHealth": "UP",
   "loginDefault": "standard WebKit; enhanced optional",
   "actualBindingVerified": true,

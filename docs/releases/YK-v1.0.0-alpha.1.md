@@ -1,5 +1,3 @@
-# 亦可 YK iOS YK-v1.0.0-alpha.1
-
 **已由 [YK-v1.0.0-alpha.2](https://github.com/yoshino-xiao7/setu_ios/releases/tag/YK-v1.0.0-alpha.2) 取代。** 本标签对应的源码 README 误含内部私有仓库地址，请改下 alpha.2。
 
 首次公开源码发布。
