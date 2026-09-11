@@ -1,5 +1,3 @@
-**已由 [YK-v1.0.0-alpha.2](https://github.com/yoshino-xiao7/setu_ios/releases/tag/YK-v1.0.0-alpha.2) 取代。** 本标签对应的源码 README 误含内部私有仓库地址，请改下 alpha.2。
-
 首次公开源码发布。
 
 **本版本只提供源码**（GitHub 自动附带的 zip / tar.gz）。没有 ipa、没有 TestFlight、没有已经签好名的安装包。要在设备上运行，请自行用 Xcode 编译。

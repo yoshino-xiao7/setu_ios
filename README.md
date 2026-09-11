@@ -4,7 +4,7 @@
 
 这不是 Web 套壳。图片、音乐、AI 绘画、收藏、账户和管理后台都是原生界面，连接亦可自己的 API 服务。
 
-当前公开版本：**[YK-v1.0.0-alpha.2](https://github.com/yoshino-xiao7/setu_ios/releases/tag/YK-v1.0.0-alpha.2)**。这是源码发布，**只提供源码**，不附带 ipa、xcarchive 或 TestFlight 包。工程内部开发版本号仍为 `1.1 (5)`。`YK-v1.0.0-alpha.1` 的 README 误放了内部仓库地址，请改用本版本。
+当前公开版本：**[YK-v1.0.0-alpha.2](https://github.com/yoshino-xiao7/setu_ios/releases/tag/YK-v1.0.0-alpha.2)**。这是源码发布，**只提供源码**，不附带 ipa、xcarchive 或 TestFlight 包。工程内部开发版本号仍为 `1.1 (5)`。
 
 ## 本次 Alpha 说明
 
