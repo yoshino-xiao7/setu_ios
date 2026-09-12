@@ -473,7 +473,97 @@ final class HanimeCatalogClientTests: XCTestCase {
         let request = HanimeSite.imageRequest(url: url)
         XCTAssertEqual(request.value(forHTTPHeaderField: "Referer"), HanimeSite.referer)
         XCTAssertEqual(request.value(forHTTPHeaderField: "User-Agent"), HanimeSite.userAgent)
-        XCTAssertEqual(HanimeSite.playbackAssetOptions[HanimeSite.assetHeaderFieldsKey] as? [String: String], HanimeSite.pageHeaders)
+        let playbackHeaders = HanimeSite.playbackAssetOptions[HanimeSite.assetHeaderFieldsKey] as? [String: String]
+        XCTAssertEqual(playbackHeaders?["Referer"], HanimeSite.referer)
+        XCTAssertEqual(playbackHeaders?["User-Agent"], HanimeSite.userAgent)
+        XCTAssertEqual(playbackHeaders?["Accept"], "*/*")
+        XCTAssertNil(playbackHeaders?["Origin"], "媒体请求不应带页面 Origin/HTML Accept，否则 CDN 会概率性拒绝")
+        XCTAssertNotEqual(playbackHeaders?["Accept"], HanimeSite.pageHeaders["Accept"])
+    }
+
+    func testWatchResolvesProtocolRelativeAndDataSrc() async throws {
+        let client = makeClient { request in
+            if request.url?.path == "/download" { return "<table></table>" }
+            return """
+            <video>
+              <source data-src="//vdownload.hembed.com/v/a-720p.mp4" type="video/mp4" size="720">
+            </video>
+            """
+        }
+        let page = try await client.work(id: "12345")
+        XCTAssertEqual(page.preferredStream?.url.absoluteString, "https://vdownload.hembed.com/v/a-720p.mp4")
+    }
+
+    func testWatchParsesPlyrHLSAndDownloadDataURLInsteadOfTruncatedMp4() async throws {
+        let hls = "https://abre-videos.youjizz.com/_hls/videos/e/c/b/6/8/file-856-480-526-h264.mp4/master.m3u8?validfrom=1&hash=abc"
+        let mp4_480 = "https://cdne-mobile.youjizz.com/videos/e/c/b/6/8/file-856-480-526-h264.mp4?validfrom=1&hash=x"
+        let mp4_360 = "https://cdne-mobile.youjizz.com/videos/e/c/b/6/8/file-642-360-345-h264.mp4?validfrom=1&hash=y"
+        let client = makeClient { request in
+            if request.url?.path == "/download" {
+                return """
+                <table>
+                  <a class="download-link" data-url="\(mp4_480)&amp;rate=1">下载</a>
+                  <span>(480p)</span>
+                  <a class="download-link" data-url="\(mp4_360)">下载</a>
+                  <span>(360p)</span>
+                </table>
+                """
+            }
+            return """
+            <html><head><meta property="og:title" content="没有source标签"></head>
+            <body>
+              <video id="player" src="blob:https://hanime1.me/abc"></video>
+              <script>
+                const source = '\(hls)';
+              </script>
+            </body></html>
+            """
+        }
+
+        let page = try await client.work(id: "37965")
+
+        XCTAssertEqual(page.preferredStream?.quality, "480p")
+        XCTAssertEqual(page.preferredStream?.url.absoluteString, "\(mp4_480)&rate=1")
+        XCTAssertEqual(page.streams.map(\.quality), ["480p", "360p", "HLS"])
+        XCTAssertEqual(page.streams.first(where: { $0.isHLS })?.url.absoluteString, hls)
+        XCTAssertFalse(page.streams.contains { $0.url.path.contains("/_hls/") && $0.url.pathExtension == "mp4" })
+    }
+
+    func testWatchParsesPlyrHLSWhenDownloadPageHasNoFiles() async throws {
+        let hls = "https://abre-videos.youjizz.com/_hls/videos/file-856-480-526-h264.mp4/master.m3u8?validfrom=1&hash=abc"
+        let client = makeClient { request in
+            if request.url?.path == "/download" { return "<table></table>" }
+            return """
+            <html><head><meta property="og:title" content="HLS only"></head>
+            <body><script>const source = '\(hls)';</script></body></html>
+            """
+        }
+        let page = try await client.work(id: "37965")
+        XCTAssertEqual(page.preferredStream?.url.absoluteString, hls)
+        XCTAssertEqual(page.preferredStream?.quality, "HLS")
+        XCTAssertEqual(page.streams.count, 1)
+    }
+
+    func testWatchRetriesWhenFirstPageHasNoStreams() async throws {
+        let lock = NSLock()
+        var watchCalls = 0
+        let client = makeClient { request in
+            if request.url?.path == "/download" { return "<table class=\"download-table\"></table>" }
+            lock.lock(); watchCalls += 1; let count = watchCalls; lock.unlock()
+            if count == 1 {
+                return "<html><head><meta property=\"og:title\" content=\"第一夜\"></head><body><div id=\"player\"></div></body></html>"
+            }
+            return """
+            <html><head><meta property="og:title" content="第一夜"></head>
+            <body>
+              <video><source src="https://vdownload.hembed.com/v/a-720p.mp4" type="video/mp4" size="720"></video>
+            </body></html>
+            """
+        }
+        let page = try await client.work(id: "12345")
+        XCTAssertEqual(page.streams.map(\.quality), ["720p"])
+        lock.lock(); let calls = watchCalls; lock.unlock()
+        XCTAssertEqual(calls, 2)
     }
 
     private func makeClient(
@@ -488,6 +578,46 @@ final class HanimeCatalogClientTests: XCTestCase {
             baseURLs: [URL(string: "https://hanime1.me")!],
             now: now
         )
+    }
+}
+
+final class HanimePlaybackLifecycleTests: XCTestCase {
+    func testCancelledOrStaleWatchLoadDoesNotCommitFailure() {
+        XCTAssertFalse(HanimeWatchLoadEvent.shouldApplyResult(ticket: 1, generation: 2, cancelled: false, error: nil))
+        XCTAssertFalse(HanimeWatchLoadEvent.shouldApplyResult(ticket: 1, generation: 1, cancelled: true, error: nil))
+        XCTAssertFalse(HanimeWatchLoadEvent.shouldApplyResult(ticket: 1, generation: 1, cancelled: false, error: CancellationError()))
+        XCTAssertTrue(HanimeWatchLoadEvent.shouldApplyResult(ticket: 1, generation: 1, cancelled: false, error: nil))
+        XCTAssertTrue(HanimeWatchLoadEvent.shouldApplyResult(ticket: 1, generation: 1, cancelled: false, error: APIError.invalidResponse))
+    }
+
+    func testDefaultQualityAssignmentDoesNotRestartAnExistingPlayer() {
+        let streamID = "720p:https://vdownload.hembed.com/v/a-720p.mp4"
+        XCTAssertTrue(HanimePlayerReload.shouldStart(currentID: streamID, nextID: streamID, hasPlayer: false))
+        XCTAssertFalse(HanimePlayerReload.shouldStart(currentID: streamID, nextID: streamID, hasPlayer: true))
+        XCTAssertTrue(HanimePlayerReload.shouldStart(currentID: streamID, nextID: "1080p:https://cdn.example/b.mp4", hasPlayer: true))
+        XCTAssertFalse(HanimePlayerReload.shouldStart(currentID: streamID, nextID: nil, hasPlayer: false))
+    }
+
+    func testFailedStreamFallsDownToNextQuality() {
+        let high = HanimeStream(quality: "1080p", url: URL(string: "https://vdownload.hembed.com/v/a-1080p.mp4")!)
+        let low = HanimeStream(quality: "720p", url: URL(string: "https://vdownload.hembed.com/v/a-720p.mp4")!)
+        let next = HanimePlayerReload.nextPlayable(after: high, in: [high, low], excluding: [high.id])
+        XCTAssertEqual(next?.quality, "720p")
+        XCTAssertNil(HanimePlayerReload.nextPlayable(after: low, in: [high, low], excluding: [high.id, low.id]))
+    }
+
+    func testPreferredStreamPrefersLabeledMp4OverGenericHLS() {
+        let hls = HanimeStream(
+            quality: "HLS",
+            url: URL(string: "https://abre-videos.youjizz.com/_hls/videos/file-h264.mp4/master.m3u8")!,
+            isHLS: true
+        )
+        let mp4 = HanimeStream(
+            quality: "480p",
+            url: URL(string: "https://cdne-mobile.youjizz.com/videos/file-h264.mp4?validfrom=1")!
+        )
+        XCTAssertEqual(HanimeStream.preferred(in: [hls, mp4])?.quality, "480p")
+        XCTAssertEqual(HanimePlayerReload.nextPlayable(after: mp4, in: [mp4, hls], excluding: [mp4.id])?.isHLS, true)
     }
 }
 

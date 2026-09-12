@@ -14,6 +14,12 @@ public enum HanimeSite {
         "Referer": referer,
     ]
 
+    public static let mediaHeaders: [String: String] = [
+        "User-Agent": userAgent,
+        "Accept": "*/*",
+        "Referer": referer,
+    ]
+
     public static func isImageCDN(_ url: URL) -> Bool {
         guard let host = url.host?.lowercased() else { return false }
         return host == "hanime1.me"
@@ -41,7 +47,7 @@ public enum HanimeSite {
     }
 
     public static var playbackAssetOptions: [String: Any] {
-        [assetHeaderFieldsKey: pageHeaders]
+        [assetHeaderFieldsKey: mediaHeaders]
     }
 }
 
@@ -88,14 +94,25 @@ public struct HanimeCatalogClient: Sendable {
 
     public func work(id: String) async throws -> HanimeWatchPage {
         let encoded = try encodedID(id)
+        do {
+            let page = try await fetchWatch(encoded)
+            if !page.streams.isEmpty { return page }
+            return try await fetchWatch(encoded)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            return try await fetchWatch(encoded)
+        }
+    }
+
+    private func fetchWatch(_ encoded: String) async throws -> HanimeWatchPage {
         let watchHTML = try await getHTML("/watch", query: [URLQueryItem(name: "v", value: encoded)])
         var parsed = HanimeHTML.watch(from: watchHTML, id: encoded)
-        if parsed.streams.isEmpty {
+        do {
             let downloadHTML = try await getHTML("/download", query: [URLQueryItem(name: "v", value: encoded)])
-            let downloaded = HanimeHTML.downloadStreams(from: downloadHTML)
-            if !downloaded.isEmpty {
-                parsed = HanimeWatchPage(work: parsed.work, streams: downloaded, related: parsed.related)
-            }
+            parsed = HanimeHTML.combining(parsed, downloadHTML: downloadHTML)
+        } catch {
+            if parsed.streams.isEmpty { throw error }
         }
         if parsed.work.title.isEmpty, parsed.streams.isEmpty, HanimeHTML.looksBlocked(watchHTML) {
             throw APIError.invalidResponse
@@ -265,8 +282,28 @@ enum HanimeHTML {
     }
 
     static func downloadStreams(from html: String) -> [HanimeStream] {
-        let hrefs = matches(#"<a\b[^>]*href=["'](https?://[^"']+)["'][^>]*>"#, in: html).map { $0[1] }
-        return uniqueStreams(hrefs.compactMap { stream(fromURL: $0, type: nil, size: nil) })
+        var found: [HanimeStream] = []
+        for match in matches(#"data-url=["'](https?://[^"']+)["']"#, in: html) {
+            if let stream = stream(fromURL: match[1], type: nil, size: nearbyQuality(around: match.range, in: html)) {
+                found.append(stream)
+            }
+        }
+        for match in matches(#"<a\b[^>]*href=["'](https?://[^"']+)["'][^>]*>"#, in: html) {
+            if let stream = stream(fromURL: match[1], type: nil, size: nearbyQuality(around: match.range, in: html)) {
+                found.append(stream)
+            }
+        }
+        return uniqueStreams(found)
+    }
+
+    static func combining(_ page: HanimeWatchPage, downloadHTML: String) -> HanimeWatchPage {
+        let downloaded = downloadStreams(from: downloadHTML)
+        guard !downloaded.isEmpty else { return page }
+        return HanimeWatchPage(
+            work: page.work,
+            streams: uniqueStreams(page.streams + downloaded),
+            related: page.related
+        )
     }
 
     static func looksBlocked(_ html: String) -> Bool {
@@ -287,7 +324,7 @@ enum HanimeHTML {
     private static func streams(in html: String) -> [HanimeStream] {
         var found: [HanimeStream] = []
         for tag in matches(#"<source\b[^>]*>"#, in: html).map({ $0[0] }) {
-            let src = attribute("src", in: tag)
+            let src = firstNonEmpty([attribute("src", in: tag), attribute("data-src", in: tag)])
             if let stream = stream(fromURL: src, type: attribute("type", in: tag), size: attribute("size", in: tag)) {
                 found.append(stream)
             }
@@ -297,23 +334,53 @@ enum HanimeHTML {
                 found.append(stream)
             }
         }
-        if found.isEmpty {
-            let urls = matches(#"https?://[^\s"'<>]+?\.(?:m3u8|mp4)(?:\?[^\s"'<>]*)?"#, in: html).map { $0[0] }
-            found.append(contentsOf: urls.compactMap { stream(fromURL: $0, type: nil, size: nil) })
-        }
+        found.append(contentsOf: javascriptSourceStreams(in: html))
+        found.append(contentsOf: looseMediaURLStreams(in: html))
         return uniqueStreams(found)
     }
 
+    private static func javascriptSourceStreams(in html: String) -> [HanimeStream] {
+        let patterns = [
+            #"(?:const|let|var)\s+source\s*=\s*['"]([^'"]+)['"]"#,
+            #"\bsource\s*:\s*['"]([^'"]+)['"]"#,
+        ]
+        var found: [HanimeStream] = []
+        for pattern in patterns {
+            for match in matches(pattern, in: html) {
+                if let stream = stream(fromURL: match[1], type: nil, size: nil) {
+                    found.append(stream)
+                }
+            }
+        }
+        return found
+    }
+
+    private static func looseMediaURLStreams(in html: String) -> [HanimeStream] {
+        let m3u8Matches = matches(#"https?://[^\s"'<>]+\.m3u8(?:\?[^\s"'<>]*)?"#, in: html)
+        let m3u8URLs = m3u8Matches.map { $0[0] }
+        var found = m3u8Matches.compactMap { stream(fromURL: $0[0], type: nil, size: nil) }
+        for match in matches(#"https?://[^\s"'<>]+\.mp4(?:\?[^\s"'<>]*)?"#, in: html) {
+            let raw = match[0]
+            if m3u8URLs.contains(where: { $0.hasPrefix(raw) }) { continue }
+            if let stream = stream(fromURL: raw, type: nil, size: nil) {
+                found.append(stream)
+            }
+        }
+        return found
+    }
+
     private static func stream(fromURL raw: String?, type: String?, size: String?) -> HanimeStream? {
-        guard let raw, let url = URL(string: decode(raw).replacingOccurrences(of: "\\/", with: "/")) else {
+        guard let raw, let url = mediaURL(from: raw), isPlayableMediaURL(url) else {
             return nil
         }
         let loweredType = (type ?? "").lowercased()
-        let isHLS = loweredType.contains("mpegurl") || url.pathExtension.lowercased() == "m3u8"
+        let isHLS = loweredType.contains("mpegurl") || url.pathExtension.lowercased() == "m3u8" || url.absoluteString.lowercased().contains(".m3u8")
         let quality: String
-        if let size, let value = Int(size), value > 0 {
+        if let size, let value = Int(size.filter(\.isNumber)), value > 0 {
             quality = "\(value)p"
         } else if let match = matches(#"(\d{3,4})p"#, in: url.absoluteString).first {
+            quality = "\(match[1])p"
+        } else if !isHLS, let match = matches(#"-(360|480|720|1080)-"#, in: url.absoluteString).first {
             quality = "\(match[1])p"
         } else {
             quality = isHLS ? "HLS" : "MP4"
@@ -321,9 +388,53 @@ enum HanimeHTML {
         return HanimeStream(quality: quality, url: url, isHLS: isHLS)
     }
 
+    private static func mediaURL(from raw: String) -> URL? {
+        let decoded = decode(raw).replacingOccurrences(of: "\\/", with: "/")
+        let absolute: String
+        if decoded.hasPrefix("//") {
+            absolute = "https:" + decoded
+        } else if decoded.hasPrefix("/") {
+            absolute = HanimeSite.origin + decoded
+        } else {
+            absolute = decoded
+        }
+        guard let url = URL(string: absolute), url.scheme == "http" || url.scheme == "https" else {
+            return nil
+        }
+        return url
+    }
+
+    private static func isPlayableMediaURL(_ url: URL) -> Bool {
+        let absolute = url.absoluteString.lowercased()
+        let path = url.path.lowercased()
+        if absolute.hasPrefix("blob:") { return false }
+        let isM3U8 = path.hasSuffix(".m3u8")
+        if isM3U8 { return true }
+        if path.contains("/_hls/") { return false }
+        return path.hasSuffix(".mp4")
+    }
+
+    private static func nearbyQuality(around range: NSRange, in html: String) -> String? {
+        guard let swiftRange = Range(range, in: html) else { return nil }
+        let end = html.index(swiftRange.upperBound, offsetBy: 400, limitedBy: html.endIndex) ?? html.endIndex
+        let window = String(html[swiftRange.upperBound..<end])
+        if let match = matches(#"\((\d{3,4})p\)"#, in: window).first {
+            return match[1]
+        }
+        if let match = matches(#">\s*(\d{3,4})p\s*<"#, in: window).first {
+            return match[1]
+        }
+        return nil
+    }
+
     private static func uniqueStreams(_ streams: [HanimeStream]) -> [HanimeStream] {
+        let playable = streams.filter { isPlayableMediaURL($0.url) }
         var seen = Set<String>()
-        return streams.filter { seen.insert($0.id).inserted }.sorted { $0.rank > $1.rank }
+        return playable.filter { seen.insert($0.id).inserted }.sorted { lhs, rhs in
+            if lhs.rank != rhs.rank { return lhs.rank > rhs.rank }
+            if lhs.isHLS != rhs.isHLS { return !lhs.isHLS && rhs.isHLS }
+            return lhs.id < rhs.id
+        }
     }
 
     private static func workCard(id: String, inner: String, tag: String) -> HanimeWork {
