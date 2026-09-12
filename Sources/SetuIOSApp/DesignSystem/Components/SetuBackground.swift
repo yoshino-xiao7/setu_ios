@@ -7,8 +7,24 @@ extension View {
     }
 
     func setuListRow() -> some View {
-        listRowBackground(Color.clear)
+        modifier(SetuListRowModifier())
+    }
+}
+
+private struct SetuListRowModifier: ViewModifier {
+    @Environment(\.setuCanvas) private var canvas
+
+    func body(content: Content) -> some View {
+        content
+            .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
-            .listRowInsets(EdgeInsets(top: SetuSpacing.sm, leading: SetuSpacing.lg, bottom: SetuSpacing.sm, trailing: SetuSpacing.lg))
+            .listRowInsets(
+                EdgeInsets(
+                    top: SetuSpacing.sm,
+                    leading: canvas.pageGutter,
+                    bottom: SetuSpacing.sm,
+                    trailing: canvas.pageGutter
+                )
+            )
     }
 }

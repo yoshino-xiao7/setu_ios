@@ -80,7 +80,7 @@ Bundle IDs: app `icu.yukiryou.setuios`, core `.core`, widget `.liveactivity`.
 
 - Follow the system design language, not the Web console's look. The target visual system is the soft-pink theme in `docs/ios-soft-pink-ui-design.md` — build shared `Setu*` design-system components rather than hardcoding colors per view. Global tint is `SetuColor.brandPink`.
 - Support Dynamic Type, light/dark mode, and VoiceOver; keep tap targets ≥ 44pt.
-- Inspect layouts at iPhone SE (375pt) and Pro Max (430pt) for overflow, clipping, and overlap.
+- Inspect layouts at iPhone SE (375pt), Pro Max (430pt), and iPad 11-inch portrait (834pt) / landscape (1194pt) for overflow, clipping, and overlap.
 
 ## Verification
 

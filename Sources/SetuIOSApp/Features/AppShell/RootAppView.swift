@@ -38,6 +38,7 @@ struct RootAppView: View {
     @State private var showingReauthentication = false
     @State private var guestBrowseEnabled = false
     @State private var sessionOwnerID: Int?
+    @State private var windowSize = CGSize.zero
 
     init(
         environment: AppEnvironment,
@@ -160,6 +161,8 @@ struct RootAppView: View {
                 updateSessionOwner()
             }
         }
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { windowSize = $0 }
+        .setuCanvas(SetuCanvasLayout(size: windowSize))
         .environment(pushNotifications)
         .environment(musicStore)
         .environment(musicPlayer)
@@ -435,6 +438,8 @@ struct RootAppView: View {
                 showingMusicQueueDrawer = true
             }
             .padding(.bottom, SetuSpacing.xl)
+            .frame(maxWidth: SetuCanvasLayout(size: windowSize).miniPlayerMaxWidth)
+            .frame(maxWidth: .infinity)
             .transition(.move(edge: .bottom).combined(with: .opacity))
         }
     }

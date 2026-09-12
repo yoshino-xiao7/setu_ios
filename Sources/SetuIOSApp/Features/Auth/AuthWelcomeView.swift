@@ -5,6 +5,7 @@ import SetuIOSCore
 struct AuthWelcomeView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.brandSplashActive) private var brandSplashActive
+    @Environment(\.setuCanvas) private var canvas
     @ScaledMetric(relativeTo: .title) private var titleSize = 27.0
     @ScaledMetric(relativeTo: .subheadline) private var subtitleSize = 13.0
     @ScaledMetric(relativeTo: .footnote) private var initialsSize = 14.0
@@ -69,7 +70,7 @@ struct AuthWelcomeView: View {
             legalLinks
                 .padding(.bottom, 8)
         }
-        .frame(maxWidth: 390, minHeight: minimumHeight)
+        .frame(maxWidth: canvas.isRegularWidth ? 440 : 390, minHeight: minimumHeight)
         .frame(maxWidth: .infinity)
     }
 

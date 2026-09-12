@@ -8,6 +8,7 @@ import UIKit
 struct MusicHomeView: View {
     @Environment(RouterPath.self) private var router
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.setuCanvas) private var canvas
     @Bindable var environment: AppEnvironment
     @Bindable var player: MusicPlaybackController
     @Environment(MusicStore.self) private var store
@@ -70,6 +71,7 @@ struct MusicHomeView: View {
             }
         }
         .listStyle(.plain)
+        .setuReadableContent()
         .setuBackground()
         .setuRefreshAfterLogin(environment.authSession) { Task { await loadLandingContent() } }
         .setuRetry { Task { await loadLandingContent() } }
@@ -147,7 +149,7 @@ struct MusicHomeView: View {
                             .accessibilityIdentifier("music.home.shortcut.fm")
                     }
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: SetuSpacing.sm),
-                                             count: dynamicTypeSize.isAccessibilitySize ? 2 : 4), spacing: SetuSpacing.md) {
+                                             count: dynamicTypeSize.isAccessibilitySize ? 2 : canvas.musicShortcutColumns), spacing: SetuSpacing.md) {
                         ForEach(MusicHomeShortcut.entries(flags: environment.config.musicFeatureFlags)
                             .filter { ["liked", "saved", "history", "playlists"].contains($0.id) }) { entry in
                             Button { router.navigate(to: entry.route) } label: {

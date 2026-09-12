@@ -114,6 +114,14 @@ public struct HanimeStream: Identifiable, Hashable, Sendable {
         if let value = Int(digits), value > 0 { return value }
         return isHLS ? 1 : 0
     }
+
+    public static func preferred(in streams: [HanimeStream]) -> HanimeStream? {
+        streams.max { lhs, rhs in
+            if lhs.rank != rhs.rank { return lhs.rank < rhs.rank }
+            if lhs.isHLS != rhs.isHLS { return lhs.isHLS && !rhs.isHLS }
+            return false
+        }
+    }
 }
 
 public struct HanimeWatchPage: Sendable {
@@ -128,6 +136,6 @@ public struct HanimeWatchPage: Sendable {
     }
 
     public var preferredStream: HanimeStream? {
-        streams.max(by: { $0.rank < $1.rank })
+        HanimeStream.preferred(in: streams)
     }
 }

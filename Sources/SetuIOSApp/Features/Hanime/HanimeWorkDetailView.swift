@@ -2,6 +2,32 @@ import AVKit
 import SetuIOSCore
 import SwiftUI
 
+enum HanimeWatchLoadEvent {
+    static func shouldApplyResult(ticket: Int, generation: Int, cancelled: Bool, error: Error? = nil) -> Bool {
+        guard ticket == generation, !cancelled else { return false }
+        if error is CancellationError { return false }
+        return true
+    }
+}
+
+enum HanimePlayerReload {
+    static func shouldStart(currentID: String?, nextID: String?, hasPlayer: Bool) -> Bool {
+        guard nextID != nil else { return false }
+        if !hasPlayer { return true }
+        return currentID != nextID
+    }
+
+    static func nextPlayable(after current: HanimeStream?, in streams: [HanimeStream], excluding failed: Set<String>) -> HanimeStream? {
+        streams
+            .sorted { lhs, rhs in
+                if lhs.rank != rhs.rank { return lhs.rank > rhs.rank }
+                if lhs.isHLS != rhs.isHLS { return !lhs.isHLS && rhs.isHLS }
+                return false
+            }
+            .first { !failed.contains($0.id) && $0.id != current?.id }
+    }
+}
+
 struct HanimeWorkDetailView: View {
     @Environment(RouterPath.self) private var router
     @Environment(MusicPlaybackController.self) private var musicPlayer
@@ -9,6 +35,7 @@ struct HanimeWorkDetailView: View {
     let workID: String
 
     @State private var state: LoadState<HanimeWatchPage> = .idle
+    @State private var loadGeneration = 0
 
     var body: some View {
         ScrollView {
@@ -26,9 +53,10 @@ struct HanimeWorkDetailView: View {
                     }
                 case .loaded(let page):
                     workHeader(page)
-                    HanimePlayerView(streams: page.streams) {
+                    HanimePlayerView(workID: workID, streams: page.streams) {
                         musicPlayer.pause()
                     }
+                    .id(workID)
                     relatedSection(page.related)
                 }
             }
@@ -97,39 +125,55 @@ struct HanimeWorkDetailView: View {
     }
 
     private func load() async {
+        loadGeneration += 1
+        let ticket = loadGeneration
+        let id = workID
         state = .loading
         do {
-            let page = try await environment.hanimeCatalogClient.work(id: workID)
+            let page = try await environment.hanimeCatalogClient.work(id: id)
+            guard HanimeWatchLoadEvent.shouldApplyResult(ticket: ticket, generation: loadGeneration, cancelled: Task.isCancelled) else { return }
             environment.moduleWatchHistoryStore.record(page.work.watchRecord)
             state = .loaded(page)
         } catch {
+            guard HanimeWatchLoadEvent.shouldApplyResult(ticket: ticket, generation: loadGeneration, cancelled: Task.isCancelled, error: error) else { return }
             state = .failed(UserFacingErrorMapper.map(error))
         }
     }
 }
 
 struct HanimePlayerView: View {
+    let workID: String
     let streams: [HanimeStream]
     var onStart: (() -> Void)?
 
     @State private var selectedID: String?
     @State private var avPlayer: AVPlayer?
+    @State private var itemObserver: NSKeyValueObservation?
+    @State private var failedIDs: Set<String> = []
+    @State private var playbackError: String?
     #if os(iOS)
     @State private var showingFullscreen = false
     #endif
 
     private var selectedStream: HanimeStream? {
-        streams.first(where: { $0.id == selectedID }) ?? streams.max(by: { $0.rank < $1.rank })
+        streams.first(where: { $0.id == selectedID }) ?? HanimeStream.preferred(in: streams)
     }
 
     var body: some View {
         SetuCard {
             VStack(alignment: .leading, spacing: SetuSpacing.md) {
                 videoArea
+                if let playbackError {
+                    Text(playbackError)
+                        .font(SetuTypography.caption)
+                        .foregroundStyle(SetuColor.danger)
+                    Button("重新加载播放") { retryPlayback() }
+                        .buttonStyle(.borderedProminent)
+                }
                 if streams.count > 1 {
                     Picker("清晰度", selection: Binding(
                         get: { selectedStream?.id ?? "" },
-                        set: { selectedID = $0 }
+                        set: { selectQuality($0) }
                     )) {
                         ForEach(streams) { stream in
                             Text(stream.quality).tag(stream.id)
@@ -137,20 +181,21 @@ struct HanimePlayerView: View {
                     }
                     .pickerStyle(.segmented)
                     .tint(SetuColor.brandPink)
-                    .onChange(of: selectedID) {
-                        configurePlayer()
-                    }
                 }
             }
         }
         .accessibilityIdentifier("hanime.player")
+        .accessibilityValue(workID)
         .onAppear {
             if selectedID == nil { selectedID = selectedStream?.id }
-            configurePlayer()
+            if HanimePlayerReload.shouldStart(currentID: selectedID, nextID: selectedStream?.id, hasPlayer: avPlayer != nil) {
+                configurePlayer()
+            } else {
+                avPlayer?.play()
+            }
         }
         .onDisappear {
             avPlayer?.pause()
-            avPlayer = nil
         }
         #if os(iOS)
         .fullScreenCover(isPresented: $showingFullscreen) {
@@ -178,8 +223,8 @@ struct HanimePlayerView: View {
 
     @ViewBuilder
     private var videoArea: some View {
-        if streams.isEmpty {
-            placeholder(message: "暂未拿到播放地址", isLoading: false)
+        if streams.isEmpty || (playbackError != nil && avPlayer == nil) {
+            placeholder(message: playbackError ?? "暂未拿到播放地址", isLoading: false)
         } else if let avPlayer {
             VideoPlayer(player: avPlayer)
                 .aspectRatio(16.0 / 9.0, contentMode: .fit)
@@ -229,8 +274,23 @@ struct HanimePlayerView: View {
         .frame(maxWidth: .infinity)
     }
 
+    private func selectQuality(_ id: String) {
+        guard selectedID != id else { return }
+        selectedID = id
+        configurePlayer()
+    }
+
+    private func retryPlayback() {
+        failedIDs = []
+        playbackError = nil
+        selectedID = HanimeStream.preferred(in: streams)?.id
+        configurePlayer()
+    }
+
     private func configurePlayer() {
+        itemObserver = nil
         avPlayer?.pause()
+        playbackError = nil
         guard let stream = selectedStream else {
             avPlayer = nil
             return
@@ -238,8 +298,26 @@ struct HanimePlayerView: View {
         let item = AVPlayerItem(asset: AVURLAsset(url: stream.url, options: HanimeSite.playbackAssetOptions))
         let player = AVPlayer(playerItem: item)
         avPlayer = player
+        itemObserver = item.observe(\.status, options: [.new]) { item, _ in
+            guard item.status == .failed else { return }
+            Task { @MainActor in
+                guard selectedID == stream.id else { return }
+                failCurrentAndTryNext(stream)
+            }
+        }
         onStart?()
         player.play()
+    }
+
+    private func failCurrentAndTryNext(_ stream: HanimeStream) {
+        failedIDs.insert(stream.id)
+        if let next = HanimePlayerReload.nextPlayable(after: stream, in: streams, excluding: failedIDs) {
+            selectedID = next.id
+            configurePlayer()
+            return
+        }
+        avPlayer = nil
+        playbackError = "无法开始播放，请再试一次"
     }
 }
 

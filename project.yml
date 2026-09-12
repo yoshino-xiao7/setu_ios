@@ -15,7 +15,7 @@ settings:
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: 7G6J4S76PN
     MARKETING_VERSION: "1.1"
-    CURRENT_PROJECT_VERSION: "5"
+    CURRENT_PROJECT_VERSION: "6"
 
 packages:
   ZIPFoundation:
@@ -66,7 +66,7 @@ targets:
         # `audio` background mode, which has no INFOPLIST_KEY_* equivalent.
         INFOPLIST_FILE: Sources/SetuIOSApp/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: icu.yukiryou.setuios
-        TARGETED_DEVICE_FAMILY: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"
         SUPPORTED_PLATFORMS: "iphoneos iphonesimulator"
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_NSSupportsLiveActivities: YES

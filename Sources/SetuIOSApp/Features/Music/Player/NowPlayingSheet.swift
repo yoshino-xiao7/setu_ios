@@ -29,6 +29,7 @@ struct NowPlayingSheet: View {
     @Environment(\.dynamicTypeSize) var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     @Environment(\.dismiss) var dismiss
+    @Environment(\.setuCanvas) var canvas
 
     @Bindable var environment: AppEnvironment
     @Bindable var player: MusicPlaybackController
@@ -63,9 +64,17 @@ struct NowPlayingSheet: View {
             if let track = player.currentTrack {
                 VStack(spacing: SetuSpacing.md) {
                     detailHeader
-                    nowPlayingPageContent(for: track)
-
-                    bottomPanel(for: track)
+                    if canvas.usesTwoPane {
+                        HStack(alignment: .top, spacing: SetuSpacing.xl) {
+                            nowPlayingPageContent(for: track)
+                            bottomPanel(for: track)
+                                .frame(maxWidth: 480)
+                        }
+                        .padding(.horizontal, SetuSpacing.xl)
+                    } else {
+                        nowPlayingPageContent(for: track)
+                        bottomPanel(for: track)
+                    }
                 }
                 .padding(.top, SetuSpacing.md)
                 .padding(.bottom, SetuSpacing.lg)
@@ -219,7 +228,7 @@ struct NowPlayingSheet: View {
         // Artwork adapts to whatever the page area offers, so controls stay
         // on-screen for iPhone SE and the art still fills a Pro Max.
         GeometryReader { proxy in
-            let side = max(min(proxy.size.width - SetuSpacing.xxl * 2, proxy.size.height - SetuSpacing.xl * 2, 360), 120)
+            let side = max(min(proxy.size.width - SetuSpacing.xxl * 2, proxy.size.height - SetuSpacing.xl * 2, canvas.artworkMaxSide), 120)
             let content = VStack(spacing: SetuSpacing.xl) {
                 Spacer(minLength: 0)
 

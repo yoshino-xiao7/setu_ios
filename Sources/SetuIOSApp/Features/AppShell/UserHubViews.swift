@@ -3,6 +3,7 @@ import SwiftUI
 
 struct MoreHubView: View {
     @Environment(RouterPath.self) private var router
+    @Environment(\.setuCanvas) private var canvas
     @Bindable var environment: AppEnvironment
 
     var body: some View {
@@ -16,28 +17,34 @@ struct MoreHubView: View {
                 SetuCard {
                     VStack(spacing: SetuSpacing.lg) {
                         SetuSectionHeader(title: "功能页")
-                        HubNavigationRow(title: "广场", subtitle: "公开收藏夹和 AI 绘画作品", systemImage: "rectangle.stack") {
-                            router.navigate(to: .plaza)
+                        LazyVGrid(
+                            columns: Array(repeating: GridItem(.flexible(), spacing: SetuSpacing.md), count: canvas.hubColumnCount),
+                            spacing: SetuSpacing.md
+                        ) {
+                            HubNavigationRow(title: "广场", subtitle: "公开收藏夹和 AI 绘画作品", systemImage: "rectangle.stack") {
+                                router.navigate(to: .plaza)
+                            }
+                            .accessibilityIdentifier("more.hub.plaza")
+                            HubNavigationRow(title: "ASMR", subtitle: "asmr.one 音声作品", systemImage: "headphones") {
+                                router.navigate(to: .asmrHome)
+                            }
+                            .accessibilityIdentifier("more.hub.asmr")
+                            HubNavigationRow(title: "JM 本子", subtitle: "禁漫天堂目录与阅读", systemImage: "book.closed") {
+                                router.navigate(to: .jmHome)
+                            }
+                            .accessibilityIdentifier("more.hub.jm")
+                            HubNavigationRow(title: "H 动漫", subtitle: "hanime1.me 作品与播放", systemImage: "play.rectangle") {
+                                router.navigate(to: .hanimeHome)
+                            }
+                            .accessibilityIdentifier("more.hub.hanime")
                         }
-                        .accessibilityIdentifier("more.hub.plaza")
-                        HubNavigationRow(title: "ASMR", subtitle: "asmr.one 音声作品", systemImage: "headphones") {
-                            router.navigate(to: .asmrHome)
-                        }
-                        .accessibilityIdentifier("more.hub.asmr")
-                        HubNavigationRow(title: "JM 本子", subtitle: "禁漫天堂目录与阅读", systemImage: "book.closed") {
-                            router.navigate(to: .jmHome)
-                        }
-                        .accessibilityIdentifier("more.hub.jm")
-                        HubNavigationRow(title: "H 动漫", subtitle: "hanime1.me 作品与播放", systemImage: "play.rectangle") {
-                            router.navigate(to: .hanimeHome)
-                        }
-                        .accessibilityIdentifier("more.hub.hanime")
                     }
                 }
             }
             .setuListRow()
         }
         .listStyle(.plain)
+        .setuReadableContent()
         .setuBackground()
         .navigationTitle("更多")
         #if os(iOS)

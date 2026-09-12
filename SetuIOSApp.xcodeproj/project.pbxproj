@@ -103,6 +103,7 @@
 		3BBCF6FAB809055FE09C9699 /* SetuRemoteImageLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43BD5EDA8AA5A779B0C7D48C /* SetuRemoteImageLoader.swift */; };
 		3D50376C6502C6F4002E7058 /* AiHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7562E6545A9C3CFDDC3E01A6 /* AiHistoryView.swift */; };
 		3D7BC9D303FE5BAF34138F15 /* MusicPlayerP13UITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 258D0EF389300423B218D52F /* MusicPlayerP13UITests.swift */; };
+		3D9C1AF6AC641E1EC7D2C70D /* SetuCanvasLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B84CF3546BECF89097A2FADB /* SetuCanvasLayoutTests.swift */; };
 		3DBF3F96ECAA7446DEDBCC6A /* ImageFeedClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95D0902F5419B07BE72C4054 /* ImageFeedClientTests.swift */; };
 		3E54742E55E0B4E44CE9C793 /* ModuleWatchLibraryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FF63F6BDB34D2B63322EB84 /* ModuleWatchLibraryTests.swift */; };
 		3F02305F38FF86B2054169E5 /* PreviewPixivOnlineClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F5256F0801A660AED6DAA7F /* PreviewPixivOnlineClient.swift */; };
@@ -194,6 +195,7 @@
 		794B6D1E3AA6C2A0E7BDD552 /* RadioFMUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0370AB53C3DA69EF6CBB68F4 /* RadioFMUITests.swift */; };
 		7A012AC0FBED97D070578606 /* MusicLibraryModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B50AE6E8336E57DC4D7ED206 /* MusicLibraryModels.swift */; };
 		7AB572495BFD26025C0DFF70 /* MusicSongRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD297F9E64A627591FE2E81F /* MusicSongRow.swift */; };
+		7BBEC3D0581004E82F3E7CC5 /* SetuCanvasLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72B8A10BCF6D2596B97055A1 /* SetuCanvasLayout.swift */; };
 		7BEAABB0A5F0C747C1095B93 /* SetuIOSCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = E83FF3E83093A6F76A280DD8 /* SetuIOSCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		7D89C4487941FDA6FB4A1AC0 /* PasskeyClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A73916342BFBD050720B6015 /* PasskeyClientTests.swift */; };
 		7EB9C89CC575D1238DC6B061 /* MusicPlaybackEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D5D8BC759F74C2C29A6E231 /* MusicPlaybackEngine.swift */; };
@@ -343,6 +345,7 @@
 		D7DE67A5B334A549195732FA /* AppleAuthClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33C3FD265E1FD43010883478 /* AppleAuthClientTests.swift */; };
 		D84F9474E8AEFCCD96C3B9BA /* FavoriteClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 545F27D69810BEB14D1827D3 /* FavoriteClientTests.swift */; };
 		D8941E2A4834984B549E9077 /* HanimeWorkDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49757CF28AF771E945EBE90C /* HanimeWorkDetailView.swift */; };
+		D906D50C140F3CD18BA4691B /* SetuCanvasEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5ADBB176A1FFF839AD91655E /* SetuCanvasEnvironment.swift */; };
 		D9166F7C9043CF321F72E735 /* RadioFMView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EFF82FDB97114E808663470 /* RadioFMView.swift */; };
 		DABC4177623C2B06794954A4 /* ZIPFoundation-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = E6C769B8883F55330851E34C /* ZIPFoundation-LICENSE.txt */; };
 		DB20D03E45B6002C9056B79C /* SetuIOSCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E83FF3E83093A6F76A280DD8 /* SetuIOSCore.framework */; };
@@ -628,6 +631,7 @@
 		59495B7528E5A519F77B784F /* ImageFeedExpiryPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageFeedExpiryPolicyTests.swift; sourceTree = "<group>"; };
 		59EF7C78E344397E089C9E14 /* AdminClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminClient.swift; sourceTree = "<group>"; };
 		5A64D43ACCAB7E5B6139EE9D /* AiGenerationDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AiGenerationDetailView.swift; sourceTree = "<group>"; };
+		5ADBB176A1FFF839AD91655E /* SetuCanvasEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuCanvasEnvironment.swift; sourceTree = "<group>"; };
 		5BA1FD0B93DCABC919AF1166 /* NextItemPreparer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NextItemPreparer.swift; sourceTree = "<group>"; };
 		5BE70E083CA8689714D87837 /* SetuPreviewFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuPreviewFixtures.swift; sourceTree = "<group>"; };
 		5C2D255EC50DD03AFCF97504 /* MusicDiscoverPreviewFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicDiscoverPreviewFixtures.swift; sourceTree = "<group>"; };
@@ -669,6 +673,7 @@
 		6FBFACA80CC1273BC475A055 /* PlatformClipboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformClipboard.swift; sourceTree = "<group>"; };
 		703416B5A4968F7D613D86F8 /* ApiKeyModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApiKeyModels.swift; sourceTree = "<group>"; };
 		70371048502B97E9B048C88F /* AirPlayHardwareUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AirPlayHardwareUITests.swift; sourceTree = "<group>"; };
+		72B8A10BCF6D2596B97055A1 /* SetuCanvasLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuCanvasLayout.swift; sourceTree = "<group>"; };
 		72E5308109C7DA93931FD731 /* FavoriteListUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoriteListUITests.swift; sourceTree = "<group>"; };
 		72EF12F591E29337D773A5C8 /* SetuAppAppearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuAppAppearance.swift; sourceTree = "<group>"; };
 		73DB094D1C3A00C6C958DBEB /* AdminOperationLogsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminOperationLogsView.swift; sourceTree = "<group>"; };
@@ -769,6 +774,7 @@
 		B631C6E273E0C435FE57E828 /* WordLyricText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordLyricText.swift; sourceTree = "<group>"; };
 		B788EAB21F1DFAC6808B1B34 /* AirPlayRouteButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AirPlayRouteButton.swift; sourceTree = "<group>"; };
 		B7DD39032D2D2A70EAFF6C83 /* MusicV2Client.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicV2Client.swift; sourceTree = "<group>"; };
+		B84CF3546BECF89097A2FADB /* SetuCanvasLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuCanvasLayoutTests.swift; sourceTree = "<group>"; };
 		B93D002CC9AC8D91AE810413 /* MobileModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileModels.swift; sourceTree = "<group>"; };
 		B9EA6361A9D71F6D1E165250 /* UserProfileClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfileClient.swift; sourceTree = "<group>"; };
 		BB684F2A000D82233D97C0D7 /* seek-chirp-vbr.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "seek-chirp-vbr.mp3"; sourceTree = "<group>"; };
@@ -962,6 +968,8 @@
 			isa = PBXGroup;
 			children = (
 				72EF12F591E29337D773A5C8 /* SetuAppAppearance.swift */,
+				5ADBB176A1FFF839AD91655E /* SetuCanvasEnvironment.swift */,
+				72B8A10BCF6D2596B97055A1 /* SetuCanvasLayout.swift */,
 				43837D03E176664A8872C81D /* SetuColor.swift */,
 				025C32B13BAE8DCE14258698 /* SetuMetrics.swift */,
 				066270CB154FDB8712B0F3B3 /* SetuTypography.swift */,
@@ -1658,6 +1666,7 @@
 				9F1353DE9EE8D70BA228EA5F /* PublicBlogClientTests.swift */,
 				29E5256D2CFDF5D727D23B75 /* RadioFMFeederTests.swift */,
 				D99D59E18C0AB69ACDBC4BEB /* RemoteCommandCoordinatorTests.swift */,
+				B84CF3546BECF89097A2FADB /* SetuCanvasLayoutTests.swift */,
 				879D7C16B2B972A0397B64EE /* SetuRemoteImageCacheTests.swift */,
 				028C52A4D6545581205E0400 /* SleepTimerControllerTests.swift */,
 				026D8717DD1A7F17F55E44E5 /* TypedPlaybackIdentityTests.swift */,
@@ -2027,6 +2036,7 @@
 				F4EA2FB6BAC068B27874E9FD /* PublicBlogClientTests.swift in Sources */,
 				FBF1B84FA78DA4B5034DC4B1 /* RadioFMFeederTests.swift in Sources */,
 				788868002D9CDDE9AA100E9F /* RemoteCommandCoordinatorTests.swift in Sources */,
+				3D9C1AF6AC641E1EC7D2C70D /* SetuCanvasLayoutTests.swift in Sources */,
 				3A9A5E67B99F2BEDFAEE1622 /* SetuRemoteImageCacheTests.swift in Sources */,
 				A74602310C5B737F4D668274 /* SleepTimerControllerTests.swift in Sources */,
 				C5C4A127238CB8026C1186FD /* TypedPlaybackIdentityTests.swift in Sources */,
@@ -2239,6 +2249,8 @@
 				F132BB812CEFE97AA86B5E4D /* SetuAppAppearance.swift in Sources */,
 				484399AD4C02D35571D80D2C /* SetuBackground.swift in Sources */,
 				30FBC429B1F581A18439C326 /* SetuBottomCTA.swift in Sources */,
+				D906D50C140F3CD18BA4691B /* SetuCanvasEnvironment.swift in Sources */,
+				7BBEC3D0581004E82F3E7CC5 /* SetuCanvasLayout.swift in Sources */,
 				11E6FA864687276A46E899CA /* SetuCard.swift in Sources */,
 				8BFA8DA95DEB49A9008EAD2D /* SetuColor.swift in Sources */,
 				F69E9D8250659B7450383BE5 /* SetuDateFormatter.swift in Sources */,
@@ -2500,7 +2512,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 7G6J4S76PN;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -2569,7 +2581,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = icu.yukiryou.setuios;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				TARGETED_DEVICE_FAMILY = 1;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};
@@ -2702,7 +2714,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = 7G6J4S76PN;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -2761,7 +2773,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = icu.yukiryou.setuios;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				TARGETED_DEVICE_FAMILY = 1;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
 		};
