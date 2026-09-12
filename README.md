@@ -1,10 +1,10 @@
 # 亦可 YK iOS
 
-**亦可 YK（原雪涼云）** 的 SwiftUI 原生 iPhone 客户端。品牌英文标识为 **YIKE**，简称 **YK**，主屏幕显示名称为「亦可 YK」。
+**亦可 YK（原雪涼云）** 的 SwiftUI 原生 iPhone / iPad 客户端。品牌英文标识为 **YIKE**，简称 **YK**，主屏幕显示名称为「亦可 YK」。
 
 这不是 Web 套壳。图片、音乐、AI 绘画、收藏、账户和管理后台都是原生界面，连接亦可自己的 API 服务。
 
-当前公开版本：**[YK-v1.0.0-alpha.2](https://github.com/yoshino-xiao7/setu_ios/releases/tag/YK-v1.0.0-alpha.2)**。这是源码发布，**只提供源码**，不附带 ipa、xcarchive 或 TestFlight 包。工程内部开发版本号仍为 `1.1 (5)`。
+当前公开版本：**[YK-v1.0.0-alpha.3](https://github.com/yoshino-xiao7/setu_ios/releases/tag/YK-v1.0.0-alpha.3)**。这是源码发布，**只提供源码**，不附带 ipa、xcarchive 或 TestFlight 包。工程内部开发版本号为 `1.1 (6)`。
 
 ## 本次 Alpha 说明
 
