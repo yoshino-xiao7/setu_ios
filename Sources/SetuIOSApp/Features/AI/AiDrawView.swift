@@ -3,6 +3,7 @@ import SwiftUI
 
 struct AiDrawView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.setuCanvas) private var canvas
     @Environment(\.setuRecoveryActions) private var recovery
     @Environment(RouterPath.self) private var router
     @Environment(SystemPushCoordinator.self) private var pushNotifications
@@ -46,16 +47,38 @@ struct AiDrawView: View {
     private let estimatedPointsCost = 20
 
     var body: some View {
-        List {
-            serviceNoticeSection
-            quickPromptSection
-            quickCanvasSection
-            quickAssetSection
-            advancedSettingsSection
-            feedbackSection
+        Group {
+            if canvas.usesTwoPane {
+                HStack(alignment: .top, spacing: 0) {
+                    List {
+                        serviceNoticeSection
+                        quickPromptSection
+                        quickCanvasSection
+                        quickAssetSection
+                        feedbackSection
+                    }
+                    .listStyle(.plain)
+                    .setuBackground()
+                    List {
+                        advancedSettingsSection
+                    }
+                    .listStyle(.plain)
+                    .setuBackground()
+                }
+            } else {
+                List {
+                    serviceNoticeSection
+                    quickPromptSection
+                    quickCanvasSection
+                    quickAssetSection
+                    advancedSettingsSection
+                    feedbackSection
+                }
+                .listStyle(.plain)
+                .setuBackground()
+            }
         }
-        .listStyle(.plain)
-        .setuBackground()
+        .setuReadableContent()
         .setuFeedbackPresentation($feedback)
         .setuRefreshAfterLogin(environment.authSession) { Task { await loadMetadata() } }
         .setuRetry { Task { await loadMetadata() } }

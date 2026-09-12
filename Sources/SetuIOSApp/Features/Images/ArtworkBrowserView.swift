@@ -176,16 +176,18 @@ private struct ArtworkChannelView: View {
     let bookmark: (BrowserArtwork) -> Void
     let artist: (String) -> Void
     let filters: () -> Void
+    @Environment(\.setuCanvas) private var canvas
+    @State private var contentWidth: CGFloat = 0
+
+    private var masonryColumnCount: Int {
+        let width = contentWidth > 0 ? contentWidth : canvas.size.width
+        return SetuCanvasLayout(size: CGSize(width: width, height: canvas.size.height)).masonryColumnCount
+    }
 
     private var columns: [[BrowserArtwork]] {
-        var columns: [[BrowserArtwork]] = [[], []]
-        var heights = [Double(0), Double(0)]
-        for work in state.items {
-            let index = heights[0] <= heights[1] ? 0 : 1
-            columns[index].append(work)
-            heights[index] += 1 / (work.pages.first?.aspectRatio ?? 1) + 0.35
+        SetuMasonryLayout.columns(from: state.items, count: masonryColumnCount) { work in
+            1 / (work.pages.first?.aspectRatio ?? 1) + 0.35
         }
-        return columns
     }
     var body: some View {
         ScrollView {
@@ -205,7 +207,7 @@ private struct ArtworkChannelView: View {
                                     }.buttonStyle(.plain).accessibilityLabel("查看 \(person.name) 的作品")
                                 }
                             }
-                        }.scrollIndicators(.hidden).frame(maxWidth: 190)
+                        }.scrollIndicators(.hidden).frame(maxWidth: canvas.isRegularWidth ? 360 : 190)
                     }
                 } else { Text(source == .gallery ? "本站图库" : state.view == "artist" ? "画师作品" : state.query.isEmpty ? "发现作品" : "搜索结果").font(.title2.bold()) }
                 if !state.tag.isEmpty {
@@ -218,7 +220,7 @@ private struct ArtworkChannelView: View {
                     }.frame(maxWidth: .infinity).padding()
                 }
                 HStack(alignment: .top, spacing: 12) {
-                    ForEach(0..<2) { column in
+                    ForEach(0..<columns.count, id: \.self) { column in
                         LazyVStack(spacing: 12) {
                             ForEach(columns[column]) { work in
                                 ArtworkTile(work: work, client: store.client, transition: transition, busy: store.busyIDs.contains(work.id), open: { open(work) }, bookmark: { bookmark(work) })
@@ -237,8 +239,9 @@ private struct ArtworkChannelView: View {
                 } else if state.loaded && !state.items.isEmpty {
                     Text("已看到这里的全部作品").font(.caption).foregroundStyle(SetuColor.textTertiary).frame(maxWidth: .infinity).padding()
                 }
-            }.padding(.horizontal, 14).padding(.top, 10).padding(.bottom, 24)
+            }.padding(.horizontal, canvas.pageGutter).padding(.top, 10).padding(.bottom, 24)
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { contentWidth = $0 }
         .scrollPosition(id: $state.scrollID)
         .refreshable { await store.load(source, reset: true) }
     }
@@ -277,7 +280,7 @@ private struct ArtworkChannelView: View {
                                         Text(article.title).font(.subheadline).lineLimit(2).foregroundStyle(.white)
                                             .padding(12).frame(maxWidth: .infinity, alignment: .leading)
                                             .background(LinearGradient(colors: [.clear, .black.opacity(0.65)], startPoint: .top, endPoint: .bottom))
-                                    }.frame(width: 280).clipShape(RoundedRectangle(cornerRadius: 16))
+                                    }.frame(width: canvas.spotlightCardWidth).clipShape(RoundedRectangle(cornerRadius: 16))
                             }
                         }
                     }

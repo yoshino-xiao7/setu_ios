@@ -11,6 +11,7 @@ struct DashboardView: View {
     @Bindable var player: MusicPlaybackController
     @Environment(AppNavigationCoordinator.self) private var navigation
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.setuCanvas) private var canvas
 
     @State private var favoritesState: LoadState<[FavoriteItem]> = .idle
     @State private var generationState: LoadState<AiGenerationJob?> = .idle
@@ -25,15 +26,36 @@ struct DashboardView: View {
     @State private var previewItem: UserImagePreviewItem?
 
     var body: some View {
-        List {
-            greetingSection
-            continueSection
-            favoritesSection
-            if !blurPreviews { recommendationSection }
-            remindersSection
+        Group {
+            if canvas.usesTwoPane {
+                HStack(alignment: .top, spacing: 0) {
+                    List {
+                        greetingSection
+                        continueSection
+                        remindersSection
+                    }
+                    .listStyle(.plain)
+                    .setuBackground()
+                    List {
+                        favoritesSection
+                        if !blurPreviews { recommendationSection }
+                    }
+                    .listStyle(.plain)
+                    .setuBackground()
+                }
+            } else {
+                List {
+                    greetingSection
+                    continueSection
+                    favoritesSection
+                    if !blurPreviews { recommendationSection }
+                    remindersSection
+                }
+                .listStyle(.plain)
+                .setuBackground()
+            }
         }
-        .listStyle(.plain)
-        .setuBackground()
+        .setuReadableContent()
         .accessibilityIdentifier("dashboard.page")
         .navigationTitle("首页")
         #if os(iOS)
@@ -574,16 +596,21 @@ private struct DashboardFieldFailure: View {
 
 private struct FavoritePreviewTile: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.setuCanvas) private var canvas
 
     let item: FavoriteItem
+
+    private var tileSide: CGFloat {
+        dynamicTypeSize.isAccessibilitySize ? max(canvas.favoriteTileSide, 184) : canvas.favoriteTileSide
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: SetuSpacing.sm) {
             SetuRemoteImage(
                 urlString: item.image?.urlSmall ?? item.image?.urlRegular,
                 accessibilityLabel: "收藏图片：\(item.image?.title.nonEmpty ?? "未命名作品")",
-                width: 136,
-                height: 136,
+                width: tileSide,
+                height: tileSide,
                 cornerRadius: SetuRadius.md,
                 allowsTapToRetry: false
             )
@@ -594,7 +621,7 @@ private struct FavoritePreviewTile: View {
                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(width: dynamicTypeSize.isAccessibilitySize ? 184 : 136, alignment: .leading)
+        .frame(width: tileSide, alignment: .leading)
     }
 }
 

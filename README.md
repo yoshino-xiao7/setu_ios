@@ -160,7 +160,7 @@
 | 项目 | 说明 |
 |---|---|
 | 系统 | iOS 17 或更高 |
-| 设备 | iPhone（工程 `TARGETED_DEVICE_FAMILY` 为 1） |
+| 设备 | iPhone 与 iPad（工程 `TARGETED_DEVICE_FAMILY` 为 1,2；iPad 支持横竖屏） |
 | 登录 | 邮箱、Apple、通行密钥 |
 | 通知 | 生成完成等推送；首次画图时会说明用途 |
 | 照片 | 保存图片到相册时申请 |
