@@ -99,7 +99,7 @@ struct ModuleWatchHistoryView: View {
         .navigationTitle("观看历史")
         .task { reload() }
         .onAppear { reload() }
-        .accessibilityIdentifier(module == .jm ? "jm.history.page" : "asmr.history.page")
+        .accessibilityIdentifier("\(module.rawValue.lowercased()).history.page")
     }
 
     private func reload() {
@@ -119,6 +119,8 @@ struct ModuleWatchHistoryView: View {
             router.navigate(to: .jmAlbum(record.externalId))
         case .asmr:
             router.navigate(to: .asmrWork(record.externalId))
+        case .hanime:
+            router.navigate(to: .hanimeWork(record.externalId))
         }
     }
 

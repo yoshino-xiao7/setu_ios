@@ -28,6 +28,10 @@ struct MoreHubView: View {
                             router.navigate(to: .jmHome)
                         }
                         .accessibilityIdentifier("more.hub.jm")
+                        HubNavigationRow(title: "H 动漫", subtitle: "hanime1.me 作品与播放", systemImage: "play.rectangle") {
+                            router.navigate(to: .hanimeHome)
+                        }
+                        .accessibilityIdentifier("more.hub.hanime")
                     }
                 }
             }
@@ -97,7 +101,7 @@ private struct MoreLandingHeader: View {
         VStack(alignment: .leading, spacing: SetuSpacing.xs) {
             Text("更多")
                 .font(SetuTypography.title)
-            Text("广场、ASMR 与 JM 本子都在这里，按模块进入功能页。")
+            Text("广场、ASMR、JM 本子与 H 动漫都在这里，按模块进入功能页。")
                 .font(SetuTypography.caption)
                 .opacity(0.9)
                 .fixedSize(horizontal: false, vertical: true)

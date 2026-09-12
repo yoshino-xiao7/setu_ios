@@ -477,6 +477,10 @@ enum SetuPreviewEnvironment {
                 apiHosts: [URL(string: "https://jm.preview.invalid")!],
                 imageHosts: [URL(string: "https://cdn.preview.invalid")!]
             ),
+            hanimeCatalogClient: HanimeCatalogClient(
+                session: catalogSession,
+                baseURLs: [URL(string: "https://hanime1.me")!]
+            ),
             imageDeleteRequestClient: ImageDeleteRequestClient(apiClient: apiClient),
             musicClient: MusicClient(apiClient: apiClient),
             musicV2Client: MusicV2Client(apiClient: apiClient),
@@ -527,7 +531,7 @@ private final class SetuPreviewKeychain: KeychainStoring, @unchecked Sendable {
 private final class SetuPreviewURLProtocol: URLProtocol {
     override class func canInit(with request: URLRequest) -> Bool {
         switch request.url?.host {
-        case "preview.setu.invalid", "api.asmr.one", "jm.preview.invalid":
+        case "preview.setu.invalid", "api.asmr.one", "jm.preview.invalid", "hanime1.me":
             return true
         default:
             return false
@@ -614,6 +618,9 @@ private enum SetuPreviewAPI {
         }
         if request.url?.host == "jm.preview.invalid" {
             return jmCatalogFixture(path: path)
+        }
+        if request.url?.host == "hanime1.me" {
+            return hanimeCatalogFixture(path: path)
         }
 
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-music-library"), path.contains("/library") {
@@ -993,6 +1000,36 @@ private enum SetuPreviewAPI {
         }
         return json("""
         {"list":[{"id":88001,"name":"示例本子","author":["画师A"],"tags":["百合"]}],"total":1}
+        """)
+    }
+
+    private static func hanimeCatalogFixture(path: String) -> Fixture {
+        if path == "/watch" || path == "/download" {
+            return json("""
+            <html><head>
+            <meta property="og:title" content="第一夜">
+            <meta property="og:image" content="https://hanime1.me/cover.jpg">
+            </head><body>
+            <video id="player">
+              <source src="https://hanime1.me/preview.mp4" type="video/mp4" size="720">
+            </video>
+            <div id="video-playlist-wrapper">
+              <div id="playlist-scroll">
+                <a href="https://hanime1.me/watch?v=12345"><img src="https://hanime1.me/cover.jpg" alt="第一夜"></a>
+              </div>
+            </div>
+            <div id="footer"></div>
+            </body></html>
+            """)
+        }
+        return json("""
+        <html><body>
+        <a href="https://hanime1.me/watch?v=12345">
+          <img src="https://hanime1.me/cover.jpg" alt="第一夜">
+          <div class="home-rows-videos-title">第一夜</div>
+        </a>
+        <a href="https://hanime1.me/search?page=2">2</a>
+        </body></html>
         """)
     }
 

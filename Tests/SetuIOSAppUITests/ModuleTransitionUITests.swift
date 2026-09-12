@@ -102,6 +102,7 @@ final class ModuleTransitionUITests: XCTestCase {
         XCTAssertTrue(element("more.hub.plaza", in: app).exists)
         XCTAssertTrue(element("more.hub.asmr", in: app).exists)
         XCTAssertTrue(element("more.hub.jm", in: app).exists)
+        XCTAssertTrue(element("more.hub.hanime", in: app).exists)
 
         element("more.hub.plaza", in: app).tap()
         XCTAssertTrue(element("plaza.hub.page", in: app).waitForExistence(timeout: 8))
@@ -116,6 +117,15 @@ final class ModuleTransitionUITests: XCTestCase {
         element("more.hub.jm", in: app).tap()
         XCTAssertTrue(element("jm.home.page", in: app).waitForExistence(timeout: 8))
         XCTAssertTrue(app.navigationBars["JM 本子"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons.firstMatch.tap()
+
+        element("more.hub.hanime", in: app).tap()
+        XCTAssertTrue(element("hanime.home.page", in: app).waitForExistence(timeout: 8))
+        XCTAssertTrue(app.navigationBars["H 动漫"].waitForExistence(timeout: 5))
+        XCTAssertTrue(element("hanime.genre.strip", in: app).waitForExistence(timeout: 5))
+        XCTAssertTrue(element("hanime.genre.riban", in: app).exists)
+        XCTAssertTrue(element("hanime.genre.mmd", in: app).exists)
+        XCTAssertTrue(element("hanime.genre.cosplay", in: app).exists)
     }
 
     func testAsmrSearchKeepsMiniPlayerVisible() {

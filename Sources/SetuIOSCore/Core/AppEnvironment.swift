@@ -34,6 +34,7 @@ public final class AppEnvironment {
     public let jmReadingProgressStore: JmReadingProgressStore
     public let asmrCatalogClient: AsmrCatalogClient
     public let jmCatalogClient: JmCatalogClient
+    public let hanimeCatalogClient: HanimeCatalogClient
     public let imageDeleteRequestClient: ImageDeleteRequestClient
     public let musicClient: MusicClient
     public let musicV2Client: MusicV2Client
@@ -63,6 +64,7 @@ public final class AppEnvironment {
         moduleFavoriteClient: ModuleFavoriteClient? = nil,
         asmrCatalogClient: AsmrCatalogClient = AsmrCatalogClient(),
         jmCatalogClient: JmCatalogClient = JmCatalogClient(),
+        hanimeCatalogClient: HanimeCatalogClient = HanimeCatalogClient(),
         imageDeleteRequestClient: ImageDeleteRequestClient,
         musicClient: MusicClient,
         musicV2Client: MusicV2Client,
@@ -98,6 +100,7 @@ public final class AppEnvironment {
         })
         self.asmrCatalogClient = asmrCatalogClient
         self.jmCatalogClient = jmCatalogClient
+        self.hanimeCatalogClient = hanimeCatalogClient
         self.imageDeleteRequestClient = imageDeleteRequestClient
         self.musicClient = musicClient
         self.musicV2Client = musicV2Client
@@ -169,6 +172,7 @@ public final class AppEnvironment {
             moduleFavoriteClient: ModuleFavoriteClient(apiClient: client),
             asmrCatalogClient: AsmrCatalogClient(),
             jmCatalogClient: JmCatalogClient(),
+            hanimeCatalogClient: HanimeCatalogClient(),
             imageDeleteRequestClient: imageDeleteRequestClient,
             musicClient: musicClient,
             musicV2Client: musicV2Client,

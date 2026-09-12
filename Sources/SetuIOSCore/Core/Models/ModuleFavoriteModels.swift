@@ -3,6 +3,7 @@ import Foundation
 public enum ModuleFavoriteModule: String, Codable, Sendable, CaseIterable {
     case asmr = "ASMR"
     case jm = "JM"
+    case hanime = "HANIME"
 }
 
 public struct ModuleFavoriteItem: Decodable, Identifiable, Sendable, Hashable {

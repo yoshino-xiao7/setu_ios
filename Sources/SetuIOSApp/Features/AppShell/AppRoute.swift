@@ -56,6 +56,10 @@ enum AppRoute: Hashable {
     case jmReader(albumID: String, chapterID: String)
     case jmFavorites
     case jmHistory
+    case hanimeHome
+    case hanimeWork(String)
+    case hanimeFavorites
+    case hanimeHistory
     case imageDeleteRequests
     case imageDeleteRequestDetail(Int)
     case qqBinding

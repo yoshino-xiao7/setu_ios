@@ -28,6 +28,7 @@ final class ModuleWatchHistoryStoreTests: XCTestCase {
         }
         store.record(ModuleWatchRecord(module: .jm, externalId: "album-120", title: "本子 120 续看", viewedAt: Date(timeIntervalSince1970: 200)))
         store.record(ModuleWatchRecord(module: .asmr, externalId: "41001", title: "第一夜"))
+        store.record(ModuleWatchRecord(module: .hanime, externalId: "12345", title: "第一夜动画"))
 
         let jm = store.records(module: .jm)
         XCTAssertEqual(jm.count, ModuleWatchHistoryStore.capacity)
@@ -36,6 +37,7 @@ final class ModuleWatchHistoryStoreTests: XCTestCase {
         XCTAssertEqual(jm.map(\.externalId).filter { $0 == "album-120" }.count, 1)
         XCTAssertFalse(jm.contains(where: { $0.externalId == "album-1" }))
         XCTAssertEqual(store.records(module: .asmr).map(\.externalId), ["41001"])
+        XCTAssertEqual(store.records(module: .hanime).map(\.externalId), ["12345"])
     }
 
     func testHistoryIsIsolatedPerAccount() {

@@ -26,6 +26,14 @@ extension RootAppView {
             JmFavoriteListView(environment: environment)
         case .jmHistory:
             ModuleWatchHistoryView(environment: environment, module: .jm)
+        case .hanimeHome:
+            HanimeHomeView(environment: environment)
+        case .hanimeWork(let workID):
+            HanimeWorkDetailView(environment: environment, workID: workID)
+        case .hanimeFavorites:
+            HanimeFavoriteListView(environment: environment)
+        case .hanimeHistory:
+            ModuleWatchHistoryView(environment: environment, module: .hanime, aspectRatio: 16 / 9)
         default:
             EmptyView()
         }

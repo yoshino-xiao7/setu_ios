@@ -218,10 +218,13 @@ actor SetuRemoteImageLoader {
     }
 
     private nonisolated static func imageRequest(url: URL, cachePolicy: URLRequest.CachePolicy) -> URLRequest {
-        guard JmAppToken.isImageCDN(url) else {
-            return URLRequest(url: url, cachePolicy: cachePolicy)
+        if JmAppToken.isImageCDN(url) {
+            return JmAppToken.imageRequest(url: url, cachePolicy: cachePolicy)
         }
-        return JmAppToken.imageRequest(url: url, cachePolicy: cachePolicy)
+        if HanimeSite.isImageCDN(url) {
+            return HanimeSite.imageRequest(url: url, cachePolicy: cachePolicy)
+        }
+        return URLRequest(url: url, cachePolicy: cachePolicy)
     }
 
     private nonisolated static func fetch(_ request: URLRequest, session: URLSession) async throws -> Data {

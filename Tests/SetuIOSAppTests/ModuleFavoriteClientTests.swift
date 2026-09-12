@@ -286,6 +286,211 @@ final class JmCatalogClientTests: XCTestCase {
     }
 }
 
+final class HanimeCatalogClientTests: XCTestCase {
+    override func tearDown() {
+        super.tearDown()
+        ModuleFavoriteMockURLProtocol.handler = nil
+    }
+
+    func testWorksParseCardsWithoutHittingSetu() async throws {
+        let probe = SyncRequestProbe()
+        let client = makeClient { request in
+            probe.capture(request)
+            return """
+            <html><body>
+            <div class="home-rows-videos-wrapper">
+              <a href="https://hanime1.me/watch?v=12345">
+                <img src="https://vdownload.hembed.com/image/a.jpg" alt="第一夜">
+                <div class="home-rows-videos-title">第一夜 &amp; 续</div>
+              </a>
+              <a href="/watch?v=12346">
+                <img data-src="https://i.hanime1.me/b.jpg" alt="第二夜">
+                <div class="card-mobile-title">第二夜</div>
+              </a>
+            </div>
+            <a href="https://hanime1.me/search?query=&page=8">8</a>
+            </body></html>
+            """
+        }
+
+        let page = try await client.works(page: 1)
+
+        XCTAssertEqual(page.works.map(\.id), ["12345", "12346"])
+        XCTAssertEqual(page.works.first?.title, "第一夜 & 续")
+        XCTAssertEqual(page.works.first?.coverURL, "https://vdownload.hembed.com/image/a.jpg")
+        XCTAssertEqual(page.works.last?.coverURL, "https://i.hanime1.me/b.jpg")
+        XCTAssertTrue(page.hasMore)
+        XCTAssertEqual(probe.lastURL, "https://hanime1.me/search?page=1")
+        XCTAssertEqual(probe.lastOrigin, HanimeSite.origin)
+        XCTAssertEqual(probe.lastReferer, HanimeSite.referer)
+        XCTAssertFalse(probe.lastURL?.contains("api.example.com") == true)
+    }
+
+    func testCatalogGenresMatchSiteNav() {
+        XCTAssertEqual(HanimeGenre.catalog.map(\.title), [
+            "最新", "里番", "新番预告", "泡面番", "Motion Anime", "3DCG", "2.5D", "2D动画", "AI生成", "MMD", "Cosplay",
+        ])
+    }
+
+    func testGenreSearchUsesTraditionalQuery() async throws {
+        let probe = SyncRequestProbe()
+        let client = makeClient { request in
+            probe.capture(request)
+            return """
+            <a href="/watch?v=9"><img src="https://i.hanime1.me/a.jpg" alt="里番一"></a>
+            <a href="/search?genre=%E8%A3%8F%E7%95%AA&page=2">2</a>
+            """
+        }
+        let genre = try XCTUnwrap(HanimeGenre.catalog.first { $0.title == "里番" })
+        let page = try await client.works(page: 1, genre: genre)
+        let url = try XCTUnwrap(URL(string: try XCTUnwrap(probe.lastURL)))
+        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        XCTAssertEqual(url.path, "/search")
+        XCTAssertEqual(items.first(where: { $0.name == "genre" })?.value, "裏番")
+        XCTAssertEqual(items.first(where: { $0.name == "page" })?.value, "1")
+        XCTAssertTrue(page.hasMore)
+        XCTAssertFalse(probe.lastURL?.contains("api.example.com") == true)
+    }
+
+    func testPreviewGenreUsesYearMonthPathAndStops() async throws {
+        let probe = SyncRequestProbe()
+        var components = DateComponents()
+        components.year = 2026
+        components.month = 9
+        components.day = 12
+        let now = try XCTUnwrap(Calendar(identifier: .gregorian).date(from: components))
+        let client = makeClient(now: { now }) { request in
+            probe.capture(request)
+            return """
+            <a href="/watch?v=88"><img src="https://i.hanime1.me/a.jpg" alt="预告"></a>
+            <a href="/search?query=&page=8">8</a>
+            """
+        }
+        let genre = try XCTUnwrap(HanimeGenre.catalog.first { $0.title == "新番预告" })
+        let page = try await client.works(page: 1, genre: genre)
+        XCTAssertEqual(probe.lastURL, "https://hanime1.me/previews/202609")
+        XCTAssertEqual(page.works.map(\.id), ["88"])
+        XCTAssertFalse(page.hasMore, "新番预告按月一页，站点页脚的 search page 不应继续翻页")
+    }
+
+    func testShortSearchPageWithoutNextStops() async throws {
+        let client = makeClient { _ in
+            """
+            <a href="/watch?v=1"><img src="https://i.hanime1.me/a.jpg" alt="一"></a>
+            """
+        }
+        let page = try await client.works(page: 1)
+        XCTAssertFalse(page.hasMore)
+        XCTAssertEqual(page.total, 1)
+    }
+
+    func testSearchUsesHanimeQueryAndDoesNotProxy() async throws {
+        let probe = SyncRequestProbe()
+        let client = makeClient { request in
+            probe.capture(request)
+            return """
+            <a href="/watch?v=777">
+              <img src="https://vdownload.hembed.com/c.jpg" alt="雨夜">
+            </a>
+            """
+        }
+
+        let page = try await client.works(page: 2, keyword: " 雨夜 ")
+
+        XCTAssertEqual(page.works.first?.id, "777")
+        XCTAssertTrue(probe.lastURL?.contains("/search?") == true)
+        XCTAssertTrue(probe.lastURL?.contains("query=") == true)
+        XCTAssertTrue(probe.lastURL?.contains("page=2") == true)
+        XCTAssertFalse(probe.lastURL?.contains("api.example.com") == true)
+    }
+
+    func testWatchPicksHighestMp4AndRelatedPlaylist() async throws {
+        let client = makeClient { request in
+            if request.url?.path == "/download" {
+                return #"<table class="download-table"></table>"#
+            }
+            return """
+            <html><head>
+            <meta property="og:title" content="第一夜">
+            <meta property="og:image" content="https://vdownload.hembed.com/image/a.jpg">
+            <meta property="og:description" content="雪社">
+            </head><body>
+            <video id="player">
+              <source src="https://vdownload.hembed.com/v/a-720p.mp4" type="video/mp4" size="720">
+              <source src="https://vdownload.hembed.com/v/a-1080p.mp4" type="video/mp4" size="1080">
+              <source src="https://vdownload.hembed.com/v/a.m3u8" type="application/x-mpegURL">
+            </video>
+            <div id="video-playlist-wrapper">
+              <h4>第一夜系列</h4>
+              <div id="playlist-scroll">
+                <a href="https://hanime1.me/watch?v=12345"><img src="https://vdownload.hembed.com/image/a.jpg" alt="第一夜"></a>
+                <a href="https://hanime1.me/watch?v=12347"><img src="https://vdownload.hembed.com/image/c.jpg" alt="第三夜"></a>
+              </div>
+            </div>
+            <div id="footer"></div>
+            </body></html>
+            """
+        }
+
+        let page = try await client.work(id: "12345")
+
+        XCTAssertEqual(page.work.title, "第一夜")
+        XCTAssertEqual(page.work.coverURL, "https://vdownload.hembed.com/image/a.jpg")
+        XCTAssertEqual(page.preferredStream?.quality, "1080p")
+        XCTAssertEqual(page.preferredStream?.url.absoluteString, "https://vdownload.hembed.com/v/a-1080p.mp4")
+        XCTAssertEqual(page.streams.map(\.quality), ["1080p", "720p", "HLS"])
+        XCTAssertEqual(page.related.map(\.id), ["12347"])
+        XCTAssertEqual(page.work.favoriteSnapshot.module, .hanime)
+        XCTAssertEqual(page.work.favoriteSnapshot.externalId, "12345")
+    }
+
+    func testWatchFallsBackToDownloadLinks() async throws {
+        let client = makeClient { request in
+            if request.url?.path == "/download" {
+                return """
+                <table class="download-table">
+                  <a href="https://vdownload.hembed.com/v/a-480p.mp4" download="第一夜.mp4">480p</a>
+                  <a href="https://vdownload.hembed.com/v/a-1080p.mp4" download="第一夜.mp4">1080p</a>
+                </table>
+                """
+            }
+            return """
+            <html><head><meta property="og:title" content="第一夜"></head>
+            <body><div id="player"></div></body></html>
+            """
+        }
+
+        let page = try await client.work(id: "12345")
+        XCTAssertEqual(page.preferredStream?.quality, "1080p")
+        XCTAssertEqual(page.streams.count, 2)
+    }
+
+    func testImageRequestUsesHanimeHeaders() {
+        let url = URL(string: "https://vdownload.hembed.com/image/a.jpg")!
+        XCTAssertTrue(HanimeSite.isImageCDN(url))
+        XCTAssertTrue(HanimeSite.isImageCDN(URL(string: "https://i.hanime1.me/b.jpg")!))
+        XCTAssertFalse(HanimeSite.isImageCDN(URL(string: "https://cdn.example.com/cover.jpg")!))
+        let request = HanimeSite.imageRequest(url: url)
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Referer"), HanimeSite.referer)
+        XCTAssertEqual(request.value(forHTTPHeaderField: "User-Agent"), HanimeSite.userAgent)
+        XCTAssertEqual(HanimeSite.playbackAssetOptions[HanimeSite.assetHeaderFieldsKey] as? [String: String], HanimeSite.pageHeaders)
+    }
+
+    private func makeClient(
+        now: @escaping @Sendable () -> Date = { Date() },
+        handler: @escaping (URLRequest) -> String
+    ) -> HanimeCatalogClient {
+        ModuleFavoriteMockURLProtocol.handler = handler
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [ModuleFavoriteMockURLProtocol.self]
+        return HanimeCatalogClient(
+            session: URLSession(configuration: configuration),
+            baseURLs: [URL(string: "https://hanime1.me")!],
+            now: now
+        )
+    }
+}
+
 final class JmImageDescramblerTests: XCTestCase {
     func testStripCountUsesPublishedThresholdsAndFilenameMD5() {
         XCTAssertEqual(JmImageDescrambler.stripCount(photoID: 100, scrambleID: 220980, fileName: "00001"), 0)
