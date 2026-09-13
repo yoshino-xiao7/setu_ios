@@ -69,3 +69,25 @@ final class CloudVideoHLSPlaylistTests: XCTestCase {
         XCTAssertEqual(headers["Referer"], "https://cloud.yukiryou.icu/")
     }
 }
+
+final class CloudVideoCDNTests: XCTestCase {
+    func testRecognizesBunnyPullZoneHosts() {
+        XCTAssertTrue(CloudVideoCDN.isImageCDN(URL(string: "https://vz-example.b-cdn.net/guid/thumbnail.jpg")!))
+        XCTAssertTrue(CloudVideoCDN.isImageCDN(URL(string: "https://iframe.mediadelivery.net/embed/1/guid")!))
+        XCTAssertFalse(CloudVideoCDN.isImageCDN(URL(string: "https://cdn.example.com/cover.jpg")!))
+        XCTAssertFalse(CloudVideoCDN.isImageCDN(URL(string: "https://not-b-cdn.net.example/cover.jpg")!))
+    }
+
+    func testImageRequestKeepsTheSignedThumbnailQuery() {
+        let url = URL(string: "https://vz-example.b-cdn.net/guid-123/thumbnail.jpg?token=HS256-abc_def&expires=1700000000")!
+        let request = CloudVideoCDN.imageRequest(
+            url: url,
+            siteBaseURL: URL(string: "https://cloud.yukiryou.icu")!
+        )
+        XCTAssertEqual(request.url, url)
+        XCTAssertEqual(request.value(forHTTPHeaderField: "User-Agent"), CloudVideoCDN.userAgent)
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Origin"), "https://cloud.yukiryou.icu")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Referer"), "https://cloud.yukiryou.icu/")
+        XCTAssertTrue(request.value(forHTTPHeaderField: "Accept")?.contains("image/") == true)
+    }
+}

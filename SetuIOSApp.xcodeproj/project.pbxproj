@@ -243,6 +243,7 @@
 		919C0C27259C01C31A172934 /* MusicDetailTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24AA32F3B26259DCE00B5EA4 /* MusicDetailTests.swift */; };
 		9631BBDF3DD4E9B63B5F71E1 /* MusicCutoverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62A83243C0C9397229ED88A0 /* MusicCutoverTests.swift */; };
 		96ADBD716CF66E09DCB08E26 /* PagingControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43B4FFBEEED327F60BF42AF0 /* PagingControllerTests.swift */; };
+		97081BD90E18CB0FE53BD199 /* CloudVideoCDN.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FDC0016D896DBB442ACAB6F /* CloudVideoCDN.swift */; };
 		978F7678CB812EF798B205F6 /* MusicRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E6923D27BB22092B9B2749C /* MusicRepository.swift */; };
 		97F937E35F4EE72E03B974A9 /* MusicSearchRowLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 534DC7E12C066A675D056D81 /* MusicSearchRowLayoutTests.swift */; };
 		9848B412239BB11B7CB70C7D /* ArtworkPager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4181E24912467DF8EE16885F /* ArtworkPager.swift */; };
@@ -580,6 +581,7 @@
 		2C5F5AFB174255A8656010EE /* CollectionListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollectionListView.swift; sourceTree = "<group>"; };
 		2C76EC45E487F2DBA4ABC299 /* ImageFeedExpiryPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageFeedExpiryPolicy.swift; sourceTree = "<group>"; };
 		2E0DF1F201FC48964AF60D5B /* AccountProfileComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountProfileComponents.swift; sourceTree = "<group>"; };
+		2FDC0016D896DBB442ACAB6F /* CloudVideoCDN.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudVideoCDN.swift; sourceTree = "<group>"; };
 		30B7C4E1777C5AD655E39E43 /* MusicSearchSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicSearchSession.swift; sourceTree = "<group>"; };
 		3158EED0A26DE3CE6E0463E8 /* AiGenerationClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AiGenerationClientTests.swift; sourceTree = "<group>"; };
 		31E7D3DDBB381C1A5709922C /* NotificationPermissionUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPermissionUITests.swift; sourceTree = "<group>"; };
@@ -1213,6 +1215,7 @@
 				2857F3CC3E109FBB670BD711 /* AppConfig.swift */,
 				1ECB7927713D69FCD42EA670 /* AppEnvironment.swift */,
 				54F876E231DF90AD8D414563 /* AuthSession.swift */,
+				2FDC0016D896DBB442ACAB6F /* CloudVideoCDN.swift */,
 				1368611B44E08CDA705D686A /* CloudVideoHLSPlaylist.swift */,
 				132D879B6DFCEC41A09C1E26 /* CloudVideoQuality.swift */,
 				E33CB6CD8E1C15CC7ABDEE45 /* LoadState.swift */,
@@ -2360,6 +2363,7 @@
 				4A48EFDD4C9435A34F64A498 /* AuthSession.swift in Sources */,
 				0BF6D82321C421B535A66042 /* AuthSessionModels.swift in Sources */,
 				602B329971138B0F32EBFD6B /* AuthSigner.swift in Sources */,
+				97081BD90E18CB0FE53BD199 /* CloudVideoCDN.swift in Sources */,
 				4FC356DD29E5FF4D2465285C /* CloudVideoClient.swift in Sources */,
 				799D626F42136769ED8A832B /* CloudVideoHLSPlaylist.swift in Sources */,
 				FC5BEB561FE1B0EDD16B5D5C /* CloudVideoModels.swift in Sources */,
@@ -2552,7 +2556,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 7G6J4S76PN;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -2754,7 +2758,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = 7G6J4S76PN;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

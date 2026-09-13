@@ -224,6 +224,9 @@ actor SetuRemoteImageLoader {
         if HanimeSite.isImageCDN(url) {
             return HanimeSite.imageRequest(url: url, cachePolicy: cachePolicy)
         }
+        if CloudVideoCDN.isImageCDN(url) {
+            return CloudVideoCDN.imageRequest(url: url, cachePolicy: cachePolicy)
+        }
         return URLRequest(url: url, cachePolicy: cachePolicy)
     }
 
@@ -234,18 +237,52 @@ actor SetuRemoteImageLoader {
     }
 
     nonisolated static func decodeImage(_ data: Data, key: SetuImageKey) throws -> SetuDecodedImage {
-        guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
-              let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, [
-                kCGImageSourceCreateThumbnailFromImageAlways: true,
-                kCGImageSourceCreateThumbnailWithTransform: true,
-                kCGImageSourceThumbnailMaxPixelSize: key.size.rawValue,
-                kCGImageSourceShouldCacheImmediately: true
-              ] as CFDictionary) else { throw URLError(.cannotDecodeContentData) }
+        if let thumbnail = thumbnailCGImage(from: data, maxPixelSize: key.size.rawValue),
+           let decoded = rasterizedImage(thumbnail) {
+            return decoded
+        }
+        if let image = platformCGImage(from: data), let decoded = rasterizedImage(image) {
+            return decoded
+        }
+        throw URLError(.cannotDecodeContentData)
+    }
+
+    private nonisolated static func thumbnailCGImage(from data: Data, maxPixelSize: Int) -> CGImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary) else {
+            return nil
+        }
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+            kCGImageSourceShouldCacheImmediately: true
+        ] as CFDictionary)
+    }
+
+    private nonisolated static func platformCGImage(from data: Data) -> CGImage? {
+        #if os(iOS)
+        return UIImage(data: data)?.cgImage
+        #elseif os(macOS)
+        guard let image = NSImage(data: data) else { return nil }
+        var rect = NSRect(origin: .zero, size: image.size)
+        return image.cgImage(forProposedRect: &rect, context: nil, hints: nil)
+        #endif
+    }
+
+    private nonisolated static func rasterizedImage(_ image: CGImage) -> SetuDecodedImage? {
         // Force bitmap rasterization here; drawing the SwiftUI image cannot defer source decoding.
-        let colorSpace = thumbnail.colorSpace?.model == .rgb ? thumbnail.colorSpace : CGColorSpace(name: CGColorSpace.sRGB)
-        guard let colorSpace, let context = CGContext(data: nil, width: thumbnail.width, height: thumbnail.height,
-            bitsPerComponent: 8, bytesPerRow: 0, space: colorSpace,
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue), let bitmap = rasterize(thumbnail, in: context) else { throw URLError(.cannotDecodeContentData) }
+        let colorSpace = image.colorSpace?.model == .rgb ? image.colorSpace : CGColorSpace(name: CGColorSpace.sRGB)
+        guard let colorSpace, let context = CGContext(
+            data: nil,
+            width: image.width,
+            height: image.height,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ), let bitmap = rasterize(image, in: context) else {
+            return nil
+        }
         return SetuDecodedImage(cgImage: bitmap)
     }
 

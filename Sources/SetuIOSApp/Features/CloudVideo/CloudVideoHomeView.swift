@@ -68,7 +68,12 @@ struct CloudVideoHomeView: View {
 
     private func catalogCard(_ video: CloudVideoItem) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            SetuImageTile(urlString: video.coverUrl, accessibilityLabel: video.title, aspectRatio: 16 / 9)
+            SetuImageTile(
+                urlString: video.coverUrl,
+                accessibilityLabel: video.title,
+                aspectRatio: 16 / 9,
+                allowsTapToRetry: true
+            )
                 .overlay(alignment: .topLeading) {
                     if video.isR18 {
                         Text("R18")

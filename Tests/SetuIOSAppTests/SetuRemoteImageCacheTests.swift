@@ -37,6 +37,18 @@ final class SetuRemoteImageCacheTests: XCTestCase {
         XCTAssertEqual(SetuImageSize.fitting(width: 100, height: 100, scale: 3), .medium)
         XCTAssertEqual(SetuImageSize.fitting(width: 360, height: 360, scale: 3), .large)
         XCTAssertEqual(SetuImageSize.fitting(width: nil, height: nil, scale: 3), .fullScreen)
+        let signed = SetuImageKey(
+            url: URL(string: "https://vz-Example.b-cdn.net/guid-123/thumbnail.jpg?token=HS256-abc_def&expires=1700000000")!,
+            size: .medium
+        )
+        XCTAssertEqual(signed.url.host, "vz-example.b-cdn.net")
+        XCTAssertEqual(
+            URLComponents(url: signed.url, resolvingAgainstBaseURL: false)?.queryItems,
+            [
+                URLQueryItem(name: "token", value: "HS256-abc_def"),
+                URLQueryItem(name: "expires", value: "1700000000"),
+            ]
+        )
         let tiers = Set((1...500).map { SetuImageSize.fitting(width: CGFloat($0), height: CGFloat($0), scale: 3) })
         XCTAssertLessThanOrEqual(tiers.count, 4)
     }
