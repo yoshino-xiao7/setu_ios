@@ -12,6 +12,8 @@ struct CloudVideoDetailView: View {
     @State private var avPlayer: AVPlayer?
     @State private var playbackError: String?
     @State private var loadGeneration = 0
+    @State private var selectedMaxHeight = CloudVideoQuality.maxHeight()
+    @State private var availableHeights: [Int] = []
     #if os(iOS)
     @State private var showingFullscreen = false
     #endif
@@ -131,6 +133,7 @@ struct CloudVideoDetailView: View {
                     }
                     .aspectRatio(16.0 / 9.0, contentMode: .fit)
                 }
+                qualityPicker
                 if playbackError != nil {
                     Button("重新加载播放") { Task { await startPlayback() } }
                         .buttonStyle(.borderedProminent)
@@ -140,11 +143,44 @@ struct CloudVideoDetailView: View {
         .accessibilityIdentifier("cloudVideo.player")
     }
 
+    private var qualityHeights: [Int] {
+        let sourceHeight: Int?
+        if case .loaded(let video) = detail {
+            sourceHeight = video.height
+        } else {
+            sourceHeight = nil
+        }
+        return CloudVideoQuality.optionHeights(available: availableHeights, sourceHeight: sourceHeight)
+    }
+
+    private var qualityPicker: some View {
+        VStack(alignment: .leading, spacing: SetuSpacing.xs) {
+            Picker("画质上限", selection: Binding(
+                get: { CloudVideoQuality.capHeight(requested: selectedMaxHeight, available: qualityHeights) },
+                set: { height in
+                    selectedMaxHeight = height
+                    CloudVideoQuality.saveMaxHeight(height)
+                    applyQualityCap(to: avPlayer?.currentItem)
+                }
+            )) {
+                ForEach(qualityHeights, id: \.self) { height in
+                    Text(CloudVideoQuality.label(for: height)).tag(height)
+                }
+            }
+            .pickerStyle(.menu)
+            .accessibilityIdentifier("cloudVideo.quality")
+            Text("默认 720p，网速差会自动降低，不会低于片源最低档")
+                .font(SetuTypography.caption)
+                .foregroundStyle(SetuColor.textSecondary)
+        }
+    }
+
     private func load() async {
         loadGeneration += 1
         let ticket = loadGeneration
         detail = .loading
         playback = nil
+        availableHeights = []
         avPlayer?.pause()
         avPlayer = nil
         do {
@@ -170,9 +206,14 @@ struct CloudVideoDetailView: View {
                 return
             }
             musicPlayer.pause()
-            let player = AVPlayer(url: url)
+            let asset = AVURLAsset(url: url)
+            let item = AVPlayerItem(asset: asset)
+            applyQualityCap(to: item)
+            let player = AVPlayer(playerItem: item)
             avPlayer = player
             player.play()
+            await refreshAvailableHeights(from: asset)
+            applyQualityCap(to: player.currentItem)
             scheduleRefresh(ticketResponse, generation: ticket)
         } catch {
             guard ticket == loadGeneration else { return }
@@ -191,6 +232,26 @@ struct CloudVideoDetailView: View {
             if let currentTime {
                 await avPlayer?.seek(to: currentTime)
             }
+        }
+    }
+
+    private func applyQualityCap(to item: AVPlayerItem?) {
+        let height = CloudVideoQuality.capHeight(requested: selectedMaxHeight, available: qualityHeights)
+        item?.preferredMaximumResolution = CloudVideoQuality.maximumResolution(forMaxHeight: height)
+    }
+
+    private func refreshAvailableHeights(from asset: AVURLAsset) async {
+        do {
+            let variants = try await asset.load(.variants)
+            let heights = variants.compactMap { variant -> Int? in
+                let height = Int(variant.videoAttributes?.presentationSize.height.rounded() ?? 0)
+                return height > 0 ? height : nil
+            }
+            if !heights.isEmpty {
+                availableHeights = CloudVideoQuality.uniqueSortedHeights(heights)
+            }
+        } catch {
+            return
         }
     }
 }
