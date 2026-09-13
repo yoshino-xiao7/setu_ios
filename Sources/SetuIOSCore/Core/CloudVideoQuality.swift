@@ -4,7 +4,6 @@ import Foundation
 public enum CloudVideoQuality {
     public static let defaultMaxHeight = 720
     public static let storageKey = "icu.yukiryou.setu.cloudVideoMaxHeight.v1"
-    public static let standardHeights = [240, 360, 480, 720, 1080, 1440, 2160]
 
     public static func maxHeight(defaults: UserDefaults = .standard) -> Int {
         let stored = defaults.object(forKey: storageKey) as? Int
@@ -34,15 +33,8 @@ public enum CloudVideoQuality {
         return heights[0]
     }
 
-    public static func optionHeights(available: [Int] = [], sourceHeight: Int? = nil) -> [Int] {
-        let fromLadder = uniqueSortedHeights(available)
-        if !fromLadder.isEmpty {
-            return fromLadder
-        }
-        if let sourceHeight, sourceHeight > 0 {
-            return standardHeights.filter { $0 <= sourceHeight }
-        }
-        return standardHeights.filter { $0 <= 1080 }
+    public static func optionHeights(available: [Int]) -> [Int] {
+        uniqueSortedHeights(available)
     }
 
     public static func label(for height: Int) -> String {

@@ -195,6 +195,7 @@
 		78EA7F03727B07DE46380D33 /* ImageUnlockPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FCF7C9E1BE43DD455302ED7 /* ImageUnlockPolicyTests.swift */; };
 		78F5050863AA5F6A270D99A4 /* SecuritySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5E929FD5136E6E36876D7CE /* SecuritySettingsView.swift */; };
 		794B6D1E3AA6C2A0E7BDD552 /* RadioFMUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0370AB53C3DA69EF6CBB68F4 /* RadioFMUITests.swift */; };
+		799D626F42136769ED8A832B /* CloudVideoHLSPlaylist.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1368611B44E08CDA705D686A /* CloudVideoHLSPlaylist.swift */; };
 		7A012AC0FBED97D070578606 /* MusicLibraryModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B50AE6E8336E57DC4D7ED206 /* MusicLibraryModels.swift */; };
 		7AB572495BFD26025C0DFF70 /* MusicSongRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD297F9E64A627591FE2E81F /* MusicSongRow.swift */; };
 		7BBEC3D0581004E82F3E7CC5 /* SetuCanvasLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72B8A10BCF6D2596B97055A1 /* SetuCanvasLayout.swift */; };
@@ -536,6 +537,7 @@
 		1079D1D0CE5C3076AA377AFF /* PointsModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PointsModels.swift; sourceTree = "<group>"; };
 		112221F8D92E8DADFE727E75 /* ModuleFavoriteModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModuleFavoriteModels.swift; sourceTree = "<group>"; };
 		132D879B6DFCEC41A09C1E26 /* CloudVideoQuality.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudVideoQuality.swift; sourceTree = "<group>"; };
+		1368611B44E08CDA705D686A /* CloudVideoHLSPlaylist.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudVideoHLSPlaylist.swift; sourceTree = "<group>"; };
 		1456165BE7AF7F3C92C54AD2 /* AuthSessionModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthSessionModels.swift; sourceTree = "<group>"; };
 		1510C637FA0869F16F2483D4 /* AdminMusicTokensView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminMusicTokensView.swift; sourceTree = "<group>"; };
 		15961097857EB58CE4B16EE6 /* ImageFeedBrowsePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageFeedBrowsePolicy.swift; sourceTree = "<group>"; };
@@ -1211,6 +1213,7 @@
 				2857F3CC3E109FBB670BD711 /* AppConfig.swift */,
 				1ECB7927713D69FCD42EA670 /* AppEnvironment.swift */,
 				54F876E231DF90AD8D414563 /* AuthSession.swift */,
+				1368611B44E08CDA705D686A /* CloudVideoHLSPlaylist.swift */,
 				132D879B6DFCEC41A09C1E26 /* CloudVideoQuality.swift */,
 				E33CB6CD8E1C15CC7ABDEE45 /* LoadState.swift */,
 			);
@@ -2358,6 +2361,7 @@
 				0BF6D82321C421B535A66042 /* AuthSessionModels.swift in Sources */,
 				602B329971138B0F32EBFD6B /* AuthSigner.swift in Sources */,
 				4FC356DD29E5FF4D2465285C /* CloudVideoClient.swift in Sources */,
+				799D626F42136769ED8A832B /* CloudVideoHLSPlaylist.swift in Sources */,
 				FC5BEB561FE1B0EDD16B5D5C /* CloudVideoModels.swift in Sources */,
 				8457A4CD8482B9197FFABB91 /* CloudVideoQuality.swift in Sources */,
 				069BF4DC2729A7AE5C53BF00 /* CollectionClient.swift in Sources */,

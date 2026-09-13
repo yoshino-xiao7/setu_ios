@@ -24,11 +24,10 @@ final class CloudVideoQualityTests: XCTestCase {
         XCTAssertEqual(CloudVideoQuality.capHeight(requested: 240, available: [240, 720]), 240)
     }
 
-    func testListsLadderHeightsOrStandardRungsUpToTheSource() {
+    func testListsOnlyRungsPresentInTheHLSLadder() {
         XCTAssertEqual(CloudVideoQuality.optionHeights(available: [1080, 720, 720, 480]), [480, 720, 1080])
-        XCTAssertEqual(CloudVideoQuality.optionHeights(available: [], sourceHeight: 1080), [240, 360, 480, 720, 1080])
-        XCTAssertEqual(CloudVideoQuality.optionHeights(available: [], sourceHeight: 480), [240, 360, 480])
-        XCTAssertEqual(CloudVideoQuality.optionHeights(available: [], sourceHeight: 0), [240, 360, 480, 720, 1080])
+        XCTAssertEqual(CloudVideoQuality.optionHeights(available: []), [])
+        XCTAssertEqual(CloudVideoQuality.optionHeights(available: [1080]), [1080])
     }
 
     func testLabels720pAsTheDefaultOption() {
@@ -39,5 +38,34 @@ final class CloudVideoQualityTests: XCTestCase {
     func testMaximumResolutionUses16By9AtTheCappedHeight() {
         XCTAssertEqual(CloudVideoQuality.maximumResolution(forMaxHeight: 720), CGSize(width: 1280, height: 720))
         XCTAssertEqual(CloudVideoQuality.maximumResolution(forMaxHeight: 1080), CGSize(width: 1920, height: 1080))
+    }
+}
+
+final class CloudVideoHLSPlaylistTests: XCTestCase {
+    func testReadsOnlyPlayableStreamHeightsFromTheMasterPlaylist() {
+        let master = """
+        #EXTM3U
+        #EXT-X-VERSION:3
+        #EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360,FRAME-RATE=30
+        360p/playlist.m3u8
+        #EXT-X-STREAM-INF:BANDWIDTH=1400000,RESOLUTION=854x480
+        480p/playlist.m3u8
+        #EXT-X-STREAM-INF:BANDWIDTH=2500000,RESOLUTION=1280x720,CODECS="avc1.4d401f,mp4a.40.2"
+        720p/playlist.m3u8
+        #EXT-X-STREAM-INF:BANDWIDTH=5000000,RESOLUTION=1920x1080
+        1080p/playlist.m3u8
+        #EXT-X-I-FRAME-STREAM-INF:BANDWIDTH=100000,RESOLUTION=1920x1080,URI="iframe.m3u8"
+        """
+        XCTAssertEqual(CloudVideoHLSPlaylist.streamHeights(fromMaster: master), [360, 480, 720, 1080])
+    }
+
+    func testIgnoresPlaylistsWithoutStreamInfResolution() {
+        XCTAssertEqual(CloudVideoHLSPlaylist.streamHeights(fromMaster: "#EXTM3U\n#EXTINF:10,\nsegment.ts\n"), [])
+    }
+
+    func testPlaybackHeadersUseTheSiteOrigin() {
+        let headers = CloudVideoHLSPlaylist.playbackHeaders(siteBaseURL: URL(string: "https://cloud.yukiryou.icu")!)
+        XCTAssertEqual(headers["Origin"], "https://cloud.yukiryou.icu")
+        XCTAssertEqual(headers["Referer"], "https://cloud.yukiryou.icu/")
     }
 }

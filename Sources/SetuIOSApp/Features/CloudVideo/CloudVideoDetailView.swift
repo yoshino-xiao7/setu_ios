@@ -1,3 +1,4 @@
+import AVFoundation
 import AVKit
 import SetuIOSCore
 import SwiftUI
@@ -14,6 +15,7 @@ struct CloudVideoDetailView: View {
     @State private var loadGeneration = 0
     @State private var selectedMaxHeight = CloudVideoQuality.maxHeight()
     @State private var availableHeights: [Int] = []
+    @State private var itemObserver: NSKeyValueObservation?
     #if os(iOS)
     @State private var showingFullscreen = false
     #endif
@@ -62,7 +64,10 @@ struct CloudVideoDetailView: View {
         .setuBackground()
         .navigationTitle("云视频")
         .task(id: videoID) { await load() }
-        .onDisappear { avPlayer?.pause() }
+        .onDisappear {
+            itemObserver = nil
+            avPlayer?.pause()
+        }
         .accessibilityIdentifier("cloudVideo.detail.page")
         #if os(iOS)
         .fullScreenCover(isPresented: $showingFullscreen) {
@@ -144,34 +149,35 @@ struct CloudVideoDetailView: View {
     }
 
     private var qualityHeights: [Int] {
-        let sourceHeight: Int?
-        if case .loaded(let video) = detail {
-            sourceHeight = video.height
-        } else {
-            sourceHeight = nil
-        }
-        return CloudVideoQuality.optionHeights(available: availableHeights, sourceHeight: sourceHeight)
+        CloudVideoQuality.optionHeights(available: availableHeights)
     }
 
+    @ViewBuilder
     private var qualityPicker: some View {
         VStack(alignment: .leading, spacing: SetuSpacing.xs) {
-            Picker("画质上限", selection: Binding(
-                get: { CloudVideoQuality.capHeight(requested: selectedMaxHeight, available: qualityHeights) },
-                set: { height in
-                    selectedMaxHeight = height
-                    CloudVideoQuality.saveMaxHeight(height)
-                    applyQualityCap(to: avPlayer?.currentItem)
+            if qualityHeights.isEmpty {
+                Text("正在读取该视频的真实转码档位")
+                    .font(SetuTypography.caption)
+                    .foregroundStyle(SetuColor.textSecondary)
+            } else {
+                Picker("画质上限", selection: Binding(
+                    get: { CloudVideoQuality.capHeight(requested: selectedMaxHeight, available: qualityHeights) },
+                    set: { height in
+                        selectedMaxHeight = height
+                        CloudVideoQuality.saveMaxHeight(height)
+                        applyQualityCap(to: avPlayer?.currentItem)
+                    }
+                )) {
+                    ForEach(qualityHeights, id: \.self) { height in
+                        Text(CloudVideoQuality.label(for: height)).tag(height)
+                    }
                 }
-            )) {
-                ForEach(qualityHeights, id: \.self) { height in
-                    Text(CloudVideoQuality.label(for: height)).tag(height)
-                }
+                .pickerStyle(.menu)
+                .accessibilityIdentifier("cloudVideo.quality")
+                Text("默认上限 720p，选项来自本片 HLS 档位，网速差会自动降低")
+                    .font(SetuTypography.caption)
+                    .foregroundStyle(SetuColor.textSecondary)
             }
-            .pickerStyle(.menu)
-            .accessibilityIdentifier("cloudVideo.quality")
-            Text("默认 720p，网速差会自动降低，不会低于片源最低档")
-                .font(SetuTypography.caption)
-                .foregroundStyle(SetuColor.textSecondary)
         }
     }
 
@@ -181,6 +187,7 @@ struct CloudVideoDetailView: View {
         detail = .loading
         playback = nil
         availableHeights = []
+        itemObserver = nil
         avPlayer?.pause()
         avPlayer = nil
         do {
@@ -206,14 +213,22 @@ struct CloudVideoDetailView: View {
                 return
             }
             musicPlayer.pause()
-            let asset = AVURLAsset(url: url)
+            activateVideoSession()
+            let asset = AVURLAsset(url: url, options: CloudVideoHLSPlaylist.assetOptions(siteBaseURL: environment.config.siteBaseURL))
             let item = AVPlayerItem(asset: asset)
             applyQualityCap(to: item)
+            observeItem(item)
             let player = AVPlayer(playerItem: item)
             avPlayer = player
             player.play()
-            await refreshAvailableHeights(from: asset)
-            applyQualityCap(to: player.currentItem)
+            Task {
+                let heights = await loadStreamHeights(from: url)
+                guard ticket == loadGeneration else { return }
+                if !heights.isEmpty {
+                    availableHeights = heights
+                }
+                applyQualityCap(to: player.currentItem)
+            }
             scheduleRefresh(ticketResponse, generation: ticket)
         } catch {
             guard ticket == loadGeneration else { return }
@@ -236,22 +251,46 @@ struct CloudVideoDetailView: View {
     }
 
     private func applyQualityCap(to item: AVPlayerItem?) {
+        guard let item else { return }
+        guard !availableHeights.isEmpty else {
+            item.preferredMaximumResolution = .zero
+            return
+        }
         let height = CloudVideoQuality.capHeight(requested: selectedMaxHeight, available: qualityHeights)
-        item?.preferredMaximumResolution = CloudVideoQuality.maximumResolution(forMaxHeight: height)
+        item.preferredMaximumResolution = CloudVideoQuality.maximumResolution(forMaxHeight: height)
     }
 
-    private func refreshAvailableHeights(from asset: AVURLAsset) async {
+    private func observeItem(_ item: AVPlayerItem) {
+        itemObserver = item.observe(\.status, options: [.new]) { item, _ in
+            guard item.status == .failed else { return }
+            Task { @MainActor in
+                playbackError = item.error?.localizedDescription ?? "无法开始播放，请再试一次"
+            }
+        }
+    }
+
+    private func activateVideoSession() {
+        #if os(iOS)
+        let session = AVAudioSession.sharedInstance()
+        try? session.setCategory(.playback, mode: .moviePlayback)
+        try? session.setActive(true)
+        #endif
+    }
+
+    private func loadStreamHeights(from url: URL) async -> [Int] {
+        var request = URLRequest(url: url)
+        for (header, value) in CloudVideoHLSPlaylist.playbackHeaders(siteBaseURL: environment.config.siteBaseURL) {
+            request.setValue(value, forHTTPHeaderField: header)
+        }
         do {
-            let variants = try await asset.load(.variants)
-            let heights = variants.compactMap { variant -> Int? in
-                let height = Int(variant.videoAttributes?.presentationSize.height.rounded() ?? 0)
-                return height > 0 ? height : nil
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
+                  let playlist = String(data: data, encoding: .utf8) else {
+                return []
             }
-            if !heights.isEmpty {
-                availableHeights = CloudVideoQuality.uniqueSortedHeights(heights)
-            }
+            return CloudVideoHLSPlaylist.streamHeights(fromMaster: playlist)
         } catch {
-            return
+            return []
         }
     }
 }
