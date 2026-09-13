@@ -69,11 +69,22 @@ struct CloudVideoHomeView: View {
     private func catalogCard(_ video: CloudVideoItem) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             SetuImageTile(urlString: video.coverUrl, accessibilityLabel: video.title, aspectRatio: 16 / 9)
+                .overlay(alignment: .topLeading) {
+                    if video.isR18 {
+                        Text("R18")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(.red.opacity(0.88), in: Capsule())
+                            .padding(6)
+                    }
+                }
             Text(video.title)
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(SetuColor.textPrimary)
                 .lineLimit(2)
-            Text(video.durationText)
+            Text("\(video.durationText) · \(video.ratingText)")
                 .font(.caption2)
                 .foregroundStyle(SetuColor.textSecondary)
         }

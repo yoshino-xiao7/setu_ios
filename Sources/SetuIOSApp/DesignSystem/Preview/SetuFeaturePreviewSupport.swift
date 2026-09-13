@@ -847,7 +847,7 @@ private enum SetuPreviewAPI {
                 """)
             }
             return json("""
-            {"id":8,"title":"示例云视频","description":"预览片源","tags":"预览","durationSeconds":96,"coverUrl":"https://preview.setu.invalid/cloud-video/thumb.jpg"}
+            {"id":8,"title":"示例云视频","description":"预览片源","tags":"预览","durationSeconds":96,"rating":"all_ages","coverUrl":"https://preview.setu.invalid/cloud-video/thumb.jpg"}
             """)
         case "/module-favorites":
             if request.httpMethod == "POST" {
@@ -1113,7 +1113,7 @@ private enum SetuPreviewAPI {
     """
 
     private static let cloudVideoPage = """
-    {"items":[{"id":8,"title":"示例云视频","description":"预览片源","tags":"预览","durationSeconds":96,"coverUrl":"https://preview.setu.invalid/cloud-video/thumb.jpg"}],"total":1,"offset":0,"limit":24}
+    {"items":[{"id":8,"title":"示例云视频","description":"预览片源","tags":"预览","durationSeconds":96,"rating":"all_ages","coverUrl":"https://preview.setu.invalid/cloud-video/thumb.jpg"}],"total":1,"offset":0,"limit":24}
     """
 
     private static let aiMinePage = """

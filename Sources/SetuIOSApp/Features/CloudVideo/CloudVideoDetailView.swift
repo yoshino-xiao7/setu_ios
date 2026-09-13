@@ -37,7 +37,7 @@ struct CloudVideoDetailView: View {
                             Text(video.title)
                                 .font(SetuTypography.title)
                                 .foregroundStyle(SetuColor.textPrimary)
-                            Text(video.durationText)
+                            Text("\(video.durationText) · \(video.ratingText)")
                                 .font(SetuTypography.caption)
                                 .foregroundStyle(SetuColor.textSecondary)
                             if let description = video.description, !description.isEmpty {

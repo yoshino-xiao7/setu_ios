@@ -9,6 +9,7 @@ public struct CloudVideoItem: Decodable, Identifiable, Hashable, Sendable {
     public let width: Int?
     public let height: Int?
     public let coverUrl: String?
+    public let rating: String?
     public let createdAt: String?
     public let updatedAt: String?
 
@@ -16,6 +17,10 @@ public struct CloudVideoItem: Decodable, Identifiable, Hashable, Sendable {
         let total = max(0, durationSeconds ?? 0)
         return String(format: "%d:%02d", total / 60, total % 60)
     }
+
+    public var isR18: Bool { rating == "r18" }
+
+    public var ratingText: String { isR18 ? "R18" : "全年龄" }
 }
 
 public struct CloudVideoPage: Decodable, Sendable {
