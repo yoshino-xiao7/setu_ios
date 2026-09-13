@@ -193,7 +193,7 @@ struct StaticInfoView: View {
             InfoPair(title: "AI 绘画", value: "生成作品、查看历史和管理删除申请。")
             InfoPair(title: "图片", value: "刷随机图片、查看积分明细、投稿图库。")
             InfoPair(title: "音乐", value: "搜索歌曲、播放歌单、查看播放历史。")
-            InfoPair(title: "更多", value: "进入广场、ASMR、JM 本子与 H 动漫功能页。")
+            InfoPair(title: "更多", value: "进入广场、ASMR、JM 本子、H 动漫与云视频功能页。")
             InfoPair(title: "广场", value: "发现公开收藏夹和 AI 绘画作品。")
         }
     }

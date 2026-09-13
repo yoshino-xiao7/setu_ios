@@ -60,6 +60,8 @@ enum AppRoute: Hashable {
     case hanimeWork(String)
     case hanimeFavorites
     case hanimeHistory
+    case cloudVideoHome
+    case cloudVideoDetail(Int)
     case imageDeleteRequests
     case imageDeleteRequestDetail(Int)
     case qqBinding

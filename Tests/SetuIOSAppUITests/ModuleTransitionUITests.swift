@@ -103,6 +103,7 @@ final class ModuleTransitionUITests: XCTestCase {
         XCTAssertTrue(element("more.hub.asmr", in: app).exists)
         XCTAssertTrue(element("more.hub.jm", in: app).exists)
         XCTAssertTrue(element("more.hub.hanime", in: app).exists)
+        XCTAssertTrue(element("more.hub.cloudVideo", in: app).exists)
 
         element("more.hub.plaza", in: app).tap()
         XCTAssertTrue(element("plaza.hub.page", in: app).waitForExistence(timeout: 8))

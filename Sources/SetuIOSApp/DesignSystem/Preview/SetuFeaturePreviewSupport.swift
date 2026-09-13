@@ -836,6 +836,19 @@ private enum SetuPreviewAPI {
             return json("{\"total\":0,\"page\":1,\"pageSize\":20,\"list\":[]}")
         case "/favorite/list":
             return json(favoritePage)
+        case "/user/cloud-video/search":
+            return json(cloudVideoPage)
+        case "/user/cloud-video":
+            return json(cloudVideoPage)
+        case let value where value.hasPrefix("/user/cloud-video/"):
+            if value.hasSuffix("/playback") {
+                return json("""
+                {"id":8,"title":"示例云视频","hlsUrl":"https://preview.setu.invalid/cloud-video/playlist.m3u8","posterUrl":"https://preview.setu.invalid/cloud-video/thumb.jpg","expireAt":4102444800}
+                """)
+            }
+            return json("""
+            {"id":8,"title":"示例云视频","description":"预览片源","tags":"预览","durationSeconds":96,"coverUrl":"https://preview.setu.invalid/cloud-video/thumb.jpg"}
+            """)
         case "/module-favorites":
             if request.httpMethod == "POST" {
                 return json("{\"id\":1,\"module\":\"ASMR\",\"externalId\":\"41001\",\"title\":\"第一夜\"}")
@@ -1097,6 +1110,10 @@ private enum SetuPreviewAPI {
         {"favoriteId":902,"imageId":302,"pid":3002,"p":0,"favoritedAt":"2026-07-08T18:40:00+08:00","image":{"id":302,"pid":3002,"p":0,"uid":32,"title":"雨夜车站","author":"白露","r18":0,"width":1400,"height":1050,"tags":["雨夜","城市"],"urlOriginal":null,"urlRegular":null,"urlSmall":null}}
       ]
     }
+    """
+
+    private static let cloudVideoPage = """
+    {"items":[{"id":8,"title":"示例云视频","description":"预览片源","tags":"预览","durationSeconds":96,"coverUrl":"https://preview.setu.invalid/cloud-video/thumb.jpg"}],"total":1,"offset":0,"limit":24}
     """
 
     private static let aiMinePage = """

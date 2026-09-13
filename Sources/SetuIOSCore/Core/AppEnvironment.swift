@@ -40,6 +40,7 @@ public final class AppEnvironment {
     public let musicV2Client: MusicV2Client
     public let downloadClient: DownloadClient
     public let galleryUploadClient: GalleryUploadClient
+    public let cloudVideoClient: CloudVideoClient
     public let adminClient: AdminClient
     public let authSession: AuthSession
 
@@ -70,6 +71,7 @@ public final class AppEnvironment {
         musicV2Client: MusicV2Client,
         downloadClient: DownloadClient,
         galleryUploadClient: GalleryUploadClient,
+        cloudVideoClient: CloudVideoClient? = nil,
         adminClient: AdminClient,
         authSession: AuthSession,
         pixivOnlineClient: (any PixivOnlineServing)? = nil
@@ -106,6 +108,7 @@ public final class AppEnvironment {
         self.musicV2Client = musicV2Client
         self.downloadClient = downloadClient
         self.galleryUploadClient = galleryUploadClient
+        self.cloudVideoClient = cloudVideoClient ?? CloudVideoClient(apiClient: apiClient)
         self.adminClient = adminClient
         self.authSession = authSession
         self.suppliedPixivClient = pixivOnlineClient
@@ -143,6 +146,7 @@ public final class AppEnvironment {
         let musicV2Client = MusicV2Client(apiClient: client)
         let downloadClient = DownloadClient(apiClient: client)
         let galleryUploadClient = GalleryUploadClient(apiClient: client)
+        let cloudVideoClient = CloudVideoClient(apiClient: client)
         let adminClient = AdminClient(apiClient: client)
         let session = AuthSession(apiClient: client, keychain: keychain)
         sessionInvalidationNotifier.setHandler { [weak session] in
@@ -178,6 +182,7 @@ public final class AppEnvironment {
             musicV2Client: musicV2Client,
             downloadClient: downloadClient,
             galleryUploadClient: galleryUploadClient,
+            cloudVideoClient: cloudVideoClient,
             adminClient: adminClient,
             authSession: session
         )

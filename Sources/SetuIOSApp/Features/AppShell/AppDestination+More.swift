@@ -34,6 +34,10 @@ extension RootAppView {
             HanimeFavoriteListView(environment: environment)
         case .hanimeHistory:
             ModuleWatchHistoryView(environment: environment, module: .hanime, aspectRatio: 16 / 9)
+        case .cloudVideoHome:
+            CloudVideoHomeView(environment: environment)
+        case .cloudVideoDetail(let videoID):
+            CloudVideoDetailView(environment: environment, videoID: videoID)
         default:
             EmptyView()
         }
