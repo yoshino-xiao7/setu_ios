@@ -36,8 +36,11 @@ public struct CloudVideoPlayback: Decodable, Sendable {
     public let hlsUrl: String
     public let posterUrl: String?
     public let expireAt: Int64
+    public let positionSeconds: Int?
 
     public var hlsURL: URL? { URL(string: hlsUrl) }
+
+    public var resumePositionSeconds: Int { max(0, positionSeconds ?? 0) }
 
     public var expiresAtDate: Date {
         Date(timeIntervalSince1970: TimeInterval(expireAt))

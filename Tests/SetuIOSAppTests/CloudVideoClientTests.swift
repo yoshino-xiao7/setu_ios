@@ -60,6 +60,33 @@ final class CloudVideoClientTests: XCTestCase {
         XCTAssertEqual(ticket.id, 8)
         XCTAssertEqual(ticket.hlsUrl.contains("playlist.m3u8"), true)
         XCTAssertEqual(ticket.expireAt, 1_700_000_000)
+        XCTAssertEqual(ticket.resumePositionSeconds, 0)
+    }
+
+    func testPlaybackDecodesResumePosition() async throws {
+        let client = makeClient { _ in
+            #"{"id":8,"title":"第一集","hlsUrl":"https://vz.example/playlist.m3u8","posterUrl":null,"expireAt":1700000000,"positionSeconds":42}"#
+        }
+
+        let ticket = try await client.playback(id: 8)
+        XCTAssertEqual(ticket.resumePositionSeconds, 42)
+    }
+
+    func testSaveProgressPutsPosition() async throws {
+        let probe = CloudVideoRequestProbe()
+        let client = makeClient { request in
+            probe.capture(request)
+            return #"{"id":8,"positionSeconds":42}"#
+        }
+
+        try await client.saveProgress(id: 8, positionSeconds: 42, durationSeconds: 120)
+
+        XCTAssertEqual(probe.lastURL, "https://api.example.com/user/cloud-video/8/progress")
+        XCTAssertEqual(probe.lastMethod, "PUT")
+        let body = try XCTUnwrap(probe.lastBody?.data(using: .utf8))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertEqual((json["positionSeconds"] as? NSNumber)?.intValue, 42)
+        XCTAssertEqual((json["durationSeconds"] as? NSNumber)?.intValue, 120)
     }
 
     private func makeClient(handler: @escaping (URLRequest) -> String) -> CloudVideoClient {
@@ -85,14 +112,28 @@ private final class CloudVideoRequestProbe: @unchecked Sendable {
     private let lock = NSLock()
     private var url: String?
     private var method: String?
+    private var body: String?
 
     var lastURL: String? { lock.withLock { url } }
     var lastMethod: String? { lock.withLock { method } }
+    var lastBody: String? { lock.withLock { body } }
 
     func capture(_ request: URLRequest) {
         lock.withLock {
             url = request.url?.absoluteString
             method = request.httpMethod
+            var data = request.httpBody ?? Data()
+            if data.isEmpty, let stream = request.httpBodyStream {
+                stream.open()
+                defer { stream.close() }
+                var buffer = [UInt8](repeating: 0, count: 1024)
+                while stream.hasBytesAvailable {
+                    let count = stream.read(&buffer, maxLength: buffer.count)
+                    if count <= 0 { break }
+                    data.append(contentsOf: buffer.prefix(count))
+                }
+            }
+            body = data.isEmpty ? nil : String(data: data, encoding: .utf8)
         }
     }
 }

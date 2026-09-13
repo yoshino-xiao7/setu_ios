@@ -31,4 +31,19 @@ public struct CloudVideoClient: Sendable {
     public func playback(id: Int) async throws -> CloudVideoPlayback {
         try await apiClient.get("/user/cloud-video/\(id)/playback")
     }
+
+    public func saveProgress(id: Int, positionSeconds: Int, durationSeconds: Int? = nil) async throws {
+        struct Body: Encodable, Sendable {
+            var positionSeconds: Int
+            var durationSeconds: Int?
+        }
+        struct Reply: Decodable, Sendable {
+            var id: Int
+            var positionSeconds: Int
+        }
+        let _: Reply = try await apiClient.put(
+            "/user/cloud-video/\(id)/progress",
+            body: Body(positionSeconds: positionSeconds, durationSeconds: durationSeconds)
+        )
+    }
 }

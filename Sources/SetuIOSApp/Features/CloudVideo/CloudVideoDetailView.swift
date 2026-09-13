@@ -16,6 +16,10 @@ struct CloudVideoDetailView: View {
     @State private var selectedMaxHeight = CloudVideoQuality.maxHeight()
     @State private var availableHeights: [Int] = []
     @State private var itemObserver: NSKeyValueObservation?
+    @State private var timeObserver: Any?
+    @State private var endObserver: NSObjectProtocol?
+    @State private var allowSave = false
+    @Environment(\.scenePhase) private var scenePhase
     #if os(iOS)
     @State private var showingFullscreen = false
     #endif
@@ -64,9 +68,11 @@ struct CloudVideoDetailView: View {
         .setuBackground()
         .navigationTitle("云视频")
         .task(id: videoID) { await load() }
-        .onDisappear {
-            itemObserver = nil
-            avPlayer?.pause()
+        .onDisappear { persistAndStop() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active {
+                saveProgress()
+            }
         }
         .accessibilityIdentifier("cloudVideo.detail.page")
         #if os(iOS)
@@ -187,9 +193,7 @@ struct CloudVideoDetailView: View {
         detail = .loading
         playback = nil
         availableHeights = []
-        itemObserver = nil
-        avPlayer?.pause()
-        avPlayer = nil
+        persistAndStop()
         do {
             let item = try await environment.cloudVideoClient.detail(id: videoID)
             guard ticket == loadGeneration else { return }
@@ -201,7 +205,7 @@ struct CloudVideoDetailView: View {
         }
     }
 
-    private func startPlayback(generation: Int? = nil) async {
+    private func startPlayback(generation: Int? = nil, resumeOverride: Double? = nil) async {
         let ticket = generation ?? loadGeneration
         playbackError = nil
         do {
@@ -214,13 +218,28 @@ struct CloudVideoDetailView: View {
             }
             musicPlayer.pause()
             activateVideoSession()
+            detachPlayer(save: true)
             let asset = AVURLAsset(url: url, options: CloudVideoHLSPlaylist.assetOptions(siteBaseURL: environment.config.siteBaseURL))
             let item = AVPlayerItem(asset: asset)
             applyQualityCap(to: item)
             observeItem(item)
             let player = AVPlayer(playerItem: item)
             avPlayer = player
-            player.play()
+            observeProgress(player)
+            let resume = resumeOverride ?? Double(ticketResponse.resumePositionSeconds)
+            if resume >= 5 {
+                allowSave = false
+                player.seek(to: CMTime(seconds: resume, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { _ in
+                    Task { @MainActor in
+                        guard ticket == loadGeneration else { return }
+                        player.play()
+                        allowSave = true
+                    }
+                }
+            } else {
+                allowSave = true
+                player.play()
+            }
             Task {
                 let heights = await loadStreamHeights(from: url)
                 guard ticket == loadGeneration else { return }
@@ -242,11 +261,11 @@ struct CloudVideoDetailView: View {
             let nanoseconds = UInt64(delay * 1_000_000_000)
             try? await Task.sleep(nanoseconds: nanoseconds)
             guard generation == loadGeneration else { return }
-            let currentTime = avPlayer?.currentTime()
-            await startPlayback(generation: generation)
-            if let currentTime {
-                await avPlayer?.seek(to: currentTime)
-            }
+            let current = avPlayer?.currentTime().seconds
+            await startPlayback(
+                generation: generation,
+                resumeOverride: current.flatMap { $0.isFinite ? $0 : nil }
+            )
         }
     }
 
@@ -266,6 +285,69 @@ struct CloudVideoDetailView: View {
             Task { @MainActor in
                 playbackError = item.error?.localizedDescription ?? "无法开始播放，请再试一次"
             }
+        }
+        if let endObserver {
+            NotificationCenter.default.removeObserver(endObserver)
+        }
+        endObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: item,
+            queue: .main
+        ) { _ in
+            Task { @MainActor in
+                saveProgress()
+            }
+        }
+    }
+
+    private func observeProgress(_ player: AVPlayer) {
+        if let timeObserver {
+            avPlayer?.removeTimeObserver(timeObserver)
+        }
+        timeObserver = player.addPeriodicTimeObserver(
+            forInterval: CMTime(seconds: 10, preferredTimescale: 1),
+            queue: .main
+        ) { _ in
+            Task { @MainActor in
+                saveProgress()
+            }
+        }
+    }
+
+    private func persistAndStop() {
+        detachPlayer(save: true)
+    }
+
+    private func detachPlayer(save: Bool) {
+        if save {
+            saveProgress()
+        }
+        if let timeObserver {
+            avPlayer?.removeTimeObserver(timeObserver)
+        }
+        timeObserver = nil
+        if let endObserver {
+            NotificationCenter.default.removeObserver(endObserver)
+        }
+        endObserver = nil
+        itemObserver = nil
+        allowSave = false
+        avPlayer?.pause()
+        avPlayer = nil
+    }
+
+    private func saveProgress() {
+        guard allowSave, let player = avPlayer else { return }
+        let seconds = player.currentTime().seconds
+        guard seconds.isFinite, seconds >= 0 else { return }
+        let duration = player.currentItem?.duration.seconds
+        let durationSeconds = duration?.isFinite == true && (duration ?? 0) > 0 ? Int(duration!.rounded(.down)) : nil
+        Task {
+            try? await environment.cloudVideoClient.saveProgress(
+                id: videoID,
+                positionSeconds: Int(seconds.rounded(.down)),
+                durationSeconds: durationSeconds
+            )
         }
     }
 
