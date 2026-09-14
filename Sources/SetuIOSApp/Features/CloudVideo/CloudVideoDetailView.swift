@@ -15,10 +15,12 @@ struct CloudVideoDetailView: View {
     @State private var loadGeneration = 0
     @State private var selectedMaxHeight = CloudVideoQuality.maxHeight()
     @State private var availableHeights: [Int] = []
+    @State private var qualityGeneration = 0
     @State private var itemObserver: NSKeyValueObservation?
     @State private var timeObserver: Any?
     @State private var endObserver: NSObjectProtocol?
     @State private var allowSave = false
+    @State private var refreshTask: Task<Void, Never>?
     @Environment(\.scenePhase) private var scenePhase
     #if os(iOS)
     @State private var showingFullscreen = false
@@ -68,10 +70,16 @@ struct CloudVideoDetailView: View {
         .setuBackground()
         .navigationTitle("云视频")
         .task(id: videoID) { await load() }
-        .onDisappear { persistAndStop() }
+        .onDisappear {
+            #if os(iOS)
+            if showingFullscreen { return }
+            #endif
+            persistAndStop()
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active {
                 saveProgress()
+                avPlayer?.pause()
             }
         }
         .accessibilityIdentifier("cloudVideo.detail.page")
@@ -82,17 +90,24 @@ struct CloudVideoDetailView: View {
                     Color.black.ignoresSafeArea()
                     CloudVideoFullscreenPlayerView(player: avPlayer)
                         .ignoresSafeArea()
-                    Button {
-                        showingFullscreen = false
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.headline.weight(.bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 44, height: 44)
-                            .background(.black.opacity(0.45), in: Circle())
+                    VStack {
+                        HStack {
+                            qualityOverlay(compact: true)
+                            Spacer()
+                            Button {
+                                showingFullscreen = false
+                            } label: {
+                                Image(systemName: "xmark")
+                                    .font(.headline.weight(.bold))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 44, height: 44)
+                                    .background(.black.opacity(0.45), in: Circle())
+                            }
+                            .accessibilityLabel("退出全屏")
+                        }
+                        Spacer()
                     }
                     .padding(SetuSpacing.lg)
-                    .accessibilityLabel("退出全屏")
                 }
             }
         }
@@ -108,6 +123,10 @@ struct CloudVideoDetailView: View {
                         .aspectRatio(16.0 / 9.0, contentMode: .fit)
                         .frame(maxWidth: .infinity)
                         .clipShape(RoundedRectangle(cornerRadius: SetuRadius.md, style: .continuous))
+                        .overlay(alignment: .topLeading) {
+                            qualityOverlay(compact: true)
+                                .padding(SetuSpacing.sm)
+                        }
                         #if os(iOS)
                         .overlay(alignment: .topTrailing) {
                             Button {
@@ -144,7 +163,6 @@ struct CloudVideoDetailView: View {
                     }
                     .aspectRatio(16.0 / 9.0, contentMode: .fit)
                 }
-                qualityPicker
                 if playbackError != nil {
                     Button("重新加载播放") { Task { await startPlayback() } }
                         .buttonStyle(.borderedProminent)
@@ -159,32 +177,49 @@ struct CloudVideoDetailView: View {
     }
 
     @ViewBuilder
-    private var qualityPicker: some View {
-        VStack(alignment: .leading, spacing: SetuSpacing.xs) {
-            if qualityHeights.isEmpty {
-                Text("正在读取该视频的真实转码档位")
-                    .font(SetuTypography.caption)
-                    .foregroundStyle(SetuColor.textSecondary)
-            } else {
-                Picker("画质上限", selection: Binding(
-                    get: { CloudVideoQuality.capHeight(requested: selectedMaxHeight, available: qualityHeights) },
-                    set: { height in
-                        selectedMaxHeight = height
-                        CloudVideoQuality.saveMaxHeight(height)
-                        applyQualityCap(to: avPlayer?.currentItem)
-                    }
-                )) {
+    private func qualityOverlay(compact: Bool) -> some View {
+        if qualityHeights.isEmpty {
+            Text("读取画质")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(.black.opacity(0.45), in: Capsule())
+                .accessibilityIdentifier("cloudVideo.quality")
+        } else {
+            Menu {
+                Picker("画质上限", selection: qualitySelection) {
                     ForEach(qualityHeights, id: \.self) { height in
                         Text(CloudVideoQuality.label(for: height)).tag(height)
                     }
                 }
-                .pickerStyle(.menu)
-                .accessibilityIdentifier("cloudVideo.quality")
-                Text("默认上限 720p，选项来自本片 HLS 档位，网速差会自动降低")
-                    .font(SetuTypography.caption)
-                    .foregroundStyle(SetuColor.textSecondary)
+            } label: {
+                Label(
+                    CloudVideoQuality.label(for: CloudVideoQuality.capHeight(requested: selectedMaxHeight, available: qualityHeights)),
+                    systemImage: "rectangle.and.text.magnifyingglass"
+                )
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, compact ? 10 : 12)
+                    .padding(.vertical, 8)
+                    .background(.black.opacity(0.45), in: Capsule())
             }
+            .accessibilityIdentifier("cloudVideo.quality")
+            .accessibilityLabel("画质上限")
         }
+    }
+
+    private var qualitySelection: Binding<Int> {
+        Binding(
+            get: { CloudVideoQuality.capHeight(requested: selectedMaxHeight, available: qualityHeights) },
+            set: { height in
+                selectedMaxHeight = height
+                CloudVideoQuality.saveMaxHeight(height)
+                qualityGeneration += 1
+                let ticket = qualityGeneration
+                Task { await reloadItemForQuality(generation: ticket) }
+            }
+        )
     }
 
     private func load() async {
@@ -193,7 +228,12 @@ struct CloudVideoDetailView: View {
         detail = .loading
         playback = nil
         availableHeights = []
-        persistAndStop()
+        #if os(iOS)
+        showingFullscreen = false
+        #endif
+        refreshTask?.cancel()
+        refreshTask = nil
+        detachPlayer(save: true)
         do {
             let item = try await environment.cloudVideoClient.detail(id: videoID)
             guard ticket == loadGeneration else { return }
@@ -224,29 +264,50 @@ struct CloudVideoDetailView: View {
             applyQualityCap(to: item)
             observeItem(item)
             let player = AVPlayer(playerItem: item)
+            player.automaticallyWaitsToMinimizeStalling = true
+            #if os(iOS)
+            player.audiovisualBackgroundPlaybackPolicy = .pauses
+            player.allowsExternalPlayback = false
+            #endif
             avPlayer = player
             observeProgress(player)
+            guard ticket == loadGeneration else {
+                abandon(player)
+                return
+            }
             let resume = resumeOverride ?? Double(ticketResponse.resumePositionSeconds)
             if resume >= 5 {
                 allowSave = false
                 player.seek(to: CMTime(seconds: resume, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { _ in
                     Task { @MainActor in
-                        guard ticket == loadGeneration else { return }
-                        player.play()
-                        allowSave = true
+                        beginPlaying(player, generation: ticket)
+                        if ticket == loadGeneration, avPlayer === player {
+                            allowSave = true
+                        }
                     }
                 }
             } else {
                 allowSave = true
-                player.play()
+                beginPlaying(player, generation: ticket)
             }
             Task {
                 let heights = await loadStreamHeights(from: url)
                 guard ticket == loadGeneration else { return }
+                let before = CloudVideoQuality.playbackConstraints(
+                    requested: selectedMaxHeight,
+                    available: availableHeights
+                )
                 if !heights.isEmpty {
                     availableHeights = heights
                 }
-                applyQualityCap(to: player.currentItem)
+                let after = CloudVideoQuality.playbackConstraints(
+                    requested: selectedMaxHeight,
+                    available: availableHeights
+                )
+                if before != after {
+                    qualityGeneration += 1
+                    await reloadItemForQuality(generation: qualityGeneration)
+                }
             }
             scheduleRefresh(ticketResponse, generation: ticket)
         } catch {
@@ -256,11 +317,12 @@ struct CloudVideoDetailView: View {
     }
 
     private func scheduleRefresh(_ ticket: CloudVideoPlayback, generation: Int) {
+        refreshTask?.cancel()
         let delay = max(30, ticket.expiresAtDate.timeIntervalSinceNow - 90)
-        Task {
+        refreshTask = Task {
             let nanoseconds = UInt64(delay * 1_000_000_000)
             try? await Task.sleep(nanoseconds: nanoseconds)
-            guard generation == loadGeneration else { return }
+            guard !Task.isCancelled, generation == loadGeneration else { return }
             let current = avPlayer?.currentTime().seconds
             await startPlayback(
                 generation: generation,
@@ -269,14 +331,59 @@ struct CloudVideoDetailView: View {
         }
     }
 
-    private func applyQualityCap(to item: AVPlayerItem?) {
-        guard let item else { return }
-        guard !availableHeights.isEmpty else {
-            item.preferredMaximumResolution = .zero
+    private func reloadItemForQuality(generation: Int) async {
+        guard generation == qualityGeneration else { return }
+        guard let player = avPlayer, let url = playback?.hlsURL else {
+            applyQualityCap(to: avPlayer?.currentItem)
             return
         }
-        let height = CloudVideoQuality.capHeight(requested: selectedMaxHeight, available: qualityHeights)
-        item.preferredMaximumResolution = CloudVideoQuality.maximumResolution(forMaxHeight: height)
+        let time = player.currentTime()
+        let shouldPlay = player.rate > 0 || player.timeControlStatus != .paused
+        let asset = AVURLAsset(url: url, options: CloudVideoHLSPlaylist.assetOptions(siteBaseURL: environment.config.siteBaseURL))
+        let item = AVPlayerItem(asset: asset)
+        applyQualityCap(to: item)
+        observeItem(item)
+        player.replaceCurrentItem(with: item)
+        observeProgress(player)
+        let resume = time.seconds
+        let seekTime = resume.isFinite && resume > 0 ? time : .zero
+        allowSave = false
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            player.seek(to: seekTime, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
+                continuation.resume()
+            }
+        }
+        guard generation == qualityGeneration, avPlayer === player else { return }
+        if shouldPlay {
+            beginPlaying(player, generation: loadGeneration)
+        }
+        allowSave = true
+    }
+
+    private func beginPlaying(_ player: AVPlayer, generation: Int) {
+        guard generation == loadGeneration, avPlayer === player else {
+            abandon(player)
+            return
+        }
+        player.play()
+    }
+
+    private func abandon(_ player: AVPlayer) {
+        player.pause()
+        player.replaceCurrentItem(with: nil)
+        if avPlayer === player {
+            avPlayer = nil
+        }
+    }
+
+    private func applyQualityCap(to item: AVPlayerItem?) {
+        guard let item else { return }
+        let constraints = CloudVideoQuality.playbackConstraints(
+            requested: selectedMaxHeight,
+            available: availableHeights
+        )
+        item.preferredMaximumResolution = constraints.maximumResolution
+        item.preferredPeakBitRate = constraints.peakBitRate
     }
 
     private func observeItem(_ item: AVPlayerItem) {
@@ -315,7 +422,17 @@ struct CloudVideoDetailView: View {
     }
 
     private func persistAndStop() {
+        loadGeneration += 1
+        qualityGeneration += 1
+        #if os(iOS)
+        showingFullscreen = false
+        #endif
+        refreshTask?.cancel()
+        refreshTask = nil
         detachPlayer(save: true)
+        #if os(iOS)
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        #endif
     }
 
     private func detachPlayer(save: Bool) {
@@ -333,6 +450,7 @@ struct CloudVideoDetailView: View {
         itemObserver = nil
         allowSave = false
         avPlayer?.pause()
+        avPlayer?.replaceCurrentItem(with: nil)
         avPlayer = nil
     }
 
@@ -385,6 +503,8 @@ private struct CloudVideoFullscreenPlayerView: UIViewControllerRepresentable {
         let controller = AVPlayerViewController()
         controller.player = player
         controller.showsPlaybackControls = true
+        controller.allowsPictureInPicturePlayback = false
+        controller.canStartPictureInPictureAutomaticallyFromInline = false
         return controller
     }
 

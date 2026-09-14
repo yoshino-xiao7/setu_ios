@@ -13,6 +13,23 @@ public enum CloudVideoCDN {
             || host.hasSuffix(".bunnycdn.com")
     }
 
+    /// Signed query tokens change on every catalog fetch; identity is the object path.
+    public static func cacheIdentity(for url: URL) -> String {
+        guard isImageCDN(url) else { return url.absoluteString }
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        components?.query = nil
+        components?.fragment = nil
+        let host = (components?.host ?? url.host)?.lowercased() ?? ""
+        var path = components?.path ?? url.path
+        if let tokenRange = path.range(of: "/bcdn_token=") {
+            let afterToken = path[tokenRange.lowerBound...]
+            if let fileStart = afterToken.dropFirst().firstIndex(of: "/") {
+                path = String(afterToken[fileStart...])
+            }
+        }
+        return "bunny://\(host)\(path)"
+    }
+
     public static func imageRequest(
         url: URL,
         cachePolicy: URLRequest.CachePolicy = .returnCacheDataElseLoad,

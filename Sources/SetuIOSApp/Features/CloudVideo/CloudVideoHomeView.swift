@@ -61,7 +61,11 @@ struct CloudVideoHomeView: View {
         }
         .setuBackground()
         .navigationTitle("云视频")
-        .task { await loadFirstPage() }
+        .task {
+            guard signedIn else { return }
+            guard !pager.hasLoadedFirstPage else { return }
+            await loadFirstPage()
+        }
         .refreshable { await loadFirstPage(clearExisting: true) }
         .accessibilityIdentifier("cloudVideo.home.page")
     }

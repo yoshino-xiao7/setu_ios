@@ -45,7 +45,17 @@ struct SetuImageKey: Hashable, Sendable {
         return Self(url: url, size: size)
     }
 
-    var cacheKey: NSString { "\(size.rawValue)|\(url.absoluteString)" as NSString }
+    var cacheIdentity: String { CloudVideoCDN.cacheIdentity(for: url) }
+    var cacheKey: NSString { "\(size.rawValue)|\(cacheIdentity)" as NSString }
+
+    static func == (lhs: SetuImageKey, rhs: SetuImageKey) -> Bool {
+        lhs.size == rhs.size && lhs.cacheIdentity == rhs.cacheIdentity
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(size)
+        hasher.combine(cacheIdentity)
+    }
 }
 
 struct SetuImageAccent: Sendable, Equatable {

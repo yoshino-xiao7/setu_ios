@@ -42,6 +42,8 @@ public final class AppEnvironment {
     public let galleryUploadClient: GalleryUploadClient
     public let cloudVideoClient: CloudVideoClient
     public let adminClient: AdminClient
+    public let adminCloudVideoClient: AdminCloudVideoClient
+    public let cloudVideoUploadStore: CloudVideoUploadStore
     public let authSession: AuthSession
 
     public init(
@@ -74,7 +76,8 @@ public final class AppEnvironment {
         cloudVideoClient: CloudVideoClient? = nil,
         adminClient: AdminClient,
         authSession: AuthSession,
-        pixivOnlineClient: (any PixivOnlineServing)? = nil
+        pixivOnlineClient: (any PixivOnlineServing)? = nil,
+        cloudVideoUploadStore: CloudVideoUploadStore? = nil
     ) {
         self.config = config
         self.keychain = keychain
@@ -112,6 +115,15 @@ public final class AppEnvironment {
         self.adminClient = adminClient
         self.authSession = authSession
         self.suppliedPixivClient = pixivOnlineClient
+        let adminCloudVideo = AdminCloudVideoClient(apiClient: apiClient)
+        self.adminCloudVideoClient = adminCloudVideo
+        self.cloudVideoUploadStore = cloudVideoUploadStore ?? CloudVideoUploadStore(
+            sessions: adminCloudVideo,
+            inbox: CloudVideoPassthroughInbox(),
+            tus: CloudVideoTUSClient(session: URLSession(configuration: .ephemeral)),
+            persistence: CloudVideoUploadMemoryPersistence(),
+            network: CloudVideoUploadManualNetwork()
+        )
     }
 
     public static func live() -> AppEnvironment {
@@ -155,6 +167,7 @@ public final class AppEnvironment {
         signatureRefreshNotifier.setHandler { [weak session] in
             await session?.refreshSignature() ?? false
         }
+        let adminCloudVideo = AdminCloudVideoClient(apiClient: client)
         return AppEnvironment(
             config: config,
             keychain: keychain,
@@ -184,7 +197,8 @@ public final class AppEnvironment {
             galleryUploadClient: galleryUploadClient,
             cloudVideoClient: cloudVideoClient,
             adminClient: adminClient,
-            authSession: session
+            authSession: session,
+            cloudVideoUploadStore: CloudVideoUploadStore.live(sessions: adminCloudVideo)
         )
     }
 

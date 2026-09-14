@@ -7,6 +7,7 @@ import WidgetKit
 struct SetuIOSLiveActivityWidgetBundle: WidgetBundle {
     var body: some Widget {
         AiGenerationLiveActivityWidget()
+        CloudVideoUploadLiveActivityWidget()
     }
 }
 
@@ -138,6 +139,70 @@ private struct AiGenerationLockScreenView: View {
             return .pink
         default:
             return .orange
+        }
+    }
+}
+
+struct CloudVideoUploadLiveActivityWidget: Widget {
+    var body: some WidgetConfiguration {
+        ActivityConfiguration(for: CloudVideoUploadActivityAttributes.self) { context in
+            HStack(spacing: 12) {
+                Image(systemName: "film")
+                    .font(.title3)
+                    .foregroundStyle(.pink)
+                    .frame(width: 32, height: 32)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(context.state.title)
+                        .font(.headline)
+                        .lineLimit(1)
+                    Text(context.state.detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                    ProgressView(value: Double(context.state.percent), total: 100)
+                }
+                Spacer(minLength: 8)
+                Text("\(context.state.percent)%")
+                    .font(.headline.monospacedDigit())
+            }
+            .padding(.vertical, 4)
+            .activityBackgroundTint(Color(.secondarySystemBackground))
+            .activitySystemActionForegroundColor(.pink)
+        } dynamicIsland: { context in
+            DynamicIsland {
+                DynamicIslandExpandedRegion(.leading) {
+                    Label("云视频", systemImage: "film")
+                        .font(.caption.weight(.semibold))
+                }
+                DynamicIslandExpandedRegion(.trailing) {
+                    Text("\(context.state.percent)%")
+                        .font(.caption.monospacedDigit())
+                }
+                DynamicIslandExpandedRegion(.bottom) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(context.state.title)
+                            .font(.headline)
+                            .lineLimit(1)
+                        Text(context.state.detail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                        ProgressView(value: Double(context.state.percent), total: 100)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            } compactLeading: {
+                Image(systemName: "film")
+                    .foregroundStyle(.pink)
+            } compactTrailing: {
+                Text("\(context.state.percent)%")
+                    .font(.caption2.monospacedDigit())
+            } minimal: {
+                Image(systemName: "film")
+                    .foregroundStyle(.pink)
+            }
+            .widgetURL(URL(string: "setuios://admin/cloud-videos"))
+            .keylineTint(.pink)
         }
     }
 }

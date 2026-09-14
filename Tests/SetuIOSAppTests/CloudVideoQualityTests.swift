@@ -39,6 +39,24 @@ final class CloudVideoQualityTests: XCTestCase {
         XCTAssertEqual(CloudVideoQuality.maximumResolution(forMaxHeight: 720), CGSize(width: 1280, height: 720))
         XCTAssertEqual(CloudVideoQuality.maximumResolution(forMaxHeight: 1080), CGSize(width: 1920, height: 1080))
     }
+
+    func testPlaybackConstraintsCapBeforeTheLadderIsKnown() {
+        let cap = CloudVideoQuality.playbackConstraints(requested: 720, available: [])
+        XCTAssertEqual(cap.height, 720)
+        XCTAssertEqual(cap.maximumResolution, CGSize(width: 1280, height: 720))
+        XCTAssertGreaterThan(cap.peakBitRate, 0)
+        XCTAssertLessThan(
+            cap.peakBitRate,
+            CloudVideoQuality.playbackConstraints(requested: 1080, available: []).peakBitRate
+        )
+    }
+
+    func testPlaybackConstraintsStayOnTheHighestEligibleRung() {
+        let cap = CloudVideoQuality.playbackConstraints(requested: 720, available: [480, 720, 1080])
+        XCTAssertEqual(cap.height, 720)
+        XCTAssertEqual(cap.maximumResolution.height, 720)
+        XCTAssertEqual(cap.peakBitRate, CloudVideoQuality.peakBitRate(forMaxHeight: 720))
+    }
 }
 
 final class CloudVideoHLSPlaylistTests: XCTestCase {
@@ -89,5 +107,15 @@ final class CloudVideoCDNTests: XCTestCase {
         XCTAssertEqual(request.value(forHTTPHeaderField: "Origin"), "https://cloud.yukiryou.icu")
         XCTAssertEqual(request.value(forHTTPHeaderField: "Referer"), "https://cloud.yukiryou.icu/")
         XCTAssertTrue(request.value(forHTTPHeaderField: "Accept")?.contains("image/") == true)
+    }
+
+    func testCacheIdentityIgnoresSigningQuery() {
+        let first = URL(string: "https://vz-example.b-cdn.net/guid-123/thumbnail.jpg?token=aaa&expires=1")!
+        let second = URL(string: "https://vz-example.b-cdn.net/guid-123/thumbnail.jpg?token=bbb&expires=2")!
+        XCTAssertEqual(CloudVideoCDN.cacheIdentity(for: first), CloudVideoCDN.cacheIdentity(for: second))
+        XCTAssertEqual(
+            CloudVideoCDN.cacheIdentity(for: first),
+            "bunny://vz-example.b-cdn.net/guid-123/thumbnail.jpg"
+        )
     }
 }

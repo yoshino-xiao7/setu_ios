@@ -1,8 +1,9 @@
-import SetuIOSCore
 import Foundation
 import Observation
+import SetuIOSCore
 import UserNotifications
 #if os(iOS)
+import BackgroundTasks
 import UIKit
 #endif
 
@@ -167,12 +168,36 @@ extension SystemPushCoordinator: UNUserNotificationCenterDelegate {
 
 final class SetuAppDelegate: NSObject, UIApplicationDelegate {
     nonisolated(unsafe) static var deviceTokenHandler: (@MainActor @Sendable (Data) async -> Void)?
+    nonisolated(unsafe) static var cloudVideoLaunchHandler: (@MainActor @Sendable () -> Void)?
+    static let cloudVideoTaskIdentifier = "icu.yukiryou.setuios.cloud-video-upload"
+
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: Self.cloudVideoTaskIdentifier, using: nil) { task in
+            Task { @MainActor in
+                Self.cloudVideoLaunchHandler?()
+                Self.scheduleCloudVideoProcessing()
+                (task as? BGProcessingTask)?.setTaskCompleted(success: true)
+            }
+        }
+        Self.scheduleCloudVideoProcessing()
+        return true
+    }
 
     func application(
         _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
         Task { @MainActor in await Self.deviceTokenHandler?(deviceToken) }
+    }
+
+    static func scheduleCloudVideoProcessing() {
+        let request = BGProcessingTaskRequest(identifier: cloudVideoTaskIdentifier)
+        request.requiresNetworkConnectivity = true
+        request.requiresExternalPower = false
+        try? BGTaskScheduler.shared.submit(request)
     }
 }
 #else

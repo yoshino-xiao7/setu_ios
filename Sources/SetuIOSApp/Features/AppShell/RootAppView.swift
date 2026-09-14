@@ -146,6 +146,10 @@ struct RootAppView: View {
             if phase != .active {
                 musicPlayer.savePlaybackSnapshot()
             }
+            if phase == .active {
+                environment.cloudVideoUploadStore.startIfNeeded()
+            }
+            Task { await CloudVideoUploadLiveActivityCenter.sync(store: environment.cloudVideoUploadStore) }
         }
         .tint(SetuColor.brandPink)
         .sheet(isPresented: $showingReauthentication) {
@@ -166,6 +170,41 @@ struct RootAppView: View {
         .environment(pushNotifications)
         .environment(musicStore)
         .environment(musicPlayer)
+        .onAppear {
+            #if os(iOS)
+            SetuAppDelegate.cloudVideoLaunchHandler = {
+                environment.cloudVideoUploadStore.startIfNeeded()
+            }
+            #endif
+            environment.cloudVideoUploadStore.startIfNeeded()
+            Task { await CloudVideoUploadLiveActivityCenter.sync(store: environment.cloudVideoUploadStore) }
+        }
+        .onChange(of: environment.cloudVideoUploadStore.summary) {
+            Task { await CloudVideoUploadLiveActivityCenter.sync(store: environment.cloudVideoUploadStore) }
+        }
+        .overlay(alignment: .bottom) {
+            if environment.cloudVideoUploadStore.busy,
+               !navigationCoordinator.router(for: .more).path.contains(.adminCloudVideos) {
+                Button {
+                    navigationCoordinator.navigate(to: .more, route: .adminCloudVideos)
+                } label: {
+                    HStack {
+                        Image(systemName: "film")
+                        Text(environment.cloudVideoUploadStore.summary)
+                            .lineLimit(1)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                    }
+                    .font(SetuTypography.caption)
+                    .foregroundStyle(SetuColor.textPrimary)
+                    .padding(.horizontal, SetuSpacing.lg)
+                    .padding(.vertical, SetuSpacing.md)
+                    .background(.ultraThinMaterial, in: Capsule())
+                }
+                .padding(.horizontal, SetuSpacing.lg)
+                .padding(.bottom, 72)
+            }
+        }
     }
 
     private func greetingSplashOverlay(greeting: HomeGreetingAnchor?, logo: Anchor<CGRect>?) -> some View {

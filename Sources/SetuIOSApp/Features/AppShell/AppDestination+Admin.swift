@@ -50,6 +50,8 @@ extension RootAppView {
             AdminAiReviewsView(environment: environment)
         case .adminAiDeleteRequests:
             AdminAiDeleteRequestsView(environment: environment)
+        case .adminCloudVideos:
+            AdminCloudVideosView(environment: environment)
         default:
             EmptyView()
         }

@@ -87,6 +87,7 @@ enum AppRoute: Hashable {
     case adminAiWorkers
     case adminAiReviews
     case adminAiDeleteRequests
+    case adminCloudVideos
 }
 
 struct PublicAiWorkSnapshot: Hashable {

@@ -45,4 +45,36 @@ public enum CloudVideoQuality {
         let capped = CGFloat(max(height, 1))
         return CGSize(width: capped * 16 / 9, height: capped)
     }
+
+    public static func peakBitRate(forMaxHeight height: Int) -> Double {
+        switch max(height, 1) {
+        case ...360:
+            return 900_000
+        case ...480:
+            return 1_600_000
+        case ...720:
+            return 3_200_000
+        case ...1080:
+            return 5_800_000
+        case ...1440:
+            return 9_000_000
+        default:
+            return 18_000_000
+        }
+    }
+
+    public struct PlaybackConstraints: Equatable, Sendable {
+        public let height: Int
+        public let maximumResolution: CGSize
+        public let peakBitRate: Double
+    }
+
+    public static func playbackConstraints(requested: Int, available: [Int]) -> PlaybackConstraints {
+        let height = capHeight(requested: requested, available: available)
+        return PlaybackConstraints(
+            height: height,
+            maximumResolution: maximumResolution(forMaxHeight: height),
+            peakBitRate: peakBitRate(forMaxHeight: height)
+        )
+    }
 }

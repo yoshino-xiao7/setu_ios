@@ -129,6 +129,7 @@ struct AdminOverviewView: View {
                     SetuNavigationRow(title: "图片审核与详情", subtitle: "图片库、投稿、删除申请", systemImage: "photo.badge.checkmark") { router.navigate(to: .adminImageAudit) }
                     SetuNavigationRow(title: "AI 生成与审核", subtitle: "生成记录、Worker、审核队列", systemImage: "sparkles.rectangle.stack") { router.navigate(to: .adminAiGenerations) }
                     SetuNavigationRow(title: "操作日志", subtitle: "后台行为审计", systemImage: "doc.text.magnifyingglass") { router.navigate(to: .adminOperationLogs) }
+                    SetuNavigationRow(title: "云视频", subtitle: "上传、转码、分级与发布", systemImage: "film") { router.navigate(to: .adminCloudVideos) }
                 }
             }
         }

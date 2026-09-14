@@ -49,6 +49,12 @@ final class SetuRemoteImageCacheTests: XCTestCase {
                 URLQueryItem(name: "expires", value: "1700000000"),
             ]
         )
+        let resigned = SetuImageKey(
+            url: URL(string: "https://vz-example.b-cdn.net/guid-123/thumbnail.jpg?token=other&expires=1800000000")!,
+            size: .medium
+        )
+        XCTAssertEqual(signed, resigned)
+        XCTAssertEqual(signed.cacheKey, resigned.cacheKey)
         let tiers = Set((1...500).map { SetuImageSize.fitting(width: CGFloat($0), height: CGFloat($0), scale: 3) })
         XCTAssertLessThanOrEqual(tiers.count, 4)
     }
