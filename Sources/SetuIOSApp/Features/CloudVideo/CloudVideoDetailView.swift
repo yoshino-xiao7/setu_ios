@@ -2,6 +2,9 @@ import AVFoundation
 import AVKit
 import SetuIOSCore
 import SwiftUI
+#if os(iOS)
+import UIKit
+#endif
 
 struct CloudVideoDetailView: View {
     @Environment(MusicPlaybackController.self) private var musicPlayer
@@ -23,7 +26,7 @@ struct CloudVideoDetailView: View {
     @State private var refreshTask: Task<Void, Never>?
     @Environment(\.scenePhase) private var scenePhase
     #if os(iOS)
-    @State private var showingFullscreen = false
+    @State private var isNativeFullscreen = false
     #endif
 
     var body: some View {
@@ -72,7 +75,7 @@ struct CloudVideoDetailView: View {
         .task(id: videoID) { await load() }
         .onDisappear {
             #if os(iOS)
-            if showingFullscreen { return }
+            if isNativeFullscreen { return }
             #endif
             persistAndStop()
         }
@@ -83,35 +86,6 @@ struct CloudVideoDetailView: View {
             }
         }
         .accessibilityIdentifier("cloudVideo.detail.page")
-        #if os(iOS)
-        .fullScreenCover(isPresented: $showingFullscreen) {
-            if let avPlayer {
-                ZStack(alignment: .topTrailing) {
-                    Color.black.ignoresSafeArea()
-                    CloudVideoFullscreenPlayerView(player: avPlayer)
-                        .ignoresSafeArea()
-                    VStack {
-                        HStack {
-                            qualityOverlay(compact: true)
-                            Spacer()
-                            Button {
-                                showingFullscreen = false
-                            } label: {
-                                Image(systemName: "xmark")
-                                    .font(.headline.weight(.bold))
-                                    .foregroundStyle(.white)
-                                    .frame(width: 44, height: 44)
-                                    .background(.black.opacity(0.45), in: Circle())
-                            }
-                            .accessibilityLabel("退出全屏")
-                        }
-                        Spacer()
-                    }
-                    .padding(SetuSpacing.lg)
-                }
-            }
-        }
-        #endif
     }
 
     @ViewBuilder
@@ -119,29 +93,26 @@ struct CloudVideoDetailView: View {
         SetuCard {
             VStack(alignment: .leading, spacing: SetuSpacing.md) {
                 if let avPlayer {
+                    #if os(iOS)
+                    CloudVideoKitPlayer(
+                        player: avPlayer,
+                        heights: qualityHeights,
+                        selectedHeight: CloudVideoQuality.capHeight(
+                            requested: selectedMaxHeight,
+                            available: qualityHeights
+                        ),
+                        onSelectHeight: { applySelectedMaxHeight($0) },
+                        isFullscreen: $isNativeFullscreen
+                    )
+                    .aspectRatio(16.0 / 9.0, contentMode: .fit)
+                    .frame(maxWidth: .infinity)
+                    .clipShape(RoundedRectangle(cornerRadius: SetuRadius.md, style: .continuous))
+                    #else
                     VideoPlayer(player: avPlayer)
                         .aspectRatio(16.0 / 9.0, contentMode: .fit)
                         .frame(maxWidth: .infinity)
                         .clipShape(RoundedRectangle(cornerRadius: SetuRadius.md, style: .continuous))
-                        .overlay(alignment: .topLeading) {
-                            qualityOverlay(compact: true)
-                                .padding(SetuSpacing.sm)
-                        }
-                        #if os(iOS)
-                        .overlay(alignment: .topTrailing) {
-                            Button {
-                                showingFullscreen = true
-                            } label: {
-                                Image(systemName: "arrow.up.left.and.arrow.down.right")
-                                    .font(.subheadline.weight(.bold))
-                                    .foregroundStyle(.white)
-                                    .frame(width: 44, height: 44)
-                                    .background(.black.opacity(0.42), in: Circle())
-                            }
-                            .padding(SetuSpacing.sm)
-                            .accessibilityLabel("全屏播放")
-                        }
-                        #endif
+                    #endif
                 } else {
                     ZStack {
                         RoundedRectangle(cornerRadius: SetuRadius.md, style: .continuous)
@@ -176,50 +147,12 @@ struct CloudVideoDetailView: View {
         CloudVideoQuality.optionHeights(available: availableHeights)
     }
 
-    @ViewBuilder
-    private func qualityOverlay(compact: Bool) -> some View {
-        if qualityHeights.isEmpty {
-            Text("读取画质")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .background(.black.opacity(0.45), in: Capsule())
-                .accessibilityIdentifier("cloudVideo.quality")
-        } else {
-            Menu {
-                Picker("画质上限", selection: qualitySelection) {
-                    ForEach(qualityHeights, id: \.self) { height in
-                        Text(CloudVideoQuality.label(for: height)).tag(height)
-                    }
-                }
-            } label: {
-                Label(
-                    CloudVideoQuality.label(for: CloudVideoQuality.capHeight(requested: selectedMaxHeight, available: qualityHeights)),
-                    systemImage: "rectangle.and.text.magnifyingglass"
-                )
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, compact ? 10 : 12)
-                    .padding(.vertical, 8)
-                    .background(.black.opacity(0.45), in: Capsule())
-            }
-            .accessibilityIdentifier("cloudVideo.quality")
-            .accessibilityLabel("画质上限")
-        }
-    }
-
-    private var qualitySelection: Binding<Int> {
-        Binding(
-            get: { CloudVideoQuality.capHeight(requested: selectedMaxHeight, available: qualityHeights) },
-            set: { height in
-                selectedMaxHeight = height
-                CloudVideoQuality.saveMaxHeight(height)
-                qualityGeneration += 1
-                let ticket = qualityGeneration
-                Task { await reloadItemForQuality(generation: ticket) }
-            }
-        )
+    private func applySelectedMaxHeight(_ height: Int) {
+        selectedMaxHeight = height
+        CloudVideoQuality.saveMaxHeight(height)
+        qualityGeneration += 1
+        let ticket = qualityGeneration
+        Task { await reloadItemForQuality(generation: ticket) }
     }
 
     private func load() async {
@@ -229,7 +162,7 @@ struct CloudVideoDetailView: View {
         playback = nil
         availableHeights = []
         #if os(iOS)
-        showingFullscreen = false
+        isNativeFullscreen = false
         #endif
         refreshTask?.cancel()
         refreshTask = nil
@@ -425,7 +358,7 @@ struct CloudVideoDetailView: View {
         loadGeneration += 1
         qualityGeneration += 1
         #if os(iOS)
-        showingFullscreen = false
+        isNativeFullscreen = false
         #endif
         refreshTask?.cancel()
         refreshTask = nil
@@ -496,20 +429,257 @@ struct CloudVideoDetailView: View {
 }
 
 #if os(iOS)
-private struct CloudVideoFullscreenPlayerView: UIViewControllerRepresentable {
+private struct CloudVideoKitPlayer: UIViewControllerRepresentable {
     let player: AVPlayer
+    var heights: [Int]
+    var selectedHeight: Int
+    var onSelectHeight: (Int) -> Void
+    @Binding var isFullscreen: Bool
 
-    func makeUIViewController(context: Context) -> AVPlayerViewController {
-        let controller = AVPlayerViewController()
+    func makeUIViewController(context: Context) -> CloudVideoPlayerViewController {
+        let controller = CloudVideoPlayerViewController()
         controller.player = player
-        controller.showsPlaybackControls = true
-        controller.allowsPictureInPicturePlayback = false
-        controller.canStartPictureInPictureAutomaticallyFromInline = false
+        controller.delegate = context.coordinator
+        context.coordinator.controller = controller
+        context.coordinator.sync(from: self)
+        context.coordinator.chrome.attach(to: controller)
+        context.coordinator.chrome.reveal()
         return controller
     }
 
-    func updateUIViewController(_ controller: AVPlayerViewController, context: Context) {
-        controller.player = player
+    func updateUIViewController(_ controller: CloudVideoPlayerViewController, context: Context) {
+        if controller.player !== player {
+            controller.player = player
+        }
+        controller.delegate = context.coordinator
+        context.coordinator.controller = controller
+        let hadHeights = !context.coordinator.heights.isEmpty
+        context.coordinator.sync(from: self)
+        context.coordinator.chrome.attach(to: controller)
+        if !hadHeights && !heights.isEmpty {
+            context.coordinator.chrome.reveal()
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    final class Coordinator: NSObject, AVPlayerViewControllerDelegate {
+        let chrome = CloudVideoQualityChrome()
+        weak var controller: CloudVideoPlayerViewController?
+        var heights: [Int] = []
+        private var isFullscreen: Binding<Bool> = .constant(false)
+
+        func sync(from parent: CloudVideoKitPlayer) {
+            heights = parent.heights
+            isFullscreen = parent.$isFullscreen
+            chrome.heights = parent.heights
+            chrome.selectedHeight = parent.selectedHeight
+            chrome.onSelect = parent.onSelectHeight
+            chrome.refreshMenu()
+            controller?.chrome = chrome
+        }
+
+        func playerViewController(
+            _ playerViewController: AVPlayerViewController,
+            willBeginFullScreenPresentationWithAnimationCoordinator coordinator: UIViewControllerTransitionCoordinator
+        ) {
+            isFullscreen.wrappedValue = true
+            coordinator.animate(alongsideTransition: nil) { [weak self] _ in
+                self?.installChrome(on: playerViewController)
+            }
+        }
+
+        func playerViewController(
+            _ playerViewController: AVPlayerViewController,
+            willEndFullScreenPresentationWithAnimationCoordinator coordinator: UIViewControllerTransitionCoordinator
+        ) {
+            coordinator.animate(alongsideTransition: nil) { [weak self] context in
+                if !context.isCancelled {
+                    self?.isFullscreen.wrappedValue = false
+                }
+                self?.installChrome(on: playerViewController)
+            }
+        }
+
+        private func installChrome(on playerViewController: AVPlayerViewController) {
+            if let presented = playerViewController.presentedViewController as? AVPlayerViewController {
+                chrome.attach(to: presented)
+            } else {
+                chrome.attach(to: playerViewController)
+            }
+            chrome.reveal()
+        }
+    }
+}
+
+private final class CloudVideoPlayerViewController: AVPlayerViewController, UIGestureRecognizerDelegate {
+    var chrome: CloudVideoQualityChrome?
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        showsPlaybackControls = true
+        allowsPictureInPicturePlayback = false
+        canStartPictureInPictureAutomaticallyFromInline = false
+        view.backgroundColor = .black
+        videoGravity = .resizeAspect
+        let tap = UITapGestureRecognizer(target: self, action: #selector(handleRevealTap))
+        tap.cancelsTouchesInView = false
+        tap.delegate = self
+        view.addGestureRecognizer(tap)
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        chrome?.attach(to: self)
+    }
+
+    @objc private func handleRevealTap() {
+        chrome?.reveal()
+    }
+
+    func gestureRecognizer(
+        _ gestureRecognizer: UIGestureRecognizer,
+        shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+    ) -> Bool {
+        true
+    }
+}
+
+private final class CloudVideoQualityChrome {
+    var heights: [Int] = []
+    var selectedHeight = CloudVideoQuality.defaultMaxHeight
+    var onSelect: ((Int) -> Void)?
+
+    private let container = CloudVideoChromePassthroughView()
+    private let button = UIButton(type: .system)
+    private var hideWork: DispatchWorkItem?
+    private var menuOpen = false
+    private var didConfigureButton = false
+    private var lastMenuSignature = ""
+
+    func attach(to controller: AVPlayerViewController) {
+        guard let overlay = controller.contentOverlayView else { return }
+        if container.superview !== overlay {
+            container.removeFromSuperview()
+            overlay.addSubview(container)
+            container.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                container.leadingAnchor.constraint(equalTo: overlay.leadingAnchor),
+                container.trailingAnchor.constraint(equalTo: overlay.trailingAnchor),
+                container.topAnchor.constraint(equalTo: overlay.topAnchor),
+                container.bottomAnchor.constraint(equalTo: overlay.bottomAnchor),
+            ])
+        }
+        if button.superview !== container {
+            configureButtonIfNeeded()
+            container.addSubview(button)
+            button.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                button.trailingAnchor.constraint(equalTo: container.safeAreaLayoutGuide.trailingAnchor, constant: -12),
+                button.bottomAnchor.constraint(equalTo: container.safeAreaLayoutGuide.bottomAnchor, constant: -72),
+            ])
+        }
+        refreshMenu()
+    }
+
+    func reveal() {
+        guard !heights.isEmpty else {
+            button.isHidden = true
+            container.isUserInteractionEnabled = false
+            return
+        }
+        hideWork?.cancel()
+        button.isHidden = false
+        button.isUserInteractionEnabled = true
+        container.isUserInteractionEnabled = true
+        UIView.animate(withDuration: 0.2) {
+            self.container.alpha = 1
+        }
+        scheduleHide()
+    }
+
+    func refreshMenu() {
+        if heights.isEmpty {
+            button.isHidden = true
+            lastMenuSignature = ""
+            return
+        }
+        let signature = "\(heights)-\(selectedHeight)"
+        guard signature != lastMenuSignature else { return }
+        lastMenuSignature = signature
+        var configuration = UIButton.Configuration.plain()
+        configuration.title = "\(selectedHeight)p"
+        configuration.baseForegroundColor = .white
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 10, bottom: 6, trailing: 10)
+        var background = configuration.background
+        background.backgroundColor = UIColor.black.withAlphaComponent(0.45)
+        background.cornerRadius = 16
+        configuration.background = background
+        configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+            var attributes = incoming
+            attributes.font = .systemFont(ofSize: 13, weight: .semibold)
+            return attributes
+        }
+        button.configuration = configuration
+        button.menu = UIMenu(
+            title: "画质上限",
+            children: heights.map { height in
+                UIAction(
+                    title: CloudVideoQuality.label(for: height),
+                    state: height == selectedHeight ? .on : .off
+                ) { [weak self] _ in
+                    self?.menuOpen = false
+                    self?.onSelect?(height)
+                    self?.scheduleHide()
+                }
+            }
+        )
+    }
+
+    private func configureButtonIfNeeded() {
+        guard !didConfigureButton else { return }
+        didConfigureButton = true
+        container.alpha = 0
+        container.isUserInteractionEnabled = false
+        button.showsMenuAsPrimaryAction = true
+        button.accessibilityIdentifier = "cloudVideo.quality"
+        button.accessibilityLabel = "画质上限"
+        button.addAction(UIAction { [weak self] _ in
+            self?.menuOpen = true
+            self?.hideWork?.cancel()
+            self?.container.alpha = 1
+            DispatchQueue.main.asyncAfter(deadline: .now() + 6) {
+                guard let self, self.menuOpen else { return }
+                self.menuOpen = false
+                self.scheduleHide()
+            }
+        }, for: .touchDown)
+    }
+
+    private func scheduleHide() {
+        hideWork?.cancel()
+        guard !menuOpen else { return }
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, !self.menuOpen else { return }
+            UIView.animate(withDuration: 0.25) {
+                self.container.alpha = 0
+            } completion: { finished in
+                guard finished, self.container.alpha == 0 else { return }
+                self.button.isUserInteractionEnabled = false
+                self.container.isUserInteractionEnabled = false
+            }
+        }
+        hideWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: work)
+    }
+}
+
+private final class CloudVideoChromePassthroughView: UIView {
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        let hit = super.hitTest(point, with: event)
+        return hit === self ? nil : hit
     }
 }
 #endif
