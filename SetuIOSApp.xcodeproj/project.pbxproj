@@ -225,6 +225,7 @@
 		86E06AA136713B6A22511779 /* PasskeyModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 635C7BEB7700E335A502536F /* PasskeyModels.swift */; };
 		87092D6EAA0BFA25229170C2 /* AiDrawView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C81906E773027AE55EE8628 /* AiDrawView.swift */; };
 		8845AB75B1CFFFA3C846706B /* ArtworkBrowserUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7400C469275AD09C9CDC7B7C /* ArtworkBrowserUITests.swift */; };
+		89557C52655AB3148F4CBCEF /* AiDrawPromptComposerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 575D5B5DA2967084AACB8459 /* AiDrawPromptComposerTests.swift */; };
 		89592A5EA02FC805C22ACD5F /* MusicCutoverLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE08D96C952D7832D2B7B17 /* MusicCutoverLayoutTests.swift */; };
 		89A72410EF493EEED221036E /* JmFavoriteListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8322EEFC0AE99F21CA6678F7 /* JmFavoriteListView.swift */; };
 		89B5B62C3E047C53B7482570 /* GalleryUploadClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1D22CE331F0ADD65C4E3113 /* GalleryUploadClientTests.swift */; };
@@ -348,6 +349,7 @@
 		CC128C6E1FE05CFB761B53D3 /* MusicSeekTimingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F031C80D8B767B22737B3D1 /* MusicSeekTimingTests.swift */; };
 		CCF3E71343E3EA16D643DC0B /* ImageFeedBrowsePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15961097857EB58CE4B16EE6 /* ImageFeedBrowsePolicy.swift */; };
 		CDADFD0A96380165350F67C5 /* ImageFeedExpiryPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C76EC45E487F2DBA4ABC299 /* ImageFeedExpiryPolicy.swift */; };
+		CF9AE7138FE7B8542C1163CB /* AiDrawPromptComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88356E53B85F73BFBDABA178 /* AiDrawPromptComposer.swift */; };
 		CFBED283B7B7B34F054E8291 /* RecommendedPlaylistsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD31DFFC3518602C842A64C /* RecommendedPlaylistsView.swift */; };
 		D0350EAB2AF41D36B727CA6E /* MusicSearchUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEBEF036D7535BAB9C1C0A08 /* MusicSearchUITests.swift */; };
 		D0C6A35A484C88DDF595CAB0 /* PlatformClipboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FBFACA80CC1273BC475A055 /* PlatformClipboard.swift */; };
@@ -653,6 +655,7 @@
 		556DF98218F10099940D0FBC /* FavoriteClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoriteClient.swift; sourceTree = "<group>"; };
 		5680B80541513C9C12C1AFE6 /* AdminAiDeleteRequestsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminAiDeleteRequestsView.swift; sourceTree = "<group>"; };
 		570850F17D9FA169047E5D4D /* MusicLibraryPreviewFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicLibraryPreviewFixtures.swift; sourceTree = "<group>"; };
+		575D5B5DA2967084AACB8459 /* AiDrawPromptComposerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AiDrawPromptComposerTests.swift; sourceTree = "<group>"; };
 		58012ABE5C1516880D3FAA61 /* SetuFeedbackBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuFeedbackBanner.swift; sourceTree = "<group>"; };
 		5806364D59D0AB304D34D827 /* MusicAudioCacheTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicAudioCacheTests.swift; sourceTree = "<group>"; };
 		5866B8A3B12FCE368B676180 /* DashboardModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardModels.swift; sourceTree = "<group>"; };
@@ -744,6 +747,7 @@
 		86B2E4429D53A970E6075BB1 /* AiGenerationLiveActivityCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AiGenerationLiveActivityCenter.swift; sourceTree = "<group>"; };
 		87730FD34122BBCA9318FA83 /* CloudVideoTUSClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudVideoTUSClient.swift; sourceTree = "<group>"; };
 		879D7C16B2B972A0397B64EE /* SetuRemoteImageCacheTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuRemoteImageCacheTests.swift; sourceTree = "<group>"; };
+		88356E53B85F73BFBDABA178 /* AiDrawPromptComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AiDrawPromptComposer.swift; sourceTree = "<group>"; };
 		89FF216152743D0333DC42F6 /* CloudVideoDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudVideoDetailView.swift; sourceTree = "<group>"; };
 		8AACE9FE15AAC322B8ACF7D2 /* ImageBrowseLayoutUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageBrowseLayoutUITests.swift; sourceTree = "<group>"; };
 		8DCB470385749A8792B64C44 /* AdminOverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminOverviewView.swift; sourceTree = "<group>"; };
@@ -1227,6 +1231,7 @@
 				A5F36A7DD3C5B90EC6E00689 /* AiAssetBrowserView.swift */,
 				6BA6E0AACD49A324C42B462C /* AiDeleteRequestsView.swift */,
 				08EB6447A38E43F5548AE68A /* AiDrawDraftStore.swift */,
+				88356E53B85F73BFBDABA178 /* AiDrawPromptComposer.swift */,
 				0C81906E773027AE55EE8628 /* AiDrawView.swift */,
 				5A64D43ACCAB7E5B6139EE9D /* AiGenerationDetailView.swift */,
 				2A4C64BFF446EE80613710C4 /* AiGenerationGridTile.swift */,
@@ -1668,6 +1673,7 @@
 				9B54E7B0273F0A02B89981E1 /* AdminClientTests.swift */,
 				C2B80AD424030CAD21CD940F /* AdminCloudVideoClientTests.swift */,
 				548F9CFC8424F16CB224B613 /* AiDrawDraftStoreTests.swift */,
+				575D5B5DA2967084AACB8459 /* AiDrawPromptComposerTests.swift */,
 				3158EED0A26DE3CE6E0463E8 /* AiGenerationClientTests.swift */,
 				D3AD9011C87227302D738CFA /* AiGenerationLiveActivityCenterTests.swift */,
 				A0108E10626523C9CDE6E2A4 /* ApiKeyClientTests.swift */,
@@ -2044,6 +2050,7 @@
 				D3335ECA866B699F6648CDF0 /* AdminClientTests.swift in Sources */,
 				82CDDEC538D0E9A7A7D2AA43 /* AdminCloudVideoClientTests.swift in Sources */,
 				85E02A7ADDEA08B12CA49EFA /* AiDrawDraftStoreTests.swift in Sources */,
+				89557C52655AB3148F4CBCEF /* AiDrawPromptComposerTests.swift in Sources */,
 				5C2F5EB5C924FF83EC641E94 /* AiGenerationClientTests.swift in Sources */,
 				441F696BFAACD6DDE9E3EB63 /* AiGenerationLiveActivityCenterTests.swift in Sources */,
 				9133E4D363ECDEC3F97EFE7F /* ApiKeyClientTests.swift in Sources */,
@@ -2190,6 +2197,7 @@
 				021B23C555C057EDD22F955F /* AiAssetBrowserView.swift in Sources */,
 				E87D8FD7890302B6B02627C3 /* AiDeleteRequestsView.swift in Sources */,
 				2251DF92CA35A53F71415E59 /* AiDrawDraftStore.swift in Sources */,
+				CF9AE7138FE7B8542C1163CB /* AiDrawPromptComposer.swift in Sources */,
 				87092D6EAA0BFA25229170C2 /* AiDrawView.swift in Sources */,
 				AFB37210A41742AE85F08058 /* AiGenerationDetailView.swift in Sources */,
 				90A396CBFF09526D25F5F97B /* AiGenerationGridTile.swift in Sources */,
@@ -2608,7 +2616,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 7G6J4S76PN;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -2811,7 +2819,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = 7G6J4S76PN;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

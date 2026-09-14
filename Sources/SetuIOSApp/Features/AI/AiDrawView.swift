@@ -1,5 +1,8 @@
 import SetuIOSCore
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct AiDrawView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -11,7 +14,7 @@ struct AiDrawView: View {
     @AppStorage("setu_has_explained_generation_notifications") private var hasExplainedGenerationNotifications = false
     @State private var statusState: LoadState<AiServiceStatusResponse> = .idle
     @State private var capabilityState: LoadState<AiCapabilityResponse> = .idle
-    @FocusState private var promptFocused: Bool
+    @FocusState private var focusedField: PromptField?
     @State private var promptCn = ""
     @State private var styleTags = ""
     @State private var positivePrompt = ""
@@ -43,6 +46,8 @@ struct AiDrawView: View {
     @State private var pendingGenerationID: Int?
     @State private var showingAdvancedSettings = false
     @State private var showingClearDraftConfirmation = false
+    @State private var positivePromptManuallyEdited = false
+    @State private var isReconcilingPrompts = false
 
     private let estimatedPointsCost = 20
 
@@ -94,8 +99,16 @@ struct AiDrawView: View {
             refreshEnabledStylePresets()
         }
         .onDisappear { saveDraft() }
-        .onChange(of: promptCn) { saveDraft() }
-        .onChange(of: positivePrompt) { saveDraft() }
+        .onChange(of: promptCn) { oldValue, newValue in
+            reconcileNaturalLanguageChange(from: oldValue, to: newValue)
+            saveDraft()
+        }
+        .onChange(of: positivePrompt) {
+            if !isApplyingDraft, !isReconcilingPrompts, !isTranslating {
+                positivePromptManuallyEdited = true
+            }
+            saveDraft()
+        }
         .onChange(of: width) { saveDraft() }
         .onChange(of: height) { saveDraft() }
         .onChange(of: steps) { saveDraft() }
@@ -120,7 +133,7 @@ struct AiDrawView: View {
             }
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
-                Button("完成") { promptFocused = false }
+                Button("完成") { dismissPromptKeyboard() }
                     .accessibilityIdentifier("ai.draw.keyboard.done")
             }
             #endif
@@ -219,7 +232,7 @@ struct AiDrawView: View {
                     SetuSectionHeader(title: "想画什么？", subtitle: "用自然语言描述场景、人物、氛围和光线")
                     TextField("例如：银发少女站在雨夜街角，霓虹灯倒映在路面，电影感光影", text: $promptCn, axis: .vertical)
                         .lineLimit(3...6)
-                        .focused($promptFocused)
+                        .focused($focusedField, equals: .promptCn)
                         .textFieldStyle(.roundedBorder)
                         .accessibilityLabel("画面描述")
                         .accessibilityIdentifier("ai.draw.prompt")
@@ -302,7 +315,7 @@ struct AiDrawView: View {
     private var advancedSettingsSection: some View {
         Section {
             SetuCard {
-                DisclosureGroup("高级设置", isExpanded: $showingAdvancedSettings) {
+                DisclosureGroup(isExpanded: $showingAdvancedSettings) {
                     VStack(alignment: .leading, spacing: SetuSpacing.lg) {
                         Divider()
                         Stepper("画面宽度 \(width)", value: $width, in: 512...1536, step: 64)
@@ -330,12 +343,25 @@ struct AiDrawView: View {
 
                         advancedModelSettings
 
-                        TextField("画面细节提示（选填）", text: $positivePrompt, axis: .vertical)
-                            .lineLimit(3...6)
-                            .textFieldStyle(.roundedBorder)
+                        VStack(alignment: .leading, spacing: SetuSpacing.sm) {
+                            Text("正向提示词")
+                                .font(.subheadline.weight(.semibold))
+                            TextField("例如：silver hair, rain, cinematic lighting", text: $positivePrompt, axis: .vertical)
+                                .lineLimit(3...6)
+                                .focused($focusedField, equals: .positive)
+                                .textFieldStyle(.roundedBorder)
+                                .accessibilityLabel("正向提示词")
+                                .accessibilityIdentifier("ai.draw.positive")
+                            Text("可只填这项生成。清空「想画什么」时，未改过的自动提示词会一起清掉。")
+                                .font(.caption)
+                                .foregroundStyle(SetuColor.textTertiary)
+                        }
                         TextField("需要避开的内容（选填）", text: $negativePrompt, axis: .vertical)
                             .lineLimit(3...6)
+                            .focused($focusedField, equals: .negative)
                             .textFieldStyle(.roundedBorder)
+                            .accessibilityLabel("反向提示词")
+                            .accessibilityIdentifier("ai.draw.negative")
 
                         Button("恢复推荐设置") {
                             restoreRecommendedSettings()
@@ -343,8 +369,11 @@ struct AiDrawView: View {
                         .buttonStyle(.bordered)
                     }
                     .padding(.top, SetuSpacing.sm)
+                    .font(.body)
+                } label: {
+                    Text("高级设置")
+                        .font(.body.weight(.semibold))
                 }
-                .font(.body.weight(.semibold))
             }
         }
         .setuListRow()
@@ -424,7 +453,7 @@ struct AiDrawView: View {
     private var generationCTA: some View {
         SetuBottomCTA {
             SetuPrimaryButton {
-                Task { await submit() }
+                Task { await submitFromCTA() }
             } label: {
                 if isSubmitting || isTranslating {
                     HStack(spacing: SetuSpacing.sm) {
@@ -444,7 +473,7 @@ struct AiDrawView: View {
                 }
             }
             .accessibilityIdentifier("ai.draw.generate")
-            .disabled(!hasDrawablePrompt || isSubmitting || isTranslating || !serviceReady)
+            .disabled(isSubmitting || isTranslating || !serviceReady)
         }
     }
 
@@ -548,6 +577,7 @@ struct AiDrawView: View {
             if let styleNotes = response.styleNotes, !styleNotes.isEmpty {
                 self.styleNotes = styleNotes
             }
+            positivePromptManuallyEdited = false
             feedback = nil
             saveDraft()
             return true
@@ -574,27 +604,49 @@ struct AiDrawView: View {
         throw AiDrawPromptPreparationError.translationTimedOut
     }
 
+    private func submitFromCTA() async {
+        dismissPromptKeyboard()
+        await Task.yield()
+        await submit()
+    }
+
+    private func dismissPromptKeyboard() {
+        focusedField = nil
+        #if canImport(UIKit)
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        #endif
+    }
+
     private func submit() async {
         userFacingError = nil
-        let prompt = promptCn.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard hasDrawablePrompt else {
-            feedback = .warning("先描述想画的画面，或选择一个风格与角色。")
+        if generationMode == "DUAL", selectedSecondCharacter.isEmpty, selectedSecondLora.isEmpty {
+            feedback = .warning("双人物创作需要选择第二角色或第二风格。")
+            showingAdvancedSettings = true
             return
         }
         guard serviceReady else {
             feedback = .warning(serviceUnavailableText)
             return
         }
-        var promptPositive = positivePrompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        if promptPositive.isEmpty {
-            if !prompt.isEmpty {
-                let prepared = await preparePrompt()
-                guard prepared else { return }
-                promptPositive = positivePrompt.trimmingCharacters(in: .whitespacesAndNewlines)
-            } else if applyPresetPromptToGeneratedFields() {
-                promptPositive = presetPromptSeed
-            }
+        guard hasDrawablePrompt else {
+            feedback = .warning("先描述想画的画面，填写正向提示词，或选择一个风格与角色。")
+            return
         }
+        var promptPositive = AiDrawPromptComposer.resolvedPositivePrompt(
+            positivePrompt: positivePrompt,
+            presetSeed: presetPromptSeed
+        )
+        if AiDrawPromptComposer.needsTranslation(promptCn: promptCn, positivePrompt: promptPositive) {
+            let prepared = await preparePrompt()
+            guard prepared else { return }
+            promptPositive = AiDrawPromptComposer.resolvedPositivePrompt(
+                positivePrompt: positivePrompt,
+                presetSeed: presetPromptSeed
+            )
+        } else if promptPositive.isEmpty, applyPresetPromptToGeneratedFields() {
+            promptPositive = presetPromptSeed
+        }
+        let prompt = AiDrawPromptComposer.resolvedPromptCn(promptCn: promptCn, positivePrompt: promptPositive)
         let promptNegative = resolvedNegativePrompt
         isSubmitting = true
         feedback = nil
@@ -695,6 +747,7 @@ struct AiDrawView: View {
         positivePrompt = ""
         negativePrompt = AiDrawDefaults.defaultNegativePrompt
         styleNotes = ""
+        positivePromptManuallyEdited = false
         saveDraft()
     }
 
@@ -708,9 +761,11 @@ struct AiDrawView: View {
     }
 
     private var hasDrawablePrompt: Bool {
-        !promptCn.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            || !positivePrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            || hasPresetPromptSeed
+        AiDrawPromptComposer.hasDrawablePrompt(
+            promptCn: promptCn,
+            positivePrompt: positivePrompt,
+            styleTags: styleTags
+        )
     }
 
     private var presetPromptSeed: String {
@@ -775,6 +830,7 @@ struct AiDrawView: View {
             AiAssetBrowserCacheStore.clearSelectedStyles()
             enabledStylePresetNames = []
             applyGeneratedStyleReset()
+            positivePromptManuallyEdited = false
             draftLoaded = true
             return
         }
@@ -803,6 +859,10 @@ struct AiDrawView: View {
         negativePrompt = draft.negativePrompt.isEmpty ? AiDrawDefaults.defaultNegativePrompt : draft.negativePrompt
         styleNotes = draft.styleNotes
         loadedDraftUpdatedAt = draft.updatedAt
+        positivePromptManuallyEdited = AiDrawPromptComposer.shouldTreatRestoredPositiveAsManual(
+            promptCn: draft.promptCn,
+            positivePrompt: draft.promptPositive
+        )
         draftLoaded = true
         isApplyingDraft = false
     }
@@ -826,7 +886,26 @@ struct AiDrawView: View {
         applyGeneratedStyleReset()
         enabledStylePresetNames = []
         loadedDraftUpdatedAt = nil
+        positivePromptManuallyEdited = false
         isApplyingDraft = false
+    }
+
+    private func reconcileNaturalLanguageChange(from previous: String, to next: String) {
+        guard !isApplyingDraft else { return }
+        let nextPositive = AiDrawPromptComposer.positivePromptAfterNaturalLanguageChange(
+            previousPromptCn: previous,
+            nextPromptCn: next,
+            currentPositivePrompt: positivePrompt,
+            presetSeed: presetPromptSeed,
+            manuallyEdited: positivePromptManuallyEdited
+        )
+        guard nextPositive != positivePrompt else { return }
+        isReconcilingPrompts = true
+        positivePrompt = nextPositive
+        if next.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !positivePromptManuallyEdited {
+            styleNotes = ""
+        }
+        isReconcilingPrompts = false
     }
 
     private func refreshEnabledStylePresets() {
@@ -867,6 +946,12 @@ struct AiDrawView: View {
     private var isDefaultNegativePrompt: Bool {
         negativePrompt.trimmingCharacters(in: .whitespacesAndNewlines) == AiDrawDefaults.defaultNegativePrompt
     }
+}
+
+private enum PromptField: Hashable {
+    case promptCn
+    case positive
+    case negative
 }
 
 private enum AiCanvasPreset: String, CaseIterable, Identifiable {
