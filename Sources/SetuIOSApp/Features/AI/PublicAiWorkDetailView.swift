@@ -309,15 +309,8 @@ struct PublicAiWorkDetailView: View {
     }
 
     private func reuseInspiration() {
-        AiDrawDraftStore.save(AiDrawDraft(
-            promptCn: work.prompt,
-            width: work.width,
-            height: work.height,
-            negativePrompt: AiDrawDefaults.defaultNegativePrompt,
-            source: "history",
-            updatedAt: Date()
-        ))
-        navigation.navigate(to: .ai, route: .aiDraw)
+        AiChatDrawComposerStore.setPendingPrompt(work.prompt)
+        navigation.navigate(to: .ai, route: .aiDraw, reset: true)
     }
 
     @MainActor

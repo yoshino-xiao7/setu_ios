@@ -78,10 +78,13 @@ struct AiGenerationDetailView: View {
             if case .loaded(let job) = state {
                 SetuBottomCTA {
                     Button {
-                        AiDrawDraftStore.applyHistoryJob(job)
+                        let prompt = job.promptCn.trimmingCharacters(in: .whitespacesAndNewlines)
+                        AiChatDrawComposerStore.setPendingPrompt(
+                            prompt.isEmpty ? (job.promptPositive ?? "") : prompt
+                        )
                         navigation.navigate(to: .ai, reset: true)
                     } label: {
-                        Text("再画一张（沿用这次参数）")
+                        Text("继续对话（沿用这次画面）")
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, minHeight: 44)
                     }

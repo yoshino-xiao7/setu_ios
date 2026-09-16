@@ -86,7 +86,6 @@ struct DashboardView: View {
             UserImagePreviewSheet(item: item)
         }
         .task {
-            draft = AiDrawDraftStore.load()
             guard !hasLoadedInitialContent else { return }
             initialLoadCount += 1
             await load()
@@ -151,22 +150,12 @@ struct DashboardView: View {
                         }
                     }
 
-                    if hasMeaningfulDraft {
-                        SetuNavigationRow(
-                            title: draft.promptCn.nonEmpty ?? "未完成的 AI 绘画草稿",
-                            subtitle: "继续编辑上次保存的参数",
-                            systemImage: "square.and.pencil"
-                        ) {
-                            navigation.navigate(to: .ai, reset: true)
-                        }
-                    }
-
                     if hasConfirmedNoActiveContent {
                         SetuEmptyState(
                             title: "暂无进行中的内容",
-                            message: "描述一个画面，开始今天的第一幅作品。",
+                            message: "直接告诉绘画助手你想画什么，开始今天的第一幅作品。",
                             systemImage: "clock.arrow.circlepath",
-                            actionTitle: "开始创作",
+                            actionTitle: "开始对话",
                             action: { navigation.navigate(to: .ai, reset: true) }
                         )
                     }
@@ -367,8 +356,6 @@ struct DashboardView: View {
         }
     }
 
-    @State private var draft = AiDrawDraft()
-
     private var greetingCopy: some View {
         VStack(alignment: .leading, spacing: SetuSpacing.sm) {
             Text(greetingTitle)
@@ -396,15 +383,6 @@ struct DashboardView: View {
         return ""
     }
 
-    private var hasMeaningfulDraft: Bool {
-        let value = draft
-        return !value.promptCn.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            || !value.promptPositive.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            || !value.styleTags.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            || !value.loraName.isEmpty
-            || !value.characterId.isEmpty
-    }
-
     private var greetingTitle: String {
         let hour = Calendar.current.component(.hour, from: Date())
         let salutation: String
@@ -418,7 +396,7 @@ struct DashboardView: View {
     }
 
     private var greetingSubtitle: String {
-        if player.currentTrack != nil || hasMeaningfulDraft {
+        if player.currentTrack != nil {
             return "欢迎回来，从上次停下的地方继续吧。"
         }
         switch generationState {
@@ -441,7 +419,7 @@ struct DashboardView: View {
     }
 
     private var hasConfirmedNoActiveContent: Bool {
-        guard player.currentTrack == nil, !hasMeaningfulDraft else { return false }
+        guard player.currentTrack == nil else { return false }
         if case .loaded(nil) = generationState { return true }
         return false
     }
@@ -455,7 +433,6 @@ struct DashboardView: View {
     }
 
     private func load() async {
-        draft = AiDrawDraftStore.load()
         async let favorites: Void = loadFavorites()
         async let generation: Void = loadGeneration()
         async let recommendation: Void = loadRecommendation()

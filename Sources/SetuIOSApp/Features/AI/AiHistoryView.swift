@@ -74,7 +74,7 @@ struct AiHistoryView: View {
                                 Button {
                                     reuse(job)
                                 } label: {
-                                    Label("复用参数", systemImage: "arrow.triangle.2.circlepath")
+                                    Label("继续对话", systemImage: "bubble.left.and.bubble.right")
                                 }
                                 Button {
                                     copyPrompt(job)
@@ -191,7 +191,8 @@ struct AiHistoryView: View {
     }
 
     private func reuse(_ job: AiGenerationJob) {
-        AiDrawDraftStore.applyHistoryJob(job)
+        let prompt = job.promptCn.trimmingCharacters(in: .whitespacesAndNewlines)
+        AiChatDrawComposerStore.setPendingPrompt(prompt.isEmpty ? (job.promptPositive ?? "") : prompt)
         navigation.navigate(to: .ai, reset: true)
     }
 

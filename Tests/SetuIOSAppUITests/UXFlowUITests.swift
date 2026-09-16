@@ -184,9 +184,12 @@ final class UXFlowUITests: XCTestCase {
         XCTAssertFalse(app.alerts.firstMatch.exists)
     }
 
-    func testGenerationReturnsToOriginalEditor() {
+    func testGenerationReturnsToChatComposer() {
         let app = launch(["-ui-testing-root-ai"])
         defer { app.terminate() }
+        let prompt = element("ai.draw.prompt", in: app)
+        XCTAssertTrue(prompt.waitForExistence(timeout: 8))
+        XCTAssertTrue(String(describing: prompt.value).contains("银发少女站在雨夜街角"))
         let generate = app.buttons["ai.draw.generate"]
         XCTAssertTrue(generate.waitForExistence(timeout: 8))
         let ready = expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: generate)
@@ -194,40 +197,27 @@ final class UXFlowUITests: XCTestCase {
         generate.tap()
         let later = app.buttons["暂不"]
         if later.waitForExistence(timeout: 3) { later.tap() }
+        let openJob = app.buttons["ai.chat.open-job-501"]
+        XCTAssertTrue(openJob.waitForExistence(timeout: 10))
+        openJob.tap()
         let again = app.buttons["ai.detail.create-again"]
         XCTAssertTrue(again.waitForExistence(timeout: 10))
         again.tap()
-        let prompt = element("ai.draw.prompt", in: app)
-        XCTAssertTrue(prompt.waitForExistence(timeout: 5))
-        XCTAssertTrue(String(describing: prompt.value).contains("银发少女站在雨夜街角"))
+        let restored = element("ai.draw.prompt", in: app)
+        XCTAssertTrue(restored.waitForExistence(timeout: 5))
+        XCTAssertTrue(String(describing: restored.value).contains("银发少女站在雨夜街角"))
         XCTAssertFalse(again.exists)
-        XCTAssertTrue(generate.isHittable)
+        XCTAssertTrue(generate.waitForExistence(timeout: 5))
     }
 
-    func testTwoAssetsApplyAndReturnWithNames() {
+    func testChatSessionToolbarIsAvailable() {
         let app = launch(["-ui-testing-root-ai"])
         defer { app.terminate() }
-        let dual = app.buttons["双人物"]
-        scrollTo(dual, in: app)
-        dual.tap()
-        let choose = app.buttons.matching(NSPredicate(format: "label BEGINSWITH '选择风格与角色'")).firstMatch
-        scrollTo(choose, in: app)
-        choose.tap()
-        let lora = app.buttons["使用 电影感光影"]
-        scrollTo(lora, in: app)
-        lora.tap()
-        app.swipeDown()
-        app.buttons["副角色"].tap()
-        app.buttons["内容类型、附加画风"].tap()
-        app.buttons["角色"].tap()
-        let character = app.buttons["使用 银发少女"]
-        scrollTo(character, in: app)
-        character.tap()
-        let apply = app.buttons["ai.assets.apply"]
-        XCTAssertEqual(apply.label, "应用并返回（已选 2 项）")
-        apply.tap()
-        let summary = app.buttons.matching(NSPredicate(format: "label CONTAINS '电影感光影' AND label CONTAINS '银发少女'")).firstMatch
-        XCTAssertTrue(summary.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["ai.chat.new"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.buttons["ai.chat.session"].waitForExistence(timeout: 8)
+            || app.descendants(matching: .any)["ai.chat.session"].waitForExistence(timeout: 8))
+        XCTAssertTrue(element("ai.draw.prompt", in: app).waitForExistence(timeout: 8))
+        XCTAssertTrue(app.buttons["ai.draw.generate"].waitForExistence(timeout: 8))
     }
 
     func testMiniPlayerLeavesTabsAndBottomActionsVisible() {
@@ -330,5 +320,6 @@ final class UXFlowUITests: XCTestCase {
         signIn.tap()
         XCTAssertTrue(app.textFields["auth.login.email"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["ai.detail.create-again"].exists)
+        XCTAssertTrue(app.buttons["ai.draw.generate"].waitForExistence(timeout: 5))
     }
 }
