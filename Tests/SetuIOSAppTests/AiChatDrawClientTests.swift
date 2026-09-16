@@ -27,7 +27,7 @@ final class AiChatDrawClientTests: XCTestCase {
         XCTAssertEqual(result.list.first?.displayTitle, "雨夜猫娘")
         XCTAssertEqual(result.list.first?.usage?.promptTokens, 10)
         let urls = await capturedRequests.urls
-        XCTAssertEqual(urls, ["https://api.example.com/ai/chat-draw/sessions?page=1&pageSize=20"])
+        XCTAssertEqual(urls, ["https://api.example.com/ai/chat-draw/sessions?page=1&pageSize=20&status=ACTIVE"])
     }
 
     func testSendMessageUsesLongTimeoutAndDecodesJob() async throws {

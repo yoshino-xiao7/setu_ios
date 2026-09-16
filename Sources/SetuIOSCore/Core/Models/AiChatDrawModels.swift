@@ -58,7 +58,16 @@ public struct AiChatDrawSession: Decodable, Identifiable, Sendable, Equatable {
 
     public var displayTitle: String {
         let trimmed = title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return trimmed.isEmpty ? "对话 #\(id)" : trimmed
+        let base = trimmed.isEmpty ? "对话 #\(id)" : trimmed
+        return isArchived ? "\(base)（已归档）" : base
+    }
+
+    public var isArchived: Bool {
+        (status ?? "").caseInsensitiveCompare("ARCHIVED") == .orderedSame
+    }
+
+    public var isActive: Bool {
+        !isArchived
     }
 }
 

@@ -816,11 +816,23 @@ private enum SetuPreviewAPI {
         case "/ai/chat-draw/sessions" where request.httpMethod == "POST":
             return json(aiChatDrawSession(id: 9001, title: "新的对话"))
         case "/ai/chat-draw/sessions" where request.httpMethod == "GET":
+            let status = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?
+                .queryItems?
+                .first(where: { $0.name == "status" })?
+                .value?
+                .uppercased() ?? "ACTIVE"
+            if status == "ARCHIVED" {
+                return json("{\"total\":0,\"page\":1,\"pageSize\":20,\"list\":[]}")
+            }
             return json("""
             {"total":1,"page":1,"pageSize":20,"list":[\(aiChatDrawSession(id: 9001, title: "雨夜街角"))]}
             """)
         case "/ai/chat-draw/sessions/9001":
             return json(aiChatDrawDetail(id: 9001, title: "雨夜街角", includeJob: false))
+        case "/ai/chat-draw/sessions/9001/archive" where request.httpMethod == "POST":
+            return json(aiChatDrawSession(id: 9001, title: "雨夜街角", status: "ARCHIVED"))
+        case "/ai/chat-draw/sessions/9001/unarchive" where request.httpMethod == "POST":
+            return json(aiChatDrawSession(id: 9001, title: "雨夜街角", status: "ACTIVE"))
         case "/ai/chat-draw/messages" where request.httpMethod == "POST":
             return json(aiChatDrawDetail(id: 9001, title: "雨夜街角", includeJob: true))
         case "/ai/generations" where request.httpMethod == "POST":
@@ -1148,9 +1160,9 @@ private enum SetuPreviewAPI {
     ]}
     """
 
-    private static func aiChatDrawSession(id: Int, title: String) -> String {
+    private static func aiChatDrawSession(id: Int, title: String, status: String = "ACTIVE") -> String {
         """
-        {"id":\(id),"title":"\(title)","status":"ACTIVE","usage":{"promptTokens":0,"completionTokens":0,"totalTokens":0,"cacheHitTokens":0,"cacheMissTokens":0,"reasoningTokens":0},"lastGenerationJobId":null,"createdAt":"2026-09-02T10:00:00","updatedAt":"2026-09-02T10:00:00"}
+        {"id":\(id),"title":"\(title)","status":"\(status)","usage":{"promptTokens":0,"completionTokens":0,"totalTokens":0,"cacheHitTokens":0,"cacheMissTokens":0,"reasoningTokens":0},"lastGenerationJobId":null,"createdAt":"2026-09-02T10:00:00","updatedAt":"2026-09-02T10:00:00"}
         """
     }
 

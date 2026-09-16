@@ -11,12 +11,20 @@ public struct AiChatDrawClient: Sendable {
         try await apiClient.post("/ai/chat-draw/sessions")
     }
 
-    public func listSessions(page: Int = 1, pageSize: Int = 20) async throws -> PageResult<AiChatDrawSession> {
-        try await apiClient.get("/ai/chat-draw/sessions?page=\(page)&pageSize=\(pageSize)")
+    public func listSessions(page: Int = 1, pageSize: Int = 20, status: String = "ACTIVE") async throws -> PageResult<AiChatDrawSession> {
+        try await apiClient.get("/ai/chat-draw/sessions?page=\(page)&pageSize=\(pageSize)&status=\(status)")
     }
 
     public func sessionDetail(id: Int) async throws -> AiChatDrawSessionDetail {
         try await apiClient.get("/ai/chat-draw/sessions/\(id)")
+    }
+
+    public func archiveSession(id: Int) async throws -> AiChatDrawSession {
+        try await apiClient.post("/ai/chat-draw/sessions/\(id)/archive")
+    }
+
+    public func unarchiveSession(id: Int) async throws -> AiChatDrawSession {
+        try await apiClient.post("/ai/chat-draw/sessions/\(id)/unarchive")
     }
 
     public func sendMessage(_ request: AiChatDrawSendRequest) async throws -> AiChatDrawSessionDetail {
