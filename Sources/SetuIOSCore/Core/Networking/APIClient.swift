@@ -158,8 +158,11 @@ public struct APIClient: Sendable {
         urlRequest.httpBody = encodedBody
         urlRequest.httpShouldHandleCookies = true
         urlRequest.timeoutInterval = timeoutInterval
+        urlRequest.cachePolicy = .reloadIgnoringLocalCacheData
         urlRequest.setValue("text/event-stream", forHTTPHeaderField: "Accept")
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+        urlRequest.setValue("keep-alive", forHTTPHeaderField: "Connection")
         urlRequest.setValue(requestID, forHTTPHeaderField: "X-Request-Id")
         if signed {
             let headers = try signer.signedHeaders(method: "POST", path: url.path(percentEncoded: true))
@@ -168,52 +171,60 @@ public struct APIClient: Sendable {
             }
         }
 
-        let (bytes, response) = try await session.bytes(for: urlRequest)
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw APIError.invalidResponse
-        }
+        var configuration = session.configuration
+        configuration.timeoutIntervalForRequest = timeoutInterval
+        configuration.timeoutIntervalForResource = timeoutInterval
+        configuration.httpAdditionalHeaders = [
+            "Accept": "text/event-stream",
+            "Cache-Control": "no-cache"
+        ]
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        configuration.urlCache = nil
 
-        if !(200..<300).contains(httpResponse.statusCode) {
-            var errorBody = Data()
-            for try await byte in bytes {
-                errorBody.append(byte)
-                if errorBody.count > 8_192 { break }
-            }
-            let signatureError = isSignatureErrorResponse(response: httpResponse, data: errorBody, signed: signed)
-            if retryingSignatureError,
-               signatureError,
-               await refreshSignature(force: true) {
-                try await consumeServerSentEventData(
-                    path,
-                    body: body,
-                    signed: signed,
-                    timeoutInterval: timeoutInterval,
-                    retryingSignatureError: false,
-                    continuation: continuation
-                )
-                return
-            }
-            if signed && (httpResponse.statusCode == 401 || signatureError) {
-                await sessionInvalidationNotifier?.notifyUnauthorized()
-            }
-            throw makeHTTPStatusError(response: httpResponse, data: errorBody, requestID: requestID)
-        }
-
-        var buffer = ""
-        for try await line in bytes.lines {
-            try Task.checkCancellation()
-            if line.isEmpty {
-                if let payload = AiChatDrawBilling.sseDataPayload(in: buffer) {
-                    continuation.yield(Data(payload.utf8))
+        let streamError: Error? = try await withCheckedThrowingContinuation { (done: CheckedContinuation<Error?, Error>) in
+            let box = SSEContinuationResumeBox()
+            let task = ServerSentEventDataTask(
+                requestID: requestID,
+                onEvent: { payload in
+                    continuation.yield(payload)
+                },
+                onComplete: { error in
+                    box.resume { done.resume(returning: error) }
                 }
-                buffer = ""
-            } else {
-                if !buffer.isEmpty { buffer += "\n" }
-                buffer += line
-            }
+            )
+            task.start(request: urlRequest, configuration: configuration)
         }
-        if let payload = AiChatDrawBilling.sseDataPayload(in: buffer) {
-            continuation.yield(Data(payload.utf8))
+
+        if let streamError {
+            if let apiError = streamError as? APIError,
+               case .httpStatus(let status, let message, _, _, _) = apiError {
+                let bodyData = Data((message ?? "").utf8)
+                let synthetic = HTTPURLResponse(
+                    url: url,
+                    statusCode: status,
+                    httpVersion: nil,
+                    headerFields: nil
+                )!
+                let signatureError = isSignatureErrorResponse(response: synthetic, data: bodyData, signed: signed)
+                if retryingSignatureError,
+                   signatureError,
+                   await refreshSignature(force: true) {
+                    try await consumeServerSentEventData(
+                        path,
+                        body: body,
+                        signed: signed,
+                        timeoutInterval: timeoutInterval,
+                        retryingSignatureError: false,
+                        continuation: continuation
+                    )
+                    return
+                }
+                if signed && (status == 401 || signatureError) {
+                    await sessionInvalidationNotifier?.notifyUnauthorized()
+                }
+                throw makeHTTPStatusError(response: synthetic, data: bodyData, requestID: requestID)
+            }
+            throw streamError
         }
     }
 
@@ -497,6 +508,19 @@ public final class SignatureRefreshNotifier: @unchecked Sendable {
     public func refreshSignature() async -> Bool {
         let callback = lock.withLock { self.handler }
         return await callback?() ?? false
+    }
+}
+
+private final class SSEContinuationResumeBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var resumed = false
+
+    func resume(_ body: () -> Void) {
+        lock.lock()
+        let should = !resumed
+        if should { resumed = true }
+        lock.unlock()
+        if should { body() }
     }
 }
 
