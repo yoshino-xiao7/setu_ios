@@ -9,7 +9,7 @@ extension RootAppView {
     func aiDestination(for route: AppRoute) -> some View {
         switch route {
         case .aiDraw:
-            AiDrawView(environment: environment)
+            AiChatDrawView(environment: environment)
         case .aiAssets:
             AiAssetBrowserView(environment: environment)
         case .aiHistory:

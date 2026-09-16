@@ -28,6 +28,7 @@ public final class AppEnvironment {
     public let appleAuthClient: AppleAuthClient
     public let collectionClient: CollectionClient
     public let aiGenerationClient: AiGenerationClient
+    public let aiChatDrawClient: AiChatDrawClient
     public let favoriteClient: FavoriteClient
     public let moduleFavoriteClient: ModuleFavoriteClient
     public let moduleWatchHistoryStore: ModuleWatchHistoryStore
@@ -63,6 +64,7 @@ public final class AppEnvironment {
         appleAuthClient: AppleAuthClient,
         collectionClient: CollectionClient,
         aiGenerationClient: AiGenerationClient,
+        aiChatDrawClient: AiChatDrawClient? = nil,
         favoriteClient: FavoriteClient,
         moduleFavoriteClient: ModuleFavoriteClient? = nil,
         asmrCatalogClient: AsmrCatalogClient = AsmrCatalogClient(),
@@ -95,6 +97,7 @@ public final class AppEnvironment {
         self.appleAuthClient = appleAuthClient
         self.collectionClient = collectionClient
         self.aiGenerationClient = aiGenerationClient
+        self.aiChatDrawClient = aiChatDrawClient ?? AiChatDrawClient(apiClient: apiClient)
         self.favoriteClient = favoriteClient
         self.moduleFavoriteClient = moduleFavoriteClient ?? ModuleFavoriteClient(apiClient: apiClient)
         self.moduleWatchHistoryStore = ModuleWatchHistoryStore(ownerID: {
@@ -152,6 +155,7 @@ public final class AppEnvironment {
         let appleAuthClient = AppleAuthClient(apiClient: client)
         let collectionClient = CollectionClient(apiClient: client)
         let aiGenerationClient = AiGenerationClient(apiClient: client)
+        let aiChatDrawClient = AiChatDrawClient(apiClient: client)
         let favoriteClient = FavoriteClient(apiClient: client)
         let imageDeleteRequestClient = ImageDeleteRequestClient(apiClient: client)
         let musicClient = MusicClient(apiClient: client)
@@ -185,6 +189,7 @@ public final class AppEnvironment {
             appleAuthClient: appleAuthClient,
             collectionClient: collectionClient,
             aiGenerationClient: aiGenerationClient,
+            aiChatDrawClient: aiChatDrawClient,
             favoriteClient: favoriteClient,
             moduleFavoriteClient: ModuleFavoriteClient(apiClient: client),
             asmrCatalogClient: AsmrCatalogClient(),

@@ -82,7 +82,9 @@ final class ProductAccessibilityUITests: XCTestCase {
         XCTAssertTrue(app.buttons["image.unlock"].waitForExistence(timeout: 8))
         XCTAssertTrue(app.buttons["image.unlock"].isHittable)
         app.tabBars.buttons["AI 绘画"].tap()
-        let prompt = app.textFields["ai.draw.prompt"].firstMatch
+        let prompt = app.textViews["ai.draw.prompt"].firstMatch.exists
+            ? app.textViews["ai.draw.prompt"].firstMatch
+            : app.textFields["ai.draw.prompt"].firstMatch
         XCTAssertTrue(prompt.waitForExistence(timeout: 8))
         XCTAssertTrue(prompt.isHittable)
         XCTAssertTrue(app.buttons["ai.draw.generate"].isHittable)

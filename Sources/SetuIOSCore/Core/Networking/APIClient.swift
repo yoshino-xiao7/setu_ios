@@ -78,14 +78,143 @@ public struct APIClient: Sendable {
         _ path: String,
         body: Request,
         signed: Bool = true,
-        headers: [String: String] = [:]
+        headers: [String: String] = [:],
+        timeoutInterval: TimeInterval? = nil
     ) async throws -> Value {
         let data = try encoder.encode(body)
-        return try await request(path, method: "POST", body: data, signed: signed, headers: headers)
+        return try await request(
+            path,
+            method: "POST",
+            body: data,
+            signed: signed,
+            headers: headers,
+            timeoutInterval: timeoutInterval
+        )
     }
 
-    public func post<Value: Decodable & Sendable>(_ path: String, signed: Bool = true) async throws -> Value {
-        try await request(path, method: "POST", body: Optional<Data>.none, signed: signed)
+    public func post<Value: Decodable & Sendable>(
+        _ path: String,
+        signed: Bool = true,
+        timeoutInterval: TimeInterval? = nil
+    ) async throws -> Value {
+        try await request(
+            path,
+            method: "POST",
+            body: Optional<Data>.none,
+            signed: signed,
+            timeoutInterval: timeoutInterval
+        )
+    }
+
+    /// Streams Server-Sent Event `data:` payloads from a signed JSON POST.
+    public func postServerSentEventData<Body: Encodable & Sendable>(
+        _ path: String,
+        body: Body,
+        signed: Bool = true,
+        timeoutInterval: TimeInterval = 600,
+        retryingSignatureError: Bool = true
+    ) -> AsyncThrowingStream<Data, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    try await self.consumeServerSentEventData(
+                        path,
+                        body: body,
+                        signed: signed,
+                        timeoutInterval: timeoutInterval,
+                        retryingSignatureError: retryingSignatureError,
+                        continuation: continuation
+                    )
+                    continuation.finish()
+                } catch is CancellationError {
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
+        }
+    }
+
+    private func consumeServerSentEventData<Body: Encodable & Sendable>(
+        _ path: String,
+        body: Body,
+        signed: Bool,
+        timeoutInterval: TimeInterval,
+        retryingSignatureError: Bool,
+        continuation: AsyncThrowingStream<Data, Error>.Continuation
+    ) async throws {
+        guard let url = URL(string: path, relativeTo: config.apiBaseURL) else {
+            throw APIError.invalidURL(path)
+        }
+
+        await refreshSignatureIfNeeded(signed: signed)
+        let requestID = Self.makeRequestID()
+        let encodedBody = try encoder.encode(body)
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "POST"
+        urlRequest.httpBody = encodedBody
+        urlRequest.httpShouldHandleCookies = true
+        urlRequest.timeoutInterval = timeoutInterval
+        urlRequest.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.setValue(requestID, forHTTPHeaderField: "X-Request-Id")
+        if signed {
+            let headers = try signer.signedHeaders(method: "POST", path: url.path(percentEncoded: true))
+            for (name, value) in headers {
+                urlRequest.setValue(value, forHTTPHeaderField: name)
+            }
+        }
+
+        let (bytes, response) = try await session.bytes(for: urlRequest)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        if !(200..<300).contains(httpResponse.statusCode) {
+            var errorBody = Data()
+            for try await byte in bytes {
+                errorBody.append(byte)
+                if errorBody.count > 8_192 { break }
+            }
+            let signatureError = isSignatureErrorResponse(response: httpResponse, data: errorBody, signed: signed)
+            if retryingSignatureError,
+               signatureError,
+               await refreshSignature(force: true) {
+                try await consumeServerSentEventData(
+                    path,
+                    body: body,
+                    signed: signed,
+                    timeoutInterval: timeoutInterval,
+                    retryingSignatureError: false,
+                    continuation: continuation
+                )
+                return
+            }
+            if signed && (httpResponse.statusCode == 401 || signatureError) {
+                await sessionInvalidationNotifier?.notifyUnauthorized()
+            }
+            throw makeHTTPStatusError(response: httpResponse, data: errorBody, requestID: requestID)
+        }
+
+        var buffer = ""
+        for try await line in bytes.lines {
+            try Task.checkCancellation()
+            if line.isEmpty {
+                if let payload = AiChatDrawBilling.sseDataPayload(in: buffer) {
+                    continuation.yield(Data(payload.utf8))
+                }
+                buffer = ""
+            } else {
+                if !buffer.isEmpty { buffer += "\n" }
+                buffer += line
+            }
+        }
+        if let payload = AiChatDrawBilling.sseDataPayload(in: buffer) {
+            continuation.yield(Data(payload.utf8))
+        }
     }
 
     public func put<Request: Encodable & Sendable, Value: Decodable & Sendable>(
@@ -207,6 +336,7 @@ public struct APIClient: Sendable {
         body: Data?,
         signed: Bool,
         headers: [String: String] = [:],
+        timeoutInterval: TimeInterval? = nil,
         retryingSignatureError: Bool = true
     ) async throws -> Value {
         guard let url = URL(string: path, relativeTo: config.apiBaseURL) else {
@@ -221,6 +351,9 @@ public struct APIClient: Sendable {
         urlRequest.httpShouldHandleCookies = true
         urlRequest.setValue("application/json", forHTTPHeaderField: "Accept")
         urlRequest.setValue(requestID, forHTTPHeaderField: "X-Request-Id")
+        if let timeoutInterval {
+            urlRequest.timeoutInterval = timeoutInterval
+        }
         if path.hasPrefix("/user/music/") || path.hasPrefix("/user/playlists") {
             urlRequest.setValue(MusicClientRelease.current, forHTTPHeaderField: "X-Setu-Client")
         }
@@ -251,7 +384,15 @@ public struct APIClient: Sendable {
         if retryingSignatureError,
            signatureError,
            await refreshSignature(force: true) {
-            return try await request(path, method: method, body: body, signed: signed, headers: headers, retryingSignatureError: false)
+            return try await request(
+                path,
+                method: method,
+                body: body,
+                signed: signed,
+                headers: headers,
+                timeoutInterval: timeoutInterval,
+                retryingSignatureError: false
+            )
         }
         if signed && (httpResponse.statusCode == 401 || signatureError) {
             await sessionInvalidationNotifier?.notifyUnauthorized()

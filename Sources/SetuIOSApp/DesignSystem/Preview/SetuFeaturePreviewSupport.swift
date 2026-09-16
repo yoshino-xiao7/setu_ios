@@ -62,6 +62,7 @@ struct SetuFeaturePreviewHost<Content: View>: View {
             : AiDrawDraft()
         AiAssetBrowserCacheStore.activatePreviewStorage()
         AiDrawDraftStore.activatePreviewStorage(with: previewDraft)
+        AiChatDrawComposerStore.activatePreviewStorage(with: previewDraft.promptCn)
         let environment = SetuPreviewEnvironment.make()
         let player = MusicPlaybackController(persistsPlayback: false)
         if playerState == .listening {
@@ -124,6 +125,7 @@ private struct SetuRootUITestContext {
     init() {
         AiAssetBrowserCacheStore.activatePreviewStorage()
         AiDrawDraftStore.activatePreviewStorage(with: SetuPreviewFixtures.aiDrawDraft)
+        AiChatDrawComposerStore.activatePreviewStorage(with: SetuPreviewFixtures.aiDrawDraft.promptCn)
         let environment = SetuPreviewEnvironment.make()
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-welcome-fixture") {
             environment.authSession.resetLocalSession()
@@ -238,7 +240,7 @@ private struct SetuAiDraftUITestHarness: View {
         .accessibilityIdentifier("ai.draft.open")
         .sheet(isPresented: $showingEditor) {
             NavigationStack {
-                AiDrawView(environment: environment)
+                AiChatDrawView(environment: environment)
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
                             Button("离开创作") {
@@ -350,7 +352,7 @@ struct SetuSquareHubUITestScenario: View {
 struct SetuAiHubUITestScenario: View {
     var body: some View {
         SetuFeaturePreviewHost { environment, _ in
-            AiDrawView(environment: environment)
+            AiChatDrawView(environment: environment)
         }
     }
 }
@@ -777,12 +779,17 @@ private enum SetuPreviewAPI {
             return json("{\"message\":\"模拟公开图片不可用\"}", statusCode: 503)
         }
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-translate-401"),
-           !loggedInAfterExpiry, path == "/ai/prompt/translate" {
+           !loggedInAfterExpiry, path == "/ai/chat-draw/messages" {
             return json("{\"message\":\"登录已过期\"}", statusCode: 401)
         }
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-401"),
            !loggedInAfterExpiry,
-           path == "/user/info" || path == "/ai/status" || path == "/mobile/images/feed" || path == "/favorite/list" || path.hasPrefix("/user/music/") {
+           path == "/user/info"
+            || path == "/ai/status"
+            || path.hasPrefix("/ai/chat-draw/")
+            || path == "/mobile/images/feed"
+            || path == "/favorite/list"
+            || path.hasPrefix("/user/music/") {
             return json("{\"message\":\"登录已过期\"}", statusCode: 401)
         }
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-root-feed-expiry"), path == "/mobile/images/feed/consume" {
@@ -806,6 +813,16 @@ private enum SetuPreviewAPI {
             return json("{\"count\":0}")
         case "/ai/prompt/translate":
             return json("{\"status\":\"COMPLETED\",\"positive\":\"silver hair, rainy street\",\"negative\":\"blur\"}")
+        case "/ai/chat-draw/sessions" where request.httpMethod == "POST":
+            return json(aiChatDrawSession(id: 9001, title: "新的对话"))
+        case "/ai/chat-draw/sessions" where request.httpMethod == "GET":
+            return json("""
+            {"total":1,"page":1,"pageSize":20,"list":[\(aiChatDrawSession(id: 9001, title: "雨夜街角"))]}
+            """)
+        case "/ai/chat-draw/sessions/9001":
+            return json(aiChatDrawDetail(id: 9001, title: "雨夜街角", includeJob: false))
+        case "/ai/chat-draw/messages" where request.httpMethod == "POST":
+            return json(aiChatDrawDetail(id: 9001, title: "雨夜街角", includeJob: true))
         case "/ai/generations" where request.httpMethod == "POST":
             return json(aiJob(id: 501, prompt: "银发少女站在雨夜街角，霓虹灯倒映在路面，电影感柔光", status: "COMPLETED", reviewStatus: "PENDING", category: nil, createdAt: "2026-09-02T10:00:00+08:00"))
         case "/ai/generations/501":
@@ -1130,6 +1147,40 @@ private enum SetuPreviewAPI {
       \(aiJob(id: 604, prompt: "森林深处的玻璃花房", status: "COMPLETED", reviewStatus: "APPROVED", category: "GENERAL", createdAt: "2026-07-08T16:45:00+08:00"))
     ]}
     """
+
+    private static func aiChatDrawSession(id: Int, title: String) -> String {
+        """
+        {"id":\(id),"title":"\(title)","status":"ACTIVE","usage":{"promptTokens":0,"completionTokens":0,"totalTokens":0,"cacheHitTokens":0,"cacheMissTokens":0,"reasoningTokens":0},"lastGenerationJobId":null,"createdAt":"2026-09-02T10:00:00","updatedAt":"2026-09-02T10:00:00"}
+        """
+    }
+
+    private static func aiChatDrawDetail(id: Int, title: String, includeJob: Bool) -> String {
+        let job = aiJob(
+            id: 501,
+            prompt: "银发少女站在雨夜街角，霓虹灯倒映在路面，电影感柔光",
+            status: "COMPLETED",
+            reviewStatus: "PENDING",
+            category: nil,
+            createdAt: "2026-09-02T10:00:00+08:00"
+        )
+        let assistantMessage: String
+        if includeJob {
+            assistantMessage = """
+            {"id":2,"role":"assistant","content":"好的，我已经按你的描述安排生成。","reasoningContent":null,"usage":{"promptTokens":120,"completionTokens":80,"totalTokens":200,"cacheHitTokens":0,"cacheMissTokens":120,"reasoningTokens":0},"generationJobId":501,"generationJob":\(job),"pointsCost":0,"pointsCharged":false,"pointsRefunded":false,"adminFree":false,"status":"COMPLETED","errorMessage":null,"createdAt":"2026-09-02T10:00:05"}
+            """
+        } else {
+            assistantMessage = """
+            {"id":2,"role":"assistant","content":"直接告诉我你想画什么吧。","reasoningContent":null,"usage":null,"generationJobId":null,"generationJob":null,"pointsCost":0,"pointsCharged":false,"pointsRefunded":false,"adminFree":false,"status":"COMPLETED","errorMessage":null,"createdAt":"2026-09-02T10:00:01"}
+            """
+        }
+        let userMessage = """
+        {"id":1,"role":"user","content":"银发少女站在雨夜街角，霓虹灯倒映在路面，电影感柔光","reasoningContent":null,"usage":null,"generationJobId":null,"generationJob":null,"pointsCost":1,"pointsCharged":true,"pointsRefunded":false,"adminFree":false,"status":"COMPLETED","errorMessage":null,"createdAt":"2026-09-02T10:00:00"}
+        """
+        let messages = includeJob ? "[\(userMessage),\(assistantMessage)]" : "[]"
+        return """
+        {"session":\(aiChatDrawSession(id: id, title: title)),"messages":\(messages),"cost":0,"tokensPerPoint":1000,"rateLimitSeconds":30,"retryAfterSeconds":0,"adminFree":false}
+        """
+    }
 
     private static func aiJob(
         id: Int,

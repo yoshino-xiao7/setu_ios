@@ -489,7 +489,7 @@ struct RootAppView: View {
         case .home:
             DashboardView(environment: environment, player: musicPlayer)
         case .ai:
-            AiDrawView(environment: environment)
+            AiChatDrawView(environment: environment)
         case .images:
             ArtworkBrowserView(environment: environment)
         case .music:
