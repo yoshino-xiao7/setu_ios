@@ -8,6 +8,7 @@ struct AiChatDrawView: View {
 
     @AppStorage("setu_has_explained_generation_notifications") private var hasExplainedGenerationNotifications = false
     @State private var sessions: [AiChatDrawSession] = []
+    @State private var archivedSessions: [AiChatDrawSession] = []
     @State private var detail: AiChatDrawSessionDetail?
     @State private var jobOverrides: [Int: AiGenerationJob] = [:]
     @State private var input = ""
@@ -37,11 +38,13 @@ struct AiChatDrawView: View {
 
     private var canSend: Bool {
         !isSending
+            && !(detail?.session.isArchived ?? false)
             && cooldownSeconds <= 0
             && !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private var sendButtonTitle: String {
+        if detail?.session.isArchived == true { return "已归档，取消归档后可继续" }
         if isSending { return "思考并绘画中…" }
         if cooldownSeconds > 0 { return "请 \(cooldownSeconds) 秒后再对话" }
         if isAdmin { return "发送，管理员免费" }
@@ -105,7 +108,7 @@ struct AiChatDrawView: View {
                 Menu {
                     Section("对话") {
                         if sessions.isEmpty {
-                            Text("暂无历史对话")
+                            Text("暂无进行中的对话")
                         } else {
                             ForEach(sessions) { session in
                                 Button {
@@ -120,6 +123,41 @@ struct AiChatDrawView: View {
                             }
                         }
                     }
+
+                    if !archivedSessions.isEmpty {
+                        Section("已归档") {
+                            ForEach(archivedSessions) { session in
+                                Button {
+                                    Task { await loadSession(id: session.id) }
+                                } label: {
+                                    if session.id == detail?.session.id {
+                                        Label(session.displayTitle, systemImage: "checkmark")
+                                    } else {
+                                        Text(session.displayTitle)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Section("当前对话") {
+                        if let current = detail?.session, current.isActive {
+                            Button {
+                                Task { await archiveCurrentSession() }
+                            } label: {
+                                Label("归档当前对话", systemImage: "archivebox")
+                            }
+                            .disabled(isLoading || isSending)
+                        } else if detail?.session.isArchived == true {
+                            Button {
+                                Task { await unarchiveCurrentSession() }
+                            } label: {
+                                Label("取消归档", systemImage: "arrow.uturn.backward")
+                            }
+                            .disabled(isLoading || isSending)
+                        }
+                    }
+
                     Section("更多") {
                         Button {
                             router.navigate(to: .aiHistory)
@@ -460,7 +498,7 @@ struct AiChatDrawView: View {
                 TextField("描述你想画的画面", text: $input, axis: .vertical)
                     .lineLimit(1...6)
                     .focused($isComposerFocused)
-                    .disabled(isSending)
+                    .disabled(isSending || detail?.session.isArchived == true)
                     .textFieldStyle(.plain)
                     .padding(.vertical, 8)
                     .accessibilityIdentifier("ai.draw.prompt")
@@ -522,11 +560,15 @@ struct AiChatDrawView: View {
         userFacingError = nil
         defer { isLoading = false }
         do {
-            let page = try await environment.aiChatDrawClient.listSessions(page: 1, pageSize: 20)
-            sessions = page.list
+            async let activePage = environment.aiChatDrawClient.listSessions(page: 1, pageSize: 20, status: "ACTIVE")
+            async let archivedPage = environment.aiChatDrawClient.listSessions(page: 1, pageSize: 20, status: "ARCHIVED")
+            let active = try await activePage
+            let archived = try await archivedPage
+            sessions = active.list
+            archivedSessions = archived.list
             if let currentID = detail?.session.id {
                 await loadSession(id: currentID)
-            } else if let latest = page.list.first {
+            } else if let latest = active.list.first {
                 await loadSession(id: latest.id)
             } else {
                 await startNewConversation()
@@ -571,6 +613,50 @@ struct AiChatDrawView: View {
         } catch {
             userFacingError = UserFacingErrorMapper.map(error)
             feedback = .error("加载对话失败")
+        }
+    }
+
+    @MainActor
+    private func archiveCurrentSession() async {
+        guard let sessionID = detail?.session.id, detail?.session.isActive == true else { return }
+        isLoading = true
+        userFacingError = nil
+        defer { isLoading = false }
+        do {
+            _ = try await environment.aiChatDrawClient.archiveSession(id: sessionID)
+            feedback = .success("对话已归档")
+            let active = try await environment.aiChatDrawClient.listSessions(page: 1, pageSize: 20, status: "ACTIVE")
+            let archived = try await environment.aiChatDrawClient.listSessions(page: 1, pageSize: 20, status: "ARCHIVED")
+            sessions = active.list
+            archivedSessions = archived.list
+            if let next = active.list.first {
+                await loadSession(id: next.id)
+            } else {
+                await startNewConversation()
+            }
+        } catch {
+            userFacingError = UserFacingErrorMapper.map(error)
+            feedback = .error("归档失败")
+        }
+    }
+
+    @MainActor
+    private func unarchiveCurrentSession() async {
+        guard let sessionID = detail?.session.id, detail?.session.isArchived == true else { return }
+        isLoading = true
+        userFacingError = nil
+        defer { isLoading = false }
+        do {
+            _ = try await environment.aiChatDrawClient.unarchiveSession(id: sessionID)
+            feedback = .success("已取消归档")
+            applyDetail(try await environment.aiChatDrawClient.sessionDetail(id: sessionID))
+            let active = try await environment.aiChatDrawClient.listSessions(page: 1, pageSize: 20, status: "ACTIVE")
+            let archived = try await environment.aiChatDrawClient.listSessions(page: 1, pageSize: 20, status: "ARCHIVED")
+            sessions = active.list
+            archivedSessions = archived.list
+        } catch {
+            userFacingError = UserFacingErrorMapper.map(error)
+            feedback = .error("取消归档失败")
         }
     }
 
@@ -759,10 +845,21 @@ struct AiChatDrawView: View {
     @MainActor
     private func applyDetail(_ next: AiChatDrawSessionDetail) {
         detail = next
-        if sessions.contains(where: { $0.id == next.session.id }) {
-            sessions = sessions.map { $0.id == next.session.id ? next.session : $0 }
+        let session = next.session
+        if session.isArchived {
+            sessions = sessions.filter { $0.id != session.id }
+            if archivedSessions.contains(where: { $0.id == session.id }) {
+                archivedSessions = archivedSessions.map { $0.id == session.id ? session : $0 }
+            } else {
+                archivedSessions.insert(session, at: 0)
+            }
         } else {
-            sessions.insert(next.session, at: 0)
+            archivedSessions = archivedSessions.filter { $0.id != session.id }
+            if sessions.contains(where: { $0.id == session.id }) {
+                sessions = sessions.map { $0.id == session.id ? session : $0 }
+            } else {
+                sessions.insert(session, at: 0)
+            }
         }
         applyCooldown(AiChatDrawBilling.cooldownSeconds(retryAfterSeconds: next.retryAfterSeconds))
     }
