@@ -85,6 +85,7 @@ public struct AiChatDrawMessage: Decodable, Identifiable, Sendable {
     public let adminFree: Bool
     public let status: String?
     public let errorMessage: String?
+    public let followUps: [String]
     public let createdAt: String?
 
     public init(from decoder: Decoder) throws {
@@ -102,6 +103,9 @@ public struct AiChatDrawMessage: Decodable, Identifiable, Sendable {
         adminFree = try container.decodeIfPresent(Bool.self, forKey: .adminFree) ?? false
         status = try container.decodeIfPresent(String.self, forKey: .status)
         errorMessage = try container.decodeIfPresent(String.self, forKey: .errorMessage)
+        followUps = (try container.decodeIfPresent([String].self, forKey: .followUps) ?? [])
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
         createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
     }
 
@@ -113,7 +117,7 @@ public struct AiChatDrawMessage: Decodable, Identifiable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case id, role, content, reasoningContent, usage, generationJobId, generationJob
-        case pointsCost, pointsCharged, pointsRefunded, adminFree, status, errorMessage, createdAt
+        case pointsCost, pointsCharged, pointsRefunded, adminFree, status, errorMessage, followUps, createdAt
     }
 }
 
@@ -183,6 +187,7 @@ public struct AiChatDrawStreamEvent: Decodable, Sendable {
     public let message: String?
     public let content: String?
     public let job: AiGenerationJob?
+    public let followUps: [String]?
     public let detail: AiChatDrawSessionDetail?
 
     public var kind: Kind {
@@ -194,6 +199,7 @@ public struct AiChatDrawStreamEvent: Decodable, Sendable {
         case delta
         case reasoning
         case job
+        case followUps = "follow_ups"
         case done
         case error
         case unknown
@@ -205,17 +211,20 @@ public struct AiChatDrawStreamingDraft: Sendable {
     public var content: String
     public var reasoningContent: String
     public var job: AiGenerationJob?
+    public var followUps: [String]
 
     public init(
         status: String = "正在思考…",
         content: String = "",
         reasoningContent: String = "",
-        job: AiGenerationJob? = nil
+        job: AiGenerationJob? = nil,
+        followUps: [String] = []
     ) {
         self.status = status
         self.content = content
         self.reasoningContent = reasoningContent
         self.job = job
+        self.followUps = followUps
     }
 
     public mutating func apply(_ event: AiChatDrawStreamEvent) throws {
@@ -228,6 +237,11 @@ public struct AiChatDrawStreamingDraft: Sendable {
             if let content = event.content { reasoningContent += content }
         case .job:
             if let job = event.job { self.job = job }
+        case .followUps:
+            let items = (event.followUps ?? [])
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+            if !items.isEmpty { followUps = items }
         case .error:
             throw APIError.httpStatus(
                 500,

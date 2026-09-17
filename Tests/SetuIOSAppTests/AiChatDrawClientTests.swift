@@ -30,6 +30,34 @@ final class AiChatDrawClientTests: XCTestCase {
         XCTAssertEqual(urls, ["https://api.example.com/ai/chat-draw/sessions?page=1&pageSize=20&status=ACTIVE"])
     }
 
+    func testAssistantMessageDecodesModelFollowUps() throws {
+        let json = """
+        {"session":{"id":11,"status":"ACTIVE"},"messages":[{"id":2,"role":"assistant","content":"已开始出图。","followUps":["把枪放下改成叉腰","换成夜晚泳池灯光"],"pointsCost":0,"pointsCharged":false,"pointsRefunded":false,"adminFree":false}]}
+        """
+        let detail = try JSONDecoder().decode(AiChatDrawSessionDetail.self, from: Data(json.utf8))
+        XCTAssertEqual(detail.messages.last?.followUps, ["把枪放下改成叉腰", "换成夜晚泳池灯光"])
+    }
+
+    func testFollowUpsStayEmptyWhenModelOmitsThem() throws {
+        let json = """
+        {"session":{"id":3,"status":"ACTIVE"},"messages":[{"id":1,"role":"user","content":"画一个泳池少女"},{"id":2,"role":"assistant","content":"先确认构图","pointsCost":0,"pointsCharged":false,"pointsRefunded":false,"adminFree":false}]}
+        """
+        let detail = try JSONDecoder().decode(AiChatDrawSessionDetail.self, from: Data(json.utf8))
+        XCTAssertEqual(detail.messages.last?.followUps ?? [], [])
+    }
+
+    func testStreamEventDecodesFollowUpsKind() throws {
+        let event = try JSONDecoder().decode(
+            AiChatDrawStreamEvent.self,
+            from: Data(#"{"type":"follow_ups","followUps":["把枪放下改成叉腰"]}"#.utf8)
+        )
+        XCTAssertEqual(event.kind, .followUps)
+        XCTAssertEqual(event.followUps, ["把枪放下改成叉腰"])
+        var draft = AiChatDrawStreamingDraft()
+        try draft.apply(event)
+        XCTAssertEqual(draft.followUps, ["把枪放下改成叉腰"])
+    }
+
     func testSendMessageUsesLongTimeoutAndDecodesJob() async throws {
         let capturedRequests = AiChatDrawClientRequestProbe()
         let session = URLSession(
