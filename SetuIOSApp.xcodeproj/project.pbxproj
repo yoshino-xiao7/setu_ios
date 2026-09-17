@@ -175,6 +175,7 @@
 		6B5D0083B10D64D4B09718BF /* SetuIOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA9BD954C658365380A65DDC /* SetuIOSApp.swift */; };
 		6B7215AD866D75D079A01750 /* LyricStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C7F242D5B50143A4E42A21F /* LyricStore.swift */; };
 		6C0B4327E92224069AA41836 /* AiChatDrawComposerStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B6681D3D20D065C4A669631 /* AiChatDrawComposerStore.swift */; };
+		6C429761DD65486F98A482C1 /* ServerSentEventDataTask.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88DDCB59AD9F2ECF76CE8C39 /* ServerSentEventDataTask.swift */; };
 		6D746765E58DC18DEC040FF5 /* HanimeFavoriteListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4938EFF1E2F082CBB92CFF28 /* HanimeFavoriteListView.swift */; };
 		6DE2DEE83653A28BFC8321D9 /* ModuleFavoriteButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44C429029A4A9C9238B27ECB /* ModuleFavoriteButton.swift */; };
 		6E4D9D84BEC036EA6374A6E5 /* ImageFeedModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDF8065685CFC878C827FD4B /* ImageFeedModels.swift */; };
@@ -755,6 +756,7 @@
 		87730FD34122BBCA9318FA83 /* CloudVideoTUSClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudVideoTUSClient.swift; sourceTree = "<group>"; };
 		879D7C16B2B972A0397B64EE /* SetuRemoteImageCacheTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuRemoteImageCacheTests.swift; sourceTree = "<group>"; };
 		88356E53B85F73BFBDABA178 /* AiDrawPromptComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AiDrawPromptComposer.swift; sourceTree = "<group>"; };
+		88DDCB59AD9F2ECF76CE8C39 /* ServerSentEventDataTask.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerSentEventDataTask.swift; sourceTree = "<group>"; };
 		89FF216152743D0333DC42F6 /* CloudVideoDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudVideoDetailView.swift; sourceTree = "<group>"; };
 		8AACE9FE15AAC322B8ACF7D2 /* ImageBrowseLayoutUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageBrowseLayoutUITests.swift; sourceTree = "<group>"; };
 		8DCB470385749A8792B64C44 /* AdminOverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminOverviewView.swift; sourceTree = "<group>"; };
@@ -1600,6 +1602,7 @@
 				D75492959910E7359FA9B733 /* PixivLoginTunnel.swift */,
 				04D5FD33628FDD90D4A0D356 /* PointsClient.swift */,
 				5D0BA5D97774BD712BA7B0D5 /* PublicBlogClient.swift */,
+				88DDCB59AD9F2ECF76CE8C39 /* ServerSentEventDataTask.swift */,
 				1D158678413750E76CB24D96 /* StatusClient.swift */,
 				B9EA6361A9D71F6D1E165250 /* UserProfileClient.swift */,
 			);
@@ -2501,6 +2504,7 @@
 				ECE478935506288511B010EC /* PointsClient.swift in Sources */,
 				A415C23CB36B44C6F1FAA819 /* PointsModels.swift in Sources */,
 				B223297B52026A49479A170F /* PublicBlogClient.swift in Sources */,
+				6C429761DD65486F98A482C1 /* ServerSentEventDataTask.swift in Sources */,
 				89C3F3AE8EA3F8D0FC889505 /* StatusClient.swift in Sources */,
 				802F3E3139B2AD9D6F218D25 /* UserFacingError.swift in Sources */,
 				1610A0C7B98958B838D2F91F /* UserProfileClient.swift in Sources */,

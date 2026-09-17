@@ -112,6 +112,23 @@ final class AiChatDrawClientTests: XCTestCase {
         XCTAssertEqual(payloads.remainder, "")
     }
 
+    func testSSEDataTaskDrainsIncrementalChunks() {
+        var buffer = Data()
+        buffer.append(contentsOf: #"data: {"type":"status","message":"hi"}"#.utf8)
+        buffer.append(contentsOf: "\n\n".utf8)
+        buffer.append(contentsOf: #"data: {"type":"delta","content":"你"#.utf8)
+        let first = ServerSentEventDataTask.drainSSEPayloads(from: &buffer)
+        XCTAssertEqual(first.count, 1)
+        XCTAssertEqual(String(data: first[0], encoding: .utf8), #"{"type":"status","message":"hi"}"#)
+        XCTAssertFalse(buffer.isEmpty)
+
+        buffer.append(contentsOf: #"好"}\n\n"#.utf8)
+        let second = ServerSentEventDataTask.drainSSEPayloads(from: &buffer)
+        XCTAssertEqual(second.count, 1)
+        XCTAssertEqual(String(data: second[0], encoding: .utf8), #"{"type":"delta","content":"你好"}"#)
+        XCTAssertTrue(buffer.isEmpty)
+    }
+
     func testBillingHelpers() {
         XCTAssertEqual(AiChatDrawBilling.pricingText(tokensPerPoint: 1000), "每 1000 Token = 1 积分")
         XCTAssertEqual(AiChatDrawBilling.parseRetrySeconds(from: "请 18 秒后再试"), 18)
@@ -139,6 +156,35 @@ final class AiChatDrawClientTests: XCTestCase {
                     messages: []
                 )
             ) == false
+        )
+
+        let userOnly = try JSONDecoder().decode(
+            AiChatDrawSessionDetail.self,
+            from: Data(#"""
+            {"session":{"id":1,"title":"t","status":"ACTIVE"},"messages":[{"id":1,"role":"user","content":"画一只猫","status":"COMPLETED"}],"tokensPerPoint":1000,"rateLimitSeconds":30}
+            """#.utf8)
+        )
+        XCTAssertTrue(AiChatDrawBilling.userTurnPersisted(content: "画一只猫", detail: userOnly))
+        XCTAssertFalse(
+            AiChatDrawBilling.turnLikelySucceeded(
+                content: "画一只猫",
+                previousMessageCount: 0,
+                detail: userOnly
+            )
+        )
+
+        let withAssistant = try JSONDecoder().decode(
+            AiChatDrawSessionDetail.self,
+            from: Data(#"""
+            {"session":{"id":1,"title":"t","status":"ACTIVE"},"messages":[{"id":1,"role":"user","content":"画一只猫","status":"COMPLETED"},{"id":2,"role":"assistant","content":"好的，开始画。","generationJobId":9,"status":"COMPLETED"}],"tokensPerPoint":1000,"rateLimitSeconds":30}
+            """#.utf8)
+        )
+        XCTAssertTrue(
+            AiChatDrawBilling.turnLikelySucceeded(
+                content: "画一只猫",
+                previousMessageCount: 0,
+                detail: withAssistant
+            )
         )
     }
 

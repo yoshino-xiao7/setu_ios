@@ -304,6 +304,8 @@ public enum AiChatDrawBilling {
             || message.localizedCaseInsensitiveContains("AI_CHAT_DRAW_STREAM_CLOSED")
     }
 
+    /// Recover only when the matching user turn already has a visible assistant reply
+    /// (text and/or generation job). User-only rows mean the turn is still running.
     public static func turnLikelySucceeded(
         content: String,
         previousMessageCount: Int,
@@ -312,6 +314,45 @@ public enum AiChatDrawBilling {
         guard let detail, detail.messages.count > previousMessageCount else { return false }
         let normalized = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty else { return false }
+        guard let userIndex = detail.messages.lastIndex(where: {
+            $0.isUser && ($0.content ?? "").trimmingCharacters(in: .whitespacesAndNewlines) == normalized
+        }) else {
+            return false
+        }
+        return detail.messages.suffix(from: detail.messages.index(after: userIndex)).contains { message in
+            guard !message.isUser else { return false }
+            let hasText = !(message.content ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .isEmpty
+            let hasJob = message.generationJobId != nil || message.generationJob != nil
+            return hasText || hasJob
+        }
+    }
+
+    /// Backoff used when SSE ends without `done` while the server may still be finishing.
+    /// Spans a few minutes so long LLM/tool turns can still surface after a silent disconnect.
+    public static let recoverPollDelaysNanoseconds: [UInt64] = [
+        0,
+        500_000_000,
+        1_000_000_000,
+        2_000_000_000,
+        3_000_000_000,
+        5_000_000_000,
+        8_000_000_000,
+        12_000_000_000,
+        20_000_000_000,
+        20_000_000_000,
+        30_000_000_000,
+        30_000_000_000,
+        30_000_000_000,
+    ]
+
+    public static func userTurnPersisted(
+        content: String,
+        detail: AiChatDrawSessionDetail?
+    ) -> Bool {
+        let normalized = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty, let detail else { return false }
         return detail.messages.contains {
             $0.isUser && ($0.content ?? "").trimmingCharacters(in: .whitespacesAndNewlines) == normalized
         }

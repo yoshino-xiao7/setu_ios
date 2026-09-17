@@ -236,8 +236,15 @@ struct AiChatDrawView: View {
                         }
 
                         if let pendingUserMessage {
-                            userBubbleText(pendingUserMessage)
-                                .id("pending-user")
+                            let alreadyPersisted = messages.contains {
+                                $0.isUser
+                                    && ($0.content ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                                    == pendingUserMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+                            }
+                            if !alreadyPersisted {
+                                userBubbleText(pendingUserMessage)
+                                    .id("pending-user")
+                            }
                         }
 
                         if let streamingDraft {
@@ -323,20 +330,32 @@ struct AiChatDrawView: View {
 
     private func streamingAssistantBlock(_ draft: AiChatDrawStreamingDraft) -> some View {
         VStack(alignment: .leading, spacing: SetuSpacing.md) {
-            if draft.content.isEmpty {
+            if !draft.status.isEmpty {
                 HStack(spacing: SetuSpacing.sm) {
-                    ProgressView()
+                    if draft.content.isEmpty {
+                        ProgressView()
+                    }
                     Text(draft.status)
-                        .font(SetuTypography.body)
+                        .font(SetuTypography.caption)
                         .foregroundStyle(SetuColor.textSecondary)
                     Spacer(minLength: 0)
                 }
-            } else {
+            }
+
+            if !draft.content.isEmpty {
                 Text(draft.content)
                     .font(SetuTypography.body)
                     .foregroundStyle(SetuColor.textPrimary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .textSelection(.enabled)
+            } else if draft.status.isEmpty {
+                HStack(spacing: SetuSpacing.sm) {
+                    ProgressView()
+                    Text("正在思考…")
+                        .font(SetuTypography.body)
+                        .foregroundStyle(SetuColor.textSecondary)
+                    Spacer(minLength: 0)
+                }
             }
 
             if !draft.reasoningContent.isEmpty {
@@ -708,12 +727,15 @@ struct AiChatDrawView: View {
                     streamingDraft = draft
                     if let job = event.job {
                         jobOverrides[job.id] = job
-                        await AiGenerationLiveActivityCenter.start(
-                            job: job,
-                            mobileClient: environment.mobileAppClient
-                        )
+                        // Don't block token deltas on Live Activity setup.
+                        Task {
+                            await AiGenerationLiveActivityCenter.start(
+                                job: job,
+                                mobileClient: environment.mobileAppClient
+                            )
+                        }
                     }
-                    // Let SwiftUI paint each chunk instead of buffering until done.
+                    // Yield so each SSE chunk can paint before the next arrives.
                     await Task.yield()
                 }
             }
@@ -735,6 +757,10 @@ struct AiChatDrawView: View {
                 if recovered {
                     pendingUserMessage = nil
                     streamingDraft = nil
+                } else if AiChatDrawBilling.userTurnPersisted(content: content, detail: detail) {
+                    pendingUserMessage = nil
+                    streamingDraft = nil
+                    feedback = .error("回复同步较慢，请下拉刷新查看是否已完成。")
                 } else {
                     userFacingError = UserFacingErrorMapper.map(APIError.invalidResponse)
                 }
@@ -754,6 +780,10 @@ struct AiChatDrawView: View {
                 if AiChatDrawBilling.isTransientSendFailure(error), !disconnect {
                     feedback = .success("对话已在后台完成，页面已自动同步。")
                 }
+            } else if AiChatDrawBilling.userTurnPersisted(content: content, detail: detail) {
+                pendingUserMessage = nil
+                streamingDraft = nil
+                feedback = .error("连接中断，请下拉刷新查看是否已完成。")
             } else {
                 pendingUserMessage = nil
                 streamingDraft = nil
@@ -806,22 +836,38 @@ struct AiChatDrawView: View {
             return false
         }
 
-        // Always try to sync — stream disconnects often happen after the turn already finished.
-        let reloaded = await reloadLatestSessionDetail(preferredSessionID: sessionID)
-        if AiChatDrawBilling.turnLikelySucceeded(
-            content: content,
-            previousMessageCount: previousCount,
-            detail: reloaded
-        ) {
-            applyCooldown(AiChatDrawBilling.cooldownSeconds(retryAfterSeconds: reloaded?.retryAfterSeconds))
-            if let reloaded {
-                await handleNewJobs(in: reloaded, previousJobIDs: previousJobIDs)
+        // Stream often dies before `done` while the server keeps generating.
+        // Poll until a visible assistant/job appears — user-only is not enough.
+        if var draft = streamingDraft {
+            draft.status = "连接中断，正在同步回复…"
+            streamingDraft = draft
+        }
+
+        var lastReloaded: AiChatDrawSessionDetail?
+        for delay in AiChatDrawBilling.recoverPollDelaysNanoseconds {
+            if delay > 0 {
+                try? await Task.sleep(nanoseconds: delay)
             }
-            return true
+            let reloaded = await reloadLatestSessionDetail(preferredSessionID: sessionID)
+            lastReloaded = reloaded
+            if AiChatDrawBilling.userTurnPersisted(content: content, detail: reloaded) {
+                pendingUserMessage = nil
+            }
+            if AiChatDrawBilling.turnLikelySucceeded(
+                content: content,
+                previousMessageCount: previousCount,
+                detail: reloaded
+            ) {
+                applyCooldown(AiChatDrawBilling.cooldownSeconds(retryAfterSeconds: reloaded?.retryAfterSeconds))
+                if let reloaded {
+                    await handleNewJobs(in: reloaded, previousJobIDs: previousJobIDs)
+                }
+                return true
+            }
         }
 
         if AiChatDrawBilling.isTransientSendFailure(error) {
-            applyCooldown(AiChatDrawBilling.cooldownSeconds(retryAfterSeconds: reloaded?.retryAfterSeconds))
+            applyCooldown(AiChatDrawBilling.cooldownSeconds(retryAfterSeconds: lastReloaded?.retryAfterSeconds))
         }
         return false
     }
