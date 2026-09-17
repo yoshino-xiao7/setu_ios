@@ -289,7 +289,10 @@ public enum AiChatDrawBilling {
                 NSURLErrorTimedOut,
                 NSURLErrorNetworkConnectionLost,
                 NSURLErrorNotConnectedToInternet,
-                NSURLErrorCannotConnectToHost
+                NSURLErrorCannotConnectToHost,
+                NSURLErrorCannotFindHost,
+                NSURLErrorDNSLookupFailed,
+                NSURLErrorCancelled // often fired when the app is backgrounded mid-stream
             ].contains(nsError.code)
         }
         let message = error.localizedDescription

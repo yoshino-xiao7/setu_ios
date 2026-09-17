@@ -140,6 +140,11 @@ final class AiChatDrawClientTests: XCTestCase {
             )
         )
         XCTAssertTrue(
+            AiChatDrawBilling.isTransientSendFailure(
+                NSError(domain: NSURLErrorDomain, code: NSURLErrorCancelled, userInfo: nil)
+            )
+        )
+        XCTAssertTrue(
             AiChatDrawBilling.turnLikelySucceeded(
                 content: "画一只猫",
                 previousMessageCount: 0,

@@ -22,6 +22,10 @@ struct AiChatDrawView: View {
     @State private var pendingGenerationID: Int?
     @State private var pendingUserMessage: String?
     @State private var streamingDraft: AiChatDrawStreamingDraft?
+    @State private var followUpSuggestions: [String] = []
+    @State private var pinnedToBottom = true
+    @State private var showJumpToBottom = false
+    @State private var scrollToBottomTick = 0
     @FocusState private var isComposerFocused: Bool
 
     private var isAdmin: Bool {
@@ -254,21 +258,73 @@ struct AiChatDrawView: View {
                             sendingPlaceholder
                                 .id("sending")
                         }
+
+                        if !followUpSuggestions.isEmpty, !isSending, detail?.session.isArchived != true {
+                            followUpChips
+                                .id("follow-ups")
+                        }
+
+                        Color.clear
+                            .frame(height: 1)
+                            .id("chat-bottom")
                     }
                     .padding(.horizontal, SetuSpacing.lg)
                     .padding(.top, SetuSpacing.sm)
                     .padding(.bottom, SetuSpacing.md)
                 }
                 .scrollDismissesKeyboard(.interactively)
+                .modifier(AiChatScrollBottomTracker(
+                    pinnedToBottom: $pinnedToBottom,
+                    showJumpToBottom: $showJumpToBottom,
+                    hasContent: !messages.isEmpty || streamingDraft != nil || pendingUserMessage != nil
+                ))
                 .onChange(of: messages.count) { _, _ in
+                    if pinnedToBottom { scrollToBottom(proxy) }
+                    refreshFollowUpSuggestions()
+                }
+                .onChange(of: scrollToBottomTick) { _, _ in
+                    pinnedToBottom = true
+                    showJumpToBottom = false
                     scrollToBottom(proxy)
                 }
                 .onChange(of: isSending) { _, sending in
-                    if sending { scrollToBottom(proxy) }
+                    if sending {
+                        followUpSuggestions = []
+                        pinnedToBottom = true
+                        scrollToBottom(proxy)
+                    } else {
+                        refreshFollowUpSuggestions()
+                    }
                 }
                 .onChange(of: streamingDraft?.content) { _, _ in
-                    scrollToBottom(proxy)
+                    if pinnedToBottom { scrollToBottom(proxy) }
                 }
+                .onChange(of: streamingDraft?.reasoningContent) { _, _ in
+                    if pinnedToBottom { scrollToBottom(proxy) }
+                }
+                .overlay(alignment: .bottom) {
+                    if showJumpToBottom {
+                        Button {
+                            pinnedToBottom = true
+                            showJumpToBottom = false
+                            scrollToBottom(proxy)
+                        } label: {
+                            Image(systemName: "arrow.down")
+                                .font(.body.weight(.semibold))
+                                .foregroundStyle(SetuColor.textPrimary)
+                                .frame(width: 40, height: 40)
+                                .background(.ultraThinMaterial, in: Circle())
+                                .overlay {
+                                    Circle().strokeBorder(SetuColor.separator.opacity(0.55), lineWidth: 0.5)
+                                }
+                        }
+                        .accessibilityLabel("回到最新消息")
+                        .accessibilityIdentifier("ai.chat.jump-bottom")
+                        .padding(.bottom, SetuSpacing.md)
+                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                    }
+                }
+                .animation(.easeOut(duration: 0.18), value: showJumpToBottom)
             }
         }
     }
@@ -299,6 +355,40 @@ struct AiChatDrawView: View {
             Spacer(minLength: 0)
         }
         .padding(.vertical, SetuSpacing.xs)
+    }
+
+    private var followUpChips: some View {
+        VStack(alignment: .leading, spacing: SetuSpacing.sm) {
+            Text("猜你想说")
+                .font(SetuTypography.caption)
+                .foregroundStyle(SetuColor.textTertiary)
+            VStack(alignment: .leading, spacing: SetuSpacing.sm) {
+                ForEach(followUpSuggestions, id: \.self) { suggestion in
+                    Button {
+                        input = suggestion
+                        followUpSuggestions = []
+                    } label: {
+                        Text(suggestion)
+                            .font(SetuTypography.caption)
+                            .foregroundStyle(SetuColor.textPrimary)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, SetuSpacing.md)
+                            .padding(.vertical, SetuSpacing.sm)
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .strokeBorder(SetuColor.separator.opacity(0.55), lineWidth: 0.5)
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("建议：\(suggestion)")
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, SetuSpacing.xs)
+        .accessibilityIdentifier("ai.chat.follow-ups")
     }
 
     @ViewBuilder
@@ -359,13 +449,16 @@ struct AiChatDrawView: View {
             }
 
             if !draft.reasoningContent.isEmpty {
-                DisclosureGroup("查看思考过程") {
-                    Text(draft.reasoningContent)
-                        .font(SetuTypography.caption)
-                        .foregroundStyle(SetuColor.textSecondary)
-                        .textSelection(.enabled)
-                }
-                .tint(SetuColor.textSecondary)
+                AiChatThinkingBlock(
+                    text: draft.reasoningContent,
+                    isActive: true,
+                    autoExpanded: draft.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                    onKeepBottom: {
+                        if pinnedToBottom {
+                            requestScrollToBottom(force: false)
+                        }
+                    }
+                )
             }
 
             if let job = draft.job {
@@ -389,13 +482,7 @@ struct AiChatDrawView: View {
 
             if let reasoning = message.reasoningContent?.trimmingCharacters(in: .whitespacesAndNewlines),
                !reasoning.isEmpty {
-                DisclosureGroup("查看思考过程") {
-                    Text(reasoning)
-                        .font(SetuTypography.caption)
-                        .foregroundStyle(SetuColor.textSecondary)
-                        .textSelection(.enabled)
-                }
-                .tint(SetuColor.textSecondary)
+                AiChatThinkingBlock(text: reasoning, isActive: false, autoExpanded: false)
             }
 
             if let job {
@@ -555,15 +642,29 @@ struct AiChatDrawView: View {
     private func scrollToBottom(_ proxy: ScrollViewProxy) {
         DispatchQueue.main.async {
             withAnimation(.easeOut(duration: 0.2)) {
-                if streamingDraft != nil {
-                    proxy.scrollTo("streaming", anchor: .bottom)
-                } else if isSending {
-                    proxy.scrollTo(pendingUserMessage == nil ? "sending" : "pending-user", anchor: .bottom)
-                } else if let lastID = messages.last?.id {
-                    proxy.scrollTo(lastID, anchor: .bottom)
-                }
+                proxy.scrollTo("chat-bottom", anchor: .bottom)
             }
         }
+    }
+
+    private func requestScrollToBottom(force: Bool = true) {
+        if force {
+            pinnedToBottom = true
+            showJumpToBottom = false
+        }
+        scrollToBottomTick &+= 1
+        // LazyVStack may still be measuring; nudge again after layout.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+            scrollToBottomTick &+= 1
+        }
+    }
+
+    private func refreshFollowUpSuggestions() {
+        guard !isSending, detail?.session.isArchived != true else {
+            followUpSuggestions = []
+            return
+        }
+        followUpSuggestions = AiChatDrawFollowUps.suggestions(from: messages)
     }
 
     private func consumePendingPromptIfNeeded() {
@@ -629,6 +730,7 @@ struct AiChatDrawView: View {
         do {
             applyDetail(try await environment.aiChatDrawClient.sessionDetail(id: id))
             jobOverrides = [:]
+            requestScrollToBottom()
         } catch {
             userFacingError = UserFacingErrorMapper.map(error)
             feedback = .error("加载对话失败")
@@ -686,57 +788,57 @@ struct AiChatDrawView: View {
 
         let previousJobIDs = Set(messages.compactMap { $0.generationJobId ?? $0.generationJob?.id })
         let previousCount = messages.count
-        let sessionID = detail?.session.id
+        var sessionID = detail?.session.id
         input = ""
         pendingUserMessage = content
         streamingDraft = AiChatDrawStreamingDraft(status: "已收到请求，开始处理…")
         isSending = true
+        isComposerFocused = false
+        followUpSuggestions = []
         userFacingError = nil
         feedback = nil
+        let backgroundTask = ChatDrawBackgroundTask.begin()
         defer {
+            backgroundTask.end()
             isSending = false
+            isComposerFocused = false
             if streamingDraft != nil { streamingDraft = nil }
+            refreshFollowUpSuggestions()
         }
 
         do {
             var finalDetail: AiChatDrawSessionDetail?
-            for try await event in environment.aiChatDrawClient.streamMessage(
-                AiChatDrawSendRequest(
-                    sessionId: sessionID,
-                    content: content,
-                    nsfwMode: nsfwMode
-                )
-            ) {
-                switch event.kind {
-                case .done:
-                    finalDetail = event.detail
-                case .error:
-                    let message = event.message ?? "对话失败"
-                    throw APIError.httpStatus(
-                        AiChatDrawBilling.isClientDisconnectedMessage(message) ? 503 : 500,
-                        message: message,
-                        requestID: nil,
-                        traceID: nil,
-                        code: AiChatDrawBilling.isClientDisconnectedMessage(message)
-                            ? "AI_CHAT_DRAW_STREAM_CLOSED"
-                            : "AI_CHAT_DRAW_STREAM_ERROR"
+            var streamAttempt = 0
+            while true {
+                streamAttempt += 1
+                do {
+                    finalDetail = try await consumeChatDrawStream(
+                        content: content,
+                        sessionID: sessionID
                     )
-                default:
-                    var draft = streamingDraft ?? AiChatDrawStreamingDraft()
-                    try draft.apply(event)
-                    streamingDraft = draft
-                    if let job = event.job {
-                        jobOverrides[job.id] = job
-                        // Don't block token deltas on Live Activity setup.
-                        Task {
-                            await AiGenerationLiveActivityCenter.start(
-                                job: job,
-                                mobileClient: environment.mobileAppClient
-                            )
-                        }
+                    if let finalDetail, sessionID == nil {
+                        sessionID = finalDetail.session.id
                     }
-                    // Yield so each SSE chunk can paint before the next arrives.
-                    await Task.yield()
+                    break
+                } catch {
+                    // Re-POST is only safe before the user turn lands; otherwise we would duplicate.
+                    let probe = await peekSessionDetail(preferredSessionID: sessionID)
+                    if sessionID == nil {
+                        sessionID = probe?.session.id
+                    }
+                    let persisted = AiChatDrawBilling.userTurnPersisted(content: content, detail: probe)
+                    let canRetryStream = streamAttempt == 1
+                        && !persisted
+                        && AiChatDrawBilling.isTransientSendFailure(error)
+                    if canRetryStream {
+                        if var draft = streamingDraft {
+                            draft.status = "连接中断，正在重连…"
+                            streamingDraft = draft
+                        }
+                        try? await Task.sleep(nanoseconds: 600_000_000)
+                        continue
+                    }
+                    throw error
                 }
             }
 
@@ -776,9 +878,8 @@ struct AiChatDrawView: View {
             if recovered {
                 pendingUserMessage = nil
                 streamingDraft = nil
-                let disconnect = AiChatDrawBilling.isClientDisconnectedMessage(Self.apiErrorMessage(error))
-                if AiChatDrawBilling.isTransientSendFailure(error), !disconnect {
-                    feedback = .success("对话已在后台完成，页面已自动同步。")
+                if AiChatDrawBilling.isTransientSendFailure(error) {
+                    feedback = .success("连接已恢复，对话已自动同步。")
                 }
             } else if AiChatDrawBilling.userTurnPersisted(content: content, detail: detail) {
                 pendingUserMessage = nil
@@ -788,8 +889,8 @@ struct AiChatDrawView: View {
                 pendingUserMessage = nil
                 streamingDraft = nil
                 input = content
-                if AiChatDrawBilling.isClientDisconnectedMessage(Self.apiErrorMessage(error)) {
-                    // Avoid scary false failures: keep UI synced and let user refresh if needed.
+                if AiChatDrawBilling.isClientDisconnectedMessage(Self.apiErrorMessage(error))
+                    || AiChatDrawBilling.isTransientSendFailure(error) {
                     feedback = .error("连接中断，请下拉刷新查看是否已完成。")
                 } else {
                     userFacingError = UserFacingErrorMapper.map(error)
@@ -804,6 +905,68 @@ struct AiChatDrawView: View {
                 }
             }
         }
+    }
+
+    @MainActor
+    private func consumeChatDrawStream(
+        content: String,
+        sessionID: Int?
+    ) async throws -> AiChatDrawSessionDetail? {
+        var finalDetail: AiChatDrawSessionDetail?
+        for try await event in environment.aiChatDrawClient.streamMessage(
+            AiChatDrawSendRequest(
+                sessionId: sessionID,
+                content: content,
+                nsfwMode: nsfwMode
+            )
+        ) {
+            switch event.kind {
+            case .done:
+                finalDetail = event.detail
+            case .error:
+                let message = event.message ?? "对话失败"
+                throw APIError.httpStatus(
+                    AiChatDrawBilling.isClientDisconnectedMessage(message) ? 503 : 500,
+                    message: message,
+                    requestID: nil,
+                    traceID: nil,
+                    code: AiChatDrawBilling.isClientDisconnectedMessage(message)
+                        ? "AI_CHAT_DRAW_STREAM_CLOSED"
+                        : "AI_CHAT_DRAW_STREAM_ERROR"
+                )
+            default:
+                var draft = streamingDraft ?? AiChatDrawStreamingDraft()
+                try draft.apply(event)
+                streamingDraft = draft
+                if let job = event.job {
+                    jobOverrides[job.id] = job
+                    // Don't block token deltas on Live Activity setup.
+                    Task {
+                        await AiGenerationLiveActivityCenter.start(
+                            job: job,
+                            mobileClient: environment.mobileAppClient
+                        )
+                    }
+                }
+                // Yield so each SSE chunk can paint before the next arrives.
+                await Task.yield()
+            }
+        }
+        return finalDetail
+    }
+
+    /// Session probe without mutating UI — used to decide if a stream re-POST is safe.
+    @MainActor
+    private func peekSessionDetail(preferredSessionID: Int?) async -> AiChatDrawSessionDetail? {
+        if let preferredSessionID,
+           let detail = try? await environment.aiChatDrawClient.sessionDetail(id: preferredSessionID) {
+            return detail
+        }
+        guard let latest = try? await environment.aiChatDrawClient.listSessions(page: 1, pageSize: 1).list.first,
+              let detail = try? await environment.aiChatDrawClient.sessionDetail(id: latest.id) else {
+            return nil
+        }
+        return detail
     }
 
     private static func apiErrorMessage(_ error: Error) -> String? {
@@ -836,10 +999,9 @@ struct AiChatDrawView: View {
             return false
         }
 
-        // Stream often dies before `done` while the server keeps generating.
-        // Poll until a visible assistant/job appears — user-only is not enough.
+        // After the turn is persisted, soft-sync instead of reopening the stream POST.
         if var draft = streamingDraft {
-            draft.status = "连接中断，正在同步回复…"
+            draft.status = "网络中断，正在重新同步…"
             streamingDraft = draft
         }
 
@@ -908,6 +1070,9 @@ struct AiChatDrawView: View {
             }
         }
         applyCooldown(AiChatDrawBilling.cooldownSeconds(retryAfterSeconds: next.retryAfterSeconds))
+        if !isSending {
+            refreshFollowUpSuggestions()
+        }
     }
 
     private func applyCooldown(_ seconds: Int) {
@@ -1017,6 +1182,148 @@ private struct AiChatNativeSendButtonStyle: ViewModifier {
             content
                 .foregroundStyle(SetuColor.textTertiary)
                 .background(SetuColor.surfaceMuted, in: Circle())
+        }
+    }
+}
+
+private struct AiChatScrollBottomTracker: ViewModifier {
+    @Binding var pinnedToBottom: Bool
+    @Binding var showJumpToBottom: Bool
+    let hasContent: Bool
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content
+                .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                    // How far the viewport is from the content bottom.
+                    // 0 ≈ pinned to latest; grows after the user scrolls up into history.
+                    geometry.contentSize.height - geometry.visibleRect.maxY
+                } action: { _, distanceFromBottom in
+                    let nearBottom = distanceFromBottom <= 56
+                    pinnedToBottom = nearBottom
+                    showJumpToBottom = !nearBottom && hasContent
+                }
+        } else {
+            content
+                .onAppear {
+                    pinnedToBottom = true
+                    showJumpToBottom = false
+                }
+        }
+    }
+}
+
+private struct AiChatThinkingBlock: View {
+    let text: String
+    let isActive: Bool
+    /// While thinking (no formal reply yet) stay open; collapse once the reply arrives.
+    let autoExpanded: Bool
+    var onKeepBottom: (() -> Void)? = nil
+
+    @State private var expanded = false
+    @State private var userOverride: Bool?
+
+    private var isExpanded: Bool {
+        userOverride ?? expanded
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SetuSpacing.sm) {
+            Button {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    let next = !isExpanded
+                    userOverride = next
+                    expanded = next
+                }
+            } label: {
+                HStack(spacing: SetuSpacing.sm) {
+                    thinkingLabel
+
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(SetuColor.textSecondary)
+                        .accessibilityHidden(true)
+
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(isExpanded ? "收起思考过程" : "展开思考过程")
+            .accessibilityAddTraits(.isButton)
+
+            if isExpanded {
+                Text(text)
+                    .font(SetuTypography.caption)
+                    .foregroundStyle(SetuColor.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .onAppear {
+            expanded = autoExpanded
+            if autoExpanded {
+                onKeepBottom?()
+            }
+        }
+        .onChange(of: autoExpanded) { _, next in
+            if next {
+                guard userOverride == nil else { return }
+                withAnimation(.easeOut(duration: 0.2)) {
+                    expanded = true
+                }
+                onKeepBottom?()
+            } else {
+                // Formal reply arrived — always collapse thinking.
+                userOverride = nil
+                withAnimation(.easeOut(duration: 0.2)) {
+                    expanded = false
+                }
+            }
+        }
+        .onChange(of: text) { _, _ in
+            if isExpanded {
+                onKeepBottom?()
+            }
+        }
+        .onChange(of: isExpanded) { _, expandedNow in
+            if expandedNow {
+                onKeepBottom?()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var thinkingLabel: some View {
+        let font = SetuTypography.caption.weight(.semibold)
+        if isActive {
+            TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: false)) { context in
+                let period = 1.6
+                let raw = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: period) / period
+                let phase = CGFloat(raw) * 2.0 - 0.5
+                Text("Thinking···")
+                    .font(font)
+                    .foregroundStyle(
+                        LinearGradient(
+                            stops: [
+                                .init(color: SetuColor.textSecondary.opacity(0.42), location: 0),
+                                .init(color: SetuColor.textSecondary.opacity(0.42), location: max(0, phase - 0.22)),
+                                .init(color: SetuColor.textPrimary.opacity(0.95), location: max(0, min(1, phase))),
+                                .init(color: Color.white.opacity(0.95), location: max(0, min(1, phase + 0.08))),
+                                .init(color: SetuColor.textPrimary.opacity(0.95), location: max(0, min(1, phase + 0.16))),
+                                .init(color: SetuColor.textSecondary.opacity(0.42), location: min(1, phase + 0.28)),
+                                .init(color: SetuColor.textSecondary.opacity(0.42), location: 1)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+            }
+        } else {
+            Text("Thinking···")
+                .font(font)
+                .foregroundStyle(SetuColor.textSecondary)
         }
     }
 }

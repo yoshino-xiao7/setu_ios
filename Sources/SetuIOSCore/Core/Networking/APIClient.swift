@@ -174,6 +174,7 @@ public struct APIClient: Sendable {
         var configuration = session.configuration
         configuration.timeoutIntervalForRequest = timeoutInterval
         configuration.timeoutIntervalForResource = timeoutInterval
+        configuration.waitsForConnectivity = true
         configuration.httpAdditionalHeaders = [
             "Accept": "text/event-stream",
             "Cache-Control": "no-cache"

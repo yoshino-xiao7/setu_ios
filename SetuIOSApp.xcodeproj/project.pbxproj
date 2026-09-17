@@ -148,6 +148,8 @@
 		57473E4A12C4AEF86997F3BC /* AsmrWorkDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E26A27AE9204004CED1D1CC /* AsmrWorkDetailView.swift */; };
 		5804A3B5A8C3723A7AE54982 /* MusicNetworkAuditTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D021B0C64505EF0228CA779 /* MusicNetworkAuditTests.swift */; };
 		585C96C5EB7FFFBAA7077DDF /* MusicLibraryUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FEB98087F55AD2FF3149B76 /* MusicLibraryUITests.swift */; };
+		59B0F0C1AC86DDC48B873EB2 /* AiChatDrawFollowUps.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC75EE78720795125833F885 /* AiChatDrawFollowUps.swift */; };
+		5A1C2D3E4F5061728394A5B6 /* ChatDrawBackgroundTask.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B2D3E4F5061728394A5B6C7 /* ChatDrawBackgroundTask.swift */; };
 		59B246A6F42217CCDBB4635D /* SetuToolbarLogo.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1111B350B370ABF4BFD5DA8 /* SetuToolbarLogo.swift */; };
 		59F8DA2EC6CDF0912519F30A /* ColorContrastTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA703609642EBB2D2B8BF70B /* ColorContrastTests.swift */; };
 		5A43A52DD0F2C0A47709A50F /* LoadState.swift in Sources */ = {isa = PBXBuildFile; fileRef = E33CB6CD8E1C15CC7ABDEE45 /* LoadState.swift */; };
@@ -855,6 +857,8 @@
 		C9D45C019C4DFBCC6CD653D4 /* SystemPushCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemPushCoordinator.swift; sourceTree = "<group>"; };
 		CA703609642EBB2D2B8BF70B /* ColorContrastTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorContrastTests.swift; sourceTree = "<group>"; };
 		CA9BD954C658365380A65DDC /* SetuIOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetuIOSApp.swift; sourceTree = "<group>"; };
+		CC75EE78720795125833F885 /* AiChatDrawFollowUps.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AiChatDrawFollowUps.swift; sourceTree = "<group>"; };
+		6B2D3E4F5061728394A5B6C7 /* ChatDrawBackgroundTask.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatDrawBackgroundTask.swift; sourceTree = "<group>"; };
 		CCFF850A71A09C9900456417 /* HanimeCatalogClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HanimeCatalogClient.swift; sourceTree = "<group>"; };
 		CE1CC07444121F2AC5E2EF91 /* MusicDiscoverModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicDiscoverModels.swift; sourceTree = "<group>"; };
 		CE4709E5B5D978FFE2698E88 /* MusicRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicRepositoryTests.swift; sourceTree = "<group>"; };
@@ -1243,6 +1247,8 @@
 			children = (
 				A5F36A7DD3C5B90EC6E00689 /* AiAssetBrowserView.swift */,
 				3B6681D3D20D065C4A669631 /* AiChatDrawComposerStore.swift */,
+				CC75EE78720795125833F885 /* AiChatDrawFollowUps.swift */,
+				6B2D3E4F5061728394A5B6C7 /* ChatDrawBackgroundTask.swift */,
 				6711FF526694E50CCF1481B2 /* AiChatDrawView.swift */,
 				6BA6E0AACD49A324C42B462C /* AiDeleteRequestsView.swift */,
 				08EB6447A38E43F5548AE68A /* AiDrawDraftStore.swift */,
@@ -2215,6 +2221,8 @@
 				BA8BE4399EF534D9DA1501B7 /* AdminUsersView.swift in Sources */,
 				021B23C555C057EDD22F955F /* AiAssetBrowserView.swift in Sources */,
 				6C0B4327E92224069AA41836 /* AiChatDrawComposerStore.swift in Sources */,
+				59B0F0C1AC86DDC48B873EB2 /* AiChatDrawFollowUps.swift in Sources */,
+				5A1C2D3E4F5061728394A5B6 /* ChatDrawBackgroundTask.swift in Sources */,
 				81F86885262469DA81F197E8 /* AiChatDrawView.swift in Sources */,
 				E87D8FD7890302B6B02627C3 /* AiDeleteRequestsView.swift in Sources */,
 				2251DF92CA35A53F71415E59 /* AiDrawDraftStore.swift in Sources */,
