@@ -203,8 +203,8 @@ struct UserImagePreviewSheet: View {
                     message: photoPermissionMessage,
                     systemImage: "photo.badge.arrow.down",
                     state: photoPermissionState,
-                    actionTitle: photoPermissionState == .denied ? "前往系统设置" : nil,
-                    action: photoPermissionState == .denied ? openPhotoSettings : nil
+                    actionTitle: photoPermissionActionTitle,
+                    action: photoPermissionAction
                 )
 
                 Button {
@@ -263,16 +263,38 @@ struct UserImagePreviewSheet: View {
     private var photoPermissionMessage: String {
         switch photoPermissionState {
         case .notDetermined:
-            "只有在你主动保存图片时才会询问，亦可不会读取你的相册。"
+            "从相册选择不需要照片权限；保存图片时只会请求添加照片权限，不会读取你的相册。"
         case .granted:
             "已允许添加图片；亦可只会保存你主动选择的作品。"
         case .denied:
-            "照片权限已关闭，可前往系统设置后再保存。"
+            "照片添加权限已关闭，可前往系统设置后再保存。"
+        }
+    }
+
+    private var photoPermissionActionTitle: String? {
+        switch photoPermissionState {
+        case .notDetermined: "允许添加照片"
+        case .denied: "前往系统设置"
+        case .granted: nil
+        }
+    }
+
+    private var photoPermissionAction: (() -> Void)? {
+        switch photoPermissionState {
+        case .notDetermined: requestPhotoPermission
+        case .denied: openPhotoSettings
+        case .granted: nil
         }
     }
 
     private func refreshPhotoAuthorizationStatus() {
         photoAuthorizationStatus = PHPhotoLibrary.authorizationStatus(for: .addOnly)
+    }
+
+    private func requestPhotoPermission() {
+        Task {
+            photoAuthorizationStatus = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+        }
     }
 
     private func openPhotoSettings() {
