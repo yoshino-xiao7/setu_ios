@@ -157,7 +157,7 @@ final class AiChatDrawClientTests: XCTestCase {
         XCTAssertTrue(buffer.isEmpty)
     }
 
-    func testBillingHelpers() {
+    func testBillingHelpers() throws {
         XCTAssertEqual(AiChatDrawBilling.pricingText(tokensPerPoint: 1000), "每 1000 Token = 1 积分")
         XCTAssertEqual(AiChatDrawBilling.parseRetrySeconds(from: "请 18 秒后再试"), 18)
         XCTAssertEqual(AiChatDrawBilling.cooldownSeconds(retryAfterSeconds: 7), 7)
