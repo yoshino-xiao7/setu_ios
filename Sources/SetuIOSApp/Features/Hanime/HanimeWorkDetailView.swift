@@ -449,7 +449,7 @@ struct HanimePlayerView: View {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: nanoseconds)
                 guard !Task.isCancelled else { return }
-                samplePlayback()
+                await samplePlayback()
             }
         }
     }
@@ -462,25 +462,40 @@ struct HanimePlayerView: View {
         isBuffering = false
     }
 
-    private func samplePlayback() {
+    private func samplePlayback() async {
         // Out of focus iOS stops video rendering on purpose; that is not a stall.
         guard scenePhase == .active, let player = avPlayer, let item = player.currentItem,
               item.status == .readyToPlay else {
+            if avPlayer?.currentItem != nil {
+                log("hanime.sample skipped phase=\(scenePhase == .active ? "active" : "background") "
+                    + "itemStatus=\(avPlayer?.currentItem?.status.rawValue ?? -1)")
+            }
             monitor.resetForNewPlayback(at: avPlayer?.currentItem?.currentTime().seconds)
             return
         }
         let time = item.currentTime()
         let position = time.seconds
         guard position.isFinite else { return }
+        let droppedTotal = await HanimePlaybackProbe.droppedVideoFramesTotal(in: item)
         let sample = HanimePlaybackSample(
             at: HanimeStallMonitor.now,
             positionSeconds: position,
             isClockRunning: player.timeControlStatus == .playing,
             isWaitingToPlay: player.timeControlStatus == .waitingToPlayAtSpecifiedRate,
             renderedFrames: monitor.frames.framesInWindow(itemTime: time),
+            droppedVideoFrames: monitor.droppedDelta(current: droppedTotal),
             bufferedAheadSeconds: HanimePlaybackProbe.bufferedAheadSeconds(in: item)
         )
         let action = monitor.consume(sample)
+        #if DEBUG && os(iOS)
+        // Hottest log site: keep the string building out of release builds.
+        log("hanime.sample pos=\(String(format: "%.1f", sample.positionSeconds)) "
+            + "ahead=\(String(format: "%.1f", sample.bufferedAheadSeconds)) "
+            + "frames=\(sample.renderedFrames.map(String.init) ?? "n/a") "
+            + "drop=\(sample.droppedVideoFrames.map(String.init) ?? "n/a") "
+            + "clock=\(sample.isClockRunning ? "play" : (sample.isWaitingToPlay ? "waiting" : "paused")) "
+            + "rate=\(String(format: "%.2f", player.rate)) action=\(action.logLabel)")
+        #endif
         if case let .recover(reason, _) = action {
             logStall(reason: reason, sample: sample)
         }
@@ -559,6 +574,7 @@ struct HanimePlayerView: View {
     private func log(_ message: String) {
         #if DEBUG && os(iOS)
         os_log("%{public}@", log: playbackLog, type: .info, message)
+        HanimePlaybackLogFile.shared.append(message)
         #endif
     }
 

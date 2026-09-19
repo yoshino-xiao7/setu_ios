@@ -15,6 +15,7 @@ final class HanimePlaybackPolicyTests: XCTestCase {
         playing: Bool = true,
         waiting: Bool = false,
         frames: Int? = 1,
+        dropped: Int? = nil,
         ahead: Double = 30
     ) -> HanimePlaybackSample {
         HanimePlaybackSample(
@@ -23,6 +24,7 @@ final class HanimePlaybackPolicyTests: XCTestCase {
             isClockRunning: playing,
             isWaitingToPlay: waiting,
             renderedFrames: frames,
+            droppedVideoFrames: dropped,
             bufferedAheadSeconds: ahead
         )
     }
@@ -133,6 +135,48 @@ final class HanimePlaybackPolicyTests: XCTestCase {
             canRefresh: true
         )
         XCTAssertEqual(step, .giveUp)
+    }
+
+    func testSustainedFrameDropsDowngradeRendition() {
+        var watchdog = HanimePlaybackWatchdog()
+        watchdog.consume(sample(at: 0, position: 10))
+        // Not frozen: video keeps producing frames but half of them are dropped.
+        XCTAssertEqual(watchdog.consume(sample(at: 2, position: 12, dropped: 30)), .none)
+        XCTAssertEqual(watchdog.consume(sample(at: 4, position: 14, dropped: 30)), .none)
+        XCTAssertEqual(
+            watchdog.consume(sample(at: 6, position: 16, dropped: 30)),
+            .recover(.frameRateCollapse, resumeAt: 10)
+        )
+    }
+
+    func testShortDropBurstDoesNotInterruptPlayback() {
+        var watchdog = HanimePlaybackWatchdog()
+        watchdog.consume(sample(at: 0, position: 10))
+        XCTAssertEqual(watchdog.consume(sample(at: 2, position: 12, dropped: 40)), .none)
+        XCTAssertEqual(watchdog.consume(sample(at: 4, position: 14, dropped: 40)), .none)
+        XCTAssertEqual(watchdog.consume(sample(at: 6, position: 16)), .healthy)
+        XCTAssertEqual(watchdog.consume(sample(at: 8, position: 18, dropped: 40)), .none)
+    }
+
+    func testSmallFrameDropCountStaysHealthy() {
+        var watchdog = HanimePlaybackWatchdog()
+        watchdog.consume(sample(at: 0, position: 10))
+        for at in stride(from: 2.0, through: 8.0, by: 2.0) {
+            XCTAssertEqual(watchdog.consume(sample(at: at, position: 10 + at, dropped: 5)), .healthy)
+        }
+    }
+
+    // MARK: - Drop counter delta
+
+    func testDroppedDeltaNeedsTwoReadingsAndRebaselines() {
+        let monitor = HanimeStallMonitor()
+        XCTAssertNil(monitor.droppedDelta(current: 10))
+        XCTAssertEqual(monitor.droppedDelta(current: 26), 16)
+        XCTAssertNil(monitor.droppedDelta(current: 4), "a new log event restarts the counter")
+        XCTAssertEqual(monitor.droppedDelta(current: 9), 5)
+        XCTAssertNil(monitor.droppedDelta(current: nil))
+        monitor.resetForNewPlayback(at: nil)
+        XCTAssertNil(monitor.droppedDelta(current: 9), "a new item needs a fresh baseline")
     }
 
     // MARK: - Watchdog

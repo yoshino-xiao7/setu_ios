@@ -151,6 +151,8 @@ struct HanimePlaybackSample {
     var isWaitingToPlay: Bool
     /// Frames the video output produced in this window; nil when the signal is unavailable.
     var renderedFrames: Int?
+    /// Video frames dropped inside this window; nil when the platform exposes no counter.
+    var droppedVideoFrames: Int?
     var bufferedAheadSeconds: Double
 }
 
@@ -159,6 +161,8 @@ enum HanimeRecoveryReason: Equatable {
     case videoFrozen
     /// Clock runs, time advances, and no media bytes are arriving.
     case supplyStarved
+    /// Video is displayed but frames keep getting dropped: decode can't keep up.
+    case frameRateCollapse
     /// Playing state is reported, yet the position does not advance.
     case clockStuck
     /// The system stall signal did not clear.
@@ -179,8 +183,21 @@ extension HanimeRecoveryReason {
         switch self {
         case .videoFrozen: "videoFrozen"
         case .supplyStarved: "supplyStarved"
+        case .frameRateCollapse: "frameRateCollapse"
         case .clockStuck: "clockStuck"
         case .stalledTooLong: "stalledTooLong"
+        }
+    }
+}
+
+extension HanimeWatchdogAction {
+    var logLabel: String {
+        switch self {
+        case .none: "none"
+        case .healthy: "healthy"
+        case .buffering: "buffering"
+        case let .recover(reason, resumeAt):
+            "recover(\(reason.logLabel) resume=\(String(format: "%.1f", resumeAt)))"
         }
     }
 }
@@ -189,8 +206,15 @@ extension HanimeRecoveryReason {
 /// budget, so the counters restart on every dispatched recovery.
 struct HanimePlaybackWatchdog {
     var sampleInterval: TimeInterval = 2
+    /// Two *consecutive* empty windows (~4s) before acting. Device data: a self-healing hitch
+    /// reads frames=0, then 1, then 0 again, so counting 2-in-3 windows would interrupt
+    /// playback that recovers by itself. Keep the bar on continuity, not on density.
     var windowsBeforeRecovery = 2
     var stallTimeoutSeconds: TimeInterval = 12
+    /// A dropped-frame burst is "卡" for the viewer but not an emergency: demand more
+    /// evidence than for a hard freeze before interrupting playback.
+    var collapseWindowsBeforeRecovery = 3
+    var droppedFramesToCollapse = 24
     /// Guard against a window where nothing at all is known to be fetched ahead.
     private var minBufferedAhead: Double { max(sampleInterval * 1.5, 1) }
 
@@ -198,6 +222,7 @@ struct HanimePlaybackWatchdog {
     private var lastHealthyPosition: Double?
     private var badWindows = 0
     private var stuckWindows = 0
+    private var collapseWindows = 0
     private var waitingSince: TimeInterval?
     private var pendingBuffering = false
 
@@ -206,6 +231,7 @@ struct HanimePlaybackWatchdog {
         lastHealthyPosition = positionSeconds
         badWindows = 0
         stuckWindows = 0
+        collapseWindows = 0
         waitingSince = nil
         pendingBuffering = false
     }
@@ -250,6 +276,15 @@ struct HanimePlaybackWatchdog {
         let frozen = sample.renderedFrames == 0
         let starving = sample.renderedFrames == nil && sample.bufferedAheadSeconds < minBufferedAhead
         guard frozen || starving else {
+            // Nothing frozen, but a steady stream of dropped video frames is what a stalled
+            // 1080p decode looks like to the viewer; only shedding resolution helps.
+            if let dropped = sample.droppedVideoFrames, dropped >= droppedFramesToCollapse {
+                collapseWindows += 1
+                guard collapseWindows >= collapseWindowsBeforeRecovery else { return .none }
+                collapseWindows = 0
+                return .recover(.frameRateCollapse, resumeAt: lastHealthyPosition ?? sample.positionSeconds)
+            }
+            collapseWindows = 0
             badWindows = 0
             lastHealthyPosition = sample.positionSeconds
             pendingBuffering = false
@@ -276,9 +311,18 @@ final class HanimeStallMonitor {
     let frames = HanimeVideoFrameProbe()
     private var watchdog = HanimePlaybackWatchdog(sampleInterval: HanimeStallMonitor.sampleInterval)
     private(set) var recoveries = 0
+    private var droppedTotal: Int?
 
     /// Monotonic clock, so a background pause never looks like a stalled window.
     static var now: TimeInterval { ProcessInfo.processInfo.systemUptime }
+
+    /// Per-window drop count from a cumulative counter; nil until two readings exist, and
+    /// re-baselines whenever the log starts a new event or a new item was installed.
+    func droppedDelta(current: Int?) -> Int? {
+        defer { if let current { droppedTotal = current } }
+        guard let current, let previous = droppedTotal, current >= previous else { return nil }
+        return current - previous
+    }
 
     /// false once the budget is spent, so the caller hands the failure to the user.
     func noteRecovery() -> Bool {
@@ -288,6 +332,7 @@ final class HanimeStallMonitor {
     }
 
     func resetForNewPlayback(at positionSeconds: Double?) {
+        droppedTotal = nil
         watchdog.reset(at: positionSeconds)
     }
 
@@ -332,6 +377,15 @@ final class HanimeVideoFrameProbe {
 }
 
 enum HanimePlaybackProbe {
+    /// Cumulative dropped video frames, when the platform exposes it. `AVPlayerItem.accessLog`
+    /// only became an async accessor on iOS 27; older systems simply lose this signal.
+    static func droppedVideoFramesTotal(in item: AVPlayerItem) async -> Int? {
+        guard #available(iOS 27.0, *) else { return nil }
+        let event = await item.accessLog?.events.last
+        let dropped = event?.numberOfDroppedVideoFrames ?? -1
+        return dropped >= 0 ? dropped : nil
+    }
+
     /// Seconds of media already fetched ahead of the playhead.
     static func bufferedAheadSeconds(in item: AVPlayerItem) -> Double {
         let now = item.currentTime().seconds
@@ -357,3 +411,68 @@ enum HanimePlaybackProbe {
     }
     #endif
 }
+
+#if DEBUG && os(iOS)
+/// An intermittent stall cannot be reproduced on demand, so the debug lines are mirrored into
+/// the app container: use the app normally, then pull the evidence afterwards with
+///
+///   xcrun devicectl device copy from --device <id> \
+///     --domain-type appDataContainer --domain-identifier icu.yukiryou.setuios \
+///     --source Documents/hanime-playback.log --destination .
+///
+/// Compiled for debug iOS builds only, and it never stores a signed direct link.
+final class HanimePlaybackLogFile {
+    static let shared = HanimePlaybackLogFile()
+
+    static let fileName = "hanime-playback.log"
+
+    private let queue = DispatchQueue(label: "icu.yukiryou.setuios.hanime-playback-logfile")
+    private let maximumBytes = 256 * 1024
+    private let formatter = ISO8601DateFormatter()
+    private let url: URL?
+
+    private init() {
+        url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?
+            .appendingPathComponent(Self.fileName)
+        guard let url else { return }
+        let system = ProcessInfo.processInfo.operatingSystemVersionString
+        queue.async {
+            self.append("session os=\(system)", to: url)
+        }
+    }
+
+    func append(_ line: String) {
+        guard let url else { return }
+        queue.async { self.append(line, to: url) }
+    }
+
+    private func append(_ line: String, to url: URL) {
+        let text = "\(formatter.string(from: Date())) \(line)\n"
+        write(Data(text.utf8), to: url)
+    }
+
+    private func write(_ data: Data, to url: URL) {
+        guard let handle = try? FileHandle(forWritingTo: url) else {
+            try? data.write(to: url)
+            return
+        }
+        defer { try? handle.close() }
+        do {
+            try handle.seekToEnd()
+            try handle.write(contentsOf: data)
+        } catch {
+            try? data.write(to: url)
+        }
+        let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+        if size > maximumBytes { trim(url) }
+    }
+
+    /// Keep the newest half, cut on a line boundary so the file stays greppable.
+    private func trim(_ url: URL) {
+        guard let all = try? Data(contentsOf: url), all.count > maximumBytes / 2 else { return }
+        let from = all.index(all.endIndex, offsetBy: -(all.count / 2))
+        let cut = all[from...].firstIndex(of: UInt8(ascii: "\n")) ?? from
+        try? all[all.index(after: cut)...].write(to: url)
+    }
+}
+#endif
