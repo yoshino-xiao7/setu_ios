@@ -39,6 +39,17 @@ public struct APIClient: Sendable {
         URLSession(configuration: liveSessionConfiguration())
     }
 
+    private static let deviceIDKey = "clientDeviceId"
+    public static func persistentDeviceID() -> String {
+        let store = KeychainStore(service: "icu.yukiryou.setuios")
+        if let stored = try? store.string(for: deviceIDKey), !stored.isEmpty {
+            return stored
+        }
+        let created = UUID().uuidString.lowercased()
+        try? store.setString(created, for: deviceIDKey)
+        return created
+    }
+
     public func mobileSessionDiagnostics(
         hasSignSecret: Bool,
         expireAt: Date?,
@@ -164,6 +175,10 @@ public struct APIClient: Sendable {
         urlRequest.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
         urlRequest.setValue("keep-alive", forHTTPHeaderField: "Connection")
         urlRequest.setValue(requestID, forHTTPHeaderField: "X-Request-Id")
+        urlRequest.setValue(Self.persistentDeviceID(), forHTTPHeaderField: "X-Device-ID")
+        if let clientRelease = MusicClientRelease.current {
+            urlRequest.setValue(clientRelease, forHTTPHeaderField: "X-Setu-Client")
+        }
         if signed {
             let headers = try signer.signedHeaders(method: "POST", path: url.path(percentEncoded: true))
             for (name, value) in headers {
@@ -366,8 +381,9 @@ public struct APIClient: Sendable {
         if let timeoutInterval {
             urlRequest.timeoutInterval = timeoutInterval
         }
-        if path.hasPrefix("/user/music/") || path.hasPrefix("/user/playlists") {
-            urlRequest.setValue(MusicClientRelease.current, forHTTPHeaderField: "X-Setu-Client")
+        urlRequest.setValue(Self.persistentDeviceID(), forHTTPHeaderField: "X-Device-ID")
+        if let clientRelease = MusicClientRelease.current {
+            urlRequest.setValue(clientRelease, forHTTPHeaderField: "X-Setu-Client")
         }
         if body != nil {
             urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
