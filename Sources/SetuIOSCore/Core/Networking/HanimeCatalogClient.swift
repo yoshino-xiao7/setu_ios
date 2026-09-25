@@ -5,6 +5,9 @@ public enum HanimeSite {
     public static let referer = "https://hanime1.me/"
     public static let userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
     public static let assetHeaderFieldsKey = "AVURLAssetHTTPHeaderFieldsKey"
+    /// Media requests need the page session's cookies: `AVURLAssetHTTPHeaderFieldsKey` suppresses
+    /// automatic cookie handling, and a cookie-less edge request is what a browser never sends.
+    public static let assetHTTPCookiesKey = "AVURLAssetHTTPCookiesKey"
 
     public static let pageHeaders: [String: String] = [
         "User-Agent": userAgent,
@@ -48,6 +51,20 @@ public enum HanimeSite {
 
     public static var playbackAssetOptions: [String: Any] {
         [assetHeaderFieldsKey: mediaHeaders]
+    }
+
+    /// Asset options for one media URL: explicit headers plus whatever cookies the page requests
+    /// already collected, so the player asks the CDN the same way the browser does.
+    public static func mediaAssetOptions(for url: URL) -> [String: Any] {
+        var options: [String: Any] = [assetHeaderFieldsKey: mediaHeaders]
+        if let cookies = HTTPCookieStorage.shared.cookies(for: url), !cookies.isEmpty {
+            options[assetHTTPCookiesKey] = cookies
+        }
+        return options
+    }
+
+    public static func mediaCookieCount(for url: URL) -> Int {
+        HTTPCookieStorage.shared.cookies(for: url)?.count ?? 0
     }
 }
 

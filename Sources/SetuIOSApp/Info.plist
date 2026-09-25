@@ -25,12 +25,33 @@
 	<array>
 		<string>icu.yukiryou.setuios.cloud-video-upload</string>
 	</array>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>orpheus</string>
+	</array>
+
 	<!-- Fixed login-proxy hosts use a per-session pinned local anchor.
 	     TLS 1.2+, forward secrecy and native upstream verification remain enforced. -->
 	<key>NSAppTransportSecurity</key>
 	<dict>
+		<key>NSAllowsArbitraryLoadsForMedia</key>
+		<true/>
 		<key>NSExceptionDomains</key>
 		<dict>
+			<key>126.net</key>
+			<dict>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
+			<key>music.126.net</key>
+			<dict>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
 			<key>app-api.pixiv.net</key>
 			<dict><key>NSExceptionAllowsInsecureHTTPLoads</key><true/></dict>
 			<key>accounts.pixiv.net</key>

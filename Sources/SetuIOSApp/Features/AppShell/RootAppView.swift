@@ -320,7 +320,14 @@ struct RootAppView: View {
         MusicClientObservation.client = environment.musicV2Client
         MusicClientObservation.playbackV2 = environment.config.musicFeatureFlags.usesV2Playback
         MusicClientObservation.emit("session", v2: environment.config.musicFeatureFlags.usesV2Playback)
-        musicPlayer.urlResolver = PlaybackURLResolver(client: environment.musicClient, v2: environment.musicV2Client, usesV2Playback: environment.config.musicFeatureFlags.usesV2Playback)
+        let neteaseSession = environment.neteaseMusicSession
+        musicPlayer.urlResolver = PlaybackURLResolver(
+            client: environment.musicClient,
+            v2: environment.musicV2Client,
+            usesV2Playback: environment.config.musicFeatureFlags.usesV2Playback,
+            neteaseClient: environment.neteaseMusicApiClient,
+            neteaseCookieProvider: { @MainActor in neteaseSession.cookie }
+        )
         let store = musicStore
         let v2 = environment.musicV2Client
         let config = environment.config

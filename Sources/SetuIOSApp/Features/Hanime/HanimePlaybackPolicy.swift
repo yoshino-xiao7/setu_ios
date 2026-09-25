@@ -55,11 +55,22 @@ enum HanimeRenditionPolicy {
         return HanimePlaybackBudget(
             startHeightLimit: nil,
             forwardBufferSeconds: 15,
-            hlsPeakBitRate: 6_000_000
+            hlsPeakBitRate: 0
         )
     }
 
+    /// A scraped m3u8 is only trustworthy when the path really ends in the playlist extension:
+    /// the site also exposes truncated `/_hls/…` addresses with no suffix, which cannot play.
+    static func playableHLSStream(in streams: [HanimeStream]) -> HanimeStream? {
+        streams.first { $0.isHLS && $0.url.path.lowercased().hasSuffix(".m3u8") }
+    }
+
     static func pickStream(in streams: [HanimeStream], budget: HanimePlaybackBudget) -> HanimeStream? {
+        // The site's own player streams HLS and plays smoothly in Safari on the same link, while
+        // our MP4 picks come from the download pages: files that are not interleaved for
+        // streaming are what let audio run ahead of video bytes. So start on HLS whenever a
+        // usable variant exists, and keep the MP4 renditions as the fallback ladder.
+        if let hls = playableHLSStream(in: streams) { return hls }
         guard let limit = budget.startHeightLimit else { return HanimeStream.preferred(in: streams) }
         let heights = streams.filter { $0.rank > knownHeightFloor && !$0.isHLS }
         if let capped = heights.filter({ $0.rank <= limit }).max(by: { $0.rank < $1.rank }) {
@@ -72,20 +83,23 @@ enum HanimeRenditionPolicy {
         return HanimeStream.preferred(in: streams)
     }
 
-    /// Next rendition strictly below `stream`, skipping failed and already-tried sources.
-    static func lowerStream(
+    /// Next stream to try when playback is unhealthy. The iPad log settled the order: a freeze
+    /// persisted with 60s of buffered media across 1080p, 720p and 480p, so the bitrate is not
+    /// the problem — the file is. Prefer another URL at the same rank (the site exposes two
+    /// mirrors per quality), then a lower rank, then anything else.
+    static func alternativeStream(
         than stream: HanimeStream?,
         in streams: [HanimeStream],
         excluding skipped: Set<String>
     ) -> HanimeStream? {
         let candidates = streams.filter { !skipped.contains($0.id) && $0.id != stream?.id }
         guard let rank = stream?.rank, rank > knownHeightFloor else {
-            // Nothing to compare against: any other source is still a change of origin.
             return candidates.min(by: { $0.rank < $1.rank })
         }
+        if let twin = candidates.first(where: { $0.rank == rank }) { return twin }
         return candidates
             .filter { $0.rank < rank }
-            .max(by: { $0.rank < $1.rank })
+            .max(by: { $0.rank < $1.rank }) ?? candidates.first
     }
 
     static func apply(_ budget: HanimePlaybackBudget, to item: AVPlayerItem, isHLS: Bool) {
@@ -98,7 +112,47 @@ enum HanimeRenditionPolicy {
     }
 }
 
+enum HanimeRenderingPolicy {
+    /// One AVPlayer must only have one active AVKit rendering surface. Keeping the inline
+    /// VideoPlayer alive behind a fullscreen AVPlayerViewController can reset the video decoder
+    /// while the audio clock continues normally.
+    static func showsInlinePlayer(isFullscreenPresented: Bool) -> Bool {
+        !isFullscreenPresented
+    }
+}
+
+enum HanimePlayerFailureDisposition: Equatable {
+    case rebuildPlayer
+    case tryAnotherSource
+
+    static func classify(_ error: Error?) -> Self {
+        let error = error as NSError?
+        if error?.domain == AVFoundationErrorDomain,
+           error?.code == AVError.Code.mediaServicesWereReset.rawValue {
+            return .rebuildPlayer
+        }
+        return .tryAnotherSource
+    }
+}
+
+/// Re-opening the same URL should not re-probe the MP4 header: that probe is exactly the
+/// multi-second stretch where the scrubber and the total duration read as empty.
+/// Only the most recent asset is kept, so stale signed links never pile up.
+final class HanimeAssetCache {
+    private var stored: (url: URL, asset: AVURLAsset)?
+
+    func asset(for url: URL, options: [String: Any]?) -> AVURLAsset {
+        if let stored, stored.url == url { return stored.asset }
+        let created = AVURLAsset(url: url, options: options)
+        stored = (url, created)
+        return created
+    }
+}
+
 enum HanimeRecoveryStep: Equatable {
+    /// Re-open the byte stream in place with a seek: keeps the item, its duration and AVKit's
+    /// controls alive. Rebuilding the item wipes the scrubber and the total time for seconds.
+    case resumeInPlace
     case switchTo(HanimeStream)
     case refreshLinks
     case giveUp
@@ -106,6 +160,7 @@ enum HanimeRecoveryStep: Equatable {
     /// Log-safe description: never leaks a signed direct link.
     var logLabel: String {
         switch self {
+        case .resumeInPlace: "resumeInPlace"
         case let .switchTo(stream): "switchTo(\(stream.quality))"
         case .refreshLinks: "refreshLinks"
         case .giveUp: "giveUp"
@@ -114,31 +169,30 @@ enum HanimeRecoveryStep: Equatable {
 }
 
 enum HanimeRecoveryPlan {
-    /// Stall recovery ladder: shed resolution first (free, no extra site request), then ask
-    /// for fresh direct links, then change source, and only then hand the failure to the user.
+    /// Cheapest and least visible first, because the log showed a bitrate-independent freeze:
+    /// 1. re-sync in place with a forward seek — keeps the item, duration and controls; a
+    ///    backward seek walks straight back into the same bad sample (that loop is in the log).
+    /// 2. another URL at the same rank — a different mirror is the most likely cure for a bad file.
+    /// 3. a fresh direct link, then the lowest remaining rank.
     static func step(
+        reason: HanimeRecoveryReason,
         current: HanimeStream?,
         streams: [HanimeStream],
         skipped: Set<String>,
         refreshed: Bool,
-        canRefresh: Bool
+        canRefresh: Bool,
+        canNudge: Bool
     ) -> HanimeRecoveryStep {
-        if let lower = HanimeRenditionPolicy.lowerStream(
+        if canNudge { return .resumeInPlace }
+        if let alternative = HanimeRenditionPolicy.alternativeStream(
             than: current,
             in: streams,
             excluding: skipped
         ) {
-            return .switchTo(lower)
+            return .switchTo(alternative)
         }
-        if canRefresh && !refreshed {
-            return .refreshLinks
-        }
-        // Links were already refreshed: the remaining lever is a different source.
-        let remaining = streams.filter { !skipped.contains($0.id) && $0.id != current?.id }
-        guard let fallback = remaining.min(by: { $0.rank < $1.rank }) ?? remaining.first else {
-            return .giveUp
-        }
-        return .switchTo(fallback)
+        if canRefresh && !refreshed { return .refreshLinks }
+        return .giveUp
     }
 }
 
@@ -224,7 +278,12 @@ struct HanimePlaybackWatchdog {
     private var stuckWindows = 0
     private var collapseWindows = 0
     private var waitingSince: TimeInterval?
+    private var motionlessSince: TimeInterval?
     private var pendingBuffering = false
+    /// Don't read "no frames" as a stall before the item has produced its first frame: after a
+    /// recovery re-mount the next few windows legitimately have none, and both false positives in
+    /// the iPad log started exactly there.
+    private var armed = false
 
     mutating func reset(at positionSeconds: Double?) {
         previous = nil
@@ -233,7 +292,9 @@ struct HanimePlaybackWatchdog {
         stuckWindows = 0
         collapseWindows = 0
         waitingSince = nil
+        motionlessSince = nil
         pendingBuffering = false
+        armed = false
     }
 
     mutating func consume(_ sample: HanimePlaybackSample) -> HanimeWatchdogAction {
@@ -264,14 +325,28 @@ struct HanimePlaybackWatchdog {
             return .recover(.stalledTooLong, resumeAt: lastHealthyPosition ?? sample.positionSeconds)
         }
         waitingSince = nil
+        // Arm only once playback demonstrably moves (a frame, or the clock advancing normally).
+        if sample.renderedFrames ?? 0 >= 1 || advanced >= elapsed * 0.8 { armed = true }
 
         if advanced < elapsed * 0.4 {
+            guard armed else {
+                // Can't tell "still starting up" from "stuck" without evidence of motion, so use
+                // the longer timeout instead of the 2-window rule. Without this, `clockStuck`
+                // would be unreachable: it is by definition a clock that never advances.
+                motionlessSince = motionlessSince ?? previous.at
+                let motionless = sample.at - (motionlessSince ?? sample.at)
+                guard motionless >= stallTimeoutSeconds else { return .none }
+                motionlessSince = sample.at
+                return .recover(.clockStuck, resumeAt: lastHealthyPosition ?? sample.positionSeconds)
+            }
+            motionlessSince = nil
             stuckWindows += 1
             badWindows = 0
             guard stuckWindows >= windowsBeforeRecovery else { return .buffering }
             stuckWindows = 0
             return .recover(.clockStuck, resumeAt: lastHealthyPosition ?? sample.positionSeconds)
         }
+        motionlessSince = nil
 
         let frozen = sample.renderedFrames == 0
         let starving = sample.renderedFrames == nil && sample.bufferedAheadSeconds < minBufferedAhead
@@ -290,6 +365,7 @@ struct HanimePlaybackWatchdog {
             pendingBuffering = false
             return .healthy
         }
+        guard armed else { return .none }
         badWindows += 1
         guard badWindows >= windowsBeforeRecovery else { return .buffering }
         badWindows = 0
@@ -305,16 +381,34 @@ struct HanimePlaybackWatchdog {
 final class HanimeStallMonitor {
     static let sampleInterval: TimeInterval = 2
     static let maxRecoveries = 3
-    /// Resume slightly behind the last healthy position: audio may have drifted ahead.
-    static let rewindSeconds: TimeInterval = 2
+    /// Attempts come back with time. The old "3 strikes and the watchdog stays off" was
+    /// reproduced on iPad: after 05:33:10 the sampler never ran again, so every later stall
+    /// (including one lasting 10+ seconds) went completely undetected.
+    static let recoveryRechargeSeconds: TimeInterval = 90
+    /// A freshly mounted item legitimately waits and produces no frames for several seconds, and
+    /// every stall signal except this grace period used to fire inside it: three attempts burned
+    /// in 45 seconds on iPad. Give a new item room to start before judging it.
+    static let startupGraceSeconds: TimeInterval = 15
 
     let frames = HanimeVideoFrameProbe()
     private var watchdog = HanimePlaybackWatchdog(sampleInterval: HanimeStallMonitor.sampleInterval)
     private(set) var recoveries = 0
     private var droppedTotal: Int?
+    private var lastRecoveryAt: TimeInterval?
+    private(set) var mountedAt: TimeInterval?
 
     /// Monotonic clock, so a background pause never looks like a stalled window.
     static var now: TimeInterval { ProcessInfo.processInfo.systemUptime }
+
+    /// Called when a new item is installed; deliberately not touched by the sampler's own resets.
+    func noteMount(now: TimeInterval) {
+        mountedAt = now
+    }
+
+    func isWarmingUp(now: TimeInterval) -> Bool {
+        guard let mountedAt else { return false }
+        return now - mountedAt < Self.startupGraceSeconds
+    }
 
     /// Per-window drop count from a cumulative counter; nil until two readings exist, and
     /// re-baselines whenever the log starts a new event or a new item was installed.
@@ -324,10 +418,16 @@ final class HanimeStallMonitor {
         return current - previous
     }
 
-    /// false once the budget is spent, so the caller hands the failure to the user.
-    func noteRecovery() -> Bool {
+    /// false when the in-flight budget is spent; callers must back off and keep sampling.
+    /// Only a dispatched recovery moves the clock — refreshing it on a refusal made the recharge
+    /// unreachable and the watchdog sat at 3 strikes while the user watched a still image.
+    func noteRecovery(now: TimeInterval) -> Bool {
+        if let at = lastRecoveryAt, recoveries > 0, now - at >= Self.recoveryRechargeSeconds {
+            recoveries -= 1
+        }
         guard recoveries < Self.maxRecoveries else { return false }
         recoveries += 1
+        lastRecoveryAt = now
         return true
     }
 
@@ -338,6 +438,8 @@ final class HanimeStallMonitor {
 
     func resetBudget() {
         recoveries = 0
+        lastRecoveryAt = nil
+        mountedAt = nil
         watchdog.reset(at: nil)
     }
 
@@ -360,10 +462,19 @@ final class HanimeVideoFrameProbe {
     /// One output per item; `suppressesPlayerRendering` stays off so AVKit keeps drawing.
     func attach(to item: AVPlayerItem) {
         guard attachedItem !== item else { return }
+        detach()
         let created = AVPlayerItemVideoOutput(pixelBufferAttributes: Self.outputAttributes)
         item.add(created)
         output = created
         attachedItem = item
+    }
+
+    func detach() {
+        if let attachedItem, let output {
+            attachedItem.remove(output)
+        }
+        output = nil
+        attachedItem = nil
     }
 
     /// nil when the signal is unavailable, so the watchdog falls back to supply signals.
@@ -412,7 +523,7 @@ enum HanimePlaybackProbe {
     #endif
 }
 
-#if DEBUG && os(iOS)
+#if os(iOS)
 /// An intermittent stall cannot be reproduced on demand, so the debug lines are mirrored into
 /// the app container: use the app normally, then pull the evidence afterwards with
 ///
@@ -436,8 +547,10 @@ final class HanimePlaybackLogFile {
             .appendingPathComponent(Self.fileName)
         guard let url else { return }
         let system = ProcessInfo.processInfo.operatingSystemVersionString
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
         queue.async {
-            self.append("session os=\(system)", to: url)
+            self.append("session os=\(system) app=\(version)(\(build))", to: url)
         }
     }
 

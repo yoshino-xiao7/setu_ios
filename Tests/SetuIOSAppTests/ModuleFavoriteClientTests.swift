@@ -481,6 +481,29 @@ final class HanimeCatalogClientTests: XCTestCase {
         XCTAssertNotEqual(playbackHeaders?["Accept"], HanimeSite.pageHeaders["Accept"])
     }
 
+    func testMediaAssetOptionsCarryPageCookies() {
+        let url = URL(string: "https://vdownload.hembed.com/video/a.mp4")!
+        let storage = HTTPCookieStorage.shared
+        let before = HanimeSite.mediaCookieCount(for: url)
+        let properties: [HTTPCookiePropertyKey: Any] = [
+            // 前导点是必需的：“hembed.com”不匹配子域，服务器下发的跨子域 cookie 形如“*.hembed.com”。
+            .domain: ".hembed.com",
+            .path: "/",
+            .name: "cf_ob_test",
+            .value: "x",
+            .expires: Date(timeIntervalSinceNow: 600),
+        ]
+        let cookie = HTTPCookie(properties: properties)!
+        storage.setCookie(cookie)
+        defer { storage.deleteCookie(cookie) }
+        XCTAssertEqual(HanimeSite.mediaCookieCount(for: url), before + 1)
+        let options = HanimeSite.mediaAssetOptions(for: url)
+        let headers = options[HanimeSite.assetHeaderFieldsKey] as? [String: String]
+        XCTAssertEqual(headers?["Referer"], HanimeSite.referer)
+        XCTAssertNotNil(options[HanimeSite.assetHTTPCookiesKey] as? [HTTPCookie],
+                        "设置了自定义 header 后 AVFoundation 不再自动带 cookie，必须显式传")
+    }
+
     func testWatchResolvesProtocolRelativeAndDataSrc() async throws {
         let client = makeClient { request in
             if request.url?.path == "/download" { return "<table></table>" }

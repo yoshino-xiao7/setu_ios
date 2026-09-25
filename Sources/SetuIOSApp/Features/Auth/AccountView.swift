@@ -138,6 +138,11 @@ struct AccountView: View {
             .setuListRow()
 
             Section {
+                NeteaseAccountCard(environment: environment)
+            }
+            .setuListRow()
+
+            Section {
                 SetuCard {
                     VStack(spacing: SetuSpacing.lg) {
                         SetuSectionHeader(title: "通用设置")

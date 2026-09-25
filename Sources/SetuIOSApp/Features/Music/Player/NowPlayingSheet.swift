@@ -41,6 +41,7 @@ struct NowPlayingSheet: View {
     @State var isDownloading = false
     @State var showingQueue = false
     @State var showingMore = false
+    @State var showingSimilar = false
     @State var pendingMoreAction: (() -> Void)?
     @State var playlistTrack: MusicPlaybackTrack?
     @State var mvTrack: MusicPlaybackTrack?
@@ -48,6 +49,7 @@ struct NowPlayingSheet: View {
     @State var feedback: SetuFeedback?
     @State var feedbackTask: Task<Void, Never>?
     @State var fileSharePayload: SystemFileSharePayload?
+    @State var showingNeteaseLogin = false
 
     init(environment: AppEnvironment, player: MusicPlaybackController, lyrics: NowPlayingLyricsModel, initialPage: NowPlayingPage = .cover) {
         self.environment = environment
@@ -66,9 +68,14 @@ struct NowPlayingSheet: View {
                     detailHeader
                     if canvas.usesTwoPane {
                         HStack(alignment: .top, spacing: SetuSpacing.xl) {
-                            nowPlayingPageContent(for: track)
-                            bottomPanel(for: track)
-                                .frame(maxWidth: 480)
+                            VStack(spacing: SetuSpacing.md) {
+                                coverPage(for: track)
+                                bottomPanel(for: track)
+                            }
+                            .frame(maxWidth: 480)
+
+                            lyricsPage(for: track)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
                         }
                         .padding(.horizontal, SetuSpacing.xl)
                     } else {
@@ -105,6 +112,12 @@ struct NowPlayingSheet: View {
             }
         }
         .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.86), value: feedback)
+        .sheet(isPresented: $showingSimilar) {
+            if let track = player.currentTrack {
+                MusicSimilarRecommendationsSheet(track: track, environment: environment, player: player)
+                    .presentationDetents([.fraction(0.55), .large])
+            }
+        }
         .sheet(isPresented: $showingMore, onDismiss: {
             let action = pendingMoreAction
             pendingMoreAction = nil
@@ -156,6 +169,9 @@ struct NowPlayingSheet: View {
                 }
             }
         }
+        .sheet(isPresented: $showingNeteaseLogin) {
+            NeteaseLoginSheet(environment: environment)
+        }
         .onDisappear {
             feedbackTask?.cancel()
         }
@@ -179,28 +195,40 @@ struct NowPlayingSheet: View {
 
             Spacer()
 
-            if !dynamicTypeSize.isAccessibilitySize {
-                VStack(spacing: 2) {
-                    Text("正在播放")
-                        .font(.caption2)
-                        .foregroundStyle(SetuColor.textTertiary)
+            VStack(spacing: 2) {
+                if let track = player.currentTrack {
+                    Text(track.title)
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(SetuColor.textPrimary)
+                        .lineLimit(1)
+                    Text(track.artist)
+                        .font(.caption)
+                        .foregroundStyle(SetuColor.textSecondary)
+                        .lineLimit(1)
+                } else {
                     Text(queueCaption)
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(SetuColor.textSecondary)
                         .lineLimit(1)
                 }
             }
+            .frame(maxWidth: .infinity)
 
             Spacer()
 
-            Button { showingMore = true } label: {
-                Image(systemName: "ellipsis")
-                    .font(.title3.weight(.semibold))
-                    .frame(width: 44, height: 44)
+            if let track = player.currentTrack {
+                ShareLink(item: "\(track.title) - \(track.artist)") {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(SetuColor.textSecondary)
+                        .frame(width: 44, height: 44)
+                        .background(SetuColor.surfaceMuted.opacity(0.7), in: Circle())
+                }
+                .setuButtonFeedback(cornerRadius: 22)
+                .accessibilityLabel("分享歌曲")
+            } else {
+                Color.clear.frame(width: 44, height: 44)
             }
-            .accessibilityLabel("更多操作")
-            .setuButtonFeedback()
-
         }
         .padding(.horizontal, SetuSpacing.lg)
     }
@@ -225,99 +253,37 @@ struct NowPlayingSheet: View {
     }
 
     func coverPage(for track: MusicPlaybackTrack) -> some View {
-        // Artwork adapts to whatever the page area offers, so controls stay
-        // on-screen for iPhone SE and the art still fills a Pro Max.
-        GeometryReader { proxy in
-            let side = max(min(proxy.size.width - SetuSpacing.xxl * 2, proxy.size.height - SetuSpacing.xl * 2, canvas.artworkMaxSide), 120)
-            let content = VStack(spacing: SetuSpacing.xl) {
-                Spacer(minLength: 0)
-
-                MusicArtworkView(
-                    urlString: track.coverURLString,
-                    width: side,
-                    height: side,
-                    cornerRadius: SetuRadius.lg,
-                    artworkSize: .lockScreen,
-                    onTap: {
-                        PlayerHaptics.light()
-                        showLyrics()
-                    }
-                )
-                .shadow(color: SetuColor.brandPink.opacity(0.24), radius: 24, y: 16)
-                .scaleEffect(player.isPlaying && !reduceMotion ? 1.0 : 0.92)
-                .animation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.78), value: player.isPlaying)
-                .accessibilityLabel("歌曲封面，点击查看歌词")
-
-                Spacer(minLength: 0)
+        MusicTurntableView(
+            track: track,
+            isPlaying: player.isPlaying,
+            isBuffering: player.isBuffering,
+            canPlayPrevious: player.canPlayPrevious,
+            canPlayNext: player.canPlayNext,
+            onSkipPrevious: {
+                PlayerHaptics.light()
+                Task { await player.userSkip(by: -1) }
+            },
+            onSkipNext: {
+                PlayerHaptics.light()
+                Task { await player.userSkip(by: 1) }
+            },
+            onTapDisc: {
+                showLyrics()
             }
-            .frame(width: proxy.size.width)
-            if dynamicTypeSize.isAccessibilitySize {
-                ScrollView { content.padding(.vertical, SetuSpacing.md) }
-            } else {
-                content.frame(height: proxy.size.height)
-            }
-        }
-        .contentShape(Rectangle())
-        .simultaneousGesture(trackSkipGesture)
+        )
     }
 
     func lyricsPage(for track: MusicPlaybackTrack) -> some View {
         NowPlayingLyricsPane(model: lyrics, player: player, onShowCover: showCover)
     }
 
-    var trackSkipGesture: some Gesture {
-        DragGesture(minimumDistance: 24, coordinateSpace: .local)
-            .onEnded { value in
-                let horizontal = abs(value.predictedEndTranslation.width) > abs(value.translation.width)
-                    ? value.predictedEndTranslation.width
-                    : value.translation.width
-                let vertical = abs(value.predictedEndTranslation.height) > abs(value.translation.height)
-                    ? value.predictedEndTranslation.height
-                    : value.translation.height
-                guard abs(horizontal) > 48, abs(horizontal) > abs(vertical) * 1.2 else {
-                    return
-                }
-                if horizontal < 0 {
-                    guard player.canPlayNext else {
-                        showFeedback(.warning("已经是最后一首"))
-                        return
-                    }
-                    PlayerHaptics.light()
-                    Task { await player.userSkip(by: 1) }
-                } else {
-                    guard player.canPlayPrevious else {
-                        showFeedback(.warning("已经是第一首"))
-                        return
-                    }
-                    PlayerHaptics.light()
-                    Task { await player.userSkip(by: -1) }
-                }
-            }
-    }
-
     // MARK: Background & helpers
 
     var detailBackground: some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    (artworkAccentColor ?? SetuColor.brandSoft).opacity(0.42),
-                    SetuColor.bgBase,
-                    SetuColor.brandSoft.opacity(0.2)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            RadialGradient(
-                colors: [
-                    (artworkAccentColor ?? SetuColor.brandPink).opacity(0.36),
-                    SetuColor.bgBase.opacity(0.08)
-                ],
-                center: .top,
-                startRadius: 40,
-                endRadius: 520
-            )
-        }
+        MusicBlurredArtworkBackdrop(
+            coverURLString: player.currentTrack?.coverURLString,
+            accentColor: artworkAccentColor
+        )
     }
 
     var queueCaption: String {

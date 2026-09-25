@@ -137,4 +137,12 @@ public struct MusicClient: Sendable {
     public func clearHistory() async throws {
         let _: String = try await apiClient.requestWithoutBody("/user/music/history", method: "DELETE")
     }
+
+    public func contributeNeteaseToken(cookie: String, nickname: String? = nil) async throws -> NeteaseTokenContributeResponse {
+        try await apiClient.post(
+            "/user/music/token/contribute",
+            body: NeteaseTokenContributeRequest(cookie: cookie, nickname: nickname)
+        )
+    }
 }
+

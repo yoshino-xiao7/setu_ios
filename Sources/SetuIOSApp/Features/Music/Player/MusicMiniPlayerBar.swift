@@ -104,13 +104,18 @@ struct MusicMiniPlayerBar: View {
     }
 
     private func artwork(for track: MusicPlaybackTrack) -> some View {
-        MusicArtworkView(
-            urlString: track.coverURLString,
-            width: 44,
-            height: 44,
-            cornerRadius: SetuRadius.sm,
-            onTap: { openDetail(.cover) }
-        )
+        Button {
+            openDetail(.cover)
+        } label: {
+            MusicMiniVinylDiscView(
+                artworkURLString: track.coverURLString,
+                diameter: 42,
+                isPlaying: player.isPlaying,
+                progress: player.playbackProgress
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("打开正在播放：\(track.title)")
     }
 
     private func trackSummary(for track: MusicPlaybackTrack, lineLimit: Int) -> some View {
@@ -172,19 +177,12 @@ struct MusicMiniPlayerBar: View {
                     .foregroundStyle(SetuColor.brandInk)
                     .frame(width: 24, height: 44)
 
-                MusicArtworkView(
-                    urlString: track.coverURLString,
-                    width: 42,
-                    height: 42,
-                    cornerRadius: SetuRadius.sm
+                MusicMiniVinylDiscView(
+                    artworkURLString: track.coverURLString,
+                    diameter: 40,
+                    isPlaying: player.isPlaying,
+                    progress: player.playbackProgress
                 )
-                .overlay(alignment: .bottomTrailing) {
-                    Image(systemName: player.isPlaying ? "waveform" : "pause.fill")
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 18, height: 18)
-                        .background(SetuColor.heroGradient, in: Circle())
-                }
             }
             .padding(.leading, SetuSpacing.xs)
             .padding(.trailing, SetuSpacing.sm)

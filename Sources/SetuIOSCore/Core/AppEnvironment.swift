@@ -46,6 +46,8 @@ public final class AppEnvironment {
     public let adminCloudVideoClient: AdminCloudVideoClient
     public let cloudVideoUploadStore: CloudVideoUploadStore
     public let authSession: AuthSession
+    public let neteaseMusicApiClient: NeteaseMusicApiClient
+    public let neteaseMusicSession: NeteaseMusicSession
 
     public init(
         config: AppConfig,
@@ -79,7 +81,9 @@ public final class AppEnvironment {
         adminClient: AdminClient,
         authSession: AuthSession,
         pixivOnlineClient: (any PixivOnlineServing)? = nil,
-        cloudVideoUploadStore: CloudVideoUploadStore? = nil
+        cloudVideoUploadStore: CloudVideoUploadStore? = nil,
+        neteaseMusicApiClient: NeteaseMusicApiClient? = nil,
+        neteaseMusicSession: NeteaseMusicSession? = nil
     ) {
         self.config = config
         self.keychain = keychain
@@ -127,6 +131,9 @@ public final class AppEnvironment {
             persistence: CloudVideoUploadMemoryPersistence(),
             network: CloudVideoUploadManualNetwork()
         )
+        let resolvedNeteaseClient = neteaseMusicApiClient ?? NeteaseMusicApiClient()
+        self.neteaseMusicApiClient = resolvedNeteaseClient
+        self.neteaseMusicSession = neteaseMusicSession ?? NeteaseMusicSession(apiClient: resolvedNeteaseClient, keychain: keychain)
     }
 
     public static func live() -> AppEnvironment {

@@ -18,14 +18,22 @@ enum HanimePlayerReload {
         return currentID != nextID
     }
 
+    private static func ordered(_ streams: [HanimeStream]) -> [HanimeStream] {
+        streams.sorted { lhs, rhs in
+            if lhs.rank != rhs.rank { return lhs.rank > rhs.rank }
+            if lhs.isHLS != rhs.isHLS { return !lhs.isHLS && rhs.isHLS }
+            return false
+        }
+    }
+
+    /// A failed rendition must not bounce the viewer back up. iPad logs showed a stall
+    /// downgrade to 480p followed by a `.failed` fallback that picked 1080p again and restarted
+    /// from zero — so prefer the highest rank at or below what just failed, and only go higher
+    /// when nothing at/below is left.
     static func nextPlayable(after current: HanimeStream?, in streams: [HanimeStream], excluding failed: Set<String>) -> HanimeStream? {
-        streams
-            .sorted { lhs, rhs in
-                if lhs.rank != rhs.rank { return lhs.rank > rhs.rank }
-                if lhs.isHLS != rhs.isHLS { return !lhs.isHLS && rhs.isHLS }
-                return false
-            }
-            .first { !failed.contains($0.id) && $0.id != current?.id }
+        let candidates = ordered(streams.filter { !failed.contains($0.id) && $0.id != current?.id })
+        guard let rank = current?.rank, rank > 1 else { return candidates.first }
+        return candidates.first(where: { $0.rank <= rank }) ?? candidates.first
     }
 }
 
@@ -166,6 +174,9 @@ struct HanimePlayerView: View {
     @State private var hasRefreshedLinks = false
     @State private var watchdogTask: Task<Void, Never>?
     @State private var recoveryTask: Task<Void, Never>?
+    @State private var mediaServicesResetObserver: NSObjectProtocol?
+    @State private var hasNudgedInPlace = false
+    @State private var assets = HanimeAssetCache()
     @State private var monitor = HanimeStallMonitor()
     @State private var networkProfile = HanimeNetworkProfile()
     #if DEBUG && os(iOS)
@@ -181,6 +192,11 @@ struct HanimePlayerView: View {
 
     private var budget: HanimePlaybackBudget {
         HanimeRenditionPolicy.budget(isExpensiveNetwork: networkProfile.isExpensive)
+    }
+
+    /// HLS is the site's own adaptive stream; "HLS" is jargon to a viewer.
+    private func qualityLabel(_ stream: HanimeStream) -> String {
+        stream.isHLS ? "自动" : stream.quality
     }
 
     private var selectedStream: HanimeStream? {
@@ -205,7 +221,7 @@ struct HanimePlayerView: View {
                         set: { selectQuality($0) }
                     )) {
                         ForEach(effectiveStreams) { stream in
-                            Text(stream.quality).tag(stream.id)
+                            Text(qualityLabel(stream)).tag(stream.id)
                         }
                     }
                     .pickerStyle(.segmented)
@@ -216,6 +232,7 @@ struct HanimePlayerView: View {
         .accessibilityIdentifier("hanime.player")
         .accessibilityValue(workID)
         .onAppear {
+            installMediaServicesResetObserver()
             if selectedID == nil { selectedID = selectedStream?.id }
             if HanimePlayerReload.shouldStart(currentID: selectedID, nextID: selectedStream?.id, hasPlayer: avPlayer != nil) {
                 configurePlayer()
@@ -225,8 +242,7 @@ struct HanimePlayerView: View {
             startWatchdog()
         }
         .onDisappear {
-            stopWatchdog()
-            avPlayer?.pause()
+            teardownPlayer()
         }
         #if os(iOS)
         .fullScreenCover(isPresented: $showingFullscreen) {
@@ -257,7 +273,17 @@ struct HanimePlayerView: View {
         if effectiveStreams.isEmpty || (playbackError != nil && avPlayer == nil) {
             placeholder(message: playbackError ?? "暂未拿到播放地址", isLoading: false)
         } else if let avPlayer {
-            VideoPlayer(player: avPlayer)
+            Group {
+                #if os(iOS)
+                if HanimeRenderingPolicy.showsInlinePlayer(isFullscreenPresented: showingFullscreen) {
+                    VideoPlayer(player: avPlayer)
+                } else {
+                    Color.black
+                }
+                #else
+                VideoPlayer(player: avPlayer)
+                #endif
+            }
                 .aspectRatio(16.0 / 9.0, contentMode: .fit)
                 .frame(maxWidth: .infinity)
                 .clipShape(RoundedRectangle(cornerRadius: SetuRadius.md, style: .continuous))
@@ -334,10 +360,14 @@ struct HanimePlayerView: View {
         skippedIDs = []
         monitor.resetBudget()
         recoveryHint = nil
+        let quality = effectiveStreams.first(where: { $0.id == id })?.quality ?? "?"
+        log("hanime.action user quality=\(quality) skippedCleared=\(skippedIDs.count)")
         configurePlayer()
     }
 
     private func retryPlayback() {
+        // 从当前位置重挂，不要回到起点：以前点“重新加载播放”会从头播放，体感就是“卡顿后重新播放”。
+        let resume = resumablePosition()
         failedIDs = []
         skippedIDs = []
         hasRefreshedLinks = false
@@ -346,8 +376,16 @@ struct HanimePlayerView: View {
         playbackError = nil
         recoveryHint = nil
         selectedID = selectedStream?.id
-        configurePlayer()
+        log("hanime.action retry quality=\(selectedStream?.quality ?? "?") resume=\(resume.map { String(format: "%.1f", $0) } ?? "start")")
+        configurePlayer(resumeAt: resume)
         startWatchdog()
+    }
+
+    private func resumablePosition() -> Double? {
+        guard let seconds = avPlayer?.currentItem?.currentTime().seconds, seconds.isFinite, seconds > 1 else {
+            return nil
+        }
+        return seconds
     }
 
     private func configurePlayer(resumeAt: Double? = nil) {
@@ -357,7 +395,7 @@ struct HanimePlayerView: View {
             abandonPlayer()
             return
         }
-        let item = AVPlayerItem(asset: AVURLAsset(url: stream.url, options: HanimeSite.playbackAssetOptions))
+        let item = AVPlayerItem(asset: assets.asset(for: stream.url, options: HanimeSite.mediaAssetOptions(for: stream.url)))
         HanimeRenditionPolicy.apply(budget, to: item, isHLS: stream.isHLS)
         observe(item, stream: stream)
         monitor.frames.attach(to: item)
@@ -377,18 +415,36 @@ struct HanimePlayerView: View {
             player = created
         }
         isBuffering = false
+        hasNudgedInPlace = false
         monitor.resetForNewPlayback(at: resumeAt)
+        monitor.noteMount(now: HanimeStallMonitor.now)
         onStart?()
         log("hanime.play quality=\(stream.quality) hls=\(stream.isHLS) "
-            + "forwardBuffer=\(budget.forwardBufferSeconds)s resume=\(resumeAt.map { String(format: "%.1f", $0) } ?? "start")")
+            + "forwardBuffer=\(budget.forwardBufferSeconds)s resume=\(resumeAt.map { String(format: "%.1f", $0) } ?? "start") "
+            + "sources=\(effectiveStreams.map { $0.isHLS ? "hls" : $0.quality }.joined(separator: ",")) "
+            + "cookies=\(HanimeSite.mediaCookieCount(for: stream.url))")
         guard let resumeAt, resumeAt.isFinite, resumeAt > 1 else {
             player.play()
             return
         }
-        let time = CMTime(seconds: resumeAt, preferredTimescale: 600)
-        player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
+        seekForRecovery(player, item, to: resumeAt, tag: "resume", forward: false)
+    }
+
+    /// Recovery seeks normally land on the keyframe at or before the target: a frame-accurate seek
+    /// on a long-GOP site MP4 has to fetch and decode from the previous keyframe, which is most of
+    /// the visible black screen. A frozen video needs the opposite: land *after* the target so the
+    /// bad sample is skipped instead of re-entered.
+    private func seekForRecovery(_ player: AVPlayer, _ item: AVPlayerItem, to seconds: Double, tag: String, forward: Bool) {
+        let time = CMTime(seconds: max(seconds, 0), preferredTimescale: 600)
+        player.seek(to: time,
+                    toleranceBefore: forward ? .zero : .indefinite,
+                    toleranceAfter: forward ? .indefinite : .zero) { finished in
             Task { @MainActor in
                 guard avPlayer === player, player.currentItem === item else { return }
+                if !finished {
+                    log("hanime.seek.failed tag=\(tag) position=\(String(format: "%.1f", seconds)) "
+                        + "status=\(item.status == .readyToPlay ? "ready" : "notReady")")
+                }
                 player.play()
             }
         }
@@ -397,9 +453,18 @@ struct HanimePlayerView: View {
     private func observe(_ item: AVPlayerItem, stream: HanimeStream) {
         itemObservers = [item.observe(\.status, options: [.new]) { item, _ in
             guard item.status == .failed else { return }
+            let error = item.error
+            let code = (error as NSError?)?.code ?? 0
+            let domain = (error as NSError?)?.domain ?? ""
             Task { @MainActor in
                 guard selectedID == stream.id else { return }
-                failCurrentAndTryNext(stream)
+                // A cancelled load is our own replaceCurrentItem racing ahead of the old item;
+                // failing over on it cascades (iPad log: 480p marked failed 1s after mounting).
+                if domain == NSURLErrorDomain, code == NSURLErrorCancelled {
+                    log("hanime.fail.ignored quality=\(stream.quality) cancelled")
+                    return
+                }
+                failCurrentAndTryNext(stream, error: error)
             }
         }]
         stallObserver = NotificationCenter.default.addObserver(
@@ -413,12 +478,26 @@ struct HanimePlayerView: View {
         }
     }
 
-    private func failCurrentAndTryNext(_ stream: HanimeStream) {
+    private func failCurrentAndTryNext(_ stream: HanimeStream, error: Error?) {
+        let resume = resumablePosition()
+        let code: String
+        if let error = error as NSError? {
+            // domain#code only: AVFoundation descriptions embed the signed URL.
+            code = "\(error.domain)#\(error.code)"
+        } else {
+            code = "unknown"
+        }
+        if HanimePlayerFailureDisposition.classify(error) == .rebuildPlayer {
+            log("hanime.mediaServices.reset source=itemFailed quality=\(stream.quality) resume=\(resume.map { String(format: "%.1f", $0) } ?? "start")")
+            rebuildPlayerAfterMediaServicesReset(resumeAt: resume)
+            return
+        }
         releaseObservers()
         failedIDs.insert(stream.id)
+        log("hanime.fail quality=\(stream.quality) error=\(code) resume=\(resume.map { String(format: "%.1f", $0) } ?? "start")")
         if let next = HanimePlayerReload.nextPlayable(after: stream, in: effectiveStreams, excluding: failedIDs) {
             selectedID = next.id
-            configurePlayer()
+            configurePlayer(resumeAt: resume)
             return
         }
         stopWatchdog()
@@ -435,9 +514,51 @@ struct HanimePlayerView: View {
     }
 
     private func abandonPlayer() {
+        monitor.frames.detach()
         avPlayer?.pause()
         avPlayer?.replaceCurrentItem(with: nil)
         avPlayer = nil
+    }
+
+    private func teardownPlayer() {
+        stopWatchdog()
+        releaseObservers()
+        removeMediaServicesResetObserver()
+        abandonPlayer()
+    }
+
+    private func installMediaServicesResetObserver() {
+        guard mediaServicesResetObserver == nil else { return }
+        mediaServicesResetObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.mediaServicesWereResetNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            Task { @MainActor in
+                let resume = resumablePosition()
+                log("hanime.mediaServices.reset source=notification resume=\(resume.map { String(format: "%.1f", $0) } ?? "start")")
+                rebuildPlayerAfterMediaServicesReset(resumeAt: resume)
+            }
+        }
+    }
+
+    private func removeMediaServicesResetObserver() {
+        if let mediaServicesResetObserver {
+            NotificationCenter.default.removeObserver(mediaServicesResetObserver)
+        }
+        mediaServicesResetObserver = nil
+    }
+
+    private func rebuildPlayerAfterMediaServicesReset(resumeAt: Double?) {
+        guard selectedStream != nil else { return }
+        stopWatchdog()
+        releaseObservers()
+        abandonPlayer()
+        monitor.resetBudget()
+        hasNudgedInPlace = false
+        recoveryHint = "媒体服务已恢复，正在重建播放器"
+        configurePlayer(resumeAt: resumeAt)
+        startWatchdog()
     }
 
     // MARK: - Stall watchdog
@@ -476,6 +597,8 @@ struct HanimePlayerView: View {
         let time = item.currentTime()
         let position = time.seconds
         guard position.isFinite else { return }
+        // 新 item 刚挂上时本来就还在等首帧，不要在那段时间里判停滞。
+        guard !monitor.isWarmingUp(now: HanimeStallMonitor.now) else { return }
         let droppedTotal = await HanimePlaybackProbe.droppedVideoFramesTotal(in: item)
         let sample = HanimePlaybackSample(
             at: HanimeStallMonitor.now,
@@ -509,6 +632,8 @@ struct HanimePlayerView: View {
         case .healthy:
             isBuffering = false
             recoveryHint = nil
+            // 一段健康播放之后，原地重拉重新可用。
+            hasNudgedInPlace = false
         case .buffering:
             isBuffering = true
         case let .recover(reason, resumeAt):
@@ -519,25 +644,39 @@ struct HanimePlayerView: View {
     private func recover(from reason: HanimeRecoveryReason, resumeAt: Double) {
         let current = selectedStream
         isBuffering = false
-        guard monitor.noteRecovery() else {
-            stopWatchdog()
-            playbackError = "视频反复停滞，自动恢复已停止，请稍后再试"
+        guard monitor.noteRecovery(now: HanimeStallMonitor.now) else {
+            // 预算暂时用完只能退避，绝对不能关掉采样：真机上就是这样关死后，
+            // 十几分钟里没有任何一行日志，十几秒的卡顿也无人接管。
+            isBuffering = true
+            recoveryHint = "视频停滞，正在等待重试窗口"
+            log("hanime.recover.backoff reason=\(reason.logLabel) recoveries=\(monitor.recoveries)")
             return
         }
         let step = HanimeRecoveryPlan.step(
+            reason: reason,
             current: current,
             streams: effectiveStreams,
             skipped: failedIDs.union(skippedIDs),
             refreshed: hasRefreshedLinks,
-            canRefresh: refreshStreams != nil
+            canRefresh: refreshStreams != nil,
+            canNudge: !hasNudgedInPlace
         )
         // `id` contains the URL, so a refreshed link for the same quality stays selectable.
         if let current { skippedIDs.insert(current.id) }
-        let target = max(resumeAt - HanimeStallMonitor.rewindSeconds, 0)
-        log("hanime.recover attempt=\(monitor.recoveries) reason=\(reason.logLabel) step=\(step.logLabel)")
+        // 以当前时钟位置为锚，不回跳到冻结前的位置：向后 seek 会再次落进同一个坏 sample
+        // （日志里反复 resume=15.1 就是这个循环），音频已走远时回跳还会吞掉一段进度。
+        let live = avPlayer?.currentItem?.currentTime().seconds ?? resumeAt
+        let anchor = live.isFinite ? live : resumeAt
+        let target = max(anchor - 1, 0)
+        // 冻结类向前重同步（跳过坏 sample），链路类向后重拉（重新开口要字节）。
+        let skipBadSample = reason == .videoFrozen || reason == .frameRateCollapse || reason == .clockStuck
+        log("hanime.recover attempt=\(monitor.recoveries) reason=\(reason.logLabel) step=\(step.logLabel) "
+            + "anchor=\(String(format: "%.1f", anchor)) advisory=\(String(format: "%.1f", resumeAt))")
         switch step {
+        case .resumeInPlace:
+            nudgeInPlace(at: anchor, forward: skipBadSample)
         case let .switchTo(stream):
-            recoveryHint = "播放停滞，已改用 \(stream.quality) 继续"
+            recoveryHint = "播放停滞，已改用 \(qualityLabel(stream)) 继续"
             selectedID = stream.id
             configurePlayer(resumeAt: target)
         case .refreshLinks:
@@ -550,6 +689,21 @@ struct HanimePlayerView: View {
         }
     }
 
+    /// Cheapest recovery: re-seek on the *current* item. That re-opens the byte stream or jumps to
+    /// the next keyframe without throwing the item away, so duration and the scrubber stay on screen.
+    private func nudgeInPlace(at position: Double, forward: Bool) {
+        guard let player = avPlayer, let item = player.currentItem else { return }
+        hasNudgedInPlace = true
+        isBuffering = true
+        recoveryHint = "播放停滞，正在重新同步画面"
+        item.cancelPendingSeeks()
+        seekForRecovery(player, item,
+                        to: forward ? position : max(position - 1, 0),
+                        tag: forward ? "nudge-forward" : "nudge",
+                        forward: forward)
+        log("hanime.recover.nudge position=\(String(format: "%.1f", position)) forward=\(forward)")
+    }
+
     private func repairWithFreshLinks(current: HanimeStream?, resumeAt: Double) {
         recoveryTask?.cancel()
         let refresh = refreshStreams
@@ -560,8 +714,10 @@ struct HanimePlayerView: View {
                 ?? fresh.first { $0.quality == current?.quality }
                 ?? HanimeRenditionPolicy.pickStream(in: fresh, budget: budget)
             guard let retry, retry.id != current?.id else {
-                stopWatchdog()
-                playbackError = "没能拿到新的播放地址，请稍后再试"
+                // 站点拦了或地址未变：保持采样，等下一次回充的预算再试。
+                hasRefreshedLinks = false
+                recoveryHint = "没能刷新播放地址，稍后自动重试"
+                log("hanime.recover.refreshFailed streams=\(fresh.count)")
                 return
             }
             refreshedStreams = fresh
@@ -574,12 +730,13 @@ struct HanimePlayerView: View {
     private func log(_ message: String) {
         #if DEBUG && os(iOS)
         os_log("%{public}@", log: playbackLog, type: .info, message)
+        #endif
+        #if os(iOS)
         HanimePlaybackLogFile.shared.append(message)
         #endif
     }
 
     private func logStall(reason: HanimeRecoveryReason, sample: HanimePlaybackSample) {
-        #if DEBUG && os(iOS)
         let frames = sample.renderedFrames.map(String.init) ?? "n/a"
         let line = "hanime.stall reason=\(reason.logLabel) quality=\(selectedStream?.quality ?? "?") "
             + "position=\(String(format: "%.1f", sample.positionSeconds)) "
@@ -589,10 +746,13 @@ struct HanimePlayerView: View {
             log(line)
             return
         }
+        #if DEBUG && os(iOS)
         Task { @MainActor in
             let access = await HanimePlaybackProbe.accessLogSummary(for: item)
             log("\(line) \(access)")
         }
+        #else
+        log(line)
         #endif
     }
 }

@@ -29,6 +29,49 @@ final class HanimePlaybackPolicyTests: XCTestCase {
         )
     }
 
+    func testStartsOnHLSTheWayTheSitePlayerDoes() {
+        let mp4 = stream("1080p", "a")
+        let hls = HanimeStream(
+            quality: "HLS",
+            url: URL(string: "https://vdownload.hembed.com/video/_hls/show.m3u8")!,
+            isHLS: true
+        )
+        let wifi = HanimeRenditionPolicy.budget(isExpensiveNetwork: false)
+        XCTAssertEqual(wifi.hlsPeakBitRate, 0, "Wi-Fi 不给 HLS 设码率上限，避免混淆结论")
+        XCTAssertEqual(HanimeRenditionPolicy.pickStream(in: [mp4, hls], budget: wifi), hls)
+    }
+
+    func testFullscreenDetachesInlineRenderingSurface() {
+        XCTAssertTrue(HanimeRenderingPolicy.showsInlinePlayer(isFullscreenPresented: false))
+        XCTAssertFalse(
+            HanimeRenderingPolicy.showsInlinePlayer(isFullscreenPresented: true),
+            "同一个 AVPlayer 不能同时挂在小窗和全屏两个 AVKit 渲染面上"
+        )
+    }
+
+    func testMediaServicesResetRebuildsPlayerInsteadOfLoweringQuality() {
+        let reset = NSError(
+            domain: AVFoundationErrorDomain,
+            code: AVError.Code.mediaServicesWereReset.rawValue
+        )
+        XCTAssertEqual(HanimePlayerFailureDisposition.classify(reset), .rebuildPlayer)
+        XCTAssertEqual(
+            HanimePlayerFailureDisposition.classify(NSError(domain: NSURLErrorDomain, code: NSURLErrorTimedOut)),
+            .tryAnotherSource
+        )
+    }
+
+    func testTruncatedHLSAddressIsNotPreferred() {
+        let mp4 = stream("1080p", "a")
+        let fake = HanimeStream(
+            quality: "HLS",
+            url: URL(string: "https://vdownload.hembed.com/video/_hls/show")!,
+            isHLS: true
+        )
+        let wifi = HanimeRenditionPolicy.budget(isExpensiveNetwork: false)
+        XCTAssertEqual(HanimeRenditionPolicy.pickStream(in: [mp4, fake], budget: wifi)?.url, mp4.url)
+    }
+
     // MARK: - Start rendition
 
     func testWifiKeepsTopRendition() {
@@ -58,17 +101,22 @@ final class HanimePlaybackPolicyTests: XCTestCase {
         XCTAssertNotNil(HanimeRenditionPolicy.pickStream(in: streams, budget: budget))
     }
 
-    func testLowerStreamOnlyStrictlyLowerAndNotSkipped() {
+    func testAlternativeStreamPrefersAnotherFileAtTheSameRank() {
         let high = stream("1080p", "a")
         let mid = stream("720p", "b")
-        let low = stream("480p", "c")
-        let streams = [high, mid, low]
-        XCTAssertEqual(HanimeRenditionPolicy.lowerStream(than: high, in: streams, excluding: [])?.quality, "720p")
+        let midTwin = stream("720p", "c")
+        let low = stream("480p", "d")
+        let streams = [high, mid, midTwin, low]
+        // 真机日志：冻结时 60 秒缓冲充足且 720p/480p 同位都卡 —— 坏的是文件，不是码率。
         XCTAssertEqual(
-            HanimeRenditionPolicy.lowerStream(than: high, in: streams, excluding: [mid.id])?.quality,
-            "480p"
+            HanimeRenditionPolicy.alternativeStream(than: mid, in: streams, excluding: [])?.url,
+            midTwin.url
         )
-        XCTAssertNil(HanimeRenditionPolicy.lowerStream(than: low, in: streams, excluding: []))
+        XCTAssertEqual(
+            HanimeRenditionPolicy.alternativeStream(than: mid, in: streams, excluding: [midTwin.id])?.quality,
+            "480p", "没有同档备用镜像时才降清晰度"
+        )
+        XCTAssertNil(HanimeRenditionPolicy.alternativeStream(than: high, in: [high], excluding: []))
     }
 
     func testBudgetCapsBitRateForHLSOnly() {
@@ -85,29 +133,92 @@ final class HanimePlaybackPolicyTests: XCTestCase {
         XCTAssertEqual(hls.preferredPeakBitRateForExpensiveNetworks, budget.hlsPeakBitRate)
     }
 
+    func testFailedFallbackDoesNotUpgradeRendition() {
+        let high = stream("1080p", "a")
+        let mid = stream("720p", "b")
+        let low = stream("480p", "c")
+        // 刚因停滞降到 720p 后不要把用户弹回 1080p。
+        XCTAssertEqual(
+            HanimePlayerReload.nextPlayable(after: mid, in: [high, mid, low], excluding: [mid.id])?.quality,
+            "480p"
+        )
+        // 更低档没了才允许回升，否则无片可播。
+        XCTAssertEqual(
+            HanimePlayerReload.nextPlayable(after: low, in: [high, mid, low], excluding: [low.id])?.quality,
+            "1080p"
+        )
+    }
+
     // MARK: - Recovery ladder
 
-    func testFirstStallShedsResolutionWithoutNewRequests() {
+    func testStallStartsWithInPlaceResyncNotATeardown() {
         let high = stream("1080p", "a")
         let mid = stream("720p", "b")
         let step = HanimeRecoveryPlan.step(
+            reason: .videoFrozen,
             current: high,
             streams: [high, mid],
             skipped: [],
             refreshed: false,
-            canRefresh: true
+            canRefresh: true,
+            canNudge: true
         )
-        XCTAssertEqual(step, .switchTo(mid))
+        XCTAssertEqual(step, .resumeInPlace, "任何停滞都先试不摧毁 UI 的原地重同步")
+    }
+
+    func testStallSwitchesTwinSourceAfterTheNudgeWasUsed() {
+        let high = stream("1080p", "a")
+        let twin = stream("1080p", "b")
+        let step = HanimeRecoveryPlan.step(
+            reason: .videoFrozen,
+            current: high,
+            streams: [high, twin],
+            skipped: [high.id],
+            refreshed: false,
+            canRefresh: true,
+            canNudge: false
+        )
+        XCTAssertEqual(step, .switchTo(twin), "重同步无效时先换同清晰度另一条源")
+    }
+
+    func testStallRefreshesLinksOnlyAfterEverySourceIsSpent() {
+        let low = stream("480p", "a")
+        let step = HanimeRecoveryPlan.step(
+            reason: .stalledTooLong,
+            current: low,
+            streams: [low],
+            skipped: [],
+            refreshed: false,
+            canRefresh: true,
+            canNudge: false
+        )
+        XCTAssertEqual(step, .refreshLinks)
+    }
+
+    func testDecodeStallWithSingleRenditionNudgesBeforeRefreshing() {
+        let only = stream("1080p", "a")
+        let step = HanimeRecoveryPlan.step(
+            reason: .videoFrozen,
+            current: only,
+            streams: [only],
+            skipped: [],
+            refreshed: false,
+            canRefresh: true,
+            canNudge: true
+        )
+        XCTAssertEqual(step, .resumeInPlace)
     }
 
     func testStallOnLowestRenditionRefreshesLinksOnce() {
         let low = stream("480p", "a")
         let step = HanimeRecoveryPlan.step(
+            reason: .videoFrozen,
             current: low,
             streams: [low],
             skipped: [low.id],
             refreshed: false,
-            canRefresh: true
+            canRefresh: true,
+            canNudge: false
         )
         XCTAssertEqual(step, .refreshLinks)
     }
@@ -116,11 +227,13 @@ final class HanimePlaybackPolicyTests: XCTestCase {
         let low = stream("480p", "a")
         let other = stream("480p", "b")
         let step = HanimeRecoveryPlan.step(
+            reason: .videoFrozen,
             current: low,
             streams: [low, other],
             skipped: [low.id],
             refreshed: true,
-            canRefresh: true
+            canRefresh: true,
+            canNudge: false
         )
         XCTAssertEqual(step, .switchTo(other))
     }
@@ -128,13 +241,24 @@ final class HanimePlaybackPolicyTests: XCTestCase {
     func testNoLeverLeftHandsFailureToUser() {
         let only = stream("480p", "a")
         let step = HanimeRecoveryPlan.step(
+            reason: .videoFrozen,
             current: only,
             streams: [only],
             skipped: [only.id],
             refreshed: true,
-            canRefresh: true
+            canRefresh: true,
+            canNudge: false
         )
         XCTAssertEqual(step, .giveUp)
+    }
+
+    func testAssetCacheKeepsOneProbedAssetPerURL() {
+        let cache = HanimeAssetCache()
+        let first = URL(string: "https://cdn.example.invalid/a.mp4")!
+        let second = URL(string: "https://cdn.example.invalid/b.mp4")!
+        XCTAssertTrue(cache.asset(for: first, options: nil) === cache.asset(for: first, options: nil))
+        XCTAssertFalse(cache.asset(for: second, options: nil) === cache.asset(for: first, options: nil))
+        XCTAssertTrue(cache.asset(for: first, options: nil) === cache.asset(for: first, options: nil))
     }
 
     func testSustainedFrameDropsDowngradeRendition() {
@@ -262,15 +386,42 @@ final class HanimePlaybackPolicyTests: XCTestCase {
         XCTAssertEqual(watchdog.consume(sample(at: 6, position: 11, frames: 0)), .buffering)
     }
 
+    func testNoFramesBeforePlaybackIsMovingIsNotAColdFreeze() {
+        var watchdog = HanimePlaybackWatchdog()
+        watchdog.consume(sample(at: 0, position: 10))
+        // 重挂后的冷启动窗口：位置不动也没帧，不能当成 videoFrozen。
+        for at in stride(from: 2.0, through: 10.0, by: 2.0) {
+            XCTAssertEqual(watchdog.consume(sample(at: at, position: 10, frames: 0)), .none,
+                           "startup with no motion yet @\(at)")
+        }
+        XCTAssertEqual(watchdog.consume(sample(at: 12, position: 10, frames: 0)),
+                       .recover(.clockStuck, resumeAt: 10),
+                       "a clock reporting .playing but never moving is still a stall")
+    }
+
+    func testMovingClockWithNoFramesIsAFreeze() {
+        var watchdog = HanimePlaybackWatchdog()
+        watchdog.consume(sample(at: 0, position: 10))
+        XCTAssertEqual(watchdog.consume(sample(at: 2, position: 12, frames: 0)), .buffering)
+        XCTAssertEqual(watchdog.consume(sample(at: 4, position: 14, frames: 0)),
+                       .recover(.videoFrozen, resumeAt: 10))
+    }
+
     func testRecoveryBudgetIsBounded() {
         let monitor = HanimeStallMonitor()
-        for _ in 1...HanimeStallMonitor.maxRecoveries {
-            XCTAssertTrue(monitor.noteRecovery())
+        for index in 1...HanimeStallMonitor.maxRecoveries {
+            XCTAssertTrue(monitor.noteRecovery(now: Double(index)), "attempt \(index)")
         }
-        XCTAssertFalse(monitor.noteRecovery(), "recovery loops must end in a visible failure")
+        // 回归用例：被拒绝的请求不能推动回充时钟，否则 backoff 永远等不到重试（iPad 日志里
+        // recoveries=3 连报 90 秒，用户就对着静帧听了 90 秒音频）。
+        for refusal in stride(from: 20.0, through: 90.0, by: 10.0) {
+            XCTAssertFalse(monitor.noteRecovery(now: refusal), "budget spent @\(refusal)")
+        }
         XCTAssertEqual(monitor.recoveries, HanimeStallMonitor.maxRecoveries)
+        XCTAssertTrue(monitor.noteRecovery(now: 3 + HanimeStallMonitor.recoveryRechargeSeconds),
+                      "a spent attempt comes back with time so the watchdog never dies")
         monitor.resetBudget()
         XCTAssertEqual(monitor.recoveries, 0)
-        XCTAssertTrue(monitor.noteRecovery())
+        XCTAssertTrue(monitor.noteRecovery(now: 999))
     }
 }

@@ -47,6 +47,8 @@ public actor PlaybackURLResolver {
     private let fetch: @Sendable ([Int], MusicAudioQuality) async throws -> MusicUrlResponse
     private let v2: MusicV2Client?
     private let usesV2Playback: Bool
+    private let neteaseClient: NeteaseMusicApiClient?
+    private let neteaseCookieProvider: (@Sendable () async -> String?)?
     private var admitted = false
     private let uptime: @Sendable () -> TimeInterval
     private let now: @Sendable () -> Date
@@ -55,21 +57,34 @@ public actor PlaybackURLResolver {
     private var generation = UUID()
     private var epochs: [Key: UUID] = [:]
 
-    public init(client: MusicClient, v2: MusicV2Client? = nil, usesV2Playback: Bool = false, now: @escaping @Sendable () -> Date = { Date() },
-                uptime: @escaping @Sendable () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
+    public init(
+        client: MusicClient,
+        v2: MusicV2Client? = nil,
+        usesV2Playback: Bool = false,
+        neteaseClient: NeteaseMusicApiClient? = nil,
+        neteaseCookieProvider: (@Sendable () async -> String?)? = nil,
+        now: @escaping @Sendable () -> Date = { Date() },
+        uptime: @escaping @Sendable () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
+    ) {
         fetch = { try await client.url(songIDs: $0, level: $1.rawValue) }
         self.v2 = v2
         self.usesV2Playback = usesV2Playback
+        self.neteaseClient = neteaseClient
+        self.neteaseCookieProvider = neteaseCookieProvider
         self.now = now
         self.uptime = uptime
     }
 
-    public init(now: @escaping @Sendable () -> Date = { Date() },
-                fetch: @escaping @Sendable ([Int], MusicAudioQuality) async throws -> MusicUrlResponse) {
+    public init(
+        now: @escaping @Sendable () -> Date = { Date() },
+        fetch: @escaping @Sendable ([Int], MusicAudioQuality) async throws -> MusicUrlResponse
+    ) {
         self.now = now
         self.fetch = fetch
         self.v2 = nil
         self.usesV2Playback = false
+        self.neteaseClient = nil
+        self.neteaseCookieProvider = nil
         self.uptime = { ProcessInfo.processInfo.systemUptime }
     }
 
@@ -121,8 +136,21 @@ public actor PlaybackURLResolver {
         if !missing.isEmpty {
             let requested = missing.map(\.id)
             let fetch = self.fetch, now = self.now, v2 = self.v2, uptime = self.uptime, cutover = usesV2Playback
+            let neteaseClient = self.neteaseClient
+            let cookie = await self.neteaseCookieProvider?()
             let flight = Flight(token: UUID(), forced: force, task: Task {
-                await Self.fetchIdentities(ids: requested, cutover: cutover, quality: quality, allowsFallback: allowsFallback, now: now, uptime: uptime, fetch: fetch, v2: v2)
+                await Self.fetchIdentities(
+                    ids: requested,
+                    cutover: cutover,
+                    quality: quality,
+                    allowsFallback: allowsFallback,
+                    now: now,
+                    uptime: uptime,
+                    fetch: fetch,
+                    v2: v2,
+                    neteaseClient: neteaseClient,
+                    neteaseCookie: cookie
+                )
             })
             for key in missing { flights[key] = flight; pending[key] = flight; epochs[key] = flight.token }
         }
@@ -171,13 +199,89 @@ public actor PlaybackURLResolver {
 
     /// Identity selects the route. Legacy callers stay on v1 while gated detail pages may use canonical IDs.
     /// V2 failures/denials never fall back to v1 or manufacture a lifetime/quality.
-    private static func fetchIdentities(ids: [MusicPlaybackIdentity], cutover: Bool = false, quality: MusicAudioQuality,
-                                        allowsFallback: Bool, now: @Sendable () -> Date,
-                                        uptime: @escaping @Sendable () -> TimeInterval,
-                                        fetch: @Sendable ([Int], MusicAudioQuality) async throws -> MusicUrlResponse,
-                                        v2: MusicV2Client?) async -> [MusicPlaybackIdentity: Outcome] {
+    private static func fetchIdentities(
+        ids: [MusicPlaybackIdentity],
+        cutover: Bool = false,
+        quality: MusicAudioQuality,
+        allowsFallback: Bool,
+        now: @Sendable () -> Date,
+        uptime: @escaping @Sendable () -> TimeInterval,
+        fetch: @Sendable ([Int], MusicAudioQuality) async throws -> MusicUrlResponse,
+        v2: MusicV2Client?,
+        neteaseClient: NeteaseMusicApiClient? = nil,
+        neteaseCookie: String? = nil
+    ) async -> [MusicPlaybackIdentity: Outcome] {
         var results: [MusicPlaybackIdentity: Outcome] = [:]
-        let legacy = ids.compactMap(\.legacyID)
+        var remainingIDs: [MusicPlaybackIdentity] = []
+        var trialFallbacks: [MusicPlaybackIdentity: ResolvedPlaybackURL] = [:]
+
+        if let neteaseClient, let cookie = neteaseCookie, !cookie.isEmpty {
+            for id in ids {
+                let trackID: Int?
+                switch id {
+                case .legacy(let num):
+                    trackID = num > 0 ? num : nil
+                case .canonical(let token):
+                    if token.rawValue.hasPrefix("netease:track:") {
+                        let suffix = token.rawValue.dropFirst("netease:track:".count)
+                        trackID = Int(suffix)
+                    } else {
+                        trackID = nil
+                    }
+                }
+
+                if let trackID {
+                    do {
+                        if let item = try await neteaseClient.fetchSongPlaybackUrl(id: trackID, level: quality.rawValue, cookie: cookie),
+                           item.isPlayable, let urlString = item.securePlaybackURLString, let url = URL(string: urlString) {
+                            let effectiveLevel = item.level ?? quality.rawValue
+                            let actual = MusicAudioQuality(rawValue: effectiveLevel)
+                            let notice = actual.flatMap { $0 != quality ? "音源返回\($0.title)音质" : nil }
+                            let lifetime: TimeInterval = 3600
+                            let resolved = ResolvedPlaybackURL(
+                                trackID: id,
+                                url: url,
+                                effectiveLevel: effectiveLevel,
+                                resolvedAt: now(),
+                                expiresAt: now().addingTimeInterval(lifetime),
+                                notice: item.isFreeTrial ? "试听片段（30秒）" : notice,
+                                usedFallback: false,
+                                uptime: uptime
+                            )
+                            if item.isFreeTrial && allowsFallback {
+                                trialFallbacks[id] = resolved
+                            } else {
+                                results[id] = .success(resolved)
+                                continue
+                            }
+                        }
+                    } catch {
+                        // Fall back to standard pool
+                    }
+                }
+                remainingIDs.append(id)
+            }
+        } else {
+            remainingIDs = ids
+        }
+
+        func applyTrialFallbacks() {
+            for (id, trial) in trialFallbacks {
+                if results[id] == nil || {
+                    if case .failure = results[id] { return true }
+                    return false
+                }() {
+                    results[id] = .success(trial)
+                }
+            }
+        }
+
+        guard !remainingIDs.isEmpty else {
+            applyTrialFallbacks()
+            return results
+        }
+
+        let legacy = remainingIDs.compactMap(\.legacyID)
         if !legacy.isEmpty {
             if cutover, let v2 {
                 do {
@@ -203,7 +307,7 @@ public actor PlaybackURLResolver {
                 for (id, value) in values { results[.legacy(id)] = value }
             }
         }
-        let canonical = ids.compactMap { if case .canonical(let id) = $0 { return id }; return nil as MusicV2TrackID? }
+        let canonical = remainingIDs.compactMap { if case .canonical(let id) = $0 { return id }; return nil as MusicV2TrackID? }
         guard !canonical.isEmpty else { return results }
         guard let v2 else {
             for id in canonical { results[.canonical(id)] = .failure(UserFacingError(message: "播放器尚未准备好")) }
@@ -256,6 +360,7 @@ public actor PlaybackURLResolver {
         } catch {
             for id in canonical { results[.canonical(id)] = .failure(UserFacingErrorMapper.map(error)) }
         }
+        applyTrialFallbacks()
         return results
     }
 

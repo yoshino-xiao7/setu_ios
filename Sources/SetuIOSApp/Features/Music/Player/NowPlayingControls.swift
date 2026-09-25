@@ -6,6 +6,8 @@ import UIKit
 
 struct MusicQualityMenu: View {
     @Bindable var player: MusicPlaybackController
+    var isNeteaseVIP: Bool = false
+    var onPromptVIPLogin: (() -> Void)? = nil
     @State private var notice: String?
 
     var body: some View {
@@ -13,6 +15,9 @@ struct MusicQualityMenu: View {
             Picker("优先音质", selection: Binding(
                 get: { player.audioQuality },
                 set: { quality in
+                    if (quality == .lossless || quality == .hires) && !isNeteaseVIP {
+                        onPromptVIPLogin?()
+                    }
                     Task {
                         _ = await player.setAudioQuality(quality)
                         switch player.feedback {
@@ -24,7 +29,11 @@ struct MusicQualityMenu: View {
                 }
             )) {
                 ForEach(MusicAudioQuality.allCases) { quality in
-                    Text(quality.title).tag(quality)
+                    if (quality == .lossless || quality == .hires) && !isNeteaseVIP {
+                        Text("\(quality.title) (VIP)").tag(quality)
+                    } else {
+                        Text(quality.title).tag(quality)
+                    }
                 }
             }
         } label: {
@@ -57,29 +66,113 @@ struct MusicQualityMenu: View {
 }
 
 extension NowPlayingSheet {
-    // MARK: Pinned bottom panel
+    // MARK: Quick action bar
 
-    func bottomPanel(for track: MusicPlaybackTrack) -> some View {
-        VStack(spacing: SetuSpacing.md) {
-            HStack(spacing: SetuSpacing.md) {
-                VStack(alignment: .leading, spacing: SetuSpacing.xs) {
-                    Text(track.title)
-                        .font(.title2.weight(.semibold))
-                        .foregroundStyle(SetuColor.textPrimary)
-                        .lineLimit(2)
-                    Text(track.artist)
-                        .font(.subheadline)
-                        .foregroundStyle(SetuColor.textSecondary)
-                        .lineLimit(1)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+    func quickActionBar(for track: MusicPlaybackTrack) -> some View {
+        HStack(spacing: 0) {
+            // 1. Like
+            Group {
                 if environment.config.musicFeatureFlags.likedTracksEnabled,
                    !track.usesDirectStream,
                    case .canonical(let id) = track.id {
                     MusicLikeButton(id: id, environment: environment, iconOnly: true)
+                } else {
+                    Image(systemName: "heart")
+                        .font(.system(size: 22))
+                        .foregroundStyle(SetuColor.textTertiary)
                 }
             }
-            .padding(.horizontal, SetuSpacing.lg)
+            .frame(maxWidth: .infinity)
+
+            // 2. Sound quality capsule
+            Group {
+                if !track.usesDirectStream {
+                    MusicQualityMenu(
+                        player: player,
+                        isNeteaseVIP: environment.neteaseMusicSession.isVIP,
+                        onPromptVIPLogin: {
+                            showingNeteaseLogin = true
+                        }
+                    )
+                } else {
+                    Text("直链")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(SetuColor.textTertiary)
+                }
+            }
+            .frame(maxWidth: .infinity)
+
+            // 3. Similar recommendations
+            Button {
+                PlayerHaptics.light()
+                showingSimilar = true
+            } label: {
+                VStack(spacing: 2) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 20, weight: .medium))
+                    Text("相似")
+                        .font(.system(size: 10, weight: .medium))
+                }
+                .foregroundStyle(SetuColor.textSecondary)
+                .frame(minWidth: 44, minHeight: 44)
+            }
+            .setuButtonFeedback()
+            .accessibilityLabel("相似推荐")
+            .frame(maxWidth: .infinity)
+
+            // 4. Add to playlist
+            if !track.usesDirectStream {
+                Button {
+                    PlayerHaptics.light()
+                    playlistTrack = track
+                } label: {
+                    VStack(spacing: 2) {
+                        Image(systemName: "folder.badge.plus")
+                            .font(.system(size: 20, weight: .medium))
+                        Text("收藏")
+                            .font(.system(size: 10, weight: .medium))
+                    }
+                    .foregroundStyle(SetuColor.textSecondary)
+                    .frame(minWidth: 44, minHeight: 44)
+                }
+                .setuButtonFeedback()
+                .accessibilityLabel("收藏到歌单")
+                .frame(maxWidth: .infinity)
+            } else {
+                Spacer()
+                .frame(maxWidth: .infinity)
+            }
+
+            // 5. More actions
+            Button {
+                PlayerHaptics.light()
+                showingMore = true
+            } label: {
+                VStack(spacing: 2) {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 20, weight: .medium))
+                    Text("更多")
+                        .font(.system(size: 10, weight: .medium))
+                }
+                .foregroundStyle(SetuColor.textSecondary)
+                .frame(minWidth: 44, minHeight: 44)
+            }
+            .setuButtonFeedback()
+            .accessibilityLabel("更多操作")
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    // MARK: Pinned bottom panel
+
+    func bottomPanel(for track: MusicPlaybackTrack) -> some View {
+        VStack(spacing: SetuSpacing.md) {
+            quickActionBar(for: track)
+                .padding(.horizontal, SetuSpacing.md)
+
+            if !environment.neteaseMusicSession.isVIP, player.isVIPRestrictedOrTrial {
+                vipPromptPill
+            }
 
             if player.playbackError != nil || player.isBuffering {
                 playbackStatusRow
@@ -150,6 +243,39 @@ extension NowPlayingSheet {
 
         }
     }
+
+    private var vipPromptPill: some View {
+        Button {
+            PlayerHaptics.light()
+            showingNeteaseLogin = true
+        } label: {
+            HStack(spacing: SetuSpacing.xs) {
+                Image(systemName: "crown.fill")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Color(red: 1.0, green: 0.82, blue: 0.25))
+                Text("当前为试听/降级音质，登录网易云 VIP 畅享完整音质")
+                    .font(.caption2)
+                    .fontWeight(.medium)
+                    .foregroundStyle(Color.white)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.7))
+            }
+            .padding(.horizontal, SetuSpacing.md)
+            .padding(.vertical, 6)
+            .background(
+                Capsule()
+                    .fill(Color.black.opacity(0.45))
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(Color.white.opacity(0.18), lineWidth: 0.8)
+                    )
+            )
+        }
+        .setuButtonFeedback()
+        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+    }
+
 
     // Present follow-up sheets only after More has finished dismissing.
     func afterMoreDismisses(_ action: @escaping () -> Void) {
@@ -355,9 +481,17 @@ struct AddPlaybackTrackToPlaylistSheet: View {
     let onFeedback: (SetuFeedback) -> Void
 
     var body: some View {
-        PlaylistSelectionSheet(presentation: .playback, requests: [request]) { playlist in
-            onFeedback(.success("已加入 \(playlist.name)"))
-        } summary: {
+        PlaylistSelectionSheet(
+            environment: environment,
+            presentation: .playback,
+            requests: [request],
+            onAdded: { playlist in
+                onFeedback(.success("已加入 \(playlist.name)"))
+            },
+            onNeteaseAdded: { playlist in
+                onFeedback(.success("已加入网易云歌单《\(playlist.name)》"))
+            }
+        ) {
             HStack(spacing: SetuSpacing.md) {
                 MusicArtworkView(urlString: track.coverURLString)
                 VStack(alignment: .leading, spacing: SetuSpacing.xs) {

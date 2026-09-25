@@ -123,6 +123,7 @@ final class MusicPlaybackController {
     @ObservationIgnored private var lastSourceResolveMilliseconds: Double?
     @ObservationIgnored private var isBenchmarking = false
     @ObservationIgnored private var isRestoringSeek = false
+    @ObservationIgnored private var lastSeekCompletedAt: Date?
     @ObservationIgnored private var seekID: UUID?
     @ObservationIgnored private var seekTarget: Double?
     @ObservationIgnored private var seekTimeout: Task<Void, Never>?
@@ -164,6 +165,15 @@ final class MusicPlaybackController {
     @ObservationIgnored private var transitionID = UUID()
     @ObservationIgnored private var sessionID = UUID()
     @ObservationIgnored private var currentSource: ResolvedPlaybackURL?
+    public var currentPlaybackSource: ResolvedPlaybackURL? { currentSource }
+    public var isVIPRestrictedOrTrial: Bool {
+        guard let currentSource else { return false }
+        if currentSource.usedFallback { return true }
+        if let notice = currentSource.notice, notice.contains("不可用") || notice.contains("试听") || notice.contains("VIP") {
+            return true
+        }
+        return false
+    }
     @ObservationIgnored private var recoveryCount = 0
     @ObservationIgnored private var recoveryTask: Task<Void, Never>?
     @ObservationIgnored private var preparationTask: Task<Void, Never>?
@@ -724,10 +734,11 @@ final class MusicPlaybackController {
             Task { @MainActor in
                 guard let self, let item, self.seekID == ticket, self.player?.currentItem === item else { return }
                 guard finished, let actual = self.player?.currentTime().seconds, actual.isFinite,
-                      abs(actual - destination) <= 1 else {
+                      abs(actual - destination) <= 3.0 else {
                     self.failSeek(message: "跳转未完成，已保留原播放位置")
                     return
                 }
+                self.lastSeekCompletedAt = Date()
                 self.isRestoringSeek = false
                 self.seekID = nil
                 self.seekTimeout?.cancel(); self.seekTimeout = nil
@@ -745,6 +756,7 @@ final class MusicPlaybackController {
     }
 
     private func failSeek(message: String) {
+        lastSeekCompletedAt = Date()
         if isRestoringSeek || seekReadyItem != nil {
             let position = seekOriginPosition ?? currentTimeSeconds
             cancelSeek()
@@ -788,6 +800,7 @@ final class MusicPlaybackController {
     }
 
     private func cancelSeek() {
+        lastSeekCompletedAt = Date()
         isRestoringSeek = false
         seekID = nil
         seekTarget = nil
@@ -1214,7 +1227,8 @@ final class MusicPlaybackController {
     }
 
     func playbackEndReached() async {
-        guard !blocksPlaybackForSeek else { return }
+        guard !isSeeking, !blocksPlaybackForSeek else { return }
+        if let lastSeek = lastSeekCompletedAt, Date().timeIntervalSince(lastSeek) < 1.5 { return }
         if sleepTimerController.consumeEndOfTrack() {
             pauseForSleepTimer()
             return
@@ -1646,7 +1660,10 @@ final class MusicPlaybackController {
 
     private func boundedPlaybackTime(_ seconds: Double) -> Double {
         guard seconds.isFinite else { return 0 }
-        return durationSeconds > 0 ? min(max(seconds, 0), durationSeconds) : max(seconds, 0)
+        let clamped = max(seconds, 0)
+        guard durationSeconds > 0 else { return clamped }
+        let maxAllowed = max(0, durationSeconds - 0.5)
+        return min(clamped, maxAllowed)
     }
 
     private func refreshDuration(for item: AVPlayerItem) {
@@ -1704,6 +1721,16 @@ final class MusicPlaybackController {
         let end = center.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self, weak item] _ in
             Task { @MainActor in
                 guard let self, let item, self.player?.currentItem === item else { return }
+                guard !self.isSeeking, !self.blocksPlaybackForSeek else { return }
+                if let lastSeek = self.lastSeekCompletedAt, Date().timeIntervalSince(lastSeek) < 1.5 { return }
+                let current = self.player?.currentTime().seconds ?? self.currentTimeSeconds
+                let duration = self.mediaDurationSeconds ?? (self.durationSeconds > 0 ? self.durationSeconds : nil)
+                if let duration, duration > 3, current.isFinite, current < duration - 2.5 {
+                    #if DEBUG
+                    print("[Playback] Spurious AVPlayerItemDidPlayToEndTime at \(current)/\(duration) ignored")
+                    #endif
+                    return
+                }
                 await self.playbackEndReached()
             }
         }

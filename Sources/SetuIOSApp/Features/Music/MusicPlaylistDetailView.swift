@@ -511,10 +511,14 @@ private struct BulkAddPlaylistSongsSheet: View {
     let onDone: () -> Void
 
     var body: some View {
-        PlaylistSelectionSheet(presentation: .bulk, requests: songs.map { AddSongToPlaylistRequest(song: $0) },
-                               excludingPlaylistID: sourcePlaylistID) { _ in
-            onDone()
-        } summary: {
+        PlaylistSelectionSheet(
+            environment: environment,
+            presentation: .bulk,
+            requests: songs.map { AddSongToPlaylistRequest(song: $0) },
+            excludingPlaylistID: sourcePlaylistID,
+            onAdded: { _ in onDone() },
+            onNeteaseAdded: { _ in onDone() }
+        ) {
             SetuSectionHeader(title: "批量加入歌单", subtitle: "已选 \(songs.count) 首歌曲")
         }
     }
