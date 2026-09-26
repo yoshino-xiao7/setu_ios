@@ -188,3 +188,67 @@ public struct NeteaseTokenContributeResponse: Codable, Sendable {
     }
 }
 
+public struct NeteaseSimilarSongArtist: Codable, Sendable {
+    public let id: Int
+    public let name: String
+    public let picUrl: String?
+
+    public init(id: Int, name: String, picUrl: String? = nil) {
+        self.id = id
+        self.name = name
+        self.picUrl = picUrl
+    }
+}
+
+public struct NeteaseSimilarSongAlbum: Codable, Sendable {
+    public let id: Int
+    public let name: String
+    public let picUrl: String?
+
+    public init(id: Int, name: String, picUrl: String? = nil) {
+        self.id = id
+        self.name = name
+        self.picUrl = picUrl
+    }
+}
+
+public struct NeteaseSimilarSongItem: Codable, Sendable, Identifiable {
+    public let id: Int
+    public let name: String
+    public let artists: [NeteaseSimilarSongArtist]
+    public let album: NeteaseSimilarSongAlbum?
+    public let duration: Int?
+
+    public init(id: Int, name: String, artists: [NeteaseSimilarSongArtist], album: NeteaseSimilarSongAlbum? = nil, duration: Int? = nil) {
+        self.id = id
+        self.name = name
+        self.artists = artists
+        self.album = album
+        self.duration = duration
+    }
+}
+
+public struct NeteaseSimilarSongsResponse: Codable, Sendable {
+    public let songs: [NeteaseSimilarSongItem]?
+}
+
+public struct NeteaseSimilarPlaylistItem: Codable, Sendable, Identifiable {
+    public let id: Int
+    public let name: String
+    public let coverImgUrl: String?
+    public let trackCount: Int?
+    public let playCount: Int?
+
+    public init(id: Int, name: String, coverImgUrl: String? = nil, trackCount: Int? = nil, playCount: Int? = nil) {
+        self.id = id
+        self.name = name
+        self.coverImgUrl = coverImgUrl
+        self.trackCount = trackCount
+        self.playCount = playCount
+    }
+}
+
+public struct NeteaseSimilarPlaylistsResponse: Codable, Sendable {
+    public let playlists: [NeteaseSimilarPlaylistItem]?
+}
+

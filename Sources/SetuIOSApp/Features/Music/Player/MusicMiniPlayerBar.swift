@@ -7,6 +7,7 @@ import UIKit
 struct MusicMiniPlayerBar: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(RouterPath.self) private var router: RouterPath?
     @Bindable var environment: AppEnvironment
     @Bindable var player: MusicPlaybackController
     var onShowQueue: (() -> Void)?
@@ -39,8 +40,15 @@ struct MusicMiniPlayerBar: View {
                 lyrics.invalidate()
             }
             .sheet(isPresented: $showingDetail) {
-                NowPlayingSheet(environment: environment, player: player, lyrics: lyrics, initialPage: initialDetailPage)
-                    .presentationDragIndicator(.visible)
+                Group {
+                    if let router {
+                        NowPlayingSheet(environment: environment, player: player, lyrics: lyrics, initialPage: initialDetailPage)
+                            .environment(router)
+                    } else {
+                        NowPlayingSheet(environment: environment, player: player, lyrics: lyrics, initialPage: initialDetailPage)
+                    }
+                }
+                .presentationDragIndicator(.visible)
             }
         }
     }

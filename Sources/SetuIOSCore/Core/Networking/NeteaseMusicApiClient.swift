@@ -154,6 +154,32 @@ public struct NeteaseMusicApiClient: Sendable {
         _ = try? await session.data(from: url)
     }
 
+    // MARK: Similar Recommendations
+
+    public func fetchSimilarSongs(id: Int, cookie: String? = nil) async throws -> [NeteaseSimilarSongItem] {
+        var query: [String: String] = [
+            "id": String(id),
+            "timestamp": String(Int(Date().timeIntervalSince1970 * 1000))
+        ]
+        if let cookie, !cookie.isEmpty { query["cookie"] = cookie }
+        let url = try makeURL(path: "/simi/song", query: query)
+        let (data, _) = try await session.data(from: url)
+        let resp = try JSONDecoder().decode(NeteaseSimilarSongsResponse.self, from: data)
+        return resp.songs ?? []
+    }
+
+    public func fetchSimilarPlaylists(id: Int, cookie: String? = nil) async throws -> [NeteaseSimilarPlaylistItem] {
+        var query: [String: String] = [
+            "id": String(id),
+            "timestamp": String(Int(Date().timeIntervalSince1970 * 1000))
+        ]
+        if let cookie, !cookie.isEmpty { query["cookie"] = cookie }
+        let url = try makeURL(path: "/simi/playlist", query: query)
+        let (data, _) = try await session.data(from: url)
+        let resp = try JSONDecoder().decode(NeteaseSimilarPlaylistsResponse.self, from: data)
+        return resp.playlists ?? []
+    }
+
     // MARK: Helper
 
     private func makeURL(path: String, query: [String: String]) throws -> URL {

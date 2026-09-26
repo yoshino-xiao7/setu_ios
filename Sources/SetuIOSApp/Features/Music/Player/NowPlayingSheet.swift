@@ -30,6 +30,7 @@ struct NowPlayingSheet: View {
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     @Environment(\.dismiss) var dismiss
     @Environment(\.setuCanvas) var canvas
+    @Environment(RouterPath.self) var router: RouterPath?
 
     @Bindable var environment: AppEnvironment
     @Bindable var player: MusicPlaybackController
@@ -114,8 +115,15 @@ struct NowPlayingSheet: View {
         .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.86), value: feedback)
         .sheet(isPresented: $showingSimilar) {
             if let track = player.currentTrack {
-                MusicSimilarRecommendationsSheet(track: track, environment: environment, player: player)
-                    .presentationDetents([.fraction(0.55), .large])
+                Group {
+                    if let router {
+                        MusicSimilarRecommendationsSheet(track: track, environment: environment, player: player)
+                            .environment(router)
+                    } else {
+                        MusicSimilarRecommendationsSheet(track: track, environment: environment, player: player)
+                    }
+                }
+                .presentationDetents([.fraction(0.55), .large])
             }
         }
         .sheet(isPresented: $showingMore, onDismiss: {

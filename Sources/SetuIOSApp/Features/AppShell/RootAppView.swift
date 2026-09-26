@@ -483,6 +483,7 @@ struct RootAppView: View {
             MusicMiniPlayerBar(environment: environment, player: musicPlayer) {
                 showingMusicQueueDrawer = true
             }
+            .environment(navigationCoordinator.router(for: navigationCoordinator.selectedTab))
             .padding(.bottom, SetuSpacing.xl)
             .frame(maxWidth: SetuCanvasLayout(size: windowSize).miniPlayerMaxWidth)
             .frame(maxWidth: .infinity)

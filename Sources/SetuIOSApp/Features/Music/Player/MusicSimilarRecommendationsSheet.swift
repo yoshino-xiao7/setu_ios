@@ -1,14 +1,35 @@
 import SetuIOSCore
 import SwiftUI
 
+struct SimilarTrackItem: Identifiable, Sendable {
+    let id: String
+    let title: String
+    let artistName: String
+    let artworkURL: String?
+    let playbackTrack: MusicPlaybackTrack
+}
+
+struct SimilarPlaylistItem: Identifiable, Sendable {
+    let id: String
+    let title: String
+    let artworkURL: String?
+    let trackCount: Int?
+    let playCount: Int?
+}
+
+struct SimilarRecommendationsData: Sendable {
+    let tracks: [SimilarTrackItem]
+    let playlists: [SimilarPlaylistItem]
+}
+
 struct MusicSimilarRecommendationsSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(RouterPath.self) private var router
+    @Environment(RouterPath.self) private var router: RouterPath?
     let track: MusicPlaybackTrack
     let environment: AppEnvironment
     let player: MusicPlaybackController
 
-    @State private var state: LoadState<MusicV2SimilarTracks> = .idle
+    @State private var state: LoadState<SimilarRecommendationsData> = .idle
     @State private var selectedTab: RecommendationTab = .tracks
 
     enum RecommendationTab: String, CaseIterable, Identifiable {
@@ -23,6 +44,19 @@ struct MusicSimilarRecommendationsSheet: View {
             return MusicV2TrackID(rawValue: "netease:track:\(id)")
         case .canonical(let token):
             return token
+        }
+    }
+
+    private var legacySongID: Int? {
+        switch track.id {
+        case .legacy(let id):
+            return id
+        case .canonical(let token):
+            let raw = token.rawValue
+            if raw.starts(with: "netease:track:") {
+                return Int(raw.replacingOccurrences(of: "netease:track:", with: ""))
+            }
+            return nil
         }
     }
 
@@ -79,15 +113,15 @@ struct MusicSimilarRecommendationsSheet: View {
         }
     }
 
-    private func similarTracksList(_ tracks: [MusicV2Track]) -> some View {
+    private func similarTracksList(_ tracks: [SimilarTrackItem]) -> some View {
         Group {
             if tracks.isEmpty {
                 SetuEmptyState(title: "暂无相似歌曲", message: "网易云曲库暂未收录相关相似推荐", systemImage: "music.note")
                     .frame(maxHeight: .infinity)
             } else {
-                List(tracks, id: \.id.rawValue) { simiTrack in
+                List(tracks) { simiTrack in
                     SimilarTrackRow(
-                        track: simiTrack,
+                        item: simiTrack,
                         allTracks: tracks,
                         currentTitle: track.title,
                         player: player
@@ -99,16 +133,16 @@ struct MusicSimilarRecommendationsSheet: View {
         }
     }
 
-    private func similarPlaylistsList(_ playlists: [MusicV2ProviderPlaylist]) -> some View {
+    private func similarPlaylistsList(_ playlists: [SimilarPlaylistItem]) -> some View {
         Group {
             if playlists.isEmpty {
                 SetuEmptyState(title: "暂无包含歌单", message: "这首歌暂未被收录进精选歌单", systemImage: "music.note.list")
                     .frame(maxHeight: .infinity)
             } else {
-                List(playlists, id: \.id.rawValue) { playlist in
+                List(playlists) { playlist in
                     SimilarPlaylistRow(playlist: playlist) {
                         dismiss()
-                        router.navigate(to: .playlistDetailV2(playlist.id.rawValue))
+                        router?.navigate(to: .playlistDetailV2(playlist.id))
                     }
                     .setuListRow()
                 }
@@ -121,7 +155,75 @@ struct MusicSimilarRecommendationsSheet: View {
         state = .loading
         do {
             let result = try await environment.musicV2Client.similar(trackID: trackToken)
-            state = .loaded(result)
+            let tracks: [SimilarTrackItem] = result.tracks.map { simiTrack in
+                SimilarTrackItem(
+                    id: simiTrack.id.rawValue,
+                    title: simiTrack.title,
+                    artistName: simiTrack.artists.map(\.name).joined(separator: " / "),
+                    artworkURL: simiTrack.artwork?.url ?? simiTrack.album?.artwork?.url,
+                    playbackTrack: MusicPlaybackTrack(track: simiTrack)
+                )
+            }
+            let playlists: [SimilarPlaylistItem] = result.playlists.map { simiPlaylist in
+                SimilarPlaylistItem(
+                    id: simiPlaylist.id.rawValue,
+                    title: simiPlaylist.title,
+                    artworkURL: simiPlaylist.artwork?.url,
+                    trackCount: simiPlaylist.trackCount,
+                    playCount: simiPlaylist.playCount
+                )
+            }
+
+            if !tracks.isEmpty || !playlists.isEmpty {
+                state = .loaded(SimilarRecommendationsData(tracks: tracks, playlists: playlists))
+                return
+            }
+        } catch {
+            // Fall through to NetEase direct API
+        }
+
+        guard let songID = legacySongID, songID > 0 else {
+            state = .loaded(SimilarRecommendationsData(tracks: [], playlists: []))
+            return
+        }
+
+        do {
+            let cookie = environment.neteaseMusicSession.cookie
+            async let songsTask = environment.neteaseMusicApiClient.fetchSimilarSongs(id: songID, cookie: cookie)
+            async let playlistsTask = environment.neteaseMusicApiClient.fetchSimilarPlaylists(id: songID, cookie: cookie)
+            let (simiSongs, simiPlaylists) = try await (songsTask, playlistsTask)
+
+            let tracks: [SimilarTrackItem] = simiSongs.map { s in
+                let artistName = s.artists.map(\.name).joined(separator: " / ")
+                let playbackTrack = MusicPlaybackTrack(
+                    id: s.id,
+                    title: s.name,
+                    artist: artistName,
+                    album: s.album?.name ?? "",
+                    coverURLString: s.album?.picUrl,
+                    durationMilliseconds: s.duration ?? 0,
+                    mvID: nil
+                )
+                return SimilarTrackItem(
+                    id: "netease:track:\(s.id)",
+                    title: s.name,
+                    artistName: artistName,
+                    artworkURL: s.album?.picUrl,
+                    playbackTrack: playbackTrack
+                )
+            }
+
+            let playlists: [SimilarPlaylistItem] = simiPlaylists.map { p in
+                SimilarPlaylistItem(
+                    id: "netease:playlist:\(p.id)",
+                    title: p.name,
+                    artworkURL: p.coverImgUrl,
+                    trackCount: p.trackCount,
+                    playCount: p.playCount
+                )
+            }
+
+            state = .loaded(SimilarRecommendationsData(tracks: tracks, playlists: playlists))
         } catch {
             state = .failed(error.localizedDescription)
         }
@@ -129,19 +231,15 @@ struct MusicSimilarRecommendationsSheet: View {
 }
 
 private struct SimilarTrackRow: View {
-    let track: MusicV2Track
-    let allTracks: [MusicV2Track]
+    let item: SimilarTrackItem
+    let allTracks: [SimilarTrackItem]
     let currentTitle: String
     let player: MusicPlaybackController
-
-    private var playbackTrack: MusicPlaybackTrack {
-        MusicPlaybackTrack(track: track)
-    }
 
     var body: some View {
         HStack(spacing: SetuSpacing.md) {
             MusicArtworkView(
-                urlString: track.artwork?.url,
+                urlString: item.artworkURL,
                 width: 44,
                 height: 44,
                 cornerRadius: SetuRadius.sm,
@@ -149,11 +247,11 @@ private struct SimilarTrackRow: View {
             )
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(track.title)
+                Text(item.title)
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(SetuColor.textPrimary)
                     .lineLimit(1)
-                Text(track.artists.map(\.name).joined(separator: " / "))
+                Text(item.artistName)
                     .font(.caption)
                     .foregroundStyle(SetuColor.textSecondary)
                     .lineLimit(1)
@@ -163,7 +261,7 @@ private struct SimilarTrackRow: View {
             // Play next button
             Button {
                 PlayerHaptics.light()
-                player.playNext(playbackTrack)
+                player.playNext(item.playbackTrack)
             } label: {
                 Image(systemName: "text.line.first.and.arrowtriangle.forward")
                     .font(.subheadline)
@@ -171,16 +269,16 @@ private struct SimilarTrackRow: View {
                     .frame(width: 36, height: 36)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("下一首播放 \(track.title)")
+            .accessibilityLabel("下一首播放 \(item.title)")
         }
         .contentShape(Rectangle())
         .onTapGesture {
             PlayerHaptics.medium()
             Task {
                 await player.play(
-                    track: playbackTrack,
-                    in: allTracks.map(MusicPlaybackTrack.init(track:)),
-                    context: .singleTrack(trackID: .canonical(.init(rawValue: track.id.rawValue)), label: "相似推荐：\(currentTitle)")
+                    track: item.playbackTrack,
+                    in: allTracks.map(\.playbackTrack),
+                    context: .singleTrack(trackID: item.playbackTrack.contextTrackID, label: "相似推荐：\(currentTitle)")
                 )
             }
         }
@@ -188,14 +286,14 @@ private struct SimilarTrackRow: View {
 }
 
 private struct SimilarPlaylistRow: View {
-    let playlist: MusicV2ProviderPlaylist
+    let playlist: SimilarPlaylistItem
     let onSelect: () -> Void
 
     var body: some View {
         Button(action: onSelect) {
             HStack(spacing: SetuSpacing.md) {
                 MusicArtworkView(
-                    urlString: playlist.artwork?.url,
+                    urlString: playlist.artworkURL,
                     width: 52,
                     height: 52,
                     cornerRadius: SetuRadius.md,
