@@ -105,6 +105,8 @@ public struct NeteaseSongUrlItem: Codable, Sendable, Identifiable {
     public let fee: Int?
     public let type: String?
     public let freeTrialInfo: NeteaseFreeTrialInfo?
+    public let time: Int?
+    public let expi: Int?
 
     public var securePlaybackURLString: String? {
         guard let url, !url.isEmpty else { return nil }
@@ -120,7 +122,18 @@ public struct NeteaseSongUrlItem: Codable, Sendable, Identifiable {
     }
 
     public var isFreeTrial: Bool {
-        freeTrialInfo != nil
+        if freeTrialInfo != nil { return true }
+        if let time, time > 0, time <= 60000 { return true }
+        return false
+    }
+
+    public var playableDurationSeconds: Double? {
+        if let time, time > 0 { return Double(time) / 1000.0 }
+        if let freeTrialInfo, let end = freeTrialInfo.end, end > 0 {
+            let start = freeTrialInfo.start ?? 0
+            return Double(max(0, end - start))
+        }
+        return nil
     }
 
     public init(
@@ -131,7 +144,9 @@ public struct NeteaseSongUrlItem: Codable, Sendable, Identifiable {
         level: String? = nil,
         fee: Int? = nil,
         type: String? = nil,
-        freeTrialInfo: NeteaseFreeTrialInfo? = nil
+        freeTrialInfo: NeteaseFreeTrialInfo? = nil,
+        time: Int? = nil,
+        expi: Int? = nil
     ) {
         self.id = id
         self.url = url
@@ -141,6 +156,8 @@ public struct NeteaseSongUrlItem: Codable, Sendable, Identifiable {
         self.fee = fee
         self.type = type
         self.freeTrialInfo = freeTrialInfo
+        self.time = time
+        self.expi = expi
     }
 }
 

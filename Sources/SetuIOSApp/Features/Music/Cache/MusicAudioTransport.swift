@@ -17,8 +17,8 @@ final class MusicAudioTransport: NSObject, URLSessionDataDelegate, @unchecked Se
             let configuration = URLSessionConfiguration.ephemeral
             configuration.httpCookieStorage = nil
             configuration.urlCache = nil
-            configuration.timeoutIntervalForRequest = 15
-            configuration.timeoutIntervalForResource = 120
+            configuration.timeoutIntervalForRequest = 60
+            configuration.timeoutIntervalForResource = 300
             let queue = OperationQueue(); queue.maxConcurrentOperationCount = 1
             let session = URLSession(configuration: configuration, delegate: transport, delegateQueue: queue)
             transport.session = session
@@ -43,7 +43,7 @@ final class MusicAudioTransport: NSObject, URLSessionDataDelegate, @unchecked Se
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
         lock.lock()
         pendingBytes += data.count
-        if pendingBytes >= 512 * 1024, !suspended {
+        if pendingBytes >= 4 * 1024 * 1024, !suspended {
             suspended = true; dataTask.suspend()
         }
         lock.unlock()
@@ -54,7 +54,7 @@ final class MusicAudioTransport: NSObject, URLSessionDataDelegate, @unchecked Se
     private func consumed(_ count: Int) {
         lock.lock(); defer { lock.unlock() }
         pendingBytes = max(0, pendingBytes - count)
-        if suspended, pendingBytes <= 256 * 1024, session != nil {
+        if suspended, pendingBytes <= 2 * 1024 * 1024, session != nil {
             suspended = false; task?.resume()
         }
     }

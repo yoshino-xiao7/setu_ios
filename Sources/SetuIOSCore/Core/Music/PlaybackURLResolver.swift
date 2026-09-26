@@ -11,13 +11,18 @@ public struct ResolvedPlaybackURL: Sendable {
     private let uptime: @Sendable () -> TimeInterval
     public let notice: String?
     public let usedFallback: Bool
+    public let streamDurationSeconds: Double?
+    public let isTrial: Bool
 
     public init(trackID: MusicPlaybackIdentity, url: URL, effectiveLevel: String, resolvedAt: Date,
                 expiresAt: Date, notice: String?, usedFallback: Bool, sourceExpiresAt: Date? = nil,
+                streamDurationSeconds: Double? = nil, isTrial: Bool = false,
                 uptime: @escaping @Sendable () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
         self.trackID = trackID; self.url = url; self.effectiveLevel = effectiveLevel
         self.resolvedAt = resolvedAt; self.refreshAt = expiresAt; self.sourceExpiresAt = sourceExpiresAt
         self.notice = notice; self.usedFallback = usedFallback
+        self.streamDurationSeconds = streamDurationSeconds
+        self.isTrial = isTrial
         self.uptime = uptime; self.acquiredUptime = uptime()
     }
 
@@ -237,18 +242,24 @@ public actor PlaybackURLResolver {
                             let effectiveLevel = item.level ?? quality.rawValue
                             let actual = MusicAudioQuality(rawValue: effectiveLevel)
                             let notice = actual.flatMap { $0 != quality ? "音源返回\($0.title)音质" : nil }
-                            let lifetime: TimeInterval = 3600
+                            let lifetime: TimeInterval = max(60, min(Double(item.expi ?? 1200), 1200) - 30)
+                            let isTrial = item.isFreeTrial
+                            let trialDuration = item.playableDurationSeconds
+                            let trialNotice = trialDuration.map { "试听片段（\(Int(round($0)))秒）" } ?? "试听片段"
                             let resolved = ResolvedPlaybackURL(
                                 trackID: id,
                                 url: url,
                                 effectiveLevel: effectiveLevel,
                                 resolvedAt: now(),
                                 expiresAt: now().addingTimeInterval(lifetime),
-                                notice: item.isFreeTrial ? "试听片段（30秒）" : notice,
+                                notice: isTrial ? trialNotice : notice,
                                 usedFallback: false,
+                                sourceExpiresAt: now().addingTimeInterval(lifetime),
+                                streamDurationSeconds: isTrial ? trialDuration : nil,
+                                isTrial: isTrial,
                                 uptime: uptime
                             )
-                            if item.isFreeTrial && allowsFallback {
+                            if isTrial {
                                 trialFallbacks[id] = resolved
                             } else {
                                 results[id] = .success(resolved)
@@ -296,7 +307,8 @@ public actor PlaybackURLResolver {
                         results[.legacy(id)] = mapped[.canonical(token)].map { outcome in outcome.map { value in
                             ResolvedPlaybackURL(trackID: .legacy(id), url: value.url, effectiveLevel: value.effectiveLevel,
                                 resolvedAt: value.resolvedAt, expiresAt: value.refreshAt, notice: value.notice,
-                                usedFallback: value.usedFallback, sourceExpiresAt: value.sourceExpiresAt, uptime: uptime)
+                                usedFallback: value.usedFallback, sourceExpiresAt: value.sourceExpiresAt,
+                                streamDurationSeconds: value.streamDurationSeconds, isTrial: value.isTrial, uptime: uptime)
                         } }
                     }
                 } catch {

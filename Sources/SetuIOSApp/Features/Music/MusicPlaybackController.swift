@@ -1283,6 +1283,9 @@ final class MusicPlaybackController {
         currentQueueIndex = committedIndex
         bufferStarted = nil; waitStarted = nil; lastDeliveryAt = nil
         rawMediaTimeSeconds = 0
+        if let trialDuration = currentSource?.streamDurationSeconds, currentSource?.isTrial == true {
+            mediaDurationSeconds = trialDuration
+        }
         if let currentSource { effectiveAudioQuality = currentSource.effectiveLevel }
         else if !url.isFileURL { effectiveAudioQuality = audioQuality.rawValue }
         isPlaying = autoplay
@@ -1334,6 +1337,7 @@ final class MusicPlaybackController {
             if let start = bufferStarted { downgradePolicy.endedStall(start: start, end: timing.now()) }
             bufferStarted = nil
             stalledCount = 0
+            recoveryCount = 0
             prefetchPreciseAudio()
             isBuffering = false
             loadingTimeout?.cancel(); loadingTimeout = nil
@@ -1435,7 +1439,13 @@ final class MusicPlaybackController {
         let now = timing.now()
         let loaded = item.loadedTimeRanges.map { CMTimeRangeGetEnd($0.timeRangeValue).seconds }.filter(\.isFinite).max() ?? 0
         let received = networkBytes > lastNetworkBytes
-        if received || loaded > lastLoadedEnd { lastDeliveryAt = now }
+        let currentPos = player?.currentTime().seconds ?? currentTimeSeconds
+        let isFullyLoaded = durationSeconds > 0 && loaded >= (durationSeconds - 1.0)
+        let hasHealthyBuffer = (loaded - currentPos) >= 8.0 || item.isPlaybackLikelyToKeepUp
+        let isActivelyPlaying = player?.timeControlStatus == .playing
+        if received || loaded > lastLoadedEnd || isFullyLoaded || hasHealthyBuffer || isActivelyPlaying {
+            lastDeliveryAt = now
+        }
         lastNetworkBytes = networkBytes; lastLoadedEnd = loaded
         if now >= (operationDeadline ?? .infinity) {
             failPlayback(UserFacingError(message: "播放准备超时，请重试")); return true
@@ -1662,8 +1672,7 @@ final class MusicPlaybackController {
         guard seconds.isFinite else { return 0 }
         let clamped = max(seconds, 0)
         guard durationSeconds > 0 else { return clamped }
-        let maxAllowed = max(0, durationSeconds - 0.5)
-        return min(clamped, maxAllowed)
+        return min(clamped, durationSeconds)
     }
 
     private func refreshDuration(for item: AVPlayerItem) {
@@ -1725,9 +1734,9 @@ final class MusicPlaybackController {
                 if let lastSeek = self.lastSeekCompletedAt, Date().timeIntervalSince(lastSeek) < 1.5 { return }
                 let current = self.player?.currentTime().seconds ?? self.currentTimeSeconds
                 let duration = self.mediaDurationSeconds ?? (self.durationSeconds > 0 ? self.durationSeconds : nil)
-                if let duration, duration > 3, current.isFinite, current < duration - 2.5 {
+                if current < 2.0, let duration, duration > 5.0 {
                     #if DEBUG
-                    print("[Playback] Spurious AVPlayerItemDidPlayToEndTime at \(current)/\(duration) ignored")
+                    print("[Playback] Spurious AVPlayerItemDidPlayToEndTime at start (\(current)/\(duration)) ignored")
                     #endif
                     return
                 }
