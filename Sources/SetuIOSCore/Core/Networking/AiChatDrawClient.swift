@@ -27,6 +27,39 @@ public struct AiChatDrawClient: Sendable {
         try await apiClient.post("/ai/chat-draw/sessions/\(id)/unarchive")
     }
 
+    public func deleteSession(id: Int) async throws {
+        let _: EmptyResponse = try await apiClient.requestWithoutBody("/ai/chat-draw/sessions/\(id)", method: "DELETE")
+    }
+
+    public func assets(sessionID: Int) async throws -> [AiChatDrawAsset] {
+        try await apiClient.get("/ai/chat-draw/sessions/\(sessionID)/assets")
+    }
+
+    public func exportSession(id: Int) async throws -> AiChatDrawExport {
+        try await apiClient.post("/ai/chat-draw/sessions/\(id)/export")
+    }
+
+    public func downloadExport(sessionID: Int) async throws -> Data {
+        try await apiClient.getData("/ai/chat-draw/sessions/\(sessionID)/export/download")
+    }
+
+    public func uploadReferenceImage(data: Data, fileName: String = "reference.jpg", mimeType: String = "image/jpeg") async throws -> AiGenerationSourceImage {
+        try await apiClient.postMultipart("/ai/generations/source", fileFieldName: "file", fileName: fileName, mimeType: mimeType, fileData: data)
+    }
+
+    public func analyzeReferenceImage(sessionID: Int?, sourceImageID: Int, nsfwMode: Bool?) async throws -> AiChatDrawImageAnalysis {
+        try await apiClient.post(
+            "/ai/chat-draw/analyze-image",
+            body: AiChatDrawAnalyzeImageRequest(
+                sessionId: sessionID,
+                sourceImageId: sourceImageID,
+                instruction: nil,
+                nsfwMode: nsfwMode
+            ),
+            timeoutInterval: AiChatDrawBilling.sendTimeoutSeconds
+        )
+    }
+
     public func sendMessage(_ request: AiChatDrawSendRequest) async throws -> AiChatDrawSessionDetail {
         try await apiClient.post(
             "/ai/chat-draw/messages",
@@ -65,4 +98,11 @@ public struct AiChatDrawClient: Sendable {
             }
         }
     }
+}
+
+private struct AiChatDrawAnalyzeImageRequest: Encodable, Sendable {
+    let sessionId: Int?
+    let sourceImageId: Int
+    let instruction: String?
+    let nsfwMode: Bool?
 }

@@ -150,7 +150,7 @@ final class AiChatDrawClientTests: XCTestCase {
         XCTAssertEqual(String(data: first[0], encoding: .utf8), #"{"type":"status","message":"hi"}"#)
         XCTAssertFalse(buffer.isEmpty)
 
-        buffer.append(contentsOf: #"好"}\n\n"#.utf8)
+        buffer.append(contentsOf: "好\"}\n\n".utf8)
         let second = ServerSentEventDataTask.drainSSEPayloads(from: &buffer)
         XCTAssertEqual(second.count, 1)
         XCTAssertEqual(String(data: second[0], encoding: .utf8), #"{"type":"delta","content":"你好"}"#)

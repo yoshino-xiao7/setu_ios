@@ -55,6 +55,45 @@ public struct AiChatDrawSession: Decodable, Identifiable, Sendable, Equatable {
     public let lastGenerationJobId: Int?
     public let createdAt: String?
     public let updatedAt: String?
+    public let archivedAt: String?
+    public let deleteAt: String?
+
+    public init(
+        id: Int,
+        title: String? = nil,
+        status: String? = nil,
+        usage: AiChatDrawUsage? = nil,
+        lastGenerationJobId: Int? = nil,
+        createdAt: String? = nil,
+        updatedAt: String? = nil,
+        archivedAt: String? = nil,
+        deleteAt: String? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.status = status
+        self.usage = usage
+        self.lastGenerationJobId = lastGenerationJobId
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.archivedAt = archivedAt
+        self.deleteAt = deleteAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(Int.self, forKey: .id)
+        title = try c.decodeIfPresent(String.self, forKey: .title)
+        status = try c.decodeIfPresent(String.self, forKey: .status)
+        usage = try c.decodeIfPresent(AiChatDrawUsage.self, forKey: .usage)
+        lastGenerationJobId = try c.decodeIfPresent(Int.self, forKey: .lastGenerationJobId)
+        createdAt = try c.decodeIfPresent(String.self, forKey: .createdAt)
+        updatedAt = try c.decodeIfPresent(String.self, forKey: .updatedAt)
+        archivedAt = try c.decodeIfPresent(String.self, forKey: .archivedAt)
+        deleteAt = try c.decodeIfPresent(String.self, forKey: .deleteAt)
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, title, status, usage, lastGenerationJobId, createdAt, updatedAt, archivedAt, deleteAt }
 
     public var displayTitle: String {
         let trimmed = title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -69,6 +108,33 @@ public struct AiChatDrawSession: Decodable, Identifiable, Sendable, Equatable {
     public var isActive: Bool {
         !isArchived
     }
+}
+
+public struct AiChatDrawAsset: Decodable, Identifiable, Sendable, Equatable {
+    /// Generated assets may be synthesized from a generation job and therefore
+    /// do not have a row id in `ai_chat_draw_asset`.
+    public let id: Int?
+    public let assetType: String
+    public let sourceImageId: Int?
+    public let generationJobId: Int?
+    public let contentType: String?
+    public let sizeBytes: Int?
+    public let url: String?
+    public let createdAt: String?
+
+    public var stableID: String {
+        if let id { return "asset-\(id)" }
+        if let generationJobId { return "generated-\(generationJobId)" }
+        if let sourceImageId { return "source-\(sourceImageId)" }
+        return "asset-\(assetType)-\(createdAt ?? "unknown")"
+    }
+}
+
+public struct AiChatDrawExport: Decodable, Sendable {
+    public let id: Int?
+    public let status: String
+    public let downloadUrl: String?
+    public let expiresAt: String?
 }
 
 public struct AiChatDrawMessage: Decodable, Identifiable, Sendable {
@@ -86,7 +152,10 @@ public struct AiChatDrawMessage: Decodable, Identifiable, Sendable {
     public let status: String?
     public let errorMessage: String?
     public let followUps: [String]
+    public let sourceImageId: Int?
+    public let referenceAnalysis: String?
     public let createdAt: String?
+    public let assets: [AiChatDrawAsset]
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -106,7 +175,10 @@ public struct AiChatDrawMessage: Decodable, Identifiable, Sendable {
         followUps = (try container.decodeIfPresent([String].self, forKey: .followUps) ?? [])
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
+        sourceImageId = try container.decodeIfPresent(Int.self, forKey: .sourceImageId)
+        referenceAnalysis = try container.decodeIfPresent(String.self, forKey: .referenceAnalysis)
         createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
+        assets = try container.decodeIfPresent([AiChatDrawAsset].self, forKey: .assets) ?? []
     }
 
     public var isUser: Bool { role == "user" }
@@ -117,7 +189,7 @@ public struct AiChatDrawMessage: Decodable, Identifiable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case id, role, content, reasoningContent, usage, generationJobId, generationJob
-        case pointsCost, pointsCharged, pointsRefunded, adminFree, status, errorMessage, followUps, createdAt
+        case pointsCost, pointsCharged, pointsRefunded, adminFree, status, errorMessage, followUps, sourceImageId, referenceAnalysis, createdAt, assets
     }
 }
 
@@ -170,15 +242,61 @@ public struct AiChatDrawSessionDetail: Decodable, Sendable {
     }
 }
 
+public struct AiChatDrawImageAnalysis: Codable, Sendable {
+    public let sourceImageId: Int?
+    public let summary: String?
+    public let subjects: String?
+    public let poseExpression: String?
+    public let settingCamera: String?
+    public let promptPositive: String?
+    public let promptNegative: String?
+
+    public init(
+        sourceImageId: Int? = nil,
+        summary: String? = nil,
+        subjects: String? = nil,
+        poseExpression: String? = nil,
+        settingCamera: String? = nil,
+        promptPositive: String? = nil,
+        promptNegative: String? = nil
+    ) {
+        self.sourceImageId = sourceImageId
+        self.summary = summary
+        self.subjects = subjects
+        self.poseExpression = poseExpression
+        self.settingCamera = settingCamera
+        self.promptPositive = promptPositive
+        self.promptNegative = promptNegative
+    }
+}
+
 public struct AiChatDrawSendRequest: Encodable, Sendable {
     public let sessionId: Int?
     public let content: String
     public let nsfwMode: Bool?
+    public let aspectRatio: String?
+    public let width: Int?
+    public let height: Int?
+    public let checkpoint: String?
+    public let sourceImageId: Int?
+    public let referenceAnalysis: String?
+    public let redesignInstruction: String?
+    public let generationMode: String?
+    public let denoise: Double?
 
-    public init(sessionId: Int? = nil, content: String, nsfwMode: Bool? = nil) {
+    public init(sessionId: Int? = nil, content: String, nsfwMode: Bool? = nil, aspectRatio: String? = nil, width: Int? = nil, height: Int? = nil, checkpoint: String? = nil, sourceImageId: Int? = nil, referenceAnalysis: String? = nil, redesignInstruction: String? = nil, generationMode: String? = nil, denoise: Double? = nil) {
         self.sessionId = sessionId
         self.content = content
         self.nsfwMode = nsfwMode
+        self.aspectRatio = aspectRatio
+        self.width = width
+        self.height = height
+        self.checkpoint = checkpoint
+        self.sourceImageId = sourceImageId
+        self.referenceAnalysis = referenceAnalysis
+        self.redesignInstruction = redesignInstruction
+        self.generationMode = generationMode
+        self.denoise = denoise
     }
 }
 

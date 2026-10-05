@@ -1,5 +1,7 @@
 import SetuIOSCore
 import SwiftUI
+import PhotosUI
+import UIKit
 
 struct AiChatDrawView: View {
     @Environment(RouterPath.self) private var router
@@ -21,9 +23,21 @@ struct AiChatDrawView: View {
     @State private var showingGenerationNotificationPrompt = false
     @State private var pendingGenerationID: Int?
     @State private var pendingUserMessage: String?
+    @State private var pendingUserImageData: Data?
+    @State private var pendingUserImageURL: String?
     @State private var streamingDraft: AiChatDrawStreamingDraft?
     @State private var followUpSuggestions: [String] = []
     @State private var pinnedToBottom = true
+    @State private var selectedPhoto: PhotosPickerItem?
+    @State private var referenceImageID: Int?
+    @State private var referenceImageData: Data?
+    @State private var referenceImageURL: String?
+    @State private var referenceAnalysis: String?
+    @State private var isUploadingReference = false
+    @State private var selectedCheckpoint: String?
+    @State private var checkpoints: [AiCapabilityItem] = []
+    @State private var exportPayload: SystemFileSharePayload?
+    @State private var showingDeleteConfirmation = false
     @State private var showJumpToBottom = false
     @State private var scrollToBottomTick = 0
     @FocusState private var isComposerFocused: Bool
@@ -42,9 +56,10 @@ struct AiChatDrawView: View {
 
     private var canSend: Bool {
         !isSending
+            && !isUploadingReference
             && !(detail?.session.isArchived ?? false)
             && cooldownSeconds <= 0
-            && !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && (!input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || referenceImageID != nil)
     }
 
     private var sendButtonTitle: String {
@@ -70,8 +85,9 @@ struct AiChatDrawView: View {
     }
 
     var body: some View {
-        messageArea
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        VStack(spacing: 0) {
+            messageArea
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             composerBar
         }
         .setuBackground()
@@ -88,6 +104,9 @@ struct AiChatDrawView: View {
         #endif
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ai.draw.page")
+        .sheet(item: $exportPayload) { payload in
+            SystemFileShareSheet(fileURL: payload.fileURL) { _ in exportPayload = nil }
+        }
         .toolbar {
             #if os(iOS)
             ToolbarItem(placement: .topBarLeading) {
@@ -160,6 +179,16 @@ struct AiChatDrawView: View {
                             }
                             .disabled(isLoading || isSending)
                         }
+                        if detail?.session != nil {
+                            Button(role: .destructive) { showingDeleteConfirmation = true } label: {
+                                Label("立即删除当前对话", systemImage: "trash")
+                            }
+                            .disabled(isLoading || isSending)
+                            Button { Task { await exportCurrentSession() } } label: {
+                                Label("导出当前会话 ZIP", systemImage: "square.and.arrow.down")
+                            }
+                            .disabled(isLoading || isSending)
+                        }
                     }
 
                     Section("更多") {
@@ -186,6 +215,14 @@ struct AiChatDrawView: View {
                 Button("完成") { isComposerFocused = false }
                     .accessibilityIdentifier("ai.draw.keyboard.done")
             }
+        }
+        .confirmationDialog("立即删除当前对话？", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) {
+            Button("删除对话", role: .destructive) {
+                Task { await deleteCurrentSession() }
+            }
+            Button("取消", role: .cancel) { }
+        } message: {
+            Text("对话中的参考图、生成图和消息将一并删除，无法恢复。")
         }
         .task {
             consumePendingPromptIfNeeded()
@@ -240,13 +277,15 @@ struct AiChatDrawView: View {
                         }
 
                         if let pendingUserMessage {
-                            let alreadyPersisted = messages.contains {
+                            let alreadyPersisted = pendingUserImageData == nil
+                                && pendingUserImageURL == nil
+                                && messages.contains {
                                 $0.isUser
                                     && ($0.content ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
                                     == pendingUserMessage.trimmingCharacters(in: .whitespacesAndNewlines)
                             }
                             if !alreadyPersisted {
-                                userBubbleText(pendingUserMessage)
+                                pendingUserBubble(text: pendingUserMessage)
                                     .id("pending-user")
                             }
                         }
@@ -401,7 +440,48 @@ struct AiChatDrawView: View {
     }
 
     private func userBubble(_ message: AiChatDrawMessage) -> some View {
-        userBubbleText(message.displayContent)
+        VStack(alignment: .trailing, spacing: SetuSpacing.xs) {
+            ForEach(message.assets, id: \.stableID) { asset in
+                if let url = asset.url, !url.isEmpty {
+                    SetuRemoteImage(urlString: url, accessibilityLabel: "参考图", width: 180, height: 180, cornerRadius: SetuRadius.md, contentMode: .fit)
+                }
+            }
+            userBubbleText(message.displayContent)
+            if let sourceImageID = message.sourceImageId ?? message.assets.first(where: { $0.sourceImageId != nil })?.sourceImageId {
+                Button {
+                    referenceImageID = sourceImageID
+                    referenceImageData = nil
+                    referenceImageURL = message.assets.first(where: { $0.sourceImageId == sourceImageID })?.url
+                    referenceAnalysis = message.referenceAnalysis
+                    feedback = .success("已引用这张参照图，请补充要求后发送")
+                } label: {
+                    Label("再次引用这张图", systemImage: "arrow.uturn.forward")
+                        .font(SetuTypography.caption)
+                }
+                .buttonStyle(.bordered)
+                .tint(SetuColor.brandPink)
+                .accessibilityIdentifier("ai.chat.reuse-reference-\(sourceImageID)")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+
+    @ViewBuilder
+    private func pendingUserBubble(text: String) -> some View {
+        VStack(alignment: .trailing, spacing: SetuSpacing.xs) {
+            if let pendingUserImageData,
+               let image = UIImage(data: pendingUserImageData) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: 180, maxHeight: 180)
+                    .clipShape(RoundedRectangle(cornerRadius: SetuRadius.md, style: .continuous))
+            } else if let pendingUserImageURL, !pendingUserImageURL.isEmpty {
+                SetuRemoteImage(urlString: pendingUserImageURL, accessibilityLabel: "参考图", width: 180, height: 180, cornerRadius: SetuRadius.md, contentMode: .fit)
+            }
+            userBubbleText(text)
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
     }
 
     private func userBubbleText(_ text: String) -> some View {
@@ -410,11 +490,16 @@ struct AiChatDrawView: View {
             Text(text)
                 .font(SetuTypography.body)
                 .foregroundStyle(SetuColor.brandInk)
-                .multilineTextAlignment(.trailing)
+                .multilineTextAlignment(.leading)
+                .lineSpacing(2)
+                .frame(maxWidth: 320, alignment: .leading)
                 .textSelection(.enabled)
                 .padding(.horizontal, SetuSpacing.md)
                 .padding(.vertical, SetuSpacing.sm + 2)
-                .background(SetuColor.brandSoft.opacity(0.55), in: Capsule(style: .continuous))
+                .background(
+                    SetuColor.brandSoft.opacity(0.55),
+                    in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+                )
         }
     }
 
@@ -473,11 +558,7 @@ struct AiChatDrawView: View {
         let content = AiChatDrawBilling.displayContent(for: message, job: job)
         return VStack(alignment: .leading, spacing: SetuSpacing.md) {
             if !content.isEmpty {
-                Text(content)
-                    .font(SetuTypography.body)
-                    .foregroundStyle(SetuColor.textPrimary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .textSelection(.enabled)
+                AiChatLongTextBlock(text: content)
             }
 
             if let reasoning = message.reasoningContent?.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -591,6 +672,25 @@ struct AiChatDrawView: View {
             HStack(alignment: .bottom, spacing: SetuSpacing.sm) {
                 Menu {
                     Toggle("允许 NSFW 内容", isOn: $nsfwMode)
+                    Menu("底模") {
+                        if checkpoints.isEmpty { Text("暂无可用底模") }
+                        ForEach(checkpoints) { checkpoint in
+                            Button {
+                                selectedCheckpoint = checkpoint.name
+                            } label: {
+                                Label(checkpoint.displayName ?? checkpoint.name, systemImage: selectedCheckpoint == checkpoint.name ? "checkmark" : "")
+                            }
+                        }
+                    }
+                    if referenceImageID != nil {
+                        Button("移除参考图", role: .destructive) {
+                            referenceImageID = nil
+                            referenceImageData = nil
+                            referenceImageURL = nil
+                            referenceAnalysis = nil
+                            selectedPhoto = nil
+                        }
+                    }
                     Text(isAdmin ? "管理员免费" : pricingText)
                 } label: {
                     Image(systemName: "plus")
@@ -600,6 +700,32 @@ struct AiChatDrawView: View {
                 }
                 .accessibilityLabel(nsfwMode ? "选项，已开启 NSFW" : "选项")
                 .accessibilityIdentifier("ai.chat.nsfw")
+
+                PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                    Image(systemName: referenceImageID == nil ? "photo.badge.plus" : "photo.fill")
+                        .font(.body.weight(.semibold))
+                        .frame(width: 34, height: 34)
+                }
+                .disabled(isSending || detail?.session.isArchived == true)
+                .accessibilityLabel("上传参考图")
+                .task(id: selectedPhoto) { await uploadSelectedPhoto() }
+
+                if let referenceImageData,
+                   let image = UIImage(data: referenceImageData) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 34, height: 34)
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .accessibilityLabel("已选择参考图")
+                } else if let referenceImageURL, !referenceImageURL.isEmpty {
+                    SetuRemoteImage(urlString: referenceImageURL, accessibilityLabel: "已引用历史参考图", width: 34, height: 34, cornerRadius: 8, contentMode: .fit)
+                } else if referenceImageID != nil {
+                    Image(systemName: "photo.fill")
+                        .foregroundStyle(SetuColor.brandPink)
+                        .frame(width: 34, height: 34)
+                        .accessibilityLabel("已引用历史参考图")
+                }
 
                 TextField("描述你想画的画面", text: $input, axis: .vertical)
                     .lineLimit(1...6)
@@ -628,6 +754,36 @@ struct AiChatDrawView: View {
             .padding(.horizontal, SetuSpacing.md)
             .padding(.top, SetuSpacing.xs)
             .padding(.bottom, SetuSpacing.sm)
+        }
+    }
+
+    @MainActor
+    private func uploadSelectedPhoto() async {
+        guard let selectedPhoto = self.selectedPhoto else { return }
+        isUploadingReference = true
+        defer { isUploadingReference = false }
+        do {
+            guard let data = try await selectedPhoto.loadTransferable(type: Data.self) else {
+                throw NSError(domain: "AiChatDraw", code: 1, userInfo: [NSLocalizedDescriptionKey: "无法读取照片数据"])
+            }
+            // PhotosPicker commonly returns HEIC bytes. The backend and upstream
+            // vision APIs accept PNG/JPEG/WebP, so never label HEIC bytes as JPEG.
+            guard let image = UIImage(data: data), let jpegData = image.jpegData(compressionQuality: 0.92) else {
+                throw NSError(domain: "AiChatDraw", code: 2, userInfo: [NSLocalizedDescriptionKey: "照片格式无法转换"])
+            }
+            let source = try await environment.aiChatDrawClient.uploadReferenceImage(
+                data: jpegData,
+                fileName: "reference.jpg",
+                mimeType: "image/jpeg"
+            )
+            referenceImageID = source.id
+            referenceImageData = jpegData
+            referenceImageURL = nil
+            referenceAnalysis = nil
+            feedback = .success("参考图已加入当前会话")
+        } catch {
+            self.selectedPhoto = nil
+            feedback = .error("参考图上传失败")
         }
     }
 
@@ -682,8 +838,10 @@ struct AiChatDrawView: View {
         do {
             async let activePage = environment.aiChatDrawClient.listSessions(page: 1, pageSize: 20, status: "ACTIVE")
             async let archivedPage = environment.aiChatDrawClient.listSessions(page: 1, pageSize: 20, status: "ARCHIVED")
+            async let capabilityPage = environment.aiGenerationClient.capabilities()
             let active = try await activePage
             let archived = try await archivedPage
+            checkpoints = (try? await capabilityPage)?.checkpoints ?? []
             sessions = active.list
             archivedSessions = archived.list
             if let currentID = detail?.session.id {
@@ -762,6 +920,28 @@ struct AiChatDrawView: View {
     }
 
     @MainActor
+    private func deleteCurrentSession() async {
+        guard let id = detail?.session.id else { return }
+        do {
+            try await environment.aiChatDrawClient.deleteSession(id: id)
+            detail = nil
+            feedback = .success("对话已删除")
+            await bootstrap()
+        } catch { feedback = .error("删除对话失败") }
+    }
+
+    @MainActor
+    private func exportCurrentSession() async {
+        guard let id = detail?.session.id else { return }
+        do {
+            let data = try await environment.aiChatDrawClient.downloadExport(sessionID: id)
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent("ai-chat-\(id).zip")
+            try data.write(to: url, options: .atomic)
+            exportPayload = SystemFileSharePayload(fileURL: url)
+        } catch { feedback = .error("导出会话失败") }
+    }
+
+    @MainActor
     private func unarchiveCurrentSession() async {
         guard let sessionID = detail?.session.id, detail?.session.isArchived == true else { return }
         isLoading = true
@@ -784,16 +964,39 @@ struct AiChatDrawView: View {
     @MainActor
     private func send() async {
         let content = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard canSend, !content.isEmpty else { return }
+        guard canSend else { return }
+        let resolvedContent = content.isEmpty ? "按这张参考图原样生成。" : content
+        let sourceImageID = referenceImageID
+        let sourceImageData = referenceImageData
+        let sourceImageURL = referenceImageURL
+        var requestReferenceAnalysis = referenceAnalysis
+        referenceImageID = nil
+        referenceImageData = nil
+        referenceImageURL = nil
+        referenceAnalysis = nil
+        selectedPhoto = nil
 
         let previousJobIDs = Set(messages.compactMap { $0.generationJobId ?? $0.generationJob?.id })
         let previousCount = messages.count
         var sessionID = detail?.session.id
         input = ""
-        pendingUserMessage = content
+        pendingUserMessage = resolvedContent
+        pendingUserImageData = sourceImageData
+        pendingUserImageURL = sourceImageURL
         streamingDraft = AiChatDrawStreamingDraft(status: "已收到请求，开始处理…")
         isSending = true
         isComposerFocused = false
+
+        if let sourceImageID, requestReferenceAnalysis == nil {
+            streamingDraft?.status = "正在理解参考图…"
+            if let analysis = try? await environment.aiChatDrawClient.analyzeReferenceImage(
+                sessionID: sessionID,
+                sourceImageID: sourceImageID,
+                nsfwMode: nsfwMode
+            ), let encoded = try? JSONEncoder().encode(analysis) {
+                requestReferenceAnalysis = String(data: encoded, encoding: .utf8)
+            }
+        }
         followUpSuggestions = []
         userFacingError = nil
         feedback = nil
@@ -813,8 +1016,10 @@ struct AiChatDrawView: View {
                 streamAttempt += 1
                 do {
                     finalDetail = try await consumeChatDrawStream(
-                        content: content,
-                        sessionID: sessionID
+                        content: resolvedContent,
+                        sessionID: sessionID,
+                        sourceImageID: sourceImageID,
+                        referenceAnalysis: requestReferenceAnalysis
                     )
                     if let finalDetail, sessionID == nil {
                         sessionID = finalDetail.session.id
@@ -826,7 +1031,7 @@ struct AiChatDrawView: View {
                     if sessionID == nil {
                         sessionID = probe?.session.id
                     }
-                    let persisted = AiChatDrawBilling.userTurnPersisted(content: content, detail: probe)
+                    let persisted = AiChatDrawBilling.userTurnPersisted(content: resolvedContent, detail: probe)
                     let canRetryStream = streamAttempt == 1
                         && !persisted
                         && AiChatDrawBilling.isTransientSendFailure(error)
@@ -844,6 +1049,8 @@ struct AiChatDrawView: View {
 
             if let finalDetail {
                 pendingUserMessage = nil
+                pendingUserImageData = nil
+                pendingUserImageURL = nil
                 streamingDraft = nil
                 applyDetail(finalDetail)
                 await handleNewJobs(in: finalDetail, previousJobIDs: previousJobIDs)
@@ -851,16 +1058,20 @@ struct AiChatDrawView: View {
             } else {
                 let recovered = await recoverSendFailure(
                     APIError.invalidResponse,
-                    content: content,
+                    content: resolvedContent,
                     sessionID: sessionID,
                     previousCount: previousCount,
                     previousJobIDs: previousJobIDs
                 )
                 if recovered {
                     pendingUserMessage = nil
+                    pendingUserImageData = nil
+                    pendingUserImageURL = nil
                     streamingDraft = nil
-                } else if AiChatDrawBilling.userTurnPersisted(content: content, detail: detail) {
+                } else if AiChatDrawBilling.userTurnPersisted(content: resolvedContent, detail: detail) {
                     pendingUserMessage = nil
+                    pendingUserImageData = nil
+                    pendingUserImageURL = nil
                     streamingDraft = nil
                     feedback = .error("回复同步较慢，请下拉刷新查看是否已完成。")
                 } else {
@@ -868,25 +1079,47 @@ struct AiChatDrawView: View {
                 }
             }
         } catch {
+            // Some iOS networks/proxies terminate SSE while the regular JSON
+            // endpoint remains usable. Retry through that endpoint only when
+            // the stream failed before the user turn was persisted, so this
+            // cannot duplicate a charged turn.
+            if let fallbackDetail = await tryNonStreamingFallback(
+                content: resolvedContent,
+                sessionID: sessionID,
+                previousCount: previousCount,
+                sourceImageID: sourceImageID,
+                referenceAnalysis: requestReferenceAnalysis
+            ) {
+                pendingUserMessage = nil
+                pendingUserImageData = nil
+                pendingUserImageURL = nil
+                streamingDraft = nil
+                applyDetail(fallbackDetail)
+                await handleNewJobs(in: fallbackDetail, previousJobIDs: previousJobIDs)
+                return
+            }
             let recovered = await recoverSendFailure(
                 error,
-                content: content,
+                content: resolvedContent,
                 sessionID: sessionID,
                 previousCount: previousCount,
                 previousJobIDs: previousJobIDs
             )
             if recovered {
                 pendingUserMessage = nil
+                pendingUserImageData = nil
+                pendingUserImageURL = nil
                 streamingDraft = nil
                 if AiChatDrawBilling.isTransientSendFailure(error) {
                     feedback = .success("连接已恢复，对话已自动同步。")
                 }
-            } else if AiChatDrawBilling.userTurnPersisted(content: content, detail: detail) {
+            } else if AiChatDrawBilling.userTurnPersisted(content: resolvedContent, detail: detail) {
                 pendingUserMessage = nil
+                pendingUserImageData = nil
+                pendingUserImageURL = nil
                 streamingDraft = nil
                 feedback = .error("连接中断，请下拉刷新查看是否已完成。")
             } else {
-                pendingUserMessage = nil
                 streamingDraft = nil
                 input = content
                 if AiChatDrawBilling.isClientDisconnectedMessage(Self.apiErrorMessage(error))
@@ -908,16 +1141,54 @@ struct AiChatDrawView: View {
     }
 
     @MainActor
+    private func tryNonStreamingFallback(
+        content: String,
+        sessionID: Int?,
+        previousCount: Int,
+        sourceImageID: Int?,
+        referenceAnalysis: String?
+    ) async -> AiChatDrawSessionDetail? {
+        let probe = await peekSessionDetail(preferredSessionID: sessionID)
+        guard !AiChatDrawBilling.userTurnPersisted(content: content, detail: probe),
+              probe?.messages.count ?? 0 <= previousCount else {
+            return nil
+        }
+        do {
+            return try await environment.aiChatDrawClient.sendMessage(
+                AiChatDrawSendRequest(
+                    sessionId: sessionID,
+                    content: content,
+                    nsfwMode: nsfwMode,
+                    checkpoint: selectedCheckpoint,
+                    sourceImageId: sourceImageID,
+                    referenceAnalysis: referenceAnalysis,
+                    generationMode: sourceImageID == nil ? "TEXT2IMG" : "IMG2IMG",
+                    denoise: sourceImageID == nil ? nil : 0.65
+                )
+            )
+        } catch {
+            return nil
+        }
+    }
+
+    @MainActor
     private func consumeChatDrawStream(
         content: String,
-        sessionID: Int?
+        sessionID: Int?,
+        sourceImageID: Int?,
+        referenceAnalysis: String?
     ) async throws -> AiChatDrawSessionDetail? {
         var finalDetail: AiChatDrawSessionDetail?
         for try await event in environment.aiChatDrawClient.streamMessage(
             AiChatDrawSendRequest(
                 sessionId: sessionID,
                 content: content,
-                nsfwMode: nsfwMode
+                nsfwMode: nsfwMode,
+                checkpoint: selectedCheckpoint,
+                sourceImageId: sourceImageID,
+                referenceAnalysis: referenceAnalysis,
+                generationMode: sourceImageID == nil ? "TEXT2IMG" : "IMG2IMG",
+                denoise: sourceImageID == nil ? nil : 0.65
             )
         ) {
             switch event.kind {
@@ -940,7 +1211,6 @@ struct AiChatDrawView: View {
                 streamingDraft = draft
                 if let job = event.job {
                     jobOverrides[job.id] = job
-                    // Don't block token deltas on Live Activity setup.
                     Task {
                         await AiGenerationLiveActivityCenter.start(
                             job: job,
@@ -948,7 +1218,6 @@ struct AiChatDrawView: View {
                         )
                     }
                 }
-                // Yield so each SSE chunk can paint before the next arrives.
                 await Task.yield()
             }
         }
@@ -1162,6 +1431,47 @@ private struct AiChatNativeCircleChrome: ViewModifier {
                     in: Circle()
                 )
         }
+    }
+}
+
+private struct AiChatLongTextBlock: View {
+    let text: String
+
+    private let collapsedLineCount = 18
+    private let collapseThreshold = 900
+    @State private var expanded = false
+
+    private var shouldCollapse: Bool {
+        text.count > collapseThreshold
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SetuSpacing.sm) {
+            Text(text)
+                .font(SetuTypography.body)
+                .foregroundStyle(SetuColor.textPrimary)
+                .lineLimit(shouldCollapse && !expanded ? collapsedLineCount : nil)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .textSelection(.enabled)
+
+            if shouldCollapse {
+                Button {
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        expanded.toggle()
+                    }
+                } label: {
+                    Label(
+                        expanded ? "收起长回复" : "展开全部（\(text.count)字）",
+                        systemImage: expanded ? "chevron.up" : "chevron.down"
+                    )
+                    .font(SetuTypography.caption.weight(.semibold))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(SetuColor.brandPink)
+                .accessibilityIdentifier("ai.chat.long-reply-toggle")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

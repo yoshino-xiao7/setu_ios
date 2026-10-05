@@ -85,6 +85,15 @@ public struct AiGenerationJob: Decodable, Identifiable, Sendable {
     }
 }
 
+public struct AiGenerationSourceImage: Decodable, Identifiable, Sendable {
+    public let id: Int
+    public let userId: Int?
+    public let url: String?
+    public let width: Int?
+    public let height: Int?
+    public let sizeBytes: Int?
+}
+
 public struct AiPublicWork: Decodable, Identifiable, Sendable, Hashable {
     public let id: Int
     public let userId: Int?
