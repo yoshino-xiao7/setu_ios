@@ -281,6 +281,52 @@ public struct AiCapabilityItem: Decodable, Identifiable, Sendable {
     public var id: String {
         [workerId, type, name].compactMap { $0 }.joined(separator: ":")
     }
+
+    public func drawingDisplayTitle(generationMode: String = "SINGLE") -> String {
+        let title = (displayName ?? name)
+            .replacingOccurrences(of: #"[（(]\s*本地快速\s*[）)]"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"[（(]\s*\d+\s*积分\s*[）)]"#, with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return "\(title)（\(AiCheckpointCatalog.pointsCost(name: name, generationMode: generationMode))积分）"
+    }
+}
+
+public enum AiCheckpointCatalog {
+    private static func baseName(_ name: String) -> String {
+        name.replacingOccurrences(of: "\\", with: "/").split(separator: "/").last.map(String.init)?.lowercased() ?? ""
+    }
+
+    public static func isSelectable(name: String) -> Bool {
+        let base = baseName(name)
+        // 独立 ANIMA 工作流不属于产品中的 Animagine（显示名为 Anima）。
+        return !base.hasPrefix("anima-") && !base.hasPrefix("anima_") && !base.hasPrefix("anima.")
+    }
+
+    public static func pointsCost(name: String, generationMode: String = "SINGLE") -> Int {
+        if baseName(name).hasPrefix("qwen_image_2.1") { return 500 }
+        return generationMode == "DUAL" ? 100 : 50
+    }
+
+    private static func rank(_ item: AiCapabilityItem) -> Int {
+        let name = baseName(item.name)
+        if name.hasPrefix("wai") { return 0 }
+        if name.hasPrefix("animagine") { return 1 }
+        if name.hasPrefix("z_image") || name.hasPrefix("z-image") { return 2 }
+        if name.contains("krea") { return 3 }
+        if name.hasPrefix("qwen_image_2.1") { return 4 }
+        return 5
+    }
+
+    public static func selectableCheckpoints(_ items: [AiCapabilityItem]) -> [AiCapabilityItem] {
+        items.enumerated()
+            .filter { isSelectable(name: $0.element.name) }
+            .sorted {
+                let left = rank($0.element)
+                let right = rank($1.element)
+                return left == right ? $0.offset < $1.offset : left < right
+            }
+            .map { $0.element }
+    }
 }
 
 public struct AiWorkerNode: Decodable, Identifiable, Sendable {

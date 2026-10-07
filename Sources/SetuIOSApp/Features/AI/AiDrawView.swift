@@ -49,7 +49,9 @@ struct AiDrawView: View {
     @State private var positivePromptManuallyEdited = false
     @State private var isReconcilingPrompts = false
 
-    private let estimatedPointsCost = 20
+    private var estimatedPointsCost: Int {
+        AiCheckpointCatalog.pointsCost(name: selectedCheckpoint, generationMode: generationMode)
+    }
 
     var body: some View {
         Group {
@@ -384,8 +386,8 @@ struct AiDrawView: View {
         if case .loaded(let capabilities) = capabilityState {
             Picker("基础画风", selection: $selectedCheckpoint) {
                 Text("推荐").tag("")
-                ForEach(capabilities.checkpoints) { item in
-                    Text(item.displayName ?? item.name).tag(item.name)
+                ForEach(AiCheckpointCatalog.selectableCheckpoints(capabilities.checkpoints)) { item in
+                    Text(item.drawingDisplayTitle(generationMode: generationMode)).tag(item.name)
                 }
             }
             Picker("主要风格", selection: $selectedLora) {
@@ -515,6 +517,9 @@ struct AiDrawView: View {
         }
         do {
             capabilityState = .loaded(try await capabilities)
+            if !AiCheckpointCatalog.isSelectable(name: selectedCheckpoint) {
+                selectedCheckpoint = ""
+            }
         } catch {
             capabilityState = .failed(UserFacingErrorMapper.map(error))
         }
@@ -848,7 +853,7 @@ struct AiDrawView: View {
         nsfwMode = draft.nsfwMode
         nsfwVisibilityLevel = draft.nsfwVisibilityLevel
         generationMode = draft.generationMode
-        selectedCheckpoint = draft.checkpoint
+        selectedCheckpoint = AiCheckpointCatalog.isSelectable(name: draft.checkpoint) ? draft.checkpoint : ""
         selectedLora = draft.loraName
         loraStrength = draft.loraStrength
         selectedCharacter = draft.characterId

@@ -678,7 +678,11 @@ struct AiChatDrawView: View {
                             Button {
                                 selectedCheckpoint = checkpoint.name
                             } label: {
-                                Label(checkpoint.displayName ?? checkpoint.name, systemImage: selectedCheckpoint == checkpoint.name ? "checkmark" : "")
+                                if selectedCheckpoint == checkpoint.name {
+                                    Label(checkpoint.drawingDisplayTitle(), systemImage: "checkmark")
+                                } else {
+                                    Text(checkpoint.drawingDisplayTitle())
+                                }
                             }
                         }
                     }
@@ -841,7 +845,10 @@ struct AiChatDrawView: View {
             async let capabilityPage = environment.aiGenerationClient.capabilities()
             let active = try await activePage
             let archived = try await archivedPage
-            checkpoints = (try? await capabilityPage)?.checkpoints ?? []
+            checkpoints = AiCheckpointCatalog.selectableCheckpoints((try? await capabilityPage)?.checkpoints ?? [])
+            if let selectedCheckpoint, !checkpoints.contains(where: { $0.name == selectedCheckpoint }) {
+                self.selectedCheckpoint = nil
+            }
             sessions = active.list
             archivedSessions = archived.list
             if let currentID = detail?.session.id {

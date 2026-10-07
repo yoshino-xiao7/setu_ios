@@ -3,6 +3,28 @@ import XCTest
 @testable import SetuIOSCore
 
 final class AiGenerationClientTests: XCTestCase {
+    func testCheckpointMenuDistinguishesAnimagineFromIndependentAnima() throws {
+        let items = try JSONDecoder().decode([AiCapabilityItem].self, from: Data(#"""
+        [
+          {"name":"anima-base-v1.0.safetensors","displayName":"ANIMA base v1.0"},
+          {"name":"qwen_image_2.1_int8_convrot.safetensors","displayName":"Qwen Image 2.1（500积分）"},
+          {"name":"krea2_turbo_nvfp4.safetensors","displayName":"Krea 2 Turbo（本地快速）"},
+          {"name":"z_image_turbo_nvfp4.safetensors","displayName":"Z-Image Turbo（本地快速）"},
+          {"name":"animagine-xl-4.0-opt.safetensors","displayName":"二次元动漫 Anima"},
+          {"name":"waiIllustriousSDXL_v170.safetensors","displayName":"二次元动漫 WAI"}
+        ]
+        """#.utf8))
+        let menu = AiCheckpointCatalog.selectableCheckpoints(items)
+        XCTAssertEqual(menu.map(\.name), [items[5].name, items[4].name, items[3].name, items[2].name, items[1].name])
+        XCTAssertEqual(menu.map { $0.drawingDisplayTitle() }, [
+            "二次元动漫 WAI（50积分）", "二次元动漫 Anima（50积分）", "Z-Image Turbo（50积分）",
+            "Krea 2 Turbo（50积分）", "Qwen Image 2.1（500积分）",
+        ])
+        XCTAssertFalse(AiCheckpointCatalog.isSelectable(name: "models\\ANIMA-base-v1.0.safetensors"))
+        XCTAssertEqual(items[5].drawingDisplayTitle(generationMode: "DUAL"), "二次元动漫 WAI（100积分）")
+        XCTAssertEqual(items[1].drawingDisplayTitle(generationMode: "DUAL"), "Qwen Image 2.1（500积分）")
+    }
+
     override func tearDown() {
         super.tearDown()
         AiGenerationClientMockURLProtocol.handler = nil
