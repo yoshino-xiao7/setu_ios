@@ -15,6 +15,7 @@ public enum CloudVideoHLSPlaylist {
     }
 
     public static let assetHeaderFieldsKey = "AVURLAssetHTTPHeaderFieldsKey"
+    static let assetHTTPCookiesKey = "AVURLAssetHTTPCookiesKey"
 
     public static func playbackHeaders(siteBaseURL: URL) -> [String: String] {
         let origin = siteBaseURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
@@ -25,8 +26,12 @@ public enum CloudVideoHLSPlaylist {
         ]
     }
 
-    public static func assetOptions(siteBaseURL: URL) -> [String: Any] {
-        [assetHeaderFieldsKey: playbackHeaders(siteBaseURL: siteBaseURL)]
+    public static func assetOptions(for mediaURL: URL? = nil, siteBaseURL: URL) -> [String: Any] {
+        var options: [String: Any] = [assetHeaderFieldsKey: playbackHeaders(siteBaseURL: siteBaseURL)]
+        if let mediaURL, let cookies = HTTPCookieStorage.shared.cookies(for: mediaURL), !cookies.isEmpty {
+            options[assetHTTPCookiesKey] = cookies
+        }
+        return options
     }
 
     private static func resolutionHeight(in streamInf: String) -> Int? {

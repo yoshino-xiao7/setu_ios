@@ -192,7 +192,7 @@ struct CloudVideoDetailView: View {
             musicPlayer.pause()
             activateVideoSession()
             detachPlayer(save: true)
-            let asset = AVURLAsset(url: url, options: CloudVideoHLSPlaylist.assetOptions(siteBaseURL: environment.config.siteBaseURL))
+            let asset = AVURLAsset(url: url, options: CloudVideoHLSPlaylist.assetOptions(for: url, siteBaseURL: environment.config.siteBaseURL))
             let item = AVPlayerItem(asset: asset)
             applyQualityCap(to: item)
             observeItem(item)
@@ -272,7 +272,7 @@ struct CloudVideoDetailView: View {
         }
         let time = player.currentTime()
         let shouldPlay = player.rate > 0 || player.timeControlStatus != .paused
-        let asset = AVURLAsset(url: url, options: CloudVideoHLSPlaylist.assetOptions(siteBaseURL: environment.config.siteBaseURL))
+        let asset = AVURLAsset(url: url, options: CloudVideoHLSPlaylist.assetOptions(for: url, siteBaseURL: environment.config.siteBaseURL))
         let item = AVPlayerItem(asset: asset)
         applyQualityCap(to: item)
         observeItem(item)

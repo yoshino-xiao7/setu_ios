@@ -34,10 +34,12 @@ extension RootAppView {
             HanimeFavoriteListView(environment: environment)
         case .hanimeHistory:
             ModuleWatchHistoryView(environment: environment, module: .hanime, aspectRatio: 16 / 9)
-        case .cloudVideoHome:
+        case .cloudVideoHome where environment.authSession.currentUser?.role == .admin:
             CloudVideoHomeView(environment: environment)
-        case .cloudVideoDetail(let videoID):
+        case .cloudVideoDetail(let videoID) where environment.authSession.currentUser?.role == .admin:
             CloudVideoDetailView(environment: environment, videoID: videoID)
+        case .cloudVideoHome, .cloudVideoDetail:
+            SetuEmptyState(title: "需要管理员权限", systemImage: "shield.slash")
         default:
             EmptyView()
         }

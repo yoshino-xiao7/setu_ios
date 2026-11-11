@@ -86,6 +86,24 @@ final class CloudVideoHLSPlaylistTests: XCTestCase {
         XCTAssertEqual(headers["Origin"], "https://cloud.yukiryou.icu")
         XCTAssertEqual(headers["Referer"], "https://cloud.yukiryou.icu/")
     }
+
+    func testAssetOptionsSendSessionCookieOnlyToMatchingMediaHost() throws {
+        let host = "cloud-video-\(UUID().uuidString.lowercased()).invalid"
+        let apiURL = try XCTUnwrap(URL(string: "https://\(host)/user/cloud-video/1/pan/master.m3u8"))
+        let cdnURL = try XCTUnwrap(URL(string: "https://cdn.invalid/playlist.m3u8"))
+        let siteURL = try XCTUnwrap(URL(string: "https://yk.yukiryou.icu"))
+        let cookie = try XCTUnwrap(HTTPCookie(properties: [
+            .domain: host, .path: "/", .name: "SID", .value: "fixture", .secure: "TRUE",
+        ]))
+        HTTPCookieStorage.shared.setCookie(cookie)
+        defer { HTTPCookieStorage.shared.deleteCookie(cookie) }
+
+        let apiOptions = CloudVideoHLSPlaylist.assetOptions(for: apiURL, siteBaseURL: siteURL)
+        let cdnOptions = CloudVideoHLSPlaylist.assetOptions(for: cdnURL, siteBaseURL: siteURL)
+        let apiCookies = apiOptions[CloudVideoHLSPlaylist.assetHTTPCookiesKey] as? [HTTPCookie]
+        XCTAssertEqual(apiCookies?.first(where: { $0.name == "SID" })?.value, "fixture")
+        XCTAssertNil(cdnOptions[CloudVideoHLSPlaylist.assetHTTPCookiesKey])
+    }
 }
 
 final class CloudVideoCDNTests: XCTestCase {
